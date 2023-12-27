@@ -1,0 +1,99 @@
+name: Push Llama Cpp Rs Staging Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: utilityai/llama-cpp-rs
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ${{ vars.CHECKS_RUNNER }}
+    outputs:
+      llama-cpp-rs: ${{ steps.filter.outputs.llama-cpp-rs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            llama-cpp-rs:
+              - 'llama-cpp-rs/**'
+  build-and-push-image:
+    name: Build and Push Image
+    runs-on: ${{ vars.RUNNER }}
+    permissions:
+      contents: read
+      packages: write
+
+    needs:
+      - changes
+    if: ${{ needs.changes.outputs.llama-cpp-rs == 'true' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: llama-cpp-rs
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-rpc:staging
+          target: rpc
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: llama-cpp-rs
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-gilc:staging
+          target: server
+          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: llama-cpp-rs
+          push: true
+          target: cli
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-cli:staging
+          labels: ${{ steps.meta.outputs.labels }}
+  redeploy:
+    name: Redeploy llama-cpp-rs dev
+    runs-on: ${{ vars.RUNNER }}
+    needs:
+      - build-and-push-image
+      - changes
+    if: ${{ needs.changes.outputs.llama-cpp-rs == 'true' }}
+    steps:
+      - name: Send redeploy llama-cpp-rs docker container webhook
+        uses: joelwmale/webhook-action@master
+        env:
+          WEBHOOK_URL: http://host.minikube.internal:9000/hooks/redeploy_dev
