@@ -1,0 +1,28 @@
+name: Publish to Crates.io
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Set up Rust
+      uses: actions/setup-rust@v1
+
+    - name: Install cargo-release
+      run: cargo install cargo-release
+
+    - name: Create a new version
+      run: cargo release --dry-run
+
+    - name: Publish to Crates.io
+      run: cargo release
+      env:
+        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
