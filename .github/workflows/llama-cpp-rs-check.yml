@@ -1,0 +1,61 @@
+name: Llama Cpp Rs Check
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  changes:
+    name: Changes
+    runs-on: ${{ vars.CHECKS_RUNNER }}
+    outputs:
+      llama-cpp-rs: ${{ steps.filter.outputs.llama-cpp-rs }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            llama-cpp-rs:
+              - 'llama-cpp-rs/**'
+  check:
+    name: Run Tests on LLama Cpp Rs
+    runs-on: ${{ vars.RUNNER }}
+    defaults:
+      run:
+        working-directory: ./llama-cpp-rs
+    needs:
+      - changes
+    if: ${{ needs.changes.outputs.llama-cpp-rs == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup protoc
+        uses: arduino/setup-protoc@v2.1.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Compile Deps
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run:
+          sudo apt-get update && sudo apt-get install -y build-essential curl libssl-dev libclang-dev pkg-config cmake git
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Clippy
+        run: cargo clippy
+      - name: Clippy
+        run: cargo fmt
