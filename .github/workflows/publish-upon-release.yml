@@ -20,10 +20,13 @@ jobs:
     - name: Install cargo-release
       run: cargo install cargo-release
 
-    - name: Create a new version
-      run: cargo release --dry-run
-
-    - name: Publish to Crates.io
+    - name: Publish to Crates.io (for llama-cpp)
       run: cargo release
       env:
-        CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+    - name: Publish to Crates.io (for llama-cpp-sys)
+      run: cd llama-cpp-sys && cargo release
+      env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
