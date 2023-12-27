@@ -1,0 +1,26 @@
+[package]
+name = "llama-cpp"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+llama-cpp-sys = { path = "../llama-cpp-sys" }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+hf-hub = { workspace = true }
+criterion = { workspace = true }
+pprof = { workspace = true, features = ["criterion", "flamegraph"] }
+
+[[bench]]
+name = "grammar_bias"
+harness = false
+
+[features]
+cublas = ["llama-cpp-sys/cublas"]
+
+[lints]
+workspace = true

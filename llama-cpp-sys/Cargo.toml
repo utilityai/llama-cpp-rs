@@ -1,0 +1,15 @@
+[package]
+name = "llama-cpp-sys"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+[build-dependencies]
+bindgen = "0.69.1"
+cmake = "0.1.50"
+
+[features]
+cublas = []
