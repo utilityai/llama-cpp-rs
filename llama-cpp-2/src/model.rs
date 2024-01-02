@@ -9,7 +9,7 @@ use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, Toke
 use llama_cpp_sys_2::{llama_context_params, llama_token_get_type, llama_vocab_type};
 use std::ffi::CString;
 use std::os::raw::c_int;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ptr::NonNull;
 
 pub mod params;
@@ -102,12 +102,11 @@ impl LlamaModel {
     ///
     ///
     /// ```no_run
-    /// use llama_cpp::model::LlamaModel;
-    /// # use std::error::Error;
+    /// use llama_cpp_2::model::LlamaModel;
     ///
-    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use std::path::Path;
-    /// let backend = llama_cpp::llama_backend::LlamaBackend::init()?;
+    /// let backend = llama_cpp_2::llama_backend::LlamaBackend::init()?;
     /// let model = LlamaModel::load_from_file(&backend, Path::new("path/to/model"), &Default::default())?;
     /// let tokens = model.str_to_token("Hello, World!", true)?;
     /// # Ok(())
@@ -216,8 +215,9 @@ impl LlamaModel {
         let len = string.as_bytes().len();
         let len = c_int::try_from(len).expect("length fits into c_int");
         let buf = string.into_raw();
-        let size =
-            unsafe { llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len) };
+        let size = unsafe {
+            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len)
+        };
 
         match size {
             0 => Err(TokenToStringError::UnknownTokenType),
@@ -269,10 +269,11 @@ impl LlamaModel {
         path: impl AsRef<Path>,
         params: &LlamaModelParams,
     ) -> Result<Self, LlamaModelLoadError> {
+        let path = path.as_ref();
         debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
         let path = path
             .to_str()
-            .ok_or(LlamaModelLoadError::PathToStrError(PathBuf::from(&path)))?;
+            .ok_or(LlamaModelLoadError::PathToStrError(path.to_path_buf()))?;
 
         let cstr = CString::new(path)?;
         let llama_model = unsafe {
