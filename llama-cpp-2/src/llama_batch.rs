@@ -22,33 +22,6 @@ impl LlamaBatch {
         self.initialized_logits.clear();
     }
 
-    /// Set the last token in the batch to [value]. If [value] is true, the token will be initilized
-    /// after a decode and can be read from. If [value] is false, the token will not be initilized (this is the default).
-    ///
-    /// # Panics
-    ///
-    /// Panics if there are no tokens in the batch.
-    #[deprecated(
-        note = "not compatible with multiple sequences. prefer setting logits while adding tokens"
-    )]
-    pub fn set_last_logit(&mut self, value: bool) {
-        let last_index = self.llama_batch.n_tokens - 1;
-        let last_index_usize =
-            usize::try_from(last_index).expect("cannot fit n_tokens - 1 into a usize");
-
-        if value {
-            self.initialized_logits.push(last_index);
-        } else {
-            self.initialized_logits.retain(|&x| x != last_index);
-        }
-
-        let value = i8::from(value);
-        unsafe {
-            let last: *mut i8 = self.llama_batch.logits.add(last_index_usize);
-            *last = value;
-        }
-    }
-
     /// add a token to the batch for sequences [`seq_ids`] at position [pos]. If [logits] is true, the
     /// token will be initilized and can be read from after the next decode.
     ///
@@ -113,12 +86,6 @@ impl LlamaBatch {
             initialized_logits: vec![],
             llama_batch: batch,
         }
-    }
-
-    /// add a prompt to the batch at sequence id 0
-    #[deprecated(note = "not compatible with multiple sequences. use `add_prompt_seq` instead")]
-    pub fn add_prompt(&mut self, prompt: &[LlamaToken]) {
-        self.add_prompt_seq(prompt, &[0]);
     }
 
     /// add a prompt to the batch at the given sequence ids. This must be the initial prompt as it
