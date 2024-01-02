@@ -110,7 +110,7 @@ impl Drop for LlamaBatch {
     /// # use llama_cpp_2::llama_batch::LlamaBatch;
     /// # use std::error::Error;
     /// # fn main() -> Result<(), Box<dyn Error>> {
-    /// let batch = LlamaBatch::new_from_prompt(&[]);
+    /// let batch = LlamaBatch::new(512, 1);
     /// // frees the memory associated with the batch. (allocated by llama.cpp)
     /// drop(batch);
     /// # Ok(())
