@@ -37,35 +37,35 @@ impl LlamaBatch {
         logits: bool,
     ) {
         assert!(self.allocated > (usize::try_from(self.n_tokens() + 1).expect("self.n_tokens does not fit into a usize")), "there are only {} tokens allocated for the batch, but {} tokens in the batch when you tried to add one", self.allocated, self.n_tokens());
+        let offset = self.llama_batch.n_tokens;
+        let offset_usize = usize::try_from(offset).expect("cannot fit n_tokens into a usize");
         unsafe {
             // batch.token   [batch.n_tokens] = id;
-            let offset = self.llama_batch.n_tokens;
-            let offset_usize = usize::try_from(offset).expect("cannot fit n_tokens into a usize");
-            *self.llama_batch.token.add(offset_usize) = id;
+            self.llama_batch.token.add(offset_usize).write(id);
             // batch.pos     [batch.n_tokens] = pos,
-            *self.llama_batch.pos.add(offset_usize) = pos;
+            self.llama_batch.pos.add(offset_usize).write(pos);
             // batch.n_seq_id[batch.n_tokens] = seq_ids.size();
-            *self.llama_batch.n_seq_id.add(offset_usize) = llama_seq_id::try_from(seq_ids.len())
-                .expect("cannot fit seq_ids.len() into a llama_seq_id");
+            self.llama_batch.n_seq_id.add(offset_usize).write(llama_seq_id::try_from(seq_ids.len())
+                .expect("cannot fit seq_ids.len() into a llama_seq_id"));
             // for (size_t i = 0; i < seq_ids.size(); ++i) {
             //     batch.seq_id[batch.n_tokens][i] = seq_ids[i];
             // }
             for (i, seq_id) in seq_ids.iter().enumerate() {
                 let tmp = *self.llama_batch.seq_id.add(offset_usize);
-                *tmp.add(i) = *seq_id;
+                tmp.add(i).write(*seq_id);
             }
             // batch.logits  [batch.n_tokens] = logits;
-            *self.llama_batch.logits.add(offset_usize) = i8::from(logits);
-
-            if logits {
-                self.initialized_logits.push(offset);
-            } else {
-                self.initialized_logits.retain(|l| l != &offset);
-            }
-
-            // batch.n_tokens++;
-            self.llama_batch.n_tokens += 1;
+            self.llama_batch.logits.add(offset_usize).write(i8::from(logits));
         }
+
+        if logits {
+            self.initialized_logits.push(offset);
+        } else {
+            self.initialized_logits.retain(|l| l != &offset);
+        }
+
+        // batch.n_tokens++;
+        self.llama_batch.n_tokens += 1;
     }
     /// Create a new `LlamaBatch` that cab contain up to `n_tokens` tokens.
     ///
@@ -110,7 +110,7 @@ impl Drop for LlamaBatch {
     /// # use llama_cpp_2::llama_batch::LlamaBatch;
     /// # use std::error::Error;
     /// # fn main() -> Result<(), Box<dyn Error>> {
-    /// let batch = LlamaBatch::new_from_prompt(&[]);
+    /// let batch = LlamaBatch::new(512, 1);
     /// // frees the memory associated with the batch. (allocated by llama.cpp)
     /// drop(batch);
     /// # Ok(())
