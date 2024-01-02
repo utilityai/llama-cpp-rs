@@ -1,5 +1,5 @@
 [package]
-name = "llama-cpp-sep"
+name = "llama-cpp-2"
 version = "0.1.0"
 edition = "2021"
 
