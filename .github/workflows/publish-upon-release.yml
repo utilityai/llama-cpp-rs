@@ -22,7 +22,6 @@ jobs:
         with:
           path: './llama-cpp-2'
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          args: --no-verify
           dry-run: true
 
       - name: Publish crates for llama-cpp-sys-2
@@ -30,5 +29,4 @@ jobs:
         with:
           path: './llama-cpp-sys-2'
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          args: --no-verify
           dry-run: true
