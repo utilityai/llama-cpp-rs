@@ -13,14 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Publish crates for llama-cpp-sys-2
-        run: cargo publish \
-          --package llama-cpp-sys-2/Cargo.toml \
-          --token ${{ secrets.CARGO_REGISTRY_TOKEN }} \
-          --verbose \
-          --dry-run
+        run: cargo publish --package llama-cpp-sys-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       - name: Publish crates for llama-cpp-2
-        run: cargo publish \
-          --package llama-cpp-2 \
-          --token ${{ secrets.CARGO_REGISTRY_TOKEN }} \
-          --verbose \
-          --dry-run
+        run: cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
