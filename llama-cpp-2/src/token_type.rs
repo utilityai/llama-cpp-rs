@@ -31,7 +31,7 @@ pub enum LlamaTokenType {
 /// # use std::ffi::c_uint;
 /// # use std::num::TryFromIntError;
 /// # use std::result::Result;
-/// # use llama_cpp::token_type::{LlamaTokenTypeFromIntError, LlamaTokenType};
+/// # use llama_cpp_2::token_type::{LlamaTokenTypeFromIntError, LlamaTokenType};
 /// # fn main() -> Result<(), LlamaTokenTypeFromIntError> {
 /// let llama_token_type = LlamaTokenType::try_from(0 as c_uint)?;
 /// assert_eq!(llama_token_type, LlamaTokenType::Undefined);

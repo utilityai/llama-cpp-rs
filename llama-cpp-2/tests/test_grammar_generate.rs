@@ -1,10 +1,10 @@
-use llama_cpp::context::params::LlamaContextParams;
-use llama_cpp::grammar::LlamaGrammar;
-use llama_cpp::llama_backend::LlamaBackend;
-use llama_cpp::llama_batch::LlamaBatch;
-use llama_cpp::model::params::LlamaModelParams;
-use llama_cpp::model::LlamaModel;
-use llama_cpp::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::grammar::LlamaGrammar;
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 
 use llama_cpp_sys_2::llama_pos;
 use std::str::FromStr;
@@ -31,7 +31,7 @@ fn test_generate_cat_via_grammar() {
         .unwrap();
 
     let n_ctx_usize = usize::try_from(ctx.n_ctx()).expect("cannot fit n_ctx into a usize");
-    let mut batch = LlamaBatch::new(n_ctx_usize, 0, 1);
+    let mut batch = LlamaBatch::new(n_ctx_usize, 1);
     batch.add(model.token_bos(), 0, &[0], true);
 
     let mut tokens = vec![model.token_bos()];

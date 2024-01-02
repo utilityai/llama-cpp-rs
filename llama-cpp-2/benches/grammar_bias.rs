@@ -1,13 +1,13 @@
 #![allow(missing_docs)]
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use llama_cpp::context::params::LlamaContextParams;
-use llama_cpp::context::LlamaContext;
-use llama_cpp::grammar::LlamaGrammar;
-use llama_cpp::llama_backend::LlamaBackend;
-use llama_cpp::model::params::LlamaModelParams;
-use llama_cpp::model::LlamaModel;
-use llama_cpp::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
+use llama_cpp_2::grammar::LlamaGrammar;
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use pprof::criterion::{Output, PProfProfiler};
 use std::str::FromStr;
 

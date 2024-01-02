@@ -3,14 +3,12 @@
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
 
-use crate::llama_backend::LlamaBackend;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use crate::{DecodeError, LlamaContextLoadError};
-use params::LlamaContextParams;
+use crate::{DecodeError};
 use std::os::raw::c_int;
 use std::ptr::NonNull;
 use std::slice;
@@ -132,35 +130,10 @@ impl<'model> LlamaContext<'model> {
         unsafe { slice::from_raw_parts_mut(logits_ptr, n_vocab * n_tokens) }
     }
 
-    /// get the logits
-    ///
-    /// # Panics
-    ///
-    /// - `n_vocab` does not fit into a usize
-    #[deprecated]
-    #[must_use]
-    pub fn logits(&self, n_tokens: usize) -> &[f32] {
-        let n_vocab = usize::try_from(self.model.n_vocab()).expect("n_vocab should be positive");
-        let logits_ptr = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
-
-        unsafe { slice::from_raw_parts(logits_ptr, n_vocab * n_tokens) }
-    }
-
     /// Returns the timings for the context.
     pub fn timings(&mut self) -> LlamaTimings {
         let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
         LlamaTimings { timings }
-    }
-
-    /// Create a new `LlamaContext` from a model.
-    #[deprecated(note = "use `Model::new_context` instead")]
-    #[tracing::instrument(skip_all)]
-    pub fn new_with_model(
-        backend: &LlamaBackend,
-        model: &'model mut LlamaModel,
-        context_params: &LlamaContextParams,
-    ) -> Result<Self, LlamaContextLoadError> {
-        model.new_context(backend, context_params)
     }
 }
 

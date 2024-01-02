@@ -1,9 +1,9 @@
-use llama_cpp::context::params::LlamaContextParams;
-use llama_cpp::llama_backend::LlamaBackend;
-use llama_cpp::llama_batch::LlamaBatch;
-use llama_cpp::model::params::LlamaModelParams;
-use llama_cpp::model::LlamaModel;
-use llama_cpp::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::error::Error;
 use std::io;
 use std::io::Write;
@@ -65,7 +65,7 @@ fn check_generate_tokens() -> Result<(), Box<dyn Error>> {
         write!(stdoutlock, "{}", model.token_to_str(*id)?)?;
     }
     stdoutlock.flush()?;
-    let mut batch = LlamaBatch::new(tokens_list.len(), 0, 1);
+    let mut batch = LlamaBatch::new(tokens_list.len(), 1);
     batch.add_prompt_seq(&tokens_list, &[0]);
     ctx.decode(&mut batch)?;
     let mut n_cur = batch.n_tokens();

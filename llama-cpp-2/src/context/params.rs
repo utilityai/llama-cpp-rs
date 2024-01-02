@@ -36,7 +36,7 @@ pub struct LlamaContextParams {
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
 /// ```
-/// # use llama_cpp::context::params::LlamaContextParams;
+/// # use llama_cpp_2::context::params::LlamaContextParams;
 /// let params = LlamaContextParams::default();
 /// assert_eq!(params.n_ctx.unwrap().get(), 512, "n_ctx should be 512");
 /// ```

@@ -75,13 +75,13 @@ impl<'grammar> Sampler<'grammar> {
 
     /// Set the temperature for sampling.
     ///
-    /// ```no_run
-    /// # use llama_cpp::context::LlamaContext;
-    /// # use llama_cpp::context::sample::Sampler;
-    /// # use llama_cpp::grammar::LlamaGrammar;
-    /// # use llama_cpp::token::data::LlamaTokenData;
-    /// # use llama_cpp::token::data_array::LlamaTokenDataArray;
-    /// # use llama_cpp::token::LlamaToken;
+    /// ```
+    /// # use llama_cpp_2::context::LlamaContext;
+    /// # use llama_cpp_2::context::sample::Sampler;
+    /// # use llama_cpp_2::grammar::LlamaGrammar;
+    /// # use llama_cpp_2::token::data::LlamaTokenData;
+    /// # use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+    /// # use llama_cpp_2::token::LlamaToken;
     ///
     /// let _sampler = Sampler::new(LlamaTokenDataArray::new(vec![LlamaTokenData::new(LlamaToken(0), 0.0, 0.0)], false))
     ///     .with_temperature(0.5);
