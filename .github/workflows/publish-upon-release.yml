@@ -11,23 +11,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out code
-        uses: actions/checkout@v2
-
-      - name: Set up Rust
-        uses: actions/setup-rust@v2
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          override: true
 
-      - name: Install cargo-release
-        run: cargo install cargo-release
+      - name: Publish crates for llama-cpp-2
+        uses: katyo/publish-crates@v2
+        with:
+          path: './llama-cpp-2'
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          args: --no-verify
+          dry-run: true
 
-      - name: Dry-run publish to Crates.io (for llama-cpp-2)
-        run: cargo release --dry-run
-        env:
-          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-
-      - name: Dry-run publish to Crates.io (for llama-cpp-sys-2)
-        run: cd llama-cpp-sys-2 && cargo release --dry-run
-        env:
-          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Publish crates for llama-cpp-sys-2
+        uses: katyo/publish-crates@v2
+        with:
+          path: './llama-cpp-sys-2'
+          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          args: --no-verify
+          dry-run: true
