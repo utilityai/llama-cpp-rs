@@ -3,14 +3,12 @@
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
 
-use crate::llama_backend::LlamaBackend;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use crate::{DecodeError, LlamaContextLoadError};
-use params::LlamaContextParams;
+use crate::{DecodeError};
 use std::os::raw::c_int;
 use std::ptr::NonNull;
 use std::slice;
