@@ -6,7 +6,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 
-use llama_cpp_sys::{llama_grammar, llama_grammar_element, llama_gretype};
+use llama_cpp_sys_2::{llama_grammar, llama_grammar_element, llama_gretype};
 use std::ptr::NonNull;
 use std::str::FromStr;
 use tracing::error;
@@ -103,7 +103,7 @@ pub struct LlamaGrammar {
 
 impl Clone for LlamaGrammar {
     fn clone(&self) -> Self {
-        let grammar = unsafe { llama_cpp_sys::llama_grammar_copy(self.grammar.as_ptr()) };
+        let grammar = unsafe { llama_cpp_sys_2::llama_grammar_copy(self.grammar.as_ptr()) };
         Self {
             parse: self.parse.clone(),
             grammar: NonNull::new(grammar).expect("copied grammar should never be null"),
@@ -223,14 +223,14 @@ impl ParseState {
         let mut rest = Self::consume_whitespace_and_comments(rest, nested);
         while rest.starts_with('|') {
             rule.push(llama_grammar_element {
-                type_: llama_cpp_sys::LLAMA_GRETYPE_ALT,
+                type_: llama_cpp_sys_2::LLAMA_GRETYPE_ALT,
                 value: 0,
             });
             rest = Self::consume_whitespace_and_comments(&rest[1..], true);
             rest = self.parse_sequence(rest, name, &mut rule, nested)?;
         }
         rule.push(llama_grammar_element {
-            type_: llama_cpp_sys::LLAMA_GRETYPE_END,
+            type_: llama_cpp_sys_2::LLAMA_GRETYPE_END,
             value: 0,
         });
         self.add_rule(id, rule);
@@ -268,7 +268,7 @@ impl ParseState {
                     let (c, r) = Self::parse_char(rest)?;
                     rest = r;
                     rule.push(llama_grammar_element {
-                        type_: llama_cpp_sys::LLAMA_GRETYPE_CHAR,
+                        type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
                         value: c,
                     });
                 }
@@ -277,16 +277,16 @@ impl ParseState {
                 rest = &rest[1..];
                 let start_type = if rest.starts_with('^') {
                     rest = &rest[1..];
-                    llama_cpp_sys::LLAMA_GRETYPE_CHAR_NOT
+                    llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_NOT
                 } else {
-                    llama_cpp_sys::LLAMA_GRETYPE_CHAR
+                    llama_cpp_sys_2::LLAMA_GRETYPE_CHAR
                 };
                 last_sym_start = rule.len();
                 while !rest.starts_with(']') {
                     let (c, r) = Self::parse_char(rest)?;
                     rest = r;
                     let gre_type = if last_sym_start < rule.len() {
-                        llama_cpp_sys::LLAMA_GRETYPE_CHAR_ALT
+                        llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_ALT
                     } else {
                         start_type
                     };
@@ -298,7 +298,7 @@ impl ParseState {
                         let (c, r) = Self::parse_char(rest)?;
                         rest = r;
                         rule.push(llama_grammar_element {
-                            type_: llama_cpp_sys::LLAMA_GRETYPE_CHAR_RNG_UPPER,
+                            type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_RNG_UPPER,
                             value: c,
                         });
                     }
@@ -310,7 +310,7 @@ impl ParseState {
                 let ref_rule_id = self.get_symbol_id(name);
                 last_sym_start = rule.len();
                 rule.push(llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_RULE_REF,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_RULE_REF,
                     value: ref_rule_id,
                 });
             } else if first_char == '(' {
@@ -319,7 +319,7 @@ impl ParseState {
                 rest = self.parse_alternatives(name, sub_rule_id, rest, true)?;
                 last_sym_start = rule.len();
                 rule.push(llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_RULE_REF,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_RULE_REF,
                     value: sub_rule_id,
                 });
                 if !rest.starts_with(')') {
@@ -339,26 +339,26 @@ impl ParseState {
                     rule.iter().skip(last_sym_start).copied().collect();
                 if rest.starts_with(['*', '+']) {
                     sub_rule.push(llama_grammar_element {
-                        type_: llama_cpp_sys::LLAMA_GRETYPE_RULE_REF,
+                        type_: llama_cpp_sys_2::LLAMA_GRETYPE_RULE_REF,
                         value: sub_rule_id,
                     });
                 }
                 sub_rule.push(llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_ALT,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_ALT,
                     value: 0,
                 });
                 if rest.starts_with('+') {
                     sub_rule.extend(rule.iter().skip(last_sym_start).copied());
                 }
                 sub_rule.push(llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_END,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_END,
                     value: 0,
                 });
                 self.add_rule(sub_rule_id, sub_rule);
 
                 rule.truncate(last_sym_start);
                 rule.push(llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_RULE_REF,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_RULE_REF,
                     value: sub_rule_id,
                 });
 
@@ -472,7 +472,7 @@ impl FromStr for LlamaGrammar {
         let rules = vec.as_mut_ptr();
 
         let grammar =
-            unsafe { llama_cpp_sys::llama_grammar_init(rules, n_rules, root_id as usize) };
+            unsafe { llama_cpp_sys_2::llama_grammar_init(rules, n_rules, root_id as usize) };
 
         Ok(Self {
             parse: parse_state,
@@ -483,7 +483,7 @@ impl FromStr for LlamaGrammar {
 
 impl Drop for LlamaGrammar {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys::llama_grammar_free(self.grammar.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_grammar_free(self.grammar.as_ptr()) }
     }
 }
 

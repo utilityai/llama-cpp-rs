@@ -35,19 +35,19 @@ fn check_parse_simple() {
             symbol_ids: BTreeMap::from([("root".to_string(), 0),]),
             rules: vec![vec![
                 llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_CHAR,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
                     value: 'c' as u32,
                 },
                 llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_CHAR,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
                     value: 'a' as u32,
                 },
                 llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_CHAR,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
                     value: 't' as u32,
                 },
                 llama_grammar_element {
-                    type_: llama_cpp_sys::LLAMA_GRETYPE_END,
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_END,
                     value: 0,
                 }
             ]],

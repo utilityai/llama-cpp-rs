@@ -1,5 +1,5 @@
 //! A safe wrapper around `llama_context_params`.
-use llama_cpp_sys::{ggml_type, llama_context_params};
+use llama_cpp_sys_2::{ggml_type, llama_context_params};
 use std::fmt::Debug;
 use std::num::NonZeroU32;
 
@@ -42,7 +42,7 @@ pub struct LlamaContextParams {
 /// ```
 impl Default for LlamaContextParams {
     fn default() -> Self {
-        Self::from(unsafe { llama_cpp_sys::llama_context_default_params() })
+        Self::from(unsafe { llama_cpp_sys_2::llama_context_default_params() })
     }
 }
 

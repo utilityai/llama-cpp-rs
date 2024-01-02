@@ -22,7 +22,7 @@ pub mod sample;
 /// Safe wrapper around `llama_context`.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaContext<'a> {
-    pub(crate) context: NonNull<llama_cpp_sys::llama_context>,
+    pub(crate) context: NonNull<llama_cpp_sys_2::llama_context>,
     /// a reference to the contexts model.
     pub model: &'a LlamaModel,
     initialized_logits: Vec<i32>,
@@ -39,7 +39,7 @@ impl Debug for LlamaContext<'_> {
 impl<'model> LlamaContext<'model> {
     pub(crate) fn new(
         llama_model: &'model LlamaModel,
-        llama_context: NonNull<llama_cpp_sys::llama_context>,
+        llama_context: NonNull<llama_cpp_sys_2::llama_context>,
     ) -> Self {
         Self {
             context: llama_context,
@@ -51,7 +51,7 @@ impl<'model> LlamaContext<'model> {
     /// Gets the size of the context.
     #[must_use]
     pub fn n_ctx(&self) -> c_int {
-        unsafe { llama_cpp_sys::llama_n_ctx(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_n_ctx(self.context.as_ptr()) }
     }
 
     /// Decodes the batch.
@@ -65,7 +65,7 @@ impl<'model> LlamaContext<'model> {
     /// - the returned [`c_int`] from llama-cpp does not fit into a i32 (this should never happen on most systems)
     pub fn decode(&mut self, batch: &mut LlamaBatch) -> Result<(), DecodeError> {
         let result =
-            unsafe { llama_cpp_sys::llama_decode(self.context.as_ptr(), batch.llama_batch) };
+            unsafe { llama_cpp_sys_2::llama_decode(self.context.as_ptr(), batch.llama_batch) };
 
         match NonZeroI32::new(result as i32) {
             None => {
@@ -108,7 +108,7 @@ impl<'model> LlamaContext<'model> {
             i
         );
 
-        let data = unsafe { llama_cpp_sys::llama_get_logits_ith(self.context.as_ptr(), i) };
+        let data = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.context.as_ptr(), i) };
         let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
@@ -116,7 +116,7 @@ impl<'model> LlamaContext<'model> {
 
     /// Reset the timings for the context.
     pub fn reset_timings(&mut self) {
-        unsafe { llama_cpp_sys::llama_reset_timings(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_reset_timings(self.context.as_ptr()) }
     }
 
     /// Rows: `n_tokens`
@@ -126,7 +126,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - `n_vocab` does not fit into a usize
     pub fn logits_mut(&mut self, n_tokens: usize) -> &mut [f32] {
-        let logits_ptr = unsafe { llama_cpp_sys::llama_get_logits(self.context.as_ptr()) };
+        let logits_ptr = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
 
         let n_vocab = usize::try_from(self.model.n_vocab()).expect("n_vocab should be positive");
         unsafe { slice::from_raw_parts_mut(logits_ptr, n_vocab * n_tokens) }
@@ -141,14 +141,14 @@ impl<'model> LlamaContext<'model> {
     #[must_use]
     pub fn logits(&self, n_tokens: usize) -> &[f32] {
         let n_vocab = usize::try_from(self.model.n_vocab()).expect("n_vocab should be positive");
-        let logits_ptr = unsafe { llama_cpp_sys::llama_get_logits(self.context.as_ptr()) };
+        let logits_ptr = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
 
         unsafe { slice::from_raw_parts(logits_ptr, n_vocab * n_tokens) }
     }
 
     /// Returns the timings for the context.
     pub fn timings(&mut self) -> LlamaTimings {
-        let timings = unsafe { llama_cpp_sys::llama_get_timings(self.context.as_ptr()) };
+        let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
         LlamaTimings { timings }
     }
 
@@ -166,6 +166,6 @@ impl<'model> LlamaContext<'model> {
 
 impl Drop for LlamaContext<'_> {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys::llama_free(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_free(self.context.as_ptr()) }
     }
 }

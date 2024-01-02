@@ -9,7 +9,7 @@ pub mod data_array;
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 #[allow(clippy::module_name_repetitions)]
-pub struct LlamaToken(pub llama_cpp_sys::llama_token);
+pub struct LlamaToken(pub llama_cpp_sys_2::llama_token);
 
 impl LlamaToken {
     /// Create a new `LlamaToken` from a i32.

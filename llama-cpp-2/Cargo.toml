@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-llama-cpp-sys = { path = "../llama-cpp-sys" }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
@@ -20,7 +20,7 @@ name = "grammar_bias"
 harness = false
 
 [features]
-cublas = ["llama-cpp-sys/cublas"]
+cublas = ["llama-cpp-sys-2/cublas"]
 
 [lints]
 workspace = true

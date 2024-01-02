@@ -43,7 +43,7 @@ impl LlamaBackend {
     #[tracing::instrument(skip_all)]
     pub fn init() -> crate::Result<LlamaBackend> {
         Self::mark_init()?;
-        unsafe { llama_cpp_sys::llama_backend_init(false) }
+        unsafe { llama_cpp_sys_2::llama_backend_init(false) }
         Ok(LlamaBackend {})
     }
 
@@ -61,7 +61,7 @@ impl LlamaBackend {
     #[tracing::instrument(skip_all)]
     pub fn init_numa() -> crate::Result<LlamaBackend> {
         Self::mark_init()?;
-        unsafe { llama_cpp_sys::llama_backend_init(true) }
+        unsafe { llama_cpp_sys_2::llama_backend_init(true) }
         Ok(LlamaBackend {})
     }
 }
@@ -89,6 +89,6 @@ impl Drop for LlamaBackend {
                 unreachable!("This should not be reachable as the only ways to obtain a llama backend involve marking the backend as initialized.")
             }
         }
-        unsafe { llama_cpp_sys::llama_backend_free() }
+        unsafe { llama_cpp_sys_2::llama_backend_free() }
     }
 }

@@ -663,14 +663,14 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "hf-hub",
- "llama-cpp-sys",
+ "llama-cpp-sys-2",
  "pprof",
  "thiserror",
  "tracing",
 ]
 
 [[package]]
-name = "llama-cpp-sys"
+name = "llama-cpp-sys-2"
 version = "0.1.0"
 dependencies = [
  "bindgen",

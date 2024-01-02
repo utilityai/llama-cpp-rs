@@ -6,7 +6,7 @@ use llama_cpp::model::params::LlamaModelParams;
 use llama_cpp::model::LlamaModel;
 use llama_cpp::token::data_array::LlamaTokenDataArray;
 
-use llama_cpp_sys::llama_pos;
+use llama_cpp_sys_2::llama_pos;
 use std::str::FromStr;
 
 #[test]

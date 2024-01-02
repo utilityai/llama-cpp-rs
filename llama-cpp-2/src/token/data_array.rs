@@ -62,11 +62,11 @@ impl LlamaTokenDataArray {
     /// the size of the data can only decrease (i.e you cannot add new elements).
     pub(crate) unsafe fn modify_as_c_llama_token_data_array(
         &mut self,
-        modify: impl FnOnce(&mut llama_cpp_sys::llama_token_data_array),
+        modify: impl FnOnce(&mut llama_cpp_sys_2::llama_token_data_array),
     ) {
         let size = self.data.len();
         let data = self.data.as_mut_ptr().cast();
-        let mut c_llama_token_data_array = llama_cpp_sys::llama_token_data_array {
+        let mut c_llama_token_data_array = llama_cpp_sys_2::llama_token_data_array {
             data,
             size,
             sorted: self.sorted,

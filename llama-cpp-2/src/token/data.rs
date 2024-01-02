@@ -9,7 +9,7 @@ use crate::token::LlamaToken;
 #[repr(transparent)]
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaTokenData {
-    data: llama_cpp_sys::llama_token_data,
+    data: llama_cpp_sys_2::llama_token_data,
 }
 
 impl LlamaTokenData {
@@ -22,7 +22,7 @@ impl LlamaTokenData {
     #[must_use]
     pub fn new(LlamaToken(id): LlamaToken, logit: f32, p: f32) -> Self {
         LlamaTokenData {
-            data: llama_cpp_sys::llama_token_data { id, logit, p },
+            data: llama_cpp_sys_2::llama_token_data { id, logit, p },
         }
     }
     /// Get the token's id

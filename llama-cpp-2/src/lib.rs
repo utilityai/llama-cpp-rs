@@ -97,7 +97,7 @@ pub enum LlamaModelLoadError {
 /// ```
 #[must_use]
 pub fn llama_time_us() -> i64 {
-    unsafe { llama_cpp_sys::llama_time_us() }
+    unsafe { llama_cpp_sys_2::llama_time_us() }
 }
 
 /// get the max number of devices according to llama.cpp (this is generally cuda devices)
@@ -108,7 +108,7 @@ pub fn llama_time_us() -> i64 {
 /// ```
 #[must_use]
 pub fn max_devices() -> c_int {
-    unsafe { llama_cpp_sys::llama_max_devices() }
+    unsafe { llama_cpp_sys_2::llama_max_devices() }
 }
 
 /// is memory mapping supported according to llama.cpp
@@ -121,7 +121,7 @@ pub fn max_devices() -> c_int {
 /// ```
 #[must_use]
 pub fn mmap_supported() -> bool {
-    unsafe { llama_cpp_sys::llama_mmap_supported() }
+    unsafe { llama_cpp_sys_2::llama_mmap_supported() }
 }
 
 /// is memory locking supported according to llama.cpp
@@ -134,7 +134,7 @@ pub fn mmap_supported() -> bool {
 /// ```
 #[must_use]
 pub fn mlock_supported() -> bool {
-    unsafe { llama_cpp_sys::llama_mlock_supported() }
+    unsafe { llama_cpp_sys_2::llama_mlock_supported() }
 }
 
 /// An error that can occur when converting a token to a string.

@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "llama-cpp-sys",
-    "llama-cpp",
+    "llama-cpp-sys-2",
+    "llama-cpp-2",
 ]
 
 [workspace.dependencies]

@@ -6,7 +6,7 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
 use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
-use llama_cpp_sys::{llama_context_params, llama_token_get_type, llama_vocab_type};
+use llama_cpp_sys_2::{llama_context_params, llama_token_get_type, llama_vocab_type};
 use std::ffi::CString;
 use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ pub mod params;
 #[repr(transparent)]
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModel {
-    pub(crate) model: NonNull<llama_cpp_sys::llama_model>,
+    pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
 }
 
 unsafe impl Send for LlamaModel {}
@@ -35,7 +35,7 @@ impl LlamaModel {
     /// platforms due to llama.cpp returning a `c_int` (i32 on most platforms) which is almost certainly positive.
     #[must_use]
     pub fn n_ctx_train(&self) -> u16 {
-        let n_ctx_train = unsafe { llama_cpp_sys::llama_n_ctx_train(self.model.as_ptr()) };
+        let n_ctx_train = unsafe { llama_cpp_sys_2::llama_n_ctx_train(self.model.as_ptr()) };
         u16::try_from(n_ctx_train).expect("n_ctx_train fits into an u16")
     }
 
@@ -50,21 +50,21 @@ impl LlamaModel {
     /// Get the beginning of stream token.
     #[must_use]
     pub fn token_bos(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys::llama_token_bos(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_bos(self.model.as_ptr()) };
         LlamaToken(token)
     }
 
     /// Get the end of stream token.
     #[must_use]
     pub fn token_eos(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys::llama_token_eos(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_eos(self.model.as_ptr()) };
         LlamaToken(token)
     }
 
     /// Get the newline token.
     #[must_use]
     pub fn token_nl(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys::llama_token_nl(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_nl(self.model.as_ptr()) };
         LlamaToken(token)
     }
 
@@ -124,7 +124,7 @@ impl LlamaModel {
         let buffer_capacity =
             c_int::try_from(buffer.capacity()).expect("buffer capacity should fit into a c_int");
         let size = unsafe {
-            llama_cpp_sys::llama_tokenize(
+            llama_cpp_sys_2::llama_tokenize(
                 self.model.as_ptr(),
                 c_string.as_ptr(),
                 c_int::try_from(c_string.as_bytes().len())?,
@@ -140,7 +140,7 @@ impl LlamaModel {
         let size = if size.is_negative() {
             buffer.reserve_exact(usize::try_from(-size).expect("usize's are larger "));
             unsafe {
-                llama_cpp_sys::llama_tokenize(
+                llama_cpp_sys_2::llama_tokenize(
                     self.model.as_ptr(),
                     c_string.as_ptr(),
                     c_int::try_from(c_string.as_bytes().len())?,
@@ -217,7 +217,7 @@ impl LlamaModel {
         let len = c_int::try_from(len).expect("length fits into c_int");
         let buf = string.into_raw();
         let size =
-            unsafe { llama_cpp_sys::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len) };
+            unsafe { llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len) };
 
         match size {
             0 => Err(TokenToStringError::UnknownTokenType),
@@ -237,7 +237,7 @@ impl LlamaModel {
     /// without issue.
     #[must_use]
     pub fn n_vocab(&self) -> c_int {
-        unsafe { llama_cpp_sys::llama_n_vocab(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_n_vocab(self.model.as_ptr()) }
     }
 
     /// The type of vocab the model was trained on.
@@ -247,7 +247,7 @@ impl LlamaModel {
     /// If llama-cpp emits a vocab type that is not known to this library.
     #[must_use]
     pub fn vocab_type(&self) -> VocabType {
-        let vocab_type = unsafe { llama_cpp_sys::llama_vocab_type(self.model.as_ptr()) };
+        let vocab_type = unsafe { llama_cpp_sys_2::llama_vocab_type(self.model.as_ptr()) };
         VocabType::try_from(vocab_type).expect("invalid vocab type")
     }
 
@@ -255,7 +255,7 @@ impl LlamaModel {
     /// without issue.
     #[must_use]
     pub fn n_embd(&self) -> c_int {
-        unsafe { llama_cpp_sys::llama_n_embd(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
     }
 
     /// loads a model from a file.
@@ -277,7 +277,7 @@ impl LlamaModel {
         let cstr = CString::new(path)?;
         let llama_model = unsafe {
             println!("{:?}", params.params);
-            llama_cpp_sys::llama_load_model_from_file(cstr.as_ptr(), params.params)
+            llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params)
         };
 
         let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
@@ -298,7 +298,7 @@ impl LlamaModel {
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let context_params = llama_context_params::from(*params);
         let context = unsafe {
-            llama_cpp_sys::llama_new_context_with_model(self.model.as_ptr(), context_params)
+            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
         };
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -308,7 +308,7 @@ impl LlamaModel {
 
 impl Drop for LlamaModel {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys::llama_free_model(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_free_model(self.model.as_ptr()) }
     }
 }
 
@@ -317,9 +317,9 @@ impl Drop for LlamaModel {
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum VocabType {
     /// Byte Pair Encoding
-    BPE = llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE,
+    BPE = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE,
     /// Sentence Piece Tokenizer
-    SPM = llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM,
+    SPM = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM,
 }
 
 /// There was an error converting a `llama_vocab_type` to a `VocabType`.
@@ -335,8 +335,8 @@ impl TryFrom<llama_vocab_type> for VocabType {
 
     fn try_from(value: llama_vocab_type) -> Result<Self, Self::Error> {
         match value {
-            llama_cpp_sys::LLAMA_VOCAB_TYPE_BPE => Ok(VocabType::BPE),
-            llama_cpp_sys::LLAMA_VOCAB_TYPE_SPM => Ok(VocabType::SPM),
+            llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE => Ok(VocabType::BPE),
+            llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM => Ok(VocabType::SPM),
             unknown => Err(LlamaTokenTypeFromIntError::UnknownValue(unknown)),
         }
     }

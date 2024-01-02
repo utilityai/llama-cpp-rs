@@ -4,7 +4,7 @@ use crate::context::LlamaContext;
 use crate::grammar::LlamaGrammar;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
-use llama_cpp_sys::llama_context;
+use llama_cpp_sys_2::llama_context;
 
 /// struct to hold params for sampling
 #[derive(Debug)]
@@ -109,7 +109,7 @@ impl LlamaContext<'_> {
     /// Accept a token into the grammar.
     pub fn grammar_accept_token(&mut self, grammar: &mut LlamaGrammar, token: LlamaToken) {
         unsafe {
-            llama_cpp_sys::llama_grammar_accept_token(
+            llama_cpp_sys_2::llama_grammar_accept_token(
                 self.context.as_ptr(),
                 grammar.grammar.as_ptr(),
                 token.0,
@@ -125,7 +125,7 @@ impl LlamaContext<'_> {
     ) {
         unsafe {
             llama_token_data_array.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys::llama_sample_grammar(
+                llama_cpp_sys_2::llama_sample_grammar(
                     self.context.as_ptr(),
                     c_llama_token_data_array,
                     llama_grammar.grammar.as_ptr(),
@@ -154,7 +154,7 @@ impl LlamaContext<'_> {
         let ctx: *mut llama_context = self.context.as_ptr();
         unsafe {
             token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
+                llama_cpp_sys_2::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
             });
         }
     }
@@ -167,16 +167,16 @@ impl LlamaContext<'_> {
     #[must_use]
     pub fn sample_token_greedy(&self, mut token_data: LlamaTokenDataArray) -> LlamaToken {
         assert!(!token_data.data.is_empty(), "no tokens");
-        let mut data_arr = llama_cpp_sys::llama_token_data_array {
+        let mut data_arr = llama_cpp_sys_2::llama_token_data_array {
             data: token_data
                 .data
                 .as_mut_ptr()
-                .cast::<llama_cpp_sys::llama_token_data>(),
+                .cast::<llama_cpp_sys_2::llama_token_data>(),
             size: token_data.data.len(),
             sorted: token_data.sorted,
         };
         let token = unsafe {
-            llama_cpp_sys::llama_sample_token_greedy(
+            llama_cpp_sys_2::llama_sample_token_greedy(
                 self.context.as_ptr(),
                 std::ptr::addr_of_mut!(data_arr),
             )
@@ -189,7 +189,7 @@ impl LlamaContext<'_> {
         let ctx = self.context.as_ptr();
         unsafe {
             token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys::llama_sample_softmax(ctx, c_llama_token_data_array);
+                llama_cpp_sys_2::llama_sample_softmax(ctx, c_llama_token_data_array);
             });
         }
     }

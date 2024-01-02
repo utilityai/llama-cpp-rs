@@ -6,7 +6,7 @@ use std::fmt::Debug;
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug)]
 pub struct LlamaModelParams {
-    pub(crate) params: llama_cpp_sys::llama_model_params,
+    pub(crate) params: llama_cpp_sys_2::llama_model_params,
 }
 
 impl LlamaModelParams {
@@ -77,7 +77,7 @@ impl LlamaModelParams {
 impl Default for LlamaModelParams {
     fn default() -> Self {
         LlamaModelParams {
-            params: unsafe { llama_cpp_sys::llama_model_default_params() },
+            params: unsafe { llama_cpp_sys_2::llama_model_default_params() },
         }
     }
 }

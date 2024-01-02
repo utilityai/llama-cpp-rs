@@ -1,7 +1,7 @@
 //! Safe wrapper around `llama_batch`.
 
 use crate::token::LlamaToken;
-use llama_cpp_sys::{llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id};
+use llama_cpp_sys_2::{llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id};
 
 /// A safe wrapper around `llama_batch`.
 #[derive(Debug)]
@@ -10,7 +10,7 @@ pub struct LlamaBatch {
     allocated: usize,
     /// The logits that are initilized. Used by [`LlamaContext`] to ensure that only initilized logits are accessed.
     pub(crate) initialized_logits: Vec<i32>,
-    /// The llama_cpp batch. always initilize by `llama_cpp_sys::llama_batch_init(allocated, <unknown>, <unknown>)`
+    /// The llama_cpp batch. always initilize by `llama_cpp_sys_2::llama_batch_init(allocated, <unknown>, <unknown>)`
     pub(crate) llama_batch: llama_batch,
 }
 

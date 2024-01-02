@@ -8,10 +8,10 @@
       <sourceFolder url="file://$MODULE_DIR$/llama-cpp-mt/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/llama-cpp-rpc/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/llama-cpp-server/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/llama-cpp-sys/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/llama-cpp/benches" isTestSource="true" />
-      <sourceFolder url="file://$MODULE_DIR$/llama-cpp/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/llama-cpp/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/llama-cpp-2/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/llama-cpp-2/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/llama-cpp-2/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/llama-cpp-sys-2/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
