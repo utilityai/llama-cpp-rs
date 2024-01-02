@@ -11,22 +11,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@v2
+      - name: Check out code
+        uses: actions/checkout@v2
 
-    - name: Set up Rust
-      uses: actions/setup-rust@v1
+      - name: Set up Rust
+        uses: actions/setup-rust@v1
 
-    - name: Install cargo-release
-      run: cargo install cargo-release
+      - name: Install cargo-release
+        run: cargo install cargo-release
 
-    - name: Publish to Crates.io (for llama-cpp)
-      run: cargo release
-      env:
+      - name: Publish to Crates.io (for llama-cpp-2)
+        run: cargo release
+        env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
 
-    - name: Publish to Crates.io (for llama-cpp-sys)
-      run: cd llama-cpp-sys && cargo release
-      env:
+      - name: Publish to Crates.io (for llama-cpp-sys-2)
+        run: cd llama-cpp-sys-2 && cargo release
+        env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-
