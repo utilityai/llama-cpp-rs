@@ -3,6 +3,9 @@ name: Update version in TOML files
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   modify_files:
     runs-on: ubuntu-latest
