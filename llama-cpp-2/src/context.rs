@@ -9,7 +9,6 @@ use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
 use crate::{DecodeError};
-use std::os::raw::c_int;
 use std::ptr::NonNull;
 use std::slice;
 
@@ -65,7 +64,7 @@ impl<'model> LlamaContext<'model> {
         let result =
             unsafe { llama_cpp_sys_2::llama_decode(self.context.as_ptr(), batch.llama_batch) };
 
-        match NonZeroI32::new(result as i32) {
+        match NonZeroI32::new(result) {
             None => {
                 self.initialized_logits = batch.initialized_logits.clone();
                 Ok(())
@@ -80,33 +79,42 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - logit `i` is not initialized.
     pub fn candidates_ith(&self, i: i32) -> impl Iterator<Item = LlamaTokenData> + '_ {
-        assert!(
-            self.initialized_logits.contains(&i),
-            "logit {i} is not initialized. only {:?} is",
-            self.initialized_logits
-        );
         (0_i32..).zip(self.get_logits_ith(i)).map(|(i, logit)| {
             let token = LlamaToken::new(i);
             LlamaTokenData::new(token, *logit, 0_f32)
         })
     }
 
-    /// Reset the timings for the context.
-    pub fn reset_timings(&mut self) {
-        unsafe { llama_cpp_sys_2::llama_reset_timings(self.context.as_ptr()) }
-    }
-
-    /// Rows: `n_tokens`
-    /// Cols: `n_vocab`
+    /// Get the logits for the ith token in the context.
     ///
     /// # Panics
     ///
+    /// - `i` is greater than `n_ctx`
     /// - `n_vocab` does not fit into a usize
-    pub fn logits_mut(&mut self, n_tokens: usize) -> &mut [f32] {
-        let logits_ptr = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
+    /// - logit `i` is not initialized.
+    #[must_use]
+    pub fn get_logits_ith(&self, i: i32) -> &[f32] {
+        assert!(
+            self.initialized_logits.contains(&i),
+            "logit {i} is not initialized. only {:?} is",
+            self.initialized_logits
+        );
+        assert!(
+            self.n_ctx() > u32::try_from(i).expect("i does not fit into a u32"),
+            "n_ctx ({}) must be greater than i ({})",
+            self.n_ctx(),
+            i
+        );
 
-        let n_vocab = usize::try_from(self.model.n_vocab()).expect("n_vocab should be positive");
-        unsafe { slice::from_raw_parts_mut(logits_ptr, n_vocab * n_tokens) }
+        let data = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.context.as_ptr(), i) };
+        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
+
+        unsafe { slice::from_raw_parts(data, len) }
+    }
+
+    /// Reset the timings for the context.
+    pub fn reset_timings(&mut self) {
+        unsafe { llama_cpp_sys_2::llama_reset_timings(self.context.as_ptr()) }
     }
 
     /// Returns the timings for the context.
