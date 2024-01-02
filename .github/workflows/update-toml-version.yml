@@ -1,0 +1,32 @@
+name: Update version in TOML files
+
+on:
+  workflow_dispatch:
+
+jobs:
+  modify_files:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Update version in TOML files
+        run: |
+          # Extract the current version from the TOML file
+          CURRENT_VERSION=$(awk -F '"' '/^version/ {print $2}' llama-cpp-2/Cargo.toml)
+
+          # Increment the version
+          NEXT_VERSION=$(echo "$CURRENT_VERSION" | awk -F. -v OFS=. '{++$NF; print}')
+
+          # Update version in llama-cpp-sys-2 Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" llama-cpp-sys-2/Cargo.toml
+
+          # Update version in llama-cpp-2 Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" llama-cpp-2/Cargo.toml
+
+      - name: Upload modified files
+        uses: actions/upload-artifact@v2
+        with:
+          name: modified-files
+          path: llama-cpp-sys-2/Cargo.toml, llama-cpp-2/Cargo.toml
