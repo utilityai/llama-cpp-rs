@@ -48,7 +48,7 @@ impl<'model> LlamaContext<'model> {
 
     /// Gets the size of the context.
     #[must_use]
-    pub fn n_ctx(&self) -> c_int {
+    pub fn n_ctx(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_n_ctx(self.context.as_ptr()) }
     }
 
@@ -89,27 +89,6 @@ impl<'model> LlamaContext<'model> {
             let token = LlamaToken::new(i);
             LlamaTokenData::new(token, *logit, 0_f32)
         })
-    }
-
-    /// Get the logits for the ith token in the context.
-    ///
-    /// # Panics
-    ///
-    /// - `i` is greater than `n_ctx`
-    /// - `n_vocab` does not fit into a usize
-    #[must_use]
-    pub fn get_logits_ith(&self, i: i32) -> &[f32] {
-        assert!(
-            self.n_ctx() > i,
-            "n_ctx ({}) must be greater than i ({})",
-            self.n_ctx(),
-            i
-        );
-
-        let data = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.context.as_ptr(), i) };
-        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
-
-        unsafe { slice::from_raw_parts(data, len) }
     }
 
     /// Reset the timings for the context.
