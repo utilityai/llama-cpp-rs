@@ -12,19 +12,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Publish crates for llama-cpp-2
-        uses: katyo/publish-crates@v2
-        with:
-          path: './llama-cpp-2'
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
       - name: Publish crates for llama-cpp-sys-2
-        uses: katyo/publish-crates@v2
-        with:
-          path: './llama-cpp-sys-2'
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish \
+          --package llama-cpp-sys-2/Cargo.toml \
+          --token ${{ secrets.CARGO_REGISTRY_TOKEN }} \
+          --verbose \
+          --dry-run
+      - name: Publish crates for llama-cpp-2
+        run: cargo publish \
+          --package llama-cpp-2 \
+          --token ${{ secrets.CARGO_REGISTRY_TOKEN }} \
+          --verbose \
+          --dry-run

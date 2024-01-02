@@ -1,7 +1,9 @@
 [package]
 name = "llama-cpp-sys-2"
+description = "Low Level Bindings to llama.cpp"
 version = "0.1.0"
 edition = "2021"
+license = "MIT or Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
