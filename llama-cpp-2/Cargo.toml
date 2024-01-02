@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2" }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.0" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
