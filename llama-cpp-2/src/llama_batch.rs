@@ -140,7 +140,7 @@ impl Drop for LlamaBatch {
     /// Drops the `LlamaBatch`.
     ///
     /// ```
-    /// # use llama_cpp::llama_batch::LlamaBatch;
+    /// # use llama_cpp_2::llama_batch::LlamaBatch;
     /// # use std::error::Error;
     /// # fn main() -> Result<(), Box<dyn Error>> {
     /// let batch = LlamaBatch::new_from_prompt(&[]);

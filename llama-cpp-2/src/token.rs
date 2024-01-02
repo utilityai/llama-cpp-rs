@@ -15,7 +15,7 @@ impl LlamaToken {
     /// Create a new `LlamaToken` from a i32.
     ///
     /// ```
-    /// # use llama_cpp::token::LlamaToken;
+    /// # use llama_cpp_2::token::LlamaToken;
     /// let token = LlamaToken::new(0);
     /// assert_eq!(token, LlamaToken(0));
     /// ```

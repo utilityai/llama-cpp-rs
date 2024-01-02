@@ -141,7 +141,7 @@ pub enum LlamaModelLoadError {
 
 /// get the time (in microseconds) according to llama.cpp
 /// ```
-/// # use llama_cpp::llama_time_us;
+/// # use llama_cpp_2::llama_time_us;
 /// let time = llama_time_us();
 /// assert!(time > 0);
 /// ```
@@ -152,7 +152,7 @@ pub fn llama_time_us() -> i64 {
 
 /// get the max number of devices according to llama.cpp (this is generally cuda devices)
 /// ```
-/// # use llama_cpp::max_devices;
+/// # use llama_cpp_2::max_devices;
 /// let max_devices = max_devices();
 /// assert!(max_devices >= 0);
 /// ```
@@ -163,7 +163,7 @@ pub fn max_devices() -> c_int {
 
 /// is memory mapping supported according to llama.cpp
 /// ```
-/// # use llama_cpp::mmap_supported;
+/// # use llama_cpp_2::mmap_supported;
 /// let mmap_supported = mmap_supported();
 /// if mmap_supported {
 ///   println!("mmap_supported!");
@@ -176,7 +176,7 @@ pub fn mmap_supported() -> bool {
 
 /// is memory locking supported according to llama.cpp
 /// ```
-/// # use llama_cpp::mlock_supported;
+/// # use llama_cpp_2::mlock_supported;
 /// let mlock_supported = mlock_supported();
 /// if mlock_supported {
 ///    println!("mlock_supported!");

@@ -10,7 +10,7 @@ pub struct LlamaTimings {
 impl LlamaTimings {
     /// Create a new `LlamaTimings`.
     /// ```
-    /// # use llama_cpp::timing::LlamaTimings;
+    /// # use llama_cpp_2::timing::LlamaTimings;
     /// let timings = LlamaTimings::new(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7, 8, 9);
     /// let timings_str = "load time = 3.00 ms
     /// sample time = 4.00 ms / 7 runs (0.57 ms per token, 1750.00 tokens per second)
