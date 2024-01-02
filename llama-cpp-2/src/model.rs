@@ -266,13 +266,13 @@ impl LlamaModel {
     #[tracing::instrument(skip_all)]
     pub fn load_from_file(
         _: &LlamaBackend,
-        path: &Path,
+        path: impl AsRef<Path>,
         params: &LlamaModelParams,
     ) -> Result<Self, LlamaModelLoadError> {
         debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
         let path = path
             .to_str()
-            .ok_or(LlamaModelLoadError::PathToStrError(PathBuf::from(path)))?;
+            .ok_or(LlamaModelLoadError::PathToStrError(PathBuf::from(&path)))?;
 
         let cstr = CString::new(path)?;
         let llama_model = unsafe {

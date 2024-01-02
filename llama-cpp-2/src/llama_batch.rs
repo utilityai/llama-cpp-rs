@@ -96,13 +96,17 @@ impl LlamaBatch {
     }
     /// Create a new `LlamaBatch` that cab contain up to `n_tokens` tokens.
     ///
+    /// # Arguments
+    ///
+    /// - `n_tokens`: the maximum number of tokens that can be added to the batch
+    ///
     /// # Panics
     ///
     /// Panics if `n_tokens` is greater than `i32::MAX`.
     #[must_use]
-    pub fn new(n_tokens: usize, embd: i32, n_seq_max: i32) -> Self {
+    pub fn new(n_tokens: usize, n_seq_max: i32) -> Self {
         let n_tokens_i32 = i32::try_from(n_tokens).expect("cannot fit n_tokens into a i32");
-        let batch = unsafe { llama_batch_init(n_tokens_i32, embd, n_seq_max) };
+        let batch = unsafe { llama_batch_init(n_tokens_i32, 0, n_seq_max) };
 
         LlamaBatch {
             allocated: n_tokens,

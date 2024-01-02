@@ -4,6 +4,56 @@
 //! with all the rust idioms. Instead it provided safe wrappers around nearly direct bindings to
 //! llama.cpp. This makes it easier to keep up with the changes in llama.cpp, but does mean that
 //! the API is not as nice as it could be.
+//!
+//! # Examples
+//!
+//! ## Inference
+//!
+//! ```no_run
+//! use llama_cpp_2::model::LlamaModel;
+//! use llama_cpp_2::llama_backend::LlamaBackend;
+//! use llama_cpp_2::context::params::LlamaContextParams;
+//! use llama_cpp_2::llama_batch::LlamaBatch;
+//! use llama_cpp_2::model::params::LlamaModelParams;
+//! use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+//!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!
+//! // initialize GGML
+//! let backend = LlamaBackend::init()?;
+//!
+//! // load the model (this may be slow)
+//! let model = LlamaModel::load_from_file(&backend, "path/to/model", &LlamaModelParams::default())?;
+//! let prompt = "How do I kill a process on linux?";
+//! let tokens = model.str_to_token(prompt, true)?;
+//!
+//! // create a context and batch
+//! let mut context = model.new_context(&backend, &LlamaContextParams::default())?;
+//! let mut batch = LlamaBatch::new(512, 1);
+//! let mut pos: i32 = 0;
+//!
+//! // add the prompt to the batch
+//! let last_index = i32::try_from(tokens.len()).unwrap() - 1;
+//! for token in tokens {
+//!     batch.add(token, pos, &[0], pos == last_index);
+//!     pos += 1;
+//! }
+//!
+//! let mut response = vec![];
+//!
+//! // evaluate first 10 tokens
+//! for i in 0..10 {
+//!     context.decode(&mut batch)?;
+//!     batch.clear();
+//!     let token = context.sample_token_greedy(LlamaTokenDataArray::from_iter(model.tokens(), false));
+//!     response.push(token);
+//! }
+//!
+//! let response_str = model.tokens_to_str(&response)?;
+//! println!("{}", response_str);
+//!
+//! # Ok(())
+//! # }
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;

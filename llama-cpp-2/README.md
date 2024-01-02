@@ -5,7 +5,8 @@ A wrapper around the [llama-cpp](https://github.com/ggerganov/llama.cpp/) librar
 # Goals
 
 - Safe
-- Up to date (llama-cpp-rs is out of date)
+- Up to date (llama.cpp moves fast)
+- 100% API coverage (not yet complete)
 - Abort free (llama.cpp will abort if you violate its invariants. This library will attempt to prevent that by ether
   ensuring the invariants are upheld statically or by checking them ourselves and returning an error)
 - Performant (no meaningful overhead over using llama-cpp-sys-2)
