@@ -1,7 +1,10 @@
 name: Update version in TOML files
 
 on:
+  repository_dispatch:
+    types : [trigger-update-toml-version]
   workflow_dispatch:
+
 
 permissions:
   contents: write
