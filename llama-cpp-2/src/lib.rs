@@ -33,7 +33,7 @@
 //! let mut pos: i32 = 0;
 //!
 //! // add the prompt to the batch
-//! let last_index = i32::try_from(tokens.len()).unwrap() - 1;
+//! let last_index = i32::try_from(tokens.len())? - 1;
 //! for token in tokens {
 //!     batch.add(token, pos, &[0], pos == last_index);
 //!     pos += 1;
@@ -47,8 +47,8 @@
 //!     let token = context.sample_token_greedy(LlamaTokenDataArray::from_iter(context.candidates_ith(batch.n_tokens()), false));
 //!     response.push(token);
 //!     batch.clear();
-//!     pos += 1;
 //!     batch.add(token, pos, &[0], true);
+//!     pos += 1;
 //! }
 //!
 //! let response_str = model.tokens_to_str(&response)?;
