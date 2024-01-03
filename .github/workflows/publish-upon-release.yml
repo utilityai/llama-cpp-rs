@@ -19,8 +19,8 @@ jobs:
           submodules: recursive
       - name: Publish crates for llama-cpp-sys-2
         run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-sys-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
-      - name: Publish crates for llama-cpp-2
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
+#      - name: Publish crates for llama-cpp-2
+#        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       - name: Trigger Update version in TOML files Workflow
         run: |
           curl -X POST \
