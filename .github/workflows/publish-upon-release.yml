@@ -29,7 +29,6 @@ jobs:
 
           # Update version in llama-cpp-2 Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" llama-cpp-2/Cargo.toml
-          sed -i "s/^\(llama-cpp-sys-2 = { path = \"\.\.\/llama-cpp-sys-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" llama-cpp-2/Cargo.toml
 
 
           # Commit the changes
