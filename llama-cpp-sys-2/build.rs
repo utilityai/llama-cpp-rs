@@ -12,11 +12,13 @@ fn main() {
         .define("_GNU_SOURCE", Some("1"))
         .compile("ggml");
 
-    cc::Build::new()
-        .cuda(true)
-        .include("llama.cpp")
-        .file("llama.cpp/ggml-cuda.cu")
-        .compile("ggml-cuda");
+    if cublas_enabled {
+        cc::Build::new()
+            .cuda(true)
+            .include("llama.cpp")
+            .file("llama.cpp/ggml-cuda.cu")
+            .compile("ggml-cuda");
+    }
 
     cc::Build::new()
         .include("llama.cpp")
@@ -33,11 +35,19 @@ fn main() {
         .file("llama.cpp/ggml-quants.c")
         .compile("ggml-quants");
 
-    cc::Build::new()
+    let mut llama_build = cc::Build::new();
+
+    llama_build
         .cpp(true)
-        .include("llama.cpp")
-        .define("GGML_USE_CUBLAS", if cublas_enabled { Some("1") } else { None })
-        .cuda(cublas_enabled)
+        .include("llama.cpp");
+
+    if cublas_enabled {
+        llama_build
+            .define("GGML_USE_CUBLAS", None)
+            .cuda(true);
+    }
+
+    llama_build
         .file("llama.cpp/llama.cpp")
         .compile("llama");
 
