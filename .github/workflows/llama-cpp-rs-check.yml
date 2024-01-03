@@ -13,22 +13,6 @@ concurrency:
 permissions: read-all
 
 jobs:
-  changes:
-    name: Changes
-    runs-on: ubuntu-latest
-    outputs:
-      llama-cpp-rs: ${{ steps.filter.outputs.llama-cpp-rs }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            llama-cpp-rs:
-              - 'llama-cpp-rs/**'
   check:
     name: Run Tests on LLama Cpp Rs
     runs-on: ${{ vars.RUNNER }}
