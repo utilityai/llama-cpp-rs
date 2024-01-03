@@ -23,6 +23,13 @@ jobs:
         run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       - name: Update version in TOML files
         run: |
+          
+          # Ensure that you are on the 'main' branch
+          git checkout main
+
+      # Pull the latest changes from the 'main' branch
+          git pull origin main
+          
           RUST_BACKTRACE=1
           # Extract the current version from the TOML file
           CURRENT_VERSION=$(awk -F '"' '/^version/ {print $2}' llama-cpp-2/Cargo.toml)
