@@ -23,6 +23,6 @@ jobs:
 #        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       # Trigger the 'update-toml-version' workflow
       - name: Trigger update-toml-version workflow
-        uses: actions/workflow-dispatch@v2
+        uses: actions/trigger-workflow@v3
         with:
           workflow: update-toml-version
