@@ -9,7 +9,7 @@ members = [
 hf-hub = { version = "0.3.2" }
 criterion = "0.5.1"
 pprof = "0.13.0"
-thiserror = "1.0.51"
+thiserror = "1.0.56"
 tracing = "0.1.40"
 
 [workspace.lints.rust]
