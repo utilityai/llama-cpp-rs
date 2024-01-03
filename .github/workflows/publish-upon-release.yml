@@ -26,4 +26,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh workflow run update-toml-version.yaml -R owner/repo
+          gh workflow run update-toml-version.yaml 
