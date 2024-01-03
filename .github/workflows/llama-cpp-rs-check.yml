@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   check:
     name: Run Tests on LLama Cpp Rs
-    runs-on: ${{ vars.RUNNER }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
