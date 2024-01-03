@@ -6,6 +6,9 @@ on:
       - created
     workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -15,9 +18,9 @@ jobs:
         with:
           submodules: recursive
       - name: Publish crates for llama-cpp-sys-2
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-sys-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose
+        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-sys-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       - name: Publish crates for llama-cpp-2
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose
+        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose --dry-run
       - name: Update version in TOML files
         run: |
           RUST_BACKTRACE=1
@@ -35,11 +38,11 @@ jobs:
           sed -i "s/^\(llama-cpp-sys-2 = { path = \"\.\.\/llama-cpp-sys-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" llama-cpp-2/Cargo.toml
 
 
-          # Commit the changes
+          # Commit the changes  
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
           git add llama-cpp-sys-2/Cargo.toml llama-cpp-2/Cargo.toml
           git commit -m "Bump version to $NEXT_VERSION [skip ci]"
 
           # Push the changes back to the repository
-          git push origin main:$GITHUB_REF
+          git push origin main
