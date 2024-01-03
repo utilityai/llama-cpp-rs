@@ -15,7 +15,7 @@ permissions: read-all
 jobs:
   changes:
     name: Changes
-    runs-on: ${{ vars.CHECKS_RUNNER }}
+    runs-on: ubuntu-latest
     outputs:
       llama-cpp-rs: ${{ steps.filter.outputs.llama-cpp-rs }}
     steps:
