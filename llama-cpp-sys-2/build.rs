@@ -6,27 +6,40 @@ fn main() {
 
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
 
-    let mut cmake_build = cmake::Config::new("llama.cpp");
+    cc::Build::new()
+        .include("llama.cpp")
+        .file("llama.cpp/ggml.c")
+        .define("_GNU_SOURCE", Some("1"))
+        .compile("ggml");
 
-    if cublas_enabled {
-        cmake_build.define("LLAMA_CUBLAS", "ON");
-    }
+    cc::Build::new()
+        .cuda(true)
+        .include("llama.cpp")
+        .file("llama.cpp/ggml-cuda.cu")
+        .compile("ggml-cuda");
 
-    cmake_build.define("LLAMA_STATIC", "ON");
-    cmake_build.build_target("llama");
+    cc::Build::new()
+        .include("llama.cpp")
+        .file("llama.cpp/ggml-alloc.c")
+        .compile("ggml-alloc");
 
-    let llama = cmake_build.build();
+    cc::Build::new()
+        .include("llama.cpp")
+        .file("llama.cpp/ggml-backend.c")
+        .compile("ggml-backend");
 
-    println!("cargo:rustc-link-lib=dylib=stdc++");
+    cc::Build::new()
+        .include("llama.cpp")
+        .file("llama.cpp/ggml-quants.c")
+        .compile("ggml-quants");
 
-    if cublas_enabled {
-        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
-        println!("cargo:rustc-link-lib=dylib=cudart");
-        println!("cargo:rustc-link-lib=dylib=cublas");
-    }
-
-    println!("cargo:rustc-link-search=native={}/build", llama.display());
-    println!("cargo:rustc-link-lib=static=llama");
+    cc::Build::new()
+        .cpp(true)
+        .include("llama.cpp")
+        .define("GGML_USE_CUBLAS", if cublas_enabled { Some("1") } else { None })
+        .cuda(cublas_enabled)
+        .file("llama.cpp/llama.cpp")
+        .compile("llama");
 
     let header = "llama.cpp/llama.h";
 

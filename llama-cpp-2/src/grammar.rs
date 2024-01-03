@@ -23,7 +23,7 @@ pub struct ExtraneousCharsAfterRule {
     pub rest: String,
 }
 
-/// There was an erorr parsing the grammar.
+/// There was an error parsing the grammar.
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::module_name_repetitions)]
 pub enum GrammarParseError {

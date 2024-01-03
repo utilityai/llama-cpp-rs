@@ -44,7 +44,7 @@
 //! // evaluate first 10 tokens
 //! for i in 0..10 {
 //!     context.decode(&mut batch)?;
-//!     let token = context.sample_token_greedy(context.candidates_ith(batch.n_tokens()));
+//!     let token = context.sample_token_greedy(LlamaTokenDataArray::from_iter(context.candidates_ith(batch.n_tokens()), false));
 //!     response.push(token);
 //!     batch.clear();
 //! }

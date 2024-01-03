@@ -10,6 +10,7 @@ use llama_cpp_sys_2::llama_pos;
 use std::str::FromStr;
 
 #[test]
+#[ignore] // slow
 fn test_generate_cat_via_grammar() {
     let grammar = r#"root ::= "cat""#;
     let mut grammar = LlamaGrammar::from_str(grammar).unwrap();
