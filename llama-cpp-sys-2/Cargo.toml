@@ -12,8 +12,8 @@ links = "llama"
 [dependencies]
 
 [build-dependencies]
-bindgen = "0.69.1"
-cc = "1.0.83"
+bindgen = { workspace = true }
+cc = { workspace = true }
 
 [features]
 cublas = []
