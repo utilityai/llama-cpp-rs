@@ -16,12 +16,6 @@ jobs:
   check:
     name: Run Tests on LLama Cpp Rs
     runs-on: ${{ vars.RUNNER }}
-    defaults:
-      run:
-        working-directory: ./llama-cpp-rs
-    needs:
-      - changes
-    if: ${{ needs.changes.outputs.llama-cpp-rs == 'true' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
