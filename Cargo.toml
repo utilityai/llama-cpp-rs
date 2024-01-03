@@ -6,11 +6,11 @@ members = [
 ]
 
 [workspace.dependencies]
+thiserror = "1"
+tracing = "0.1"
 hf-hub = { version = "0.3.2" }
 criterion = "0.5.1"
 pprof = "0.13.0"
-thiserror = "1.0.56"
-tracing = "0.1.40"
 
 [workspace.lints.rust]
 missing_docs = { level = "warn" }
