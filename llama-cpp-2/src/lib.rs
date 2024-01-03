@@ -47,6 +47,8 @@
 //!     let token = context.sample_token_greedy(LlamaTokenDataArray::from_iter(context.candidates_ith(batch.n_tokens()), false));
 //!     response.push(token);
 //!     batch.clear();
+//!     pos += 1;
+//!     batch.add(token, pos, &[0], true);
 //! }
 //!
 //! let response_str = model.tokens_to_str(&response)?;
