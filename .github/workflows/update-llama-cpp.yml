@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   update:
+    runs-on: ubuntu-latest
     name: Update llama cpp
     steps:
       - uses: actions/checkout@v3
