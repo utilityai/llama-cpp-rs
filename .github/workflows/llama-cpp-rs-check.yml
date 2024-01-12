@@ -31,5 +31,7 @@ jobs:
           components: clippy, rustfmt
       - name: Clippy
         run: cargo clippy
-      - name: Clippy
+      - name: Fmt
         run: cargo fmt
+      - name: Test
+        run: cargo test
