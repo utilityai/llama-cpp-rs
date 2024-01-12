@@ -28,6 +28,6 @@ jobs:
       - name: commit
         run: git commit -am "updated llama.cpp"
       - name: push
-        run: git push
+        run: git push --set-upstream origin update-llama-cpp-$(date -I)
       - name: create pr
         run: gh pr create --fill
