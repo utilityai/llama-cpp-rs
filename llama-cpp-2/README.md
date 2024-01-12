@@ -1,22 +1,19 @@
 # llama-cpp-rs-2
 
+[utilityai]: https://utilityai.ca
+
 A wrapper around the [llama-cpp](https://github.com/ggerganov/llama.cpp/) library for rust.
 
-# Goals
+# Info
 
-- Safe
-- Up to date (llama.cpp moves fast)
-- 100% API coverage (not yet complete)
-- Abort free (llama.cpp will abort if you violate its invariants. This library will attempt to prevent that by either
-  ensuring the invariants are upheld statically or by checking them ourselves and returning an error)
-- Performant (no meaningful overhead over using llama-cpp-sys-2)
-- Well documented
+This is part of the project powering all the LLMs at [utilityai], it is tighly coupled llama.cpp and mimics its API as closly as possible while being safe in order to stay up to date.
 
-# Non-goals
+# Disclaimer
 
-- Idiomatic rust (I will prioritize a more direct translation of the C++ API over a more idiomatic rust API due to
-  maintenance burden)
+This is not a simple library to use. In an ideal work a nice abstraction would be written on top of this crate to provide an ergonomic API - the benfits of this crate over raw bindings is safety and not much else.
+
+We compensate for this shortcoming (we hope) by providing lots of examples and good documentation. Testing is a work in progress.
 
 # Contributing
 
-Contributions are welcome. Please open an issue before starting work on a PR.
+Contributions are welcome. Please open an issue before starting work on a non-trivial PR.
