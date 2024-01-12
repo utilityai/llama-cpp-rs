@@ -39,6 +39,7 @@ fn main() {
 
     llama_build
         .cpp(true)
+        .flag_if_supported("--std=c++17")
         .include("llama.cpp");
 
     if cublas_enabled {
