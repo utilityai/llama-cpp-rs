@@ -30,4 +30,6 @@ jobs:
       - name: push
         run: git push --set-upstream origin update-llama-cpp-$(date -I)
       - name: create pr
-        run: gh pr create --fill
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
+          gh pr create --fill
