@@ -21,10 +21,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Setup protoc
-        uses: arduino/setup-protoc@v2.1.0
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Compile Deps
         env:
           DEBIAN_FRONTEND: noninteractive
