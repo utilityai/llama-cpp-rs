@@ -7,7 +7,9 @@
 //!
 //! # Examples
 //!
-//! See the `examples` folder
+//! See the (examples)[https://github.com/utilityai/llama-cpp-rs/tree/main/llama-cpp-2/examples] folder.
+//!
+//! - (simple)[https://github.com/utilityai/llama-cpp-rs/blob/main/llama-cpp-2/examples/simple.rs]
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
