@@ -7,57 +7,7 @@
 //!
 //! # Examples
 //!
-//! ## Inference
-//!
-//! ```no_run
-//! use llama_cpp_2::model::LlamaModel;
-//! use llama_cpp_2::llama_backend::LlamaBackend;
-//! use llama_cpp_2::context::params::LlamaContextParams;
-//! use llama_cpp_2::llama_batch::LlamaBatch;
-//! use llama_cpp_2::model::params::LlamaModelParams;
-//! use llama_cpp_2::token::data_array::LlamaTokenDataArray;
-//!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!
-//! // initialize GGML
-//! let backend = LlamaBackend::init()?;
-//!
-//! // load the model (this may be slow)
-//! eprintln!("Loading model...");
-//! let model = LlamaModel::load_from_file(&backend, "/home/marcus/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-Chat-GGUF/blobs/08a5566d61d7cb6b420c3e4387a39e0078e1f2fe5f055f3a03887385304d4bfa", &LlamaModelParams::default())?;
-//! let prompt = "How do I kill a process on linux?";
-//! let tokens = model.str_to_token(prompt, true)?;
-//!
-//! // create a context and batch
-//! let mut context = model.new_context(&backend, &LlamaContextParams::default())?;
-//! let mut batch = LlamaBatch::new(512, 1);
-//! let mut pos: i32 = 0;
-//!
-//! // add the prompt to the batch
-//! let last_index = i32::try_from(tokens.len())? - 1;
-//! for token in tokens {
-//!     batch.add(token, pos, &[0], pos == last_index);
-//!     pos += 1;
-//! }
-//!
-//! let mut response = vec![];
-//!
-//! eprintln!("Eval...");
-//! // evaluate first 10 tokens
-//! for i in 0..10 {
-//!     context.decode(&mut batch)?;
-//!     let token = context.sample_token_greedy(LlamaTokenDataArray::from_iter(context.candidates_ith(batch.n_tokens()), false));
-//!     response.push(token);
-//!     batch.clear();
-//!     batch.add(token, pos, &[0], true);
-//!     pos += 1;
-//! }
-//!
-//! let response_str = model.tokens_to_str(&response)?;
-//! println!("{}", response_str);
-//!
-//! # Ok(())
-//! # }
+//! See the `examples` folder
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
