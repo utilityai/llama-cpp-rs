@@ -13,19 +13,17 @@ fn main() {
     ggml.cpp(false);
     llama_cpp.cpp(true);
 
+    // https://github.com/ggerganov/llama.cpp/blob/a836c8f534ab789b02da149fbdaf7735500bff74/Makefile#L364-L368
     if let Some(ggml_cuda) = &mut ggml_cuda {
-        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
-        println!("cargo:rustc-link-search=native=/opt/cuda/lib64");
-
-        let libs = "cuda cublas culibos cudart cublasLt pthread dl rt";
-
-        for lib in libs.split_whitespace() {
+        for lib in ["cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt"] {
             println!("cargo:rustc-link-lib={}", lib);
         }
 
+        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+
         ggml_cuda
             .cuda(true)
-            .flag("-arch=native")
+            .flag("-arch=native") // FIX for: ggml-cuda was compiled without support for the current GPU architecture.
             .file("llama.cpp/ggml-cuda.cu")
             .include("llama.cpp/ggml-cuda.h");
 
@@ -39,15 +37,21 @@ fn main() {
         ggml_cuda.compile("ggml-cuda");
     }
 
+    if cfg!(target_os = "linux") {
+        ggml.define("_GNU_SOURCE", None);
+    }
+
     ggml
+        .std("c11")
         .file("llama.cpp/ggml.c")
         .file("llama.cpp/ggml-alloc.c")
         .file("llama.cpp/ggml-backend.c")
         .file("llama.cpp/ggml-quants.c")
-        .define("_GNU_SOURCE", None)
         .define("GGML_USE_K_QUANTS", None);
 
     llama_cpp
+        .define("_XOPEN_SOURCE", Some("600"))
+        .std("c++11")
         .file("llama.cpp/llama.cpp");
 
     println!("compiling ggml");
