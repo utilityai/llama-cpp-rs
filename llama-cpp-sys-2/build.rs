@@ -6,51 +6,55 @@ fn main() {
 
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
 
-    cc::Build::new()
-        .include("llama.cpp")
-        .file("llama.cpp/ggml.c")
-        .define("_GNU_SOURCE", Some("1"))
-        .compile("ggml");
+    let mut ggml = cc::Build::new();
+    let mut ggml_cuda = if cublas_enabled { Some(cc::Build::new()) } else { None };
+    let mut llama_cpp = cc::Build::new();
 
-    if cublas_enabled {
-        cc::Build::new()
+    ggml.cpp(false);
+    llama_cpp.cpp(true);
+
+    if let Some(ggml_cuda) = &mut ggml_cuda {
+        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+        println!("cargo:rustc-link-search=native=/opt/cuda/lib64");
+
+        let libs = "cuda cublas culibos cudart cublasLt pthread dl rt";
+
+        for lib in libs.split_whitespace() {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
+
+        ggml_cuda
             .cuda(true)
-            .include("llama.cpp")
+            .flag("-arch=native")
             .file("llama.cpp/ggml-cuda.cu")
-            .compile("ggml-cuda");
+            .include("llama.cpp/ggml-cuda.h");
+
+        ggml.define("GGML_USE_CUBLAS", None);
+        ggml_cuda.define("GGML_USE_CUBLAS", None);
+        llama_cpp.define("GGML_USE_CUBLAS", None);
     }
 
-    cc::Build::new()
-        .include("llama.cpp")
+    if let Some(ggml_cuda) = ggml_cuda {
+        println!("compiling ggml-cuda");
+        ggml_cuda.compile("ggml-cuda");
+    }
+
+    ggml
+        .file("llama.cpp/ggml.c")
         .file("llama.cpp/ggml-alloc.c")
-        .compile("ggml-alloc");
-
-    cc::Build::new()
-        .include("llama.cpp")
         .file("llama.cpp/ggml-backend.c")
-        .compile("ggml-backend");
-
-    cc::Build::new()
-        .include("llama.cpp")
         .file("llama.cpp/ggml-quants.c")
-        .compile("ggml-quants");
+        .define("_GNU_SOURCE", None)
+        .define("GGML_USE_K_QUANTS", None);
 
-    let mut llama_build = cc::Build::new();
+    llama_cpp
+        .file("llama.cpp/llama.cpp");
 
-    llama_build
-        .cpp(true)
-        .flag_if_supported("--std=c++17")
-        .include("llama.cpp");
+    println!("compiling ggml");
+    ggml.compile("ggml");
 
-    if cublas_enabled {
-        llama_build
-            .define("GGML_USE_CUBLAS", None)
-            .cuda(true);
-    }
-
-    llama_build
-        .file("llama.cpp/llama.cpp")
-        .compile("llama");
+    println!("compiling llama");
+    llama_cpp.compile("llama");
 
     let header = "llama.cpp/llama.h";
 

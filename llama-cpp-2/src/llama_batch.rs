@@ -72,6 +72,7 @@ impl LlamaBatch {
     /// # Arguments
     ///
     /// - `n_tokens`: the maximum number of tokens that can be added to the batch
+    /// - `n_seq_max`: the maximum number of sequences that can be added to the batch (generally 1 unless you know what you are doing)
     ///
     /// # Panics
     ///
@@ -85,14 +86,6 @@ impl LlamaBatch {
             allocated: n_tokens,
             initialized_logits: vec![],
             llama_batch: batch,
-        }
-    }
-
-    /// add a prompt to the batch at the given sequence ids. This must be the initial prompt as it
-    /// will be added to the batch starting at position 0.
-    pub fn add_prompt_seq(&mut self, prompt: &[LlamaToken], seq_ids: &[i32]) {
-        for (i, &token) in (0_i32..).zip(prompt) {
-            self.add(token, i, seq_ids, false);
         }
     }
 

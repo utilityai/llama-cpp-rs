@@ -23,7 +23,8 @@
 //! let backend = LlamaBackend::init()?;
 //!
 //! // load the model (this may be slow)
-//! let model = LlamaModel::load_from_file(&backend, "path/to/model", &LlamaModelParams::default())?;
+//! eprintln!("Loading model...");
+//! let model = LlamaModel::load_from_file(&backend, "/home/marcus/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-Chat-GGUF/blobs/08a5566d61d7cb6b420c3e4387a39e0078e1f2fe5f055f3a03887385304d4bfa", &LlamaModelParams::default())?;
 //! let prompt = "How do I kill a process on linux?";
 //! let tokens = model.str_to_token(prompt, true)?;
 //!
@@ -41,6 +42,7 @@
 //!
 //! let mut response = vec![];
 //!
+//! eprintln!("Eval...");
 //! // evaluate first 10 tokens
 //! for i in 0..10 {
 //!     context.decode(&mut batch)?;
@@ -213,4 +215,23 @@ pub enum StringToTokenError {
     #[error("{0}")]
     /// Failed to convert a provided integer to a c_int.
     CIntConversionError(#[from] std::num::TryFromIntError),
+}
+
+/// Get the time in microseconds according to ggml
+///
+/// ```
+/// # use std::time::Duration;
+/// use llama_cpp_2::ggml_time_us;
+///
+/// let start = ggml_time_us();
+///
+/// std::thread::sleep(Duration::from_micros(10));
+///
+/// let end = ggml_time_us();
+///
+/// let elapsed = end - start;
+///
+/// assert!(elapsed >= 10)
+pub fn ggml_time_us() -> i64 {
+    unsafe { llama_cpp_sys_2::ggml_time_us() }
 }

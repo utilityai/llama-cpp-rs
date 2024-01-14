@@ -236,7 +236,7 @@ impl LlamaModel {
     /// This returns a `c_int` for maximum compatibility. Most of the time it can be cast to an i32
     /// without issue.
     #[must_use]
-    pub fn n_vocab(&self) -> c_int {
+    pub fn n_vocab(&self) -> i32 {
         unsafe { llama_cpp_sys_2::llama_n_vocab(self.model.as_ptr()) }
     }
 
