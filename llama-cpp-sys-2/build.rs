@@ -23,7 +23,10 @@ fn main() {
 
         ggml_cuda
             .cuda(true)
-            .flag("-arch=native") // FIX for: ggml-cuda was compiled without support for the current GPU architecture.
+            .std("c++11")
+            // This is a fix for "ggml-cuda was compiled without support for the current GPU architecture."
+            // the Makefile does a *lot* of complex logic around this - so I expect this will break some stuff.
+            .flag("-arch=native")
             .file("llama.cpp/ggml-cuda.cu")
             .include("llama.cpp/ggml-cuda.h");
 
