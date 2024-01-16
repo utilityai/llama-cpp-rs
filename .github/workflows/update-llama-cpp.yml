@@ -30,17 +30,6 @@ jobs:
       - name: push
         run: git push --set-upstream origin update-llama-cpp-$(date -I) --force
       - name: create pr
-        id: create_pr
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          PR_OUTPUT=$(gh pr create --fill)
-          echo "$PR_OUTPUT"
-          echo "PR_NUMBER=$(echo "$PR_OUTPUT" | grep -oP 'pull request \K(\d+)' | head -n 1)" >> $GITHUB_ENV 
-      - name: Trigger Llama Cpp Rs Check Workflow
-        run: |
-          curl \
-            -X POST \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/llama-cpp-rs-check.yml/dispatches" \
-            -d '{"ref":"main", "inputs": {"pr_number":"'$PR_NUMBER'"}}'
+          gh pr create --fill
