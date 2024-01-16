@@ -162,7 +162,7 @@ impl LlamaModel {
                     c_int::try_from(c_string.as_bytes().len())?,
                     buffer.as_mut_ptr(),
                     -size,
-                    add_bos.into(),
+                    add_bos,
                     true,
                 )
             }
