@@ -22,6 +22,14 @@ pub struct LlamaModel {
     pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
 }
 
+/// How to determine if we should prepend a bos token to tokens
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddBos {
+    /// Add the beginning of stream token to the start of the string.
+    Always,
+    /// Do not add the beginning of stream token to the start of the string.
+    Never,
+}
 unsafe impl Send for LlamaModel {}
 
 unsafe impl Sync for LlamaModel {}
@@ -106,22 +114,31 @@ impl LlamaModel {
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use std::path::Path;
+    /// use llama_cpp_2::model::AddBos;
     /// let backend = llama_cpp_2::llama_backend::LlamaBackend::init()?;
     /// let model = LlamaModel::load_from_file(&backend, Path::new("path/to/model"), &Default::default())?;
-    /// let tokens = model.str_to_token("Hello, World!", true)?;
+    /// let tokens = model.str_to_token("Hello, World!", AddBos::Always)?;
     /// # Ok(())
     /// # }
     pub fn str_to_token(
         &self,
         str: &str,
-        add_bos: bool,
+        add_bos: AddBos,
     ) -> Result<Vec<LlamaToken>, StringToTokenError> {
+        let add_bos = match add_bos {
+            AddBos::Always => true,
+            AddBos::Never => false
+        };
+
         let tokens_estimation = std::cmp::max(8, (str.len() / 2) + usize::from(add_bos));
         let mut buffer = Vec::with_capacity(tokens_estimation);
 
         let c_string = CString::new(str)?;
         let buffer_capacity =
             c_int::try_from(buffer.capacity()).expect("buffer capacity should fit into a c_int");
+
+
+
         let size = unsafe {
             llama_cpp_sys_2::llama_tokenize(
                 self.model.as_ptr(),
@@ -145,7 +162,7 @@ impl LlamaModel {
                     c_int::try_from(c_string.as_bytes().len())?,
                     buffer.as_mut_ptr(),
                     -size,
-                    add_bos,
+                    add_bos.into(),
                     true,
                 )
             }

@@ -14,6 +14,8 @@ use anyhow::{bail, Context, Result};
 use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use llama_cpp_2::model::AddBos;
+
 
 #[derive(clap::Parser)]
 struct Args {
@@ -65,7 +67,7 @@ fn main() -> Result<()> {
 
     // tokenize the prompt
 
-    let tokens_list = model.str_to_token(&params.prompt, true)
+    let tokens_list = model.str_to_token(&params.prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {}", params.prompt))?;
 
     let n_cxt = ctx.n_ctx() as i32;
