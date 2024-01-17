@@ -182,6 +182,7 @@ pub enum StringToTokenError {
 /// let elapsed = end - start;
 ///
 /// assert!(elapsed >= 10)
+#[must_use]
 pub fn ggml_time_us() -> i64 {
     unsafe { llama_cpp_sys_2::ggml_time_us() }
 }
