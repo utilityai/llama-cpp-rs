@@ -21,6 +21,18 @@ fn main() {
 
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
 
+        if cfg!(target_arch = "aarch64") {
+            ggml_cuda
+                .flag_if_supported("-mfp16-format=ieee")
+                .flag_if_supported("-mno-unaligned-access");
+            llama_cpp
+                .flag_if_supported("-mfp16-format=ieee")
+                .flag_if_supported("-mno-unaligned-access");
+            ggml_cuda
+                .flag_if_supported("-mfp16-format=ieee")
+                .flag_if_supported("-mno-unaligned-access");
+        }
+
         ggml_cuda
             .cuda(true)
             .std("c++11")
