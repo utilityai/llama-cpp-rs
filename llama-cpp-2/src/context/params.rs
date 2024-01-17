@@ -75,9 +75,11 @@ pub struct LlamaContextParams {
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
 /// ```
-/// # use llama_cpp_2::context::params::LlamaContextParams;
+/// # use std::num::NonZeroU32;
+/// use llama_cpp_2::context::params::{LlamaContextParams, RopeScalingType};
 /// let params = LlamaContextParams::default();
-/// assert_eq!(params.n_ctx.unwrap().get(), 512, "n_ctx should be 512");
+/// assert_eq!(params.n_ctx, NonZeroU32::new(512), "n_ctx should be 512");
+/// assert_eq!(params.rope_scaling_type, RopeScalingType::Unspecified);
 /// ```
 impl Default for LlamaContextParams {
     fn default() -> Self {
