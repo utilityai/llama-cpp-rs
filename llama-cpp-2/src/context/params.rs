@@ -3,6 +3,45 @@ use llama_cpp_sys_2::{ggml_type, llama_context_params};
 use std::fmt::Debug;
 use std::num::NonZeroU32;
 
+/// A rusty wrapper around `rope_scaling_type`.
+#[repr(i8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum RopeScalingType {
+    /// The scaling type is unspecified
+    Unspecified = -1,
+    /// No scaling
+    None = 0,
+    /// Linear scaling
+    Linear = 1,
+    /// Yarn scaling
+    Yarn = 2,
+}
+
+/// Create a `RopeScalingType` from a `c_int` - returns `RopeScalingType::ScalingUnspecified` if
+/// the value is not recognized.
+impl From<i8> for RopeScalingType {
+    fn from(value: i8) -> Self {
+        match value {
+            0 => Self::None,
+            1 => Self::Linear,
+            2 => Self::Yarn,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
+/// Create a `c_int` from a `RopeScalingType`.
+impl From<RopeScalingType> for i8 {
+    fn from(value: RopeScalingType) -> Self {
+        match value {
+            RopeScalingType::None => 0,
+            RopeScalingType::Linear => 1,
+            RopeScalingType::Yarn => 2,
+            RopeScalingType::Unspecified => -1,
+        }
+    }
+}
+
 /// A safe wrapper around `llama_context_params`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(
@@ -18,7 +57,7 @@ pub struct LlamaContextParams {
     pub n_batch: u32,
     pub n_threads: u32,
     pub n_threads_batch: u32,
-    pub rope_scaling_type: i8,
+    pub rope_scaling_type: RopeScalingType,
     pub rope_freq_base: f32,
     pub rope_freq_scale: f32,
     pub yarn_ext_factor: f32,
@@ -83,7 +122,7 @@ impl From<llama_context_params> for LlamaContextParams {
             mul_mat_q,
             logits_all,
             embedding,
-            rope_scaling_type,
+            rope_scaling_type: RopeScalingType::from(rope_scaling_type),
             yarn_ext_factor,
             yarn_attn_factor,
             yarn_beta_fast,
@@ -131,7 +170,7 @@ impl From<LlamaContextParams> for llama_context_params {
             mul_mat_q,
             logits_all,
             embedding,
-            rope_scaling_type,
+            rope_scaling_type: i8::from(rope_scaling_type),
             yarn_ext_factor,
             yarn_attn_factor,
             yarn_beta_fast,
