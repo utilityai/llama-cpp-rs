@@ -4,4 +4,4 @@ FROM rust:bookworm AS builder
 # Install requirements for bindgen: https://rust-lang.github.io/rust-bindgen/requirements.html
 RUN apt update && apt install -y llvm-dev libclang-dev clang
 COPY . .
-RUN cargo build
+RUN cargo check --package llama-cpp-sys-2
