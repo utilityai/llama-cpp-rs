@@ -309,12 +309,12 @@ impl LlamaModel {
     /// # Errors
     ///
     /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
-    pub fn new_context<'a>(
-        &'a self,
+    pub fn new_context(
+        &self,
         _: &LlamaBackend,
-        params: &LlamaContextParams,
-    ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
-        let context_params = llama_context_params::from(*params);
+        params: LlamaContextParams,
+    ) -> Result<LlamaContext, LlamaContextLoadError> {
+        let context_params = llama_context_params::from(params);
         let context = unsafe {
             llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
         };

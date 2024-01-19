@@ -43,7 +43,7 @@ impl From<RopeScalingType> for i8 {
 }
 
 /// A safe wrapper around `llama_context_params`.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, PartialEq)]
 #[allow(
     missing_docs,
     clippy::struct_excessive_bools,
@@ -71,6 +71,8 @@ pub struct LlamaContextParams {
     pub logits_all: bool,
     pub embedding: bool,
     pub offload_kqv: bool,
+    pub cb_eval: llama_cpp_sys_2::ggml_backend_sched_eval_callback,
+    pub cb_eval_user_data: *mut std::ffi::c_void,
 }
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
@@ -97,6 +99,8 @@ impl From<llama_context_params> for LlamaContextParams {
             n_threads_batch,
             rope_freq_base,
             rope_freq_scale,
+            cb_eval,
+            cb_eval_user_data,
             type_k,
             type_v,
             mul_mat_q,
@@ -131,6 +135,8 @@ impl From<llama_context_params> for LlamaContextParams {
             yarn_beta_slow,
             yarn_orig_ctx,
             offload_kqv,
+            cb_eval,
+            cb_eval_user_data,
         }
     }
 }
@@ -157,6 +163,8 @@ impl From<LlamaContextParams> for llama_context_params {
             yarn_beta_slow,
             yarn_orig_ctx,
             offload_kqv,
+            cb_eval,
+            cb_eval_user_data,
         }: LlamaContextParams,
     ) -> Self {
         llama_context_params {
@@ -179,6 +187,8 @@ impl From<LlamaContextParams> for llama_context_params {
             yarn_beta_slow,
             yarn_orig_ctx,
             offload_kqv,
+            cb_eval,
+            cb_eval_user_data,
         }
     }
 }
