@@ -62,7 +62,7 @@ fn main() -> Result<()> {
         ..LlamaContextParams::default()
     };
 
-    let mut ctx = model.new_context(&backend, &ctx_params)
+    let mut ctx = model.new_context(&backend, ctx_params)
         .with_context(|| "unable to create the llama_context")?;
 
     // tokenize the prompt
