@@ -56,11 +56,9 @@ fn main() -> Result<()> {
         .with_context(|| "unable to load model")?;
 
     // initialize the context
-    let ctx_params = LlamaContextParams {
-        seed: 1234,
-        n_ctx: NonZeroU32::new(2048),
-        ..LlamaContextParams::default()
-    };
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(NonZeroU32::new(2048))
+        .with_seed(1234);
 
     let mut ctx = model.new_context(&backend, ctx_params)
         .with_context(|| "unable to create the llama_context")?;

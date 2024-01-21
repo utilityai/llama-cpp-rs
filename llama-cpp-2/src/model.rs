@@ -6,7 +6,6 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
 use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
-use llama_cpp_sys_2::{llama_context_params, llama_token_get_type, llama_vocab_type};
 use std::ffi::CString;
 use std::os::raw::c_int;
 use std::path::Path;
@@ -184,7 +183,7 @@ impl LlamaModel {
     /// If the token type is not known to this library.
     #[must_use]
     pub fn token_type(&self, LlamaToken(id): LlamaToken) -> LlamaTokenType {
-        let token_type = unsafe { llama_token_get_type(self.model.as_ptr(), id) };
+        let token_type = unsafe { llama_cpp_sys_2::llama_token_get_type(self.model.as_ptr(), id) };
         LlamaTokenType::try_from(token_type).expect("token type is valid")
     }
 
@@ -314,7 +313,7 @@ impl LlamaModel {
         _: &LlamaBackend,
         params: LlamaContextParams,
     ) -> Result<LlamaContext, LlamaContextLoadError> {
-        let context_params = llama_context_params::from(params);
+        let context_params = params.context_params;
         let context = unsafe {
             llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
         };
@@ -345,13 +344,13 @@ pub enum VocabType {
 pub enum LlamaTokenTypeFromIntError {
     /// The value is not a valid `llama_token_type`. Contains the int value that was invalid.
     #[error("Unknown Value {0}")]
-    UnknownValue(llama_vocab_type),
+    UnknownValue(llama_cpp_sys_2::llama_vocab_type),
 }
 
-impl TryFrom<llama_vocab_type> for VocabType {
+impl TryFrom<llama_cpp_sys_2::llama_vocab_type> for VocabType {
     type Error = LlamaTokenTypeFromIntError;
 
-    fn try_from(value: llama_vocab_type) -> Result<Self, Self::Error> {
+    fn try_from(value: llama_cpp_sys_2::llama_vocab_type) -> Result<Self, Self::Error> {
         match value {
             llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE => Ok(VocabType::BPE),
             llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM => Ok(VocabType::SPM),

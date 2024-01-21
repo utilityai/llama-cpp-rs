@@ -1,5 +1,5 @@
 //! A safe wrapper around `llama_context_params`.
-use llama_cpp_sys_2::{ggml_type, llama_context_params};
+use llama_cpp_sys_2;
 use std::fmt::Debug;
 use std::num::NonZeroU32;
 
@@ -43,36 +43,102 @@ impl From<RopeScalingType> for i8 {
 }
 
 /// A safe wrapper around `llama_context_params`.
-#[derive(Debug, PartialEq)]
+///
+/// Generally this should be created with [`Default::default()`] and then modified with `with_*` methods.
+///
+/// # Examples
+///
+/// ```rust
+/// # use std::num::NonZeroU32;
+/// use llama_cpp_2::context::params::LlamaContextParams;
+///
+///let ctx_params = LlamaContextParams::default()
+///    .with_n_ctx(NonZeroU32::new(2048))
+///    .with_seed(1234);
+///
+/// assert_eq!(ctx_params.seed(), 1234);
+/// assert_eq!(ctx_params.n_ctx(), NonZeroU32::new(2048));
+/// ```
+#[derive(Debug, Clone)]
 #[allow(
     missing_docs,
     clippy::struct_excessive_bools,
     clippy::module_name_repetitions
 )]
 pub struct LlamaContextParams {
-    /// The random seed
-    pub seed: u32,
-    /// the number of tokens in the context - [`None`] if defined by the model.
-    pub n_ctx: Option<NonZeroU32>,
-    pub n_batch: u32,
-    pub n_threads: u32,
-    pub n_threads_batch: u32,
-    pub rope_scaling_type: RopeScalingType,
-    pub rope_freq_base: f32,
-    pub rope_freq_scale: f32,
-    pub yarn_ext_factor: f32,
-    pub yarn_attn_factor: f32,
-    pub yarn_beta_fast: f32,
-    pub yarn_beta_slow: f32,
-    pub yarn_orig_ctx: u32,
-    pub type_k: ggml_type,
-    pub type_v: ggml_type,
-    pub mul_mat_q: bool,
-    pub logits_all: bool,
-    pub embedding: bool,
-    pub offload_kqv: bool,
-    pub cb_eval: llama_cpp_sys_2::ggml_backend_sched_eval_callback,
-    pub cb_eval_user_data: *mut std::ffi::c_void,
+    pub(crate) context_params: llama_cpp_sys_2::llama_context_params,
+}
+
+impl LlamaContextParams {
+    /// Set the seed of the context
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// let params = params.with_seed(1234);
+    /// assert_eq!(params.seed(), 1234);
+    /// ```
+    pub fn with_seed(mut self, seed: u32) -> Self {
+        self.context_params.seed = seed;
+        self
+    }
+
+    /// Get the seed of the context
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_seed(1234);
+    /// assert_eq!(params.seed(), 1234);
+    /// ```
+    pub fn seed(&self) -> u32 {
+        self.context_params.seed
+    }
+
+    /// Set the side of the context
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use std::num::NonZeroU32;
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// let params = params.with_n_ctx(NonZeroU32::new(2048));
+    /// assert_eq!(params.n_ctx(), NonZeroU32::new(2048));
+    /// ```
+    pub fn with_n_ctx(mut self, n_ctx: Option<NonZeroU32>) -> Self {
+        self.context_params.n_ctx = n_ctx.map_or(0, |n_ctx| n_ctx.get());
+        self
+    }
+
+    /// Get the size of the context.
+    ///
+    /// [`None`] if the context size is specified by the model and not the context.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
+    /// assert_eq!(params.n_ctx(), std::num::NonZeroU32::new(512));
+    pub fn n_ctx(&self) -> Option<NonZeroU32> {
+        NonZeroU32::new(self.context_params.n_ctx)
+    }
+
+    /// Get the type of rope scaling.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
+    /// assert_eq!(params.rope_scaling_type(), llama_cpp_2::context::params::RopeScalingType::Unspecified);
+    /// ```
+    pub fn rope_scaling_type(&self) -> RopeScalingType {
+        RopeScalingType::from(self.context_params.rope_scaling_type)
+    }
 }
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
@@ -80,115 +146,12 @@ pub struct LlamaContextParams {
 /// # use std::num::NonZeroU32;
 /// use llama_cpp_2::context::params::{LlamaContextParams, RopeScalingType};
 /// let params = LlamaContextParams::default();
-/// assert_eq!(params.n_ctx, NonZeroU32::new(512), "n_ctx should be 512");
-/// assert_eq!(params.rope_scaling_type, RopeScalingType::Unspecified);
+/// assert_eq!(params.n_ctx(), NonZeroU32::new(512), "n_ctx should be 512");
+/// assert_eq!(params.rope_scaling_type(), RopeScalingType::Unspecified);
 /// ```
 impl Default for LlamaContextParams {
     fn default() -> Self {
-        Self::from(unsafe { llama_cpp_sys_2::llama_context_default_params() })
-    }
-}
-
-impl From<llama_context_params> for LlamaContextParams {
-    fn from(
-        llama_context_params {
-            seed,
-            n_ctx,
-            n_batch,
-            n_threads,
-            n_threads_batch,
-            rope_freq_base,
-            rope_freq_scale,
-            cb_eval,
-            cb_eval_user_data,
-            type_k,
-            type_v,
-            mul_mat_q,
-            logits_all,
-            embedding,
-            rope_scaling_type,
-            yarn_ext_factor,
-            yarn_attn_factor,
-            yarn_beta_fast,
-            yarn_beta_slow,
-            yarn_orig_ctx,
-            offload_kqv,
-        }: llama_context_params,
-    ) -> Self {
-        Self {
-            seed,
-            n_ctx: NonZeroU32::new(n_ctx),
-            n_batch,
-            n_threads,
-            n_threads_batch,
-            rope_freq_base,
-            rope_freq_scale,
-            type_k,
-            type_v,
-            mul_mat_q,
-            logits_all,
-            embedding,
-            rope_scaling_type: RopeScalingType::from(rope_scaling_type),
-            yarn_ext_factor,
-            yarn_attn_factor,
-            yarn_beta_fast,
-            yarn_beta_slow,
-            yarn_orig_ctx,
-            offload_kqv,
-            cb_eval,
-            cb_eval_user_data,
-        }
-    }
-}
-
-impl From<LlamaContextParams> for llama_context_params {
-    fn from(
-        LlamaContextParams {
-            seed,
-            n_ctx,
-            n_batch,
-            n_threads,
-            n_threads_batch,
-            rope_freq_base,
-            rope_freq_scale,
-            type_k,
-            type_v,
-            mul_mat_q,
-            logits_all,
-            embedding,
-            rope_scaling_type,
-            yarn_ext_factor,
-            yarn_attn_factor,
-            yarn_beta_fast,
-            yarn_beta_slow,
-            yarn_orig_ctx,
-            offload_kqv,
-            cb_eval,
-            cb_eval_user_data,
-        }: LlamaContextParams,
-    ) -> Self {
-        llama_context_params {
-            seed,
-            n_ctx: n_ctx.map_or(0, NonZeroU32::get),
-            n_batch,
-            n_threads,
-            n_threads_batch,
-            rope_freq_base,
-            rope_freq_scale,
-            type_k,
-            type_v,
-            mul_mat_q,
-            logits_all,
-            embedding,
-            rope_scaling_type: i8::from(rope_scaling_type),
-            yarn_ext_factor,
-            yarn_attn_factor,
-            yarn_beta_fast,
-            yarn_beta_slow,
-            yarn_orig_ctx,
-            offload_kqv,
-            cb_eval,
-            cb_eval_user_data,
-        }
+        let context_params = unsafe { llama_cpp_sys_2::llama_context_default_params() };
+        Self { context_params, }
     }
 }
