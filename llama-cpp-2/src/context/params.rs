@@ -132,6 +132,35 @@ impl LlamaContextParams {
         NonZeroU32::new(self.context_params.n_ctx)
     }
 
+    /// Set the n_batch
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use std::num::NonZeroU32;
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_n_batch(2048);
+    /// assert_eq!(params.n_batch(), 2048);
+    /// ```
+    pub fn with_n_batch(mut self, n_batch: u32) -> Self {
+        self.context_params.n_batch = n_batch;
+        self
+    }
+
+    /// Get the n_batch
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.n_batch(), 512);
+    /// ```
+    pub fn n_batch(&self) -> u32 {
+        self.context_params.n_batch
+    }
+
     /// Set the type of rope scaling.
     ///
     /// # Examples
