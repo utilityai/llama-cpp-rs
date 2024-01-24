@@ -19,8 +19,10 @@ See [bindgen](https://rust-lang.github.io/rust-bindgen/requirements.html) for mo
 
 # Disclaimer
 
-This is not a simple library to use. In an ideal work a nice abstraction would be written on top of this crate to
-provide an ergonomic API - the benefits of this crate over raw bindings is safety and not much else.
+This crate is *not safe*. There is absolutly ways to misuse the llama.cpp API provided to create UB, please create an issue if you spot one. Do not use this code for tasks where UB is not acceptable.
+
+This is not a simple library to use. In an ideal world a nice abstraction would be written on top of this crate to
+provide an ergonomic API - the benefits of this crate over raw bindings is safety (and not much of it as that) and not much else.
 
 We compensate for this shortcoming (we hope) by providing lots of examples and good documentation. Testing is a work in
 progress.
