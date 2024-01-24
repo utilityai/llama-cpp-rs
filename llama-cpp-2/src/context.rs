@@ -8,7 +8,7 @@ use crate::model::LlamaModel;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use crate::{DecodeError};
+use crate::DecodeError;
 use std::ptr::NonNull;
 use std::slice;
 
@@ -43,6 +43,12 @@ impl<'model> LlamaContext<'model> {
             model: llama_model,
             initialized_logits: Vec::new(),
         }
+    }
+
+    /// Gets the max number of tokens in a batch.
+    #[must_use]
+    pub fn n_batch(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_n_batch(self.context.as_ptr()) }
     }
 
     /// Gets the size of the context.
