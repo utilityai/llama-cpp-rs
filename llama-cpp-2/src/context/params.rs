@@ -69,6 +69,10 @@ pub struct LlamaContextParams {
     pub(crate) context_params: llama_cpp_sys_2::llama_context_params,
 }
 
+/// SAFETY: we do not currently allow setting or reading the pointers that cause this to not be automatically send or sync.
+unsafe impl Send for LlamaContextParams {}
+unsafe impl Sync for LlamaContextParams {}
+
 impl LlamaContextParams {
     /// Set the seed of the context
     ///
