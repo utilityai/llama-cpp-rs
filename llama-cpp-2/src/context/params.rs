@@ -159,7 +159,7 @@ impl LlamaContextParams {
         RopeScalingType::from(self.context_params.rope_scaling_type)
     }
 
-    /// Set the rope frequency scale.
+    /// Set the rope frequency base.
     ///
     /// # Examples
     ///
