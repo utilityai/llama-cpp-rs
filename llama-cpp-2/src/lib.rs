@@ -12,6 +12,7 @@ use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
 
+use crate::llama_batch::BatchAddError;
 use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::string::FromUtf8Error;
@@ -44,6 +45,9 @@ pub enum LLamaCppError {
     /// There was an error creating a new model context.
     #[error("{0}")]
     LlamaContextLoadError(#[from] LlamaContextLoadError),
+    /// There was an error adding a token to a batch.
+    #[error["{0}"]]
+    BatchAddError(#[from] BatchAddError),
 }
 
 /// Failed to Load context
