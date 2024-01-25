@@ -15,7 +15,7 @@ pub struct LlamaBatch {
 }
 
 /// Errors that can occur when adding a token to a batch.
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BatchAddError {
     /// There was not enough space in the batch to add the token.
     #[error("Insufficient Space of {0}")]
