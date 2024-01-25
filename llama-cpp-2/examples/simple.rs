@@ -96,7 +96,7 @@ either reduce n_len or increase n_ctx")
     for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
         // llama_decode will output logits only for the last token of the prompt
         let is_last = i == last_index;
-        batch.add(token, i, &[0], is_last);
+        batch.add(token, i, &[0], is_last)?;
     }
 
     ctx.decode(&mut batch)
@@ -129,7 +129,7 @@ either reduce n_len or increase n_ctx")
             std::io::stdout().flush()?;
 
             batch.clear();
-            batch.add(new_token_id, n_cur, &[0], true);
+            batch.add(new_token_id, n_cur, &[0], true)?;
         }
 
         n_cur += 1;

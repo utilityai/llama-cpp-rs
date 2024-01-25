@@ -14,6 +14,14 @@ pub struct LlamaBatch {
     pub(crate) llama_batch: llama_batch,
 }
 
+/// Errors that can occur when adding a token to a batch.
+#[derive(thiserror::Error, Debug)]
+pub enum BatchAddError {
+    /// There was not enough space in the batch to add the token.
+    #[error("Insufficient Space of {0}")]
+    InsufficientSpace(usize),
+}
+
 impl LlamaBatch {
     /// Clear the batch. This does not free the memory associated with the batch, but it does reset
     /// the number of tokens to 0.
@@ -35,8 +43,10 @@ impl LlamaBatch {
         pos: llama_pos,
         seq_ids: &[i32],
         logits: bool,
-    ) {
-        assert!(self.allocated > (usize::try_from(self.n_tokens() + 1).expect("self.n_tokens does not fit into a usize")), "there are only {} tokens allocated for the batch, but {} tokens in the batch when you tried to add one", self.allocated, self.n_tokens());
+    ) -> Result<(), BatchAddError> {
+        if self.allocated < usize::try_from(self.n_tokens() + 1).expect("cannot fit n_tokens into a usize") {
+            return Err(BatchAddError::InsufficientSpace(self.allocated))
+        }
         let offset = self.llama_batch.n_tokens;
         let offset_usize = usize::try_from(offset).expect("cannot fit n_tokens into a usize");
         unsafe {
@@ -66,6 +76,8 @@ impl LlamaBatch {
 
         // batch.n_tokens++;
         self.llama_batch.n_tokens += 1;
+
+        Ok(())
     }
     /// Create a new `LlamaBatch` that cab contain up to `n_tokens` tokens.
     ///
