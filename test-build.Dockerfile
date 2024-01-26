@@ -7,6 +7,4 @@ ENV PATH=/root/.cargo/bin:$PATH
 # Install requirements for bindgen: https://rust-lang.github.io/rust-bindgen/requirements.html
 RUN apt update && apt install -y llvm-dev libclang-dev clang
 COPY . .
-ARG CUDA_DOCKER_ARCH=all
-ENV CUDA_DOCKER_ARCH=${CUDA_DOCKER_ARCH}
 RUN cargo build --package llama-cpp-sys-2 --features cublas

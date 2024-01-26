@@ -714,7 +714,7 @@ checksum = "c4cd1a83af159aa67994778be9070f0ae1bd732942279cabb14f86f986a21456"
 
 [[package]]
 name = "llama-cpp-2"
-version = "0.1.18"
+version = "0.1.20"
 dependencies = [
  "anyhow",
  "clap",
@@ -728,7 +728,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-sys-2"
-version = "0.1.18"
+version = "0.1.20"
 dependencies = [
  "bindgen",
  "cc",
