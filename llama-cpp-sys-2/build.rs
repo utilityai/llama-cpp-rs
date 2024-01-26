@@ -35,12 +35,8 @@ fn main() {
 
         ggml_cuda
             .cuda(true)
-            .std("c++11")
-            // This is a fix for "ggml-cuda was compiled without support for the current GPU architecture."
-            // the Makefile does a *lot* of complex logic around this - so I expect this will break some stuff.
-            .flag("-arch=native")
-            .file("llama.cpp/ggml-cuda.cu")
-            .include("llama.cpp/ggml-cuda.h");
+            .std("c++17")
+            .file("llama.cpp/ggml-cuda.cu");
 
         ggml.define("GGML_USE_CUBLAS", None);
         ggml_cuda.define("GGML_USE_CUBLAS", None);
@@ -57,7 +53,7 @@ fn main() {
     }
 
     ggml
-        .std("c11")
+        .std("c17")
         .file("llama.cpp/ggml.c")
         .file("llama.cpp/ggml-alloc.c")
         .file("llama.cpp/ggml-backend.c")
@@ -66,7 +62,7 @@ fn main() {
 
     llama_cpp
         .define("_XOPEN_SOURCE", Some("600"))
-        .std("c++11")
+        .std("c++17")
         .file("llama.cpp/llama.cpp");
 
     println!("compiling ggml");
