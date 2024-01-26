@@ -11,4 +11,6 @@
 
 This is the home for [llama-cpp-2][crates.io]. It also contains the [llama-cpp-sys] bindings which are updated regularly and in sync with [llama-cpp-2][crates.io].
 
+This project was created with the explict goal of staying as up to date as possible with llama.cpp, as a result it is dead simple, very close to raw bindings, and does not follow semver meaningfully.
+
 Check out the [docs.rs] for crate documentation or the [readme] for high level information about the project.
