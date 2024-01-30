@@ -54,4 +54,5 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           file: test-build.Dockerfile
+          target: base-cuda
           platforms: ${{ matrix.target }}

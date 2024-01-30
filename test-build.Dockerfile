@@ -3,9 +3,15 @@ ARG UBUNTU_VERSION=22.04
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu${UBUNTU_VERSION} as base-cuda
 
 # Install requirements for rustup install + bindgen: https://rust-lang.github.io/rust-bindgen/requirements.html
-RUN DEBIAN_FRONTEND=noninteractive apt update -y && apt install -y curl llvm-dev libclang-dev clang
+RUN DEBIAN_FRONTEND=noninteractive apt update -y && apt install -y curl llvm-dev libclang-dev clang pkg-config libssl-dev
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH=/root/.cargo/bin:$PATH
 
 COPY . .
-RUN cargo build --package llama-cpp-sys-2 --features cublas
+RUN cargo build --example simple --features cublas
+
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} as base-cuda-runtime
+
+COPY --from=base-cuda /target/debug/examples/simple /usr/local/bin/simple
+
+ENTRYPOINT ["/usr/local/bin/simple"]

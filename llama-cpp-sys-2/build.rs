@@ -36,6 +36,7 @@ fn main() {
         ggml_cuda
             .cuda(true)
             .std("c++17")
+            .flag("-arch=all")
             .file("llama.cpp/ggml-cuda.cu");
 
         ggml.define("GGML_USE_CUBLAS", None);
