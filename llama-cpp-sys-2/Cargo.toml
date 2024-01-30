@@ -8,6 +8,7 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 links = "llama"
 
 include = [
+    "build.rs",
     "/src",
     "llama-cpp-sys-2/ggml.c",
     "llama-cpp-sys-2/ggml.h",
