@@ -7,6 +7,30 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
 links = "llama"
 
+include = [
+    "/src",
+    "llama-cpp-sys-2/ggml.c",
+    "llama-cpp-sys-2/ggml.h",
+    "llama-cpp-sys-2/ggml-alloc.c",
+    "llama-cpp-sys-2/ggml-alloc.h",
+    "llama-cpp-sys-2/ggml-backend.c",
+    "llama-cpp-sys-2/ggml-backend.h",
+    "llama-cpp-sys-2/ggml-backend-impl.h",
+    "llama-cpp-sys-2/ggml-cuda.cu",
+    "llama-cpp-sys-2/ggml-cuda.h",
+    "llama-cpp-sys-2/ggml-impl.h",
+    "llama-cpp-sys-2/ggml-metal.m",
+    "llama-cpp-sys-2/ggml-metal.metal",
+    "llama-cpp-sys-2/ggml-mpi.c",
+    "llama-cpp-sys-2/ggml-mpi.h",
+    "llama-cpp-sys-2/ggml-opencl.cpp",
+    "llama-cpp-sys-2/ggml-opencl.h",
+    "llama-cpp-sys-2/ggml-quants.c",
+    "llama-cpp-sys-2/ggml-quants.h",
+    "llama-cpp-sys-2/llama.cpp",
+    "llama-cpp-sys-2/llama.h",
+]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
