@@ -14,3 +14,17 @@ This is the home for [llama-cpp-2][crates.io]. It also contains the [llama-cpp-s
 This project was created with the explict goal of staying as up to date as possible with llama.cpp, as a result it is dead simple, very close to raw bindings, and does not follow semver meaningfully.
 
 Check out the [docs.rs] for crate documentation or the [readme] for high level information about the project.
+
+## Hacking
+
+Ensure that when you clone this project you also clone the submodules. This can be done with the following command:
+
+```sh
+git clone --recursive https://github.com/utilityai/llama-cpp-rs
+```
+
+or if you have already cloned the project you can run:
+
+```sh
+git submodule update --init --recursive
+```
