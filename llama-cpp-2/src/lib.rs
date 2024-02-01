@@ -115,7 +115,7 @@ pub fn llama_time_us() -> i64 {
 /// assert!(max_devices >= 0);
 /// ```
 #[must_use]
-pub fn max_devices() -> c_int {
+pub fn max_devices() -> usize {
     unsafe { llama_cpp_sys_2::llama_max_devices() }
 }
 
