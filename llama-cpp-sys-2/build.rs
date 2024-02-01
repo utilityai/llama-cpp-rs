@@ -1,10 +1,15 @@
 use std::env;
 use std::path::PathBuf;
+use std::path::Path;
 
 fn main() {
     println!("cargo:rerun-if-changed=llama.cpp");
 
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
+
+    if !Path::new("llama.cpp/ggml.c").exists() {
+    	panic!("llama.cpp seems to not be populated, try running `git submodule update --init --recursive` to init.")
+    }
 
     let mut ggml = cc::Build::new();
     let mut ggml_cuda = if cublas_enabled { Some(cc::Build::new()) } else { None };
