@@ -38,14 +38,6 @@ fn main() {
                 .flag_if_supported("-mno-unaligned-access");
         }
 
-        // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
-        if cfg!(target_os = "macos") {
-            llama_cpp.define("_DARWIN_C_SOURCE", None);
-        }
-        if cfg!(target_os = "dragonfly") {
-            llama_cpp.define("__BSD_VISIBLE", None);
-        }
-
         ggml_cuda
             .cuda(true)
             .std("c++17")
@@ -55,6 +47,14 @@ fn main() {
         ggml.define("GGML_USE_CUBLAS", None);
         ggml_cuda.define("GGML_USE_CUBLAS", None);
         llama_cpp.define("GGML_USE_CUBLAS", None);
+    }
+
+    // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
+    if cfg!(target_os = "macos") {
+        llama_cpp.define("_DARWIN_C_SOURCE", None);
+    }
+    if cfg!(target_os = "dragonfly") {
+        llama_cpp.define("__BSD_VISIBLE", None);
     }
 
     if let Some(ggml_cuda) = ggml_cuda {
