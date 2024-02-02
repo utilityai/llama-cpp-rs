@@ -56,3 +56,13 @@ jobs:
           file: test-build.Dockerfile
           target: base-cuda
           platforms: ${{ matrix.target }}
+  mac:
+    name: Check that it builds on mac
+    runs-on: macos-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --example simple
