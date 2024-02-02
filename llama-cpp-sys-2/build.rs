@@ -37,7 +37,8 @@ fn main() {
                 .flag_if_supported("-mfp16-format=ieee")
                 .flag_if_supported("-mno-unaligned-access");
         }
-        
+
+        // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
         if cfg!(target_os = "macos") {
             llama_cpp.define("_DARWIN_C_SOURCE", None);
         }
