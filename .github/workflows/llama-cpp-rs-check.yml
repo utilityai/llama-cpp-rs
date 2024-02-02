@@ -65,4 +65,4 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --example simple
+        run: cargo build
