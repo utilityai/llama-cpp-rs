@@ -49,6 +49,14 @@ fn main() {
         llama_cpp.define("GGML_USE_CUBLAS", None);
     }
 
+    // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
+    if cfg!(target_os = "macos") {
+        llama_cpp.define("_DARWIN_C_SOURCE", None);
+    }
+    if cfg!(target_os = "dragonfly") {
+        llama_cpp.define("__BSD_VISIBLE", None);
+    }
+
     if let Some(ggml_cuda) = ggml_cuda {
         println!("compiling ggml-cuda");
         ggml_cuda.compile("ggml-cuda");
