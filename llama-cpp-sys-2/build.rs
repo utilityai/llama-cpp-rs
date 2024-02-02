@@ -37,6 +37,13 @@ fn main() {
                 .flag_if_supported("-mfp16-format=ieee")
                 .flag_if_supported("-mno-unaligned-access");
         }
+        
+        if cfg!(target_os = "macos") {
+            llama_cpp.define("_DARWIN_C_SOURCE", None);
+        }
+        if cfg!(target_os = "dragonfly") {
+            llama_cpp.define("__BSD_VISIBLE", None);
+        }
 
         ggml_cuda
             .cuda(true)
