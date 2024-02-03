@@ -51,7 +51,28 @@ fn main() {
 
     // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
     if cfg!(target_os = "macos") {
+        assert!(!cublas_enabled, "CUBLAS is not supported on macOS");
+
         llama_cpp.define("_DARWIN_C_SOURCE", None);
+
+        // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L340-L343
+        llama_cpp.define("GGML_USE_METAL", None);
+        llama_cpp.define("GGML_USE_ACCELERATE", None);
+        llama_cpp.define("ACCELERATE_NEW_LAPACK", None);
+        llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
+        println!("cargo:rustc-link-lib=framework=Accelerate");
+
+        // 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
+        // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L509-L511
+        println!("cargo:rustc-link-lib=framework Foundation");
+        println!("cargo:rustc-link-lib=framework Metal");
+        println!("cargo:rustc-link-lib=framework MetalKit");
+
+
+        // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L517-L520
+        ggml
+            .file("llama.cpp/ggml-metal.m")
+            .file("llama.cpp/ggml-metal.h");
     }
     if cfg!(target_os = "dragonfly") {
         llama_cpp.define("__BSD_VISIBLE", None);
