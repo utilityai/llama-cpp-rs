@@ -1,5 +1,5 @@
 //! This is an translation of simple.cpp in llama.cpp using llama-cpp-2.
-#![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;

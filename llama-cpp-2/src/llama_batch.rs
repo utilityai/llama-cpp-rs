@@ -37,6 +37,10 @@ impl LlamaBatch {
     ///
     /// - [`self.llama_batch.n_tokens`] does not fit into a usize
     /// - [`seq_ids.len()`] does not fit into a [`llama_seq_id`]
+    ///
+    /// # Errors
+    ///
+    /// returns a error if there is insufficient space in the buffer
     pub fn add(
         &mut self,
         LlamaToken(id): LlamaToken,
