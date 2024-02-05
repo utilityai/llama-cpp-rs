@@ -1,21 +1,20 @@
 //! This is an translation of simple.cpp in llama.cpp using llama-cpp-2.
 #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 
+use anyhow::{bail, Context, Result};
+use clap::Parser;
+use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::ggml_time_us;
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::AddBos;
+use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::Duration;
-use clap::Parser;
-use llama_cpp_2::context::params::LlamaContextParams;
-use llama_cpp_2::llama_backend::LlamaBackend;
-use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::params::LlamaModelParams;
-use anyhow::{bail, Context, Result};
-use llama_cpp_2::ggml_time_us;
-use llama_cpp_2::llama_batch::LlamaBatch;
-use llama_cpp_2::token::data_array::LlamaTokenDataArray;
-use llama_cpp_2::model::AddBos;
-
 
 #[derive(clap::Parser)]
 struct Args {
@@ -29,7 +28,6 @@ struct Args {
     #[clap(long)]
     disable_gpu: bool,
 }
-
 
 fn main() -> Result<()> {
     let params = Args::parse();
@@ -60,12 +58,14 @@ fn main() -> Result<()> {
         .with_n_ctx(NonZeroU32::new(2048))
         .with_seed(1234);
 
-    let mut ctx = model.new_context(&backend, ctx_params)
+    let mut ctx = model
+        .new_context(&backend, ctx_params)
         .with_context(|| "unable to create the llama_context")?;
 
     // tokenize the prompt
 
-    let tokens_list = model.str_to_token(&params.prompt, AddBos::Always)
+    let tokens_list = model
+        .str_to_token(&params.prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {}", params.prompt))?;
 
     let n_cxt = ctx.n_ctx() as i32;
@@ -75,8 +75,10 @@ fn main() -> Result<()> {
 
     // make sure the KV cache is big enough to hold all the prompt and generated tokens
     if n_kv_req > n_cxt {
-        bail!("n_kv_req > n_ctx, the required kv cache size is not big enough
-either reduce n_len or increase n_ctx")
+        bail!(
+            "n_kv_req > n_ctx, the required kv cache size is not big enough
+either reduce n_len or increase n_ctx"
+        )
     }
 
     // print the prompt token-by-token
@@ -137,7 +139,6 @@ either reduce n_len or increase n_ctx")
         ctx.decode(&mut batch).with_context(|| "failed to eval")?;
 
         n_decode += 1;
-
     }
 
     eprintln!("\n");
@@ -146,10 +147,14 @@ either reduce n_len or increase n_ctx")
 
     let duration = Duration::from_micros((t_main_end - t_main_start) as u64);
 
-    eprintln!("decoded {} tokens in {:.2} s, speed {:.2} t/s\n", n_decode, duration.as_secs_f32(), n_decode as f32 / duration.as_secs_f32());
+    eprintln!(
+        "decoded {} tokens in {:.2} s, speed {:.2} t/s\n",
+        n_decode,
+        duration.as_secs_f32(),
+        n_decode as f32 / duration.as_secs_f32()
+    );
 
     println!("{}", ctx.timings());
 
     Ok(())
-
 }

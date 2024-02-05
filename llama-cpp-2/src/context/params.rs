@@ -19,8 +19,8 @@ pub enum RopeScalingType {
 
 /// Create a `RopeScalingType` from a `c_int` - returns `RopeScalingType::ScalingUnspecified` if
 /// the value is not recognized.
-impl From<i8> for RopeScalingType {
-    fn from(value: i8) -> Self {
+impl From<i32> for RopeScalingType {
+    fn from(value: i32) -> Self {
         match value {
             0 => Self::None,
             1 => Self::Linear,
@@ -31,7 +31,7 @@ impl From<i8> for RopeScalingType {
 }
 
 /// Create a `c_int` from a `RopeScalingType`.
-impl From<RopeScalingType> for i8 {
+impl From<RopeScalingType> for i32 {
     fn from(value: RopeScalingType) -> Self {
         match value {
             RopeScalingType::None => 0,
@@ -172,7 +172,7 @@ impl LlamaContextParams {
     /// assert_eq!(params.rope_scaling_type(), RopeScalingType::Linear);
     /// ```
     pub fn with_rope_scaling_type(mut self, rope_scaling_type: RopeScalingType) -> Self {
-        self.context_params.rope_scaling_type = i8::from(rope_scaling_type);
+        self.context_params.rope_scaling_type = i32::from(rope_scaling_type);
         self
     }
 
