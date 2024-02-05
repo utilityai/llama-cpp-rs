@@ -32,7 +32,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let model_params = LlamaModelParams::default();
     let model = LlamaModel::load_from_file(&backend, &file, &model_params).unwrap();
     let mut ctx = model
-        .new_context(&backend, &LlamaContextParams::default())
+        .new_context(&backend, LlamaContextParams::default())
         .unwrap();
     let grammar = LlamaGrammar::from_str(include_str!("../src/grammar/json.gbnf")).unwrap();
 

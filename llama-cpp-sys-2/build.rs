@@ -13,6 +13,7 @@ fn main() {
 
     let mut ggml = cc::Build::new();
     let mut ggml_cuda = if cublas_enabled { Some(cc::Build::new()) } else { None };
+    let mut ggml_metal= if cfg!(target_os = "macos") { Some(cc::Build::new()) } else { None };
     let mut llama_cpp = cc::Build::new();
 
     ggml.cpp(false);
@@ -60,20 +61,22 @@ fn main() {
         llama_cpp.define("GGML_USE_ACCELERATE", None);
         llama_cpp.define("ACCELERATE_NEW_LAPACK", None);
         llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
-        println!("cargo:rustc-link-lib=framework=Accelerate");
+        println!("cargo:rustc-link-arg=framework=Accelerate");
 
         // 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
         // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L509-L511
-        println!("cargo:rustc-link-lib=framework Foundation");
-        println!("cargo:rustc-link-lib=framework Metal");
-        println!("cargo:rustc-link-lib=framework MetalKit");
-
-
-        // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L517-L520
-        ggml
-            .file("llama.cpp/ggml-metal.m")
-            .file("llama.cpp/ggml-metal.h");
+        println!("cargo:rustc-link-arg=framework=Foundation");
+        println!("cargo:rustc-link-arg=framework=Metal");
+        println!("cargo:rustc-link-arg=framework=MetalKit");
     }
+
+    if let Some(ggml_metal) = &mut ggml_metal {
+        metal_hack(ggml_metal);
+        ggml_metal
+            .file("llama.cpp/ggml-metal")
+            .include("llama.cpp");
+    }
+
     if cfg!(target_os = "dragonfly") {
         llama_cpp.define("__BSD_VISIBLE", None);
     }
@@ -81,6 +84,12 @@ fn main() {
     if let Some(ggml_cuda) = ggml_cuda {
         println!("compiling ggml-cuda");
         ggml_cuda.compile("ggml-cuda");
+    }
+
+
+    if let Some(ggml_metal) = ggml_metal {
+        println!("compiling ggml-metal");
+        ggml_metal.compile("ggml-metal")
     }
 
     if cfg!(target_os = "linux") {
@@ -97,6 +106,7 @@ fn main() {
 
     llama_cpp
         .define("_XOPEN_SOURCE", Some("600"))
+        .include("llama.cpp")
         .std("c++17")
         .file("llama.cpp/llama.cpp");
 
@@ -123,4 +133,44 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("failed to write bindings to file");
+}
+
+
+// courtesy of https://github.com/rustformers/llm
+fn metal_hack(build: &mut cc::Build) {
+    const GGML_METAL_METAL_PATH: &str = "llama.cpp/ggml-metal.metal";
+    const GGML_METAL_PATH: &str = "llama.cpp/ggml-metal.m";
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not defined"));
+
+    let ggml_metal_path = {
+        let ggml_metal_metal = std::fs::read_to_string(GGML_METAL_METAL_PATH)
+            .expect("Could not read ggml-metal.metal")
+            .replace('\\', "\\\\")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\"', "\\\"");
+
+        let ggml_metal =
+            std::fs::read_to_string(GGML_METAL_PATH).expect("Could not read ggml-metal.m");
+
+        let needle = r#"NSString * src = [NSString stringWithContentsOfFile:sourcePath encoding:NSUTF8StringEncoding error:&error];"#;
+        if !ggml_metal.contains(needle) {
+            panic!("ggml-metal.m does not contain the needle to be replaced; the patching logic needs to be reinvestigated. Contact a `llama-cpp-sys-2` developer!");
+        }
+
+        // Replace the runtime read of the file with a compile-time string
+        let ggml_metal = ggml_metal.replace(
+            needle,
+            &format!(r#"NSString * src  = @"{ggml_metal_metal}";"#),
+        );
+
+        let patched_ggml_metal_path = out_dir.join("ggml-metal.m");
+        std::fs::write(&patched_ggml_metal_path, ggml_metal)
+            .expect("Could not write temporary patched ggml-metal.m");
+
+        patched_ggml_metal_path
+    };
+
+    build.file(ggml_metal_path);
 }
