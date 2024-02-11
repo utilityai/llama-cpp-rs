@@ -269,7 +269,7 @@ impl ParseState {
                     rest = r;
                     rule.push(llama_grammar_element {
                         type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
-                        value: c,
+                        value: c as _,
                     });
                 }
                 rest = Self::consume_whitespace_and_comments(&rest[1..], nested);
@@ -292,14 +292,14 @@ impl ParseState {
                     };
                     rule.push(llama_grammar_element {
                         type_: gre_type,
-                        value: c,
+                        value: c as _,
                     });
                     if rest.starts_with("-]") {
                         let (c, r) = Self::parse_char(rest)?;
                         rest = r;
                         rule.push(llama_grammar_element {
                             type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_RNG_UPPER,
-                            value: c,
+                            value: c as _,
                         });
                     }
                 }
@@ -386,7 +386,7 @@ impl ParseState {
                 error,
             })?;
 
-        Ok((value, rest))
+        Ok((value as llama_gretype, rest))
     }
 
     fn parse_char(rest: &str) -> Result<(llama_gretype, &str), GrammarParseError> {
@@ -401,17 +401,17 @@ impl ParseState {
                 'x' => Self::parse_hex(rest, 2),
                 'u' => Self::parse_hex(rest, 4),
                 'U' => Self::parse_hex(rest, 8),
-                't' => Ok((u32::from('\t'), rest)),
-                'r' => Ok((u32::from('\r'), rest)),
-                'n' => Ok((u32::from('\n'), rest)),
-                '\\' => Ok((u32::from('\\'), rest)),
-                '"' => Ok((u32::from('"'), rest)),
-                '[' => Ok((u32::from('['), rest)),
-                ']' => Ok((u32::from(']'), rest)),
+                't' => Ok((u32::from('\t') as llama_gretype, rest)),
+                'r' => Ok((u32::from('\r') as llama_gretype, rest)),
+                'n' => Ok((u32::from('\n') as llama_gretype, rest)),
+                '\\' => Ok((u32::from('\\') as llama_gretype, rest)),
+                '"' => Ok((u32::from('"') as llama_gretype, rest)),
+                '[' => Ok((u32::from('[') as llama_gretype, rest)),
+                ']' => Ok((u32::from(']') as llama_gretype, rest)),
                 c => Err(GrammarParseError::UnknownEscape { escape: c }),
             }
         } else if let Some(c) = rest.chars().next() {
-            Ok((u32::from(c), &rest[c.len_utf8()..]))
+            Ok((u32::from(c) as llama_gretype, &rest[c.len_utf8()..]))
         } else {
             Err(GrammarParseError::UnexpectedEndOfInput {
                 parse_stage: "char",
