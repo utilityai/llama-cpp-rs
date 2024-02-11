@@ -24,10 +24,13 @@ fn main() {
 
     // https://github.com/ggerganov/llama.cpp/blob/a836c8f534ab789b02da149fbdaf7735500bff74/Makefile#L364-L368
     if let Some(ggml_cuda) = &mut ggml_cuda {
-        for lib in [
-            "cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt",
-        ] {
+        for lib in ["cuda", "cublas", "cudart", "cublasLt"] {
             println!("cargo:rustc-link-lib={}", lib);
+        }
+        if !ggml_cuda.get_compiler().is_like_msvc() {
+            for lib in ["culibos", "pthread", "dl", "rt"] {
+                println!("cargo:rustc-link-lib={}", lib);
+            }
         }
 
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
@@ -46,9 +49,14 @@ fn main() {
 
         ggml_cuda
             .cuda(true)
-            .std("c++17")
             .flag("-arch=all")
             .file("llama.cpp/ggml-cuda.cu");
+
+        if ggml_cuda.get_compiler().is_like_msvc() {
+            ggml_cuda.std("c++14");
+        } else {
+            ggml_cuda.std("c++17");
+        }
 
         ggml.define("GGML_USE_CUBLAS", None);
         ggml_cuda.define("GGML_USE_CUBLAS", None);
