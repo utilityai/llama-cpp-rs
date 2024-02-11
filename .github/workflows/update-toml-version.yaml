@@ -17,6 +17,8 @@ jobs:
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
 
       - name: Update version in TOML files
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Extract the current version from the TOML file
           CURRENT_VERSION=$(awk -F '"' '/^version/ {print $2}' llama-cpp-2/Cargo.toml)
