@@ -30,7 +30,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .unwrap();
     let backend = LlamaBackend::init().unwrap();
     let model_params = LlamaModelParams::default();
-    let model = LlamaModel::load_from_file(&backend, &file, &model_params).unwrap();
+    let model = LlamaModel::load_from_file(&backend, file, &model_params).unwrap();
     let mut ctx = model
         .new_context(&backend, LlamaContextParams::default())
         .unwrap();

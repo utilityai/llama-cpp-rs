@@ -1,6 +1,6 @@
 use std::env;
-use std::path::PathBuf;
 use std::path::Path;
+use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=llama.cpp");
@@ -8,7 +8,7 @@ fn main() {
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
 
     if !Path::new("llama.cpp/ggml.c").exists() {
-    	panic!("llama.cpp seems to not be populated, try running `git submodule update --init --recursive` to init.")
+        panic!("llama.cpp seems to not be populated, try running `git submodule update --init --recursive` to init.")
     }
 
     let mut ggml = cc::Build::new();
@@ -21,7 +21,9 @@ fn main() {
 
     // https://github.com/ggerganov/llama.cpp/blob/a836c8f534ab789b02da149fbdaf7735500bff74/Makefile#L364-L368
     if let Some(ggml_cuda) = &mut ggml_cuda {
-        for lib in ["cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt"] {
+        for lib in [
+            "cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt",
+        ] {
             println!("cargo:rustc-link-lib={}", lib);
         }
 
@@ -96,8 +98,7 @@ fn main() {
         ggml.define("_GNU_SOURCE", None);
     }
 
-    ggml
-        .std("c17")
+    ggml.std("c17")
         .file("llama.cpp/ggml.c")
         .file("llama.cpp/ggml-alloc.c")
         .file("llama.cpp/ggml-backend.c")

@@ -37,6 +37,10 @@ impl LlamaBatch {
     ///
     /// - [`self.llama_batch.n_tokens`] does not fit into a usize
     /// - [`seq_ids.len()`] does not fit into a [`llama_seq_id`]
+    ///
+    /// # Errors
+    ///
+    /// returns a error if there is insufficient space in the buffer
     pub fn add(
         &mut self,
         LlamaToken(id): LlamaToken,
@@ -44,8 +48,10 @@ impl LlamaBatch {
         seq_ids: &[i32],
         logits: bool,
     ) -> Result<(), BatchAddError> {
-        if self.allocated < usize::try_from(self.n_tokens() + 1).expect("cannot fit n_tokens into a usize") {
-            return Err(BatchAddError::InsufficientSpace(self.allocated))
+        if self.allocated
+            < usize::try_from(self.n_tokens() + 1).expect("cannot fit n_tokens into a usize")
+        {
+            return Err(BatchAddError::InsufficientSpace(self.allocated));
         }
         let offset = self.llama_batch.n_tokens;
         let offset_usize = usize::try_from(offset).expect("cannot fit n_tokens into a usize");
@@ -55,8 +61,10 @@ impl LlamaBatch {
             // batch.pos     [batch.n_tokens] = pos,
             self.llama_batch.pos.add(offset_usize).write(pos);
             // batch.n_seq_id[batch.n_tokens] = seq_ids.size();
-            self.llama_batch.n_seq_id.add(offset_usize).write(llama_seq_id::try_from(seq_ids.len())
-                .expect("cannot fit seq_ids.len() into a llama_seq_id"));
+            self.llama_batch.n_seq_id.add(offset_usize).write(
+                llama_seq_id::try_from(seq_ids.len())
+                    .expect("cannot fit seq_ids.len() into a llama_seq_id"),
+            );
             // for (size_t i = 0; i < seq_ids.size(); ++i) {
             //     batch.seq_id[batch.n_tokens][i] = seq_ids[i];
             // }
@@ -65,7 +73,10 @@ impl LlamaBatch {
                 tmp.add(i).write(*seq_id);
             }
             // batch.logits  [batch.n_tokens] = logits;
-            self.llama_batch.logits.add(offset_usize).write(i8::from(logits));
+            self.llama_batch
+                .logits
+                .add(offset_usize)
+                .write(i8::from(logits));
         }
 
         if logits {

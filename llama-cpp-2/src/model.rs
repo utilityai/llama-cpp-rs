@@ -126,7 +126,7 @@ impl LlamaModel {
     ) -> Result<Vec<LlamaToken>, StringToTokenError> {
         let add_bos = match add_bos {
             AddBos::Always => true,
-            AddBos::Never => false
+            AddBos::Never => false,
         };
 
         let tokens_estimation = std::cmp::max(8, (str.len() / 2) + usize::from(add_bos));
@@ -135,8 +135,6 @@ impl LlamaModel {
         let c_string = CString::new(str)?;
         let buffer_capacity =
             c_int::try_from(buffer.capacity()).expect("buffer capacity should fit into a c_int");
-
-
 
         let size = unsafe {
             llama_cpp_sys_2::llama_tokenize(
