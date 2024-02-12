@@ -332,9 +332,9 @@ impl Drop for LlamaModel {
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum VocabType {
     /// Byte Pair Encoding
-    BPE = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE,
+    BPE = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE as _,
     /// Sentence Piece Tokenizer
-    SPM = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM,
+    SPM = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM as _,
 }
 
 /// There was an error converting a `llama_vocab_type` to a `VocabType`.
