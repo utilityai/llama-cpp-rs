@@ -20,7 +20,7 @@ pprof = { workspace = true, features = ["criterion", "flamegraph"] }
 
 # used in examples
 clap = { version = "4.5.0", features = ["derive"] }
-anyhow = "1.0.79"
+anyhow = "1.0.80"
 
 [[bench]]
 name = "grammar_bias"
