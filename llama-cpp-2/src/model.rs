@@ -210,7 +210,7 @@ impl LlamaModel {
         }
 
         match self.token_type(token) {
-            LlamaTokenType::Normal => {}
+            LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
             LlamaTokenType::Control => {
                 if token == self.token_bos() || token == self.token_eos() {
                     return Ok(String::new());
@@ -219,7 +219,6 @@ impl LlamaModel {
             LlamaTokenType::Unknown
             | LlamaTokenType::Undefined
             | LlamaTokenType::Byte
-            | LlamaTokenType::UserDefined
             | LlamaTokenType::Unused => {
                 return Ok(String::new());
             }
