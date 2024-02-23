@@ -65,12 +65,6 @@ fn main() {
         llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
         println!("cargo:rustc-link-arg=framework=Accelerate");
 
-        // 	MK_LDFLAGS  += -framework Foundation -framework Metal -framework MetalKit
-        // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L509-L511
-        println!("cargo:rustc-link-arg=framework=Foundation");
-        println!("cargo:rustc-link-arg=framework=Metal");
-        println!("cargo:rustc-link-arg=framework=MetalKit");
-
         metal_hack(&mut ggml);
         ggml.include("./llama.cpp/ggml-metal.h");
     }
