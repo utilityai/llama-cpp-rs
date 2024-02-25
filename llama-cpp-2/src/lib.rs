@@ -194,3 +194,19 @@ pub enum StringToTokenError {
 pub fn ggml_time_us() -> i64 {
     unsafe { llama_cpp_sys_2::ggml_time_us() }
 }
+
+/// checks if mlock is supported
+/// 
+/// ```
+/// # use llama_cpp_2::llama_supports_mlock;
+///
+/// if llama_supports_mlock() {
+///   println!("mlock is supported!");
+/// } else {
+///   println!("mlock is not supported!");
+/// }
+/// ```
+#[must_use]
+pub fn llama_supports_mlock() -> bool {
+    unsafe { llama_cpp_sys_2::llama_supports_mlock() }
+}

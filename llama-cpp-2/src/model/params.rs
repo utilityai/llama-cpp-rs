@@ -62,6 +62,13 @@ impl LlamaModelParams {
         self.params.vocab_only = vocab_only;
         self
     }
+
+    /// sets `use_mlock`
+    #[must_use]
+    pub fn with_use_mlock(mut self, use_mlock: bool) -> Self {
+        self.params.use_mlock = use_mlock;
+        self
+    }
 }
 
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
