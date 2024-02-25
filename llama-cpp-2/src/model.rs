@@ -210,7 +210,7 @@ impl LlamaModel {
         }
 
         match self.token_type(token) {
-            LlamaTokenType::Normal => {}
+            LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
             LlamaTokenType::Control => {
                 if token == self.token_bos() || token == self.token_eos() {
                     return Ok(String::new());
@@ -219,7 +219,6 @@ impl LlamaModel {
             LlamaTokenType::Unknown
             | LlamaTokenType::Undefined
             | LlamaTokenType::Byte
-            | LlamaTokenType::UserDefined
             | LlamaTokenType::Unused => {
                 return Ok(String::new());
             }
@@ -332,9 +331,9 @@ impl Drop for LlamaModel {
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum VocabType {
     /// Byte Pair Encoding
-    BPE = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE,
+    BPE = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_BPE as _,
     /// Sentence Piece Tokenizer
-    SPM = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM,
+    SPM = llama_cpp_sys_2::LLAMA_VOCAB_TYPE_SPM as _,
 }
 
 /// There was an error converting a `llama_vocab_type` to a `VocabType`.

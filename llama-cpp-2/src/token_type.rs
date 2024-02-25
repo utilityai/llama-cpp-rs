@@ -6,19 +6,19 @@
 #[allow(clippy::module_name_repetitions)]
 pub enum LlamaTokenType {
     /// An undefined token type.
-    Undefined = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNDEFINED,
+    Undefined = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNDEFINED as _,
     /// A normal token type.
-    Normal = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_NORMAL,
+    Normal = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_NORMAL as _,
     /// An unknown token type.
-    Unknown = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNKNOWN,
+    Unknown = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNKNOWN as _,
     /// A control token type.
-    Control = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_CONTROL,
+    Control = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_CONTROL as _,
     /// A user defined token type.
-    UserDefined = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_USER_DEFINED,
+    UserDefined = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_USER_DEFINED as _,
     /// An unused token type.
-    Unused = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNUSED,
+    Unused = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNUSED as _,
     /// A byte token type.
-    Byte = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_BYTE,
+    Byte = llama_cpp_sys_2::LLAMA_TOKEN_TYPE_BYTE as _,
 }
 
 /// A safe wrapper for converting potentially deceptive `llama_token_type` values into
@@ -52,7 +52,7 @@ impl TryFrom<llama_cpp_sys_2::llama_token_type> for LlamaTokenType {
             llama_cpp_sys_2::LLAMA_TOKEN_TYPE_USER_DEFINED => Ok(LlamaTokenType::UserDefined),
             llama_cpp_sys_2::LLAMA_TOKEN_TYPE_UNUSED => Ok(LlamaTokenType::Unused),
             llama_cpp_sys_2::LLAMA_TOKEN_TYPE_BYTE => Ok(LlamaTokenType::Byte),
-            _ => Err(LlamaTokenTypeFromIntError::UnknownValue(value)),
+            _ => Err(LlamaTokenTypeFromIntError::UnknownValue(value as _)),
         }
     }
 }

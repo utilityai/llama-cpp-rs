@@ -68,3 +68,15 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build
+  windows:
+    name: Check that it builds on windows
+    runs-on: windows-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          submodules: recursive
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build

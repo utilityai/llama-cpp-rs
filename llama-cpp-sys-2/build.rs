@@ -24,6 +24,11 @@ fn main() {
         ] {
             println!("cargo:rustc-link-lib={}", lib);
         }
+        if !ggml_cuda.get_compiler().is_like_msvc() {
+            for lib in ["culibos", "pthread", "dl", "rt"] {
+                println!("cargo:rustc-link-lib={}", lib);
+            }
+        }
 
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
 
@@ -37,10 +42,18 @@ fn main() {
                 .flag_if_supported("-mno-unaligned-access");
         }
 
-        ggml.cuda(true)
+
+        ggml
+            .cuda(true)
             .std("c++17")
             .flag("-arch=all")
             .file("llama.cpp/ggml-cuda.cu");
+
+        if ggml_cuda.get_compiler().is_like_msvc() {
+            ggml_cuda.std("c++14");
+        } else {
+            ggml_cuda.std("c++17");
+        }
 
         ggml.define("GGML_USE_CUBLAS", None);
         ggml.define("GGML_USE_CUBLAS", None);
