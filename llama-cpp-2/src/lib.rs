@@ -8,6 +8,10 @@
 //! # Examples
 //!
 //! - [simple](https://github.com/utilityai/llama-cpp-rs/blob/main/llama-cpp-2/examples/simple.rs)
+//!
+//! # Feature Flags
+//!
+//! - `cublas` enables CUDA gpu support.
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
