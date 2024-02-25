@@ -26,6 +26,8 @@ Check out the [docs.rs] for crate documentation or the [readme] for high level i
 
 ## Try it
 
+We maintain a super simple example of using the library:
+
 Clone the repo
 
 ```bash
