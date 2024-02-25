@@ -1,4 +1,4 @@
-//! This is an translation of simple.cpp in llama.cpp using llama-cpp-2.
+//! This is a translation of simple.cpp in llama.cpp using llama-cpp-2.
 #![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
 
 use anyhow::{bail, Context, Result};
@@ -15,11 +15,13 @@ use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::Duration;
+use hf_hub::api::sync::ApiBuilder;
 
-#[derive(clap::Parser)]
+#[derive(clap::Parser, Debug, Clone)]
 struct Args {
     /// The path to the model
-    model_path: PathBuf,
+    #[command(subcommand)]
+    model: Model,
     /// The prompt
     #[clap(default_value = "Hello my name is")]
     prompt: String,
@@ -29,8 +31,41 @@ struct Args {
     disable_gpu: bool,
 }
 
+#[derive(clap::Subcommand, Debug, Clone)]
+enum Model {
+    /// Use an already downloaded model
+    Local {
+        /// The path to the model. e.g. `/home/marcus/.cache/huggingface/hub/models--TheBloke--Llama-2-7B-Chat-GGUF/blobs/08a5566d61d7cb6b420c3e4387a39e0078e1f2fe5f055f3a03887385304d4bfa`
+        path: PathBuf,
+    },
+    /// Download a model from huggingface (or use a cached version)
+    #[clap(name = "hf-model")]
+    HuggingFace {
+        /// the repo containing the model. e.g. `TheBloke/Llama-2-7B-Chat-GGUF`
+        repo: String,
+        /// the model name. e.g. `llama-2-7b-chat.Q4_K_M.gguf`
+        model: String,
+    },
+}
+
+impl Model {
+    /// Convert the model to a path - may download from huggingface
+    fn to_path(self) -> Result<PathBuf> {
+        match self {
+            Model::Local { path } => Ok(path),
+            Model::HuggingFace { model, repo } => ApiBuilder::new()
+                .with_progress(true)
+                .build()
+                .with_context(|| "unable to create huggingface api")?
+                .model(repo)
+                .get(&model)
+                .with_context(|| "unable to download model")
+        }
+    }
+}
+
 fn main() -> Result<()> {
-    let params = Args::parse();
+    let Args { model, prompt, #[cfg(feature = "cublas")] disable_gpu } = Args::parse();
 
     // init LLM
     let backend = LlamaBackend::init()?;
@@ -41,7 +76,7 @@ fn main() -> Result<()> {
     // offload all layers to the gpu
     let model_params = {
         #[cfg(feature = "cublas")]
-        if !params.disable_gpu {
+        if !disable_gpu {
             LlamaModelParams::default().with_n_gpu_layers(1000)
         } else {
             LlamaModelParams::default()
@@ -49,8 +84,10 @@ fn main() -> Result<()> {
         #[cfg(not(feature = "cublas"))]
         LlamaModelParams::default()
     };
+    
+    let model_path = model.to_path().with_context(|| "failed to get model from args")?;
 
-    let model = LlamaModel::load_from_file(&backend, params.model_path, &model_params)
+    let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
         .with_context(|| "unable to load model")?;
 
     // initialize the context
@@ -65,8 +102,8 @@ fn main() -> Result<()> {
     // tokenize the prompt
 
     let tokens_list = model
-        .str_to_token(&params.prompt, AddBos::Always)
-        .with_context(|| format!("failed to tokenize {}", params.prompt))?;
+        .str_to_token(&prompt, AddBos::Always)
+        .with_context(|| format!("failed to tokenize {}", prompt))?;
 
     let n_cxt = ctx.n_ctx() as i32;
     let n_kv_req = tokens_list.len() as i32 + (n_len - tokens_list.len() as i32);
