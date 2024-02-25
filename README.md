@@ -24,30 +24,19 @@ dead simple, very close to raw bindings, and does not follow semver meaningfully
 
 Check out the [docs.rs] for crate documentation or the [readme] for high level information about the project.
 
-## Try it out!
+## Try it
 
 Clone the repo
 
 ```bash
 git clone --recursive https://github.com/utilityai/llama-cpp-rs
-```
-
-Enter the directory
-
-```bash
 cd llama-cpp-rs
 ```
 
-Run the simple example
+Run the simple example (add `--featues cublas` if you have a cuda gpu)
 
 ```bash
 cargo run --release --bin simple "The way to kill a linux process is" hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
-```
-
-Or if you have a GPU and want to use it
-
-```bash
-cargo run --features cublas --release --bin simple "The way to kill a linux process is" hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 ```
 
 <details>
