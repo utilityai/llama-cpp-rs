@@ -25,6 +25,9 @@ struct Args {
     /// The prompt
     #[clap(default_value = "Hello my name is")]
     prompt: String,
+    /// set the length of the prompt + output in tokens
+    #[arg(long, default_value_t = 32)]
+    n_len: i32,
     /// Disable offloading layers to the gpu
     #[cfg(feature = "cublas")]
     #[clap(long)]
@@ -65,13 +68,10 @@ impl Model {
 }
 
 fn main() -> Result<()> {
-    let Args { model, prompt, #[cfg(feature = "cublas")] disable_gpu } = Args::parse();
+    let Args { n_len, model, prompt, #[cfg(feature = "cublas")] disable_gpu } = Args::parse();
 
     // init LLM
     let backend = LlamaBackend::init()?;
-
-    // total length of the sequence including the prompt
-    let n_len: i32 = 32;
 
     // offload all layers to the gpu
     let model_params = {
@@ -116,6 +116,10 @@ fn main() -> Result<()> {
             "n_kv_req > n_ctx, the required kv cache size is not big enough
 either reduce n_len or increase n_ctx"
         )
+    }
+
+    if tokens_list.len() >= usize::try_from(n_len)? {
+        bail!("the prompt is too long, it has more tokens than n_len")
     }
 
     // print the prompt token-by-token
