@@ -54,11 +54,11 @@ fn main() {
             .include("llama.cpp");
 
         if ggml_cuda.get_compiler().is_like_msvc() {
-            // someone with windows should check if this works @ cc++11
-            // this case was added when we used c++17 (which was not what llama.cpp used)
             ggml_cuda.std("c++14");
         } else {
-            ggml_cuda.std("c++11");
+            ggml_cuda
+                .flag("-std=c++11")
+                .std("c++11");
         }
 
         ggml.define("GGML_USE_CUBLAS", None);
