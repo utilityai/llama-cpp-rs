@@ -26,6 +26,10 @@ anyhow = "1.0.80"
 name = "grammar_bias"
 harness = false
 
+[[bench]]
+name = "generate"
+harness = false
+
 [features]
 cublas = ["llama-cpp-sys-2/cublas"]
 
