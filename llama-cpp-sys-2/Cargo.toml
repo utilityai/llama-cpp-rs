@@ -22,6 +22,7 @@ include = [
     "/llama.cpp/ggml-impl.h",
     "/llama.cpp/ggml-metal.m",
     "/llama.cpp/ggml-metal.metal",
+    "/llama.cpp/ggml-metal.h",
     "/llama.cpp/ggml-mpi.c",
     "/llama.cpp/ggml-mpi.h",
     "/llama.cpp/ggml-opencl.cpp",
