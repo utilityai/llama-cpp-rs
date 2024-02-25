@@ -7,6 +7,8 @@ fn main() {
 
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
 
+    let mut ggml_cuda = if cublas_enabled { Some(cc::Build::new()) } else { None };
+
     if !Path::new("llama.cpp/ggml.c").exists() {
         panic!("llama.cpp seems to not be populated, try running `git submodule update --init --recursive` to init.")
     }
@@ -18,7 +20,7 @@ fn main() {
     llama_cpp.cpp(true);
 
     // https://github.com/ggerganov/llama.cpp/blob/a836c8f534ab789b02da149fbdaf7735500bff74/Makefile#L364-L368
-    if cublas_enabled {
+    if let Some(ggml_cuda) = &mut ggml_cuda {
         for lib in [
             "cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt",
         ] {
@@ -33,6 +35,9 @@ fn main() {
         println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
 
         if cfg!(target_arch = "aarch64") {
+            ggml_cuda
+                .flag_if_supported("-mfp16-format=ieee")
+                .flag_if_supported("-mno-unaligned-access");
             ggml.flag_if_supported("-mfp16-format=ieee")
                 .flag_if_supported("-mno-unaligned-access");
             llama_cpp
@@ -42,21 +47,22 @@ fn main() {
                 .flag_if_supported("-mno-unaligned-access");
         }
 
-
-        ggml
+        ggml_cuda
             .cuda(true)
-            .std("c++17")
             .flag("-arch=all")
-            .file("llama.cpp/ggml-cuda.cu");
+            .file("llama.cpp/ggml-cuda.cu")
+            .include("llama.cpp");
 
         if ggml_cuda.get_compiler().is_like_msvc() {
+            // someone with windows should check if this works @ cc++11
+            // this case was added when we used c++17 (which was not what llama.cpp used)
             ggml_cuda.std("c++14");
         } else {
-            ggml_cuda.std("c++17");
+            ggml_cuda.std("c++11");
         }
 
         ggml.define("GGML_USE_CUBLAS", None);
-        ggml.define("GGML_USE_CUBLAS", None);
+        ggml_cuda.define("GGML_USE_CUBLAS", None);
         llama_cpp.define("GGML_USE_CUBLAS", None);
     }
 
@@ -90,7 +96,7 @@ fn main() {
         ggml.define("_GNU_SOURCE", None);
     }
 
-    ggml.std("c17")
+    ggml.std("c11")
         .include("./llama.cpp")
         .file("llama.cpp/ggml.c")
         .file("llama.cpp/ggml-alloc.c")
@@ -101,14 +107,22 @@ fn main() {
     llama_cpp
         .define("_XOPEN_SOURCE", Some("600"))
         .include("llama.cpp")
-        .std("c++17")
+        .std("c++11")
         .file("llama.cpp/llama.cpp");
+
+    if let Some(ggml_cuda) = ggml_cuda {
+        println!("compiling ggml-cuda");
+        ggml_cuda.compile("ggml-cuda");
+        println!("compiled ggml-cuda");
+    }
 
     println!("compiling ggml");
     ggml.compile("ggml");
+    println!("compiled ggml");
 
     println!("compiling llama");
     llama_cpp.compile("llama");
+    println!("compiled llama");
 
     let header = "llama.cpp/llama.h";
 
