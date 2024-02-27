@@ -58,7 +58,7 @@ enum Model {
 
 impl Model {
     /// Convert the model to a path - may download from huggingface
-    fn to_path(self) -> Result<PathBuf> {
+    fn as_path(self) -> Result<PathBuf> {
         match self {
             Model::Local { path } => Ok(path),
             Model::HuggingFace { model, repo } => ApiBuilder::new()
@@ -97,7 +97,7 @@ fn main() -> Result<()> {
     };
 
     let model_path = model
-        .to_path()
+        .as_path()
         .with_context(|| "failed to get model from args")?;
 
     let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
@@ -116,7 +116,7 @@ fn main() -> Result<()> {
 
     let tokens_list = model
         .str_to_token(&prompt, AddBos::Always)
-        .with_context(|| format!("failed to tokenize {}", prompt))?;
+        .with_context(|| format!("failed to tokenize {prompt}"))?;
 
     let n_cxt = ctx.n_ctx() as i32;
     let n_kv_req = tokens_list.len() as i32 + (n_len - tokens_list.len() as i32);
