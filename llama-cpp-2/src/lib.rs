@@ -196,7 +196,7 @@ pub fn ggml_time_us() -> i64 {
 }
 
 /// checks if mlock is supported
-/// 
+///
 /// ```
 /// # use llama_cpp_2::llama_supports_mlock;
 ///

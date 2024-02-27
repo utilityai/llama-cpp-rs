@@ -1,12 +1,12 @@
 use anyhow::Context;
-use criterion::{Criterion, criterion_group, criterion_main};
-use pprof::criterion::{Output, PProfProfiler};
+use criterion::{criterion_group, criterion_main, Criterion};
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
-use llama_cpp_2::model::{AddBos, LlamaModel};
 use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::{AddBos, LlamaModel};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use pprof::criterion::{Output, PProfProfiler};
 
 fn generate(c: &mut Criterion) {
     let api = hf_hub::api::sync::ApiBuilder::new()
@@ -26,7 +26,9 @@ fn generate(c: &mut Criterion) {
 
     c.bench_function("generate 50 tokens", |b| {
         b.iter(|| {
-            let tokens_list = model.str_to_token("Hello, my name is", AddBos::Always).unwrap();
+            let tokens_list = model
+                .str_to_token("Hello, my name is", AddBos::Always)
+                .unwrap();
             let mut n_ctx = tokens_list.len() as i32;
             let mut batch = LlamaBatch::new(512, 1);
             let last_index: i32 = (tokens_list.len() - 1) as i32;

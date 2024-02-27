@@ -7,7 +7,11 @@ fn main() {
 
     let cublas_enabled = env::var("CARGO_FEATURE_CUBLAS").is_ok();
 
-    let mut ggml_cuda = if cublas_enabled { Some(cc::Build::new()) } else { None };
+    let mut ggml_cuda = if cublas_enabled {
+        Some(cc::Build::new())
+    } else {
+        None
+    };
 
     if !Path::new("llama.cpp/ggml.c").exists() {
         panic!("llama.cpp seems to not be populated, try running `git submodule update --init --recursive` to init.")
@@ -56,9 +60,7 @@ fn main() {
         if ggml_cuda.get_compiler().is_like_msvc() {
             ggml_cuda.std("c++14");
         } else {
-            ggml_cuda
-                .flag("-std=c++11")
-                .std("c++11");
+            ggml_cuda.flag("-std=c++11").std("c++11");
         }
 
         ggml.define("GGML_USE_CUBLAS", None);

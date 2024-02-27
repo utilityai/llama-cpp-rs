@@ -1,8 +1,14 @@
 //! This is a translation of simple.cpp in llama.cpp using llama-cpp-2.
-#![allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation, clippy::cast_precision_loss, clippy::cast_sign_loss)]
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
+)]
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -15,7 +21,6 @@ use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::time::Duration;
-use hf_hub::api::sync::ApiBuilder;
 
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
@@ -62,13 +67,19 @@ impl Model {
                 .with_context(|| "unable to create huggingface api")?
                 .model(repo)
                 .get(&model)
-                .with_context(|| "unable to download model")
+                .with_context(|| "unable to download model"),
         }
     }
 }
 
 fn main() -> Result<()> {
-    let Args { n_len, model, prompt, #[cfg(feature = "cublas")] disable_gpu } = Args::parse();
+    let Args {
+        n_len,
+        model,
+        prompt,
+        #[cfg(feature = "cublas")]
+        disable_gpu,
+    } = Args::parse();
 
     // init LLM
     let backend = LlamaBackend::init()?;
@@ -84,8 +95,10 @@ fn main() -> Result<()> {
         #[cfg(not(feature = "cublas"))]
         LlamaModelParams::default()
     };
-    
-    let model_path = model.to_path().with_context(|| "failed to get model from args")?;
+
+    let model_path = model
+        .to_path()
+        .with_context(|| "failed to get model from args")?;
 
     let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
         .with_context(|| "unable to load model")?;

@@ -84,7 +84,8 @@ impl LlamaContextParams {
     /// let params = params.with_seed(1234);
     /// assert_eq!(params.seed(), 1234);
     /// ```
-    #[must_use] pub fn with_seed(mut self, seed: u32) -> Self {
+    #[must_use]
+    pub fn with_seed(mut self, seed: u32) -> Self {
         self.context_params.seed = seed;
         self
     }
@@ -99,7 +100,8 @@ impl LlamaContextParams {
     ///     .with_seed(1234);
     /// assert_eq!(params.seed(), 1234);
     /// ```
-    #[must_use] pub fn seed(&self) -> u32 {
+    #[must_use]
+    pub fn seed(&self) -> u32 {
         self.context_params.seed
     }
 
@@ -114,7 +116,8 @@ impl LlamaContextParams {
     /// let params = params.with_n_ctx(NonZeroU32::new(2048));
     /// assert_eq!(params.n_ctx(), NonZeroU32::new(2048));
     /// ```
-    #[must_use] pub fn with_n_ctx(mut self, n_ctx: Option<NonZeroU32>) -> Self {
+    #[must_use]
+    pub fn with_n_ctx(mut self, n_ctx: Option<NonZeroU32>) -> Self {
         self.context_params.n_ctx = n_ctx.map_or(0, std::num::NonZeroU32::get);
         self
     }
@@ -128,7 +131,8 @@ impl LlamaContextParams {
     /// ```rust
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
     /// assert_eq!(params.n_ctx(), std::num::NonZeroU32::new(512));
-    #[must_use] pub fn n_ctx(&self) -> Option<NonZeroU32> {
+    #[must_use]
+    pub fn n_ctx(&self) -> Option<NonZeroU32> {
         NonZeroU32::new(self.context_params.n_ctx)
     }
 
@@ -143,7 +147,8 @@ impl LlamaContextParams {
     ///     .with_n_batch(2048);
     /// assert_eq!(params.n_batch(), 2048);
     /// ```
-    #[must_use] pub fn with_n_batch(mut self, n_batch: u32) -> Self {
+    #[must_use]
+    pub fn with_n_batch(mut self, n_batch: u32) -> Self {
         self.context_params.n_batch = n_batch;
         self
     }
@@ -157,7 +162,8 @@ impl LlamaContextParams {
     /// let params = LlamaContextParams::default();
     /// assert_eq!(params.n_batch(), 512);
     /// ```
-    #[must_use] pub fn n_batch(&self) -> u32 {
+    #[must_use]
+    pub fn n_batch(&self) -> u32 {
         self.context_params.n_batch
     }
 
@@ -171,7 +177,8 @@ impl LlamaContextParams {
     ///     .with_rope_scaling_type(RopeScalingType::Linear);
     /// assert_eq!(params.rope_scaling_type(), RopeScalingType::Linear);
     /// ```
-    #[must_use] pub fn with_rope_scaling_type(mut self, rope_scaling_type: RopeScalingType) -> Self {
+    #[must_use]
+    pub fn with_rope_scaling_type(mut self, rope_scaling_type: RopeScalingType) -> Self {
         self.context_params.rope_scaling_type = i32::from(rope_scaling_type);
         self
     }
@@ -184,7 +191,8 @@ impl LlamaContextParams {
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
     /// assert_eq!(params.rope_scaling_type(), llama_cpp_2::context::params::RopeScalingType::Unspecified);
     /// ```
-    #[must_use] pub fn rope_scaling_type(&self) -> RopeScalingType {
+    #[must_use]
+    pub fn rope_scaling_type(&self) -> RopeScalingType {
         RopeScalingType::from(self.context_params.rope_scaling_type)
     }
 
@@ -198,7 +206,8 @@ impl LlamaContextParams {
     ///    .with_rope_freq_base(0.5);
     /// assert_eq!(params.rope_freq_base(), 0.5);
     /// ```
-    #[must_use] pub fn with_rope_freq_base(mut self, rope_freq_base: f32) -> Self {
+    #[must_use]
+    pub fn with_rope_freq_base(mut self, rope_freq_base: f32) -> Self {
         self.context_params.rope_freq_base = rope_freq_base;
         self
     }
@@ -211,7 +220,8 @@ impl LlamaContextParams {
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
     /// assert_eq!(params.rope_freq_base(), 0.0);
     /// ```
-    #[must_use] pub fn rope_freq_base(&self) -> f32 {
+    #[must_use]
+    pub fn rope_freq_base(&self) -> f32 {
         self.context_params.rope_freq_base
     }
 
@@ -225,7 +235,8 @@ impl LlamaContextParams {
     ///   .with_rope_freq_scale(0.5);
     /// assert_eq!(params.rope_freq_scale(), 0.5);
     /// ```
-    #[must_use] pub fn with_rope_freq_scale(mut self, rope_freq_scale: f32) -> Self {
+    #[must_use]
+    pub fn with_rope_freq_scale(mut self, rope_freq_scale: f32) -> Self {
         self.context_params.rope_freq_scale = rope_freq_scale;
         self
     }
@@ -238,7 +249,8 @@ impl LlamaContextParams {
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
     /// assert_eq!(params.rope_freq_scale(), 0.0);
     /// ```
-    #[must_use] pub fn rope_freq_scale(&self) -> f32 {
+    #[must_use]
+    pub fn rope_freq_scale(&self) -> f32 {
         self.context_params.rope_freq_scale
     }
 
@@ -250,7 +262,8 @@ impl LlamaContextParams {
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
     /// assert_eq!(params.n_threads(), 4);
     /// ```
-    #[must_use] pub fn n_threads(&self) -> u32 {
+    #[must_use]
+    pub fn n_threads(&self) -> u32 {
         self.context_params.n_threads
     }
 
@@ -264,7 +277,8 @@ impl LlamaContextParams {
     ///    .with_n_threads(8);
     /// assert_eq!(params.n_threads(), 8);
     /// ```
-    #[must_use] pub fn with_n_threads(mut self, n_threads: u32) -> Self {
+    #[must_use]
+    pub fn with_n_threads(mut self, n_threads: u32) -> Self {
         self.context_params.n_threads = n_threads;
         self
     }
