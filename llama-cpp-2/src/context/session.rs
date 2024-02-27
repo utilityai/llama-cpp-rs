@@ -58,6 +58,8 @@ impl LlamaContext<'_> {
     }
     /// Load a session file into the current context.
     ///
+    /// You still need to pass the returned tokens to the context for inference to work. What this function buys you is that the KV caches are already filled with the relevant data.
+    ///
     /// # Parameters
     ///
     /// * `path_session` - The file to load from. It must be a session file from a compatible context, otherwise the function will error.
