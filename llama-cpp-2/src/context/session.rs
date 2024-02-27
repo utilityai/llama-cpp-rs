@@ -35,6 +35,15 @@ pub enum LoadSessionError {
     /// failed to convert path to str
     #[error("failed to convert path {0} to str")]
     PathToStrError(PathBuf),
+    
+    /// Insufficient max length
+    #[error("max_length is not large enough to hold {n_out} (was {max_tokens})")]
+    InsufficientMaxLength {
+        /// The length of the session file
+        n_out: usize,
+        /// The maximum length
+        max_tokens: usize,
+    },
 }
 
 impl LlamaContext<'_> {
@@ -44,9 +53,9 @@ impl LlamaContext<'_> {
     ///
     /// * `path_session` - The file to save to.
     /// * `tokens` - The tokens to associate the session with. This should be a prefix of a sequence of tokens that the context has processed, so that the relevant KV caches are already filled.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Fails if the path is not a valid utf8, is not a valid c string, or llama.cpp fails to save the session file.
     pub fn save_session_file(
         &self,
@@ -64,7 +73,7 @@ impl LlamaContext<'_> {
             llama_cpp_sys_2::llama_save_session_file(
                 self.context.as_ptr(),
                 cstr.as_ptr(),
-                tokens.as_ptr() as *const i32,
+                tokens.as_ptr().cast::<llama_cpp_sys_2::llama_token>(),
                 tokens.len(),
             )
         } {
@@ -81,9 +90,9 @@ impl LlamaContext<'_> {
     ///
     /// * `path_session` - The file to load from. It must be a session file from a compatible context, otherwise the function will error.
     /// * `max_tokens` - The maximum token length of the loaded session. If the session was saved with a longer length, the function will error.
-    /// 
+    ///
     /// # Errors
-    /// 
+    ///
     /// Fails if the path is not a valid utf8, is not a valid c string, or llama.cpp fails to load the session file. (e.g. the file does not exist, is not a session file, etc.)
     pub fn load_session_file(
         &mut self,
@@ -103,11 +112,17 @@ impl LlamaContext<'_> {
             if llama_cpp_sys_2::llama_load_session_file(
                 self.context.as_ptr(),
                 cstr.as_ptr(),
-                tokens.as_mut_ptr().cast::<i32>(),
+                // cast is valid as LlamaToken is repr(transparent) 
+                Vec::<LlamaToken>::as_mut_ptr(&mut tokens).cast::<llama_cpp_sys_2::llama_token>(),
                 max_tokens,
                 &mut n_out,
             ) {
-                assert!(n_out <= max_tokens, "n_out is greater than max_tokens");
+                if n_out > max_tokens {
+                    return Err(LoadSessionError::InsufficientMaxLength {
+                        n_out,
+                        max_tokens,
+                    });
+                }
                 tokens.set_len(n_out);
                 Ok(tokens)
             } else {

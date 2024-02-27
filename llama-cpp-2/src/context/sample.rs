@@ -184,7 +184,7 @@ impl LlamaContext<'_> {
         LlamaToken(token)
     }
 
-    /// Tail Free Sampling described in https://www.trentonbricken.com/Tail-Free-Sampling/.
+    /// Tail Free Sampling described in [Tail-Free-Sampling](https://www.trentonbricken.com/Tail-Free-Sampling/).
     pub fn sample_tail_free(&self, token_data: &mut LlamaTokenDataArray, z: f32, min_keep: usize) {
         let ctx = self.context.as_ptr();
         unsafe {
@@ -194,7 +194,7 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Locally Typical Sampling implementation described in the paper https://arxiv.org/abs/2202.00666.
+    /// Locally Typical Sampling implementation described in the [paper](https://arxiv.org/abs/2202.00666).
     pub fn sample_typical(&self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
         let ctx = self.context.as_ptr();
         unsafe {
@@ -204,7 +204,7 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Nucleus sampling described in academic paper \"The Curious Case of Neural Text Degeneration\" https://arxiv.org/abs/1904.09751"
+    /// Nucleus sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)"
     pub fn sample_top_p(&self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
         let ctx = self.context.as_ptr();
         unsafe {
@@ -214,7 +214,7 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Minimum P sampling as described in https://github.com/ggerganov/llama.cpp/pull/3841"
+    /// Minimum P sampling as described in [#3841](https://github.com/ggerganov/llama.cpp/pull/3841)
     pub fn sample_min_p(
         &self,
         llama_token_data: &mut LlamaTokenDataArray,
@@ -229,7 +229,7 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration" https://arxiv.org/abs/1904.09751
+    /// Top-K sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)
     pub fn sample_top_k(&self, token_data: &mut LlamaTokenDataArray, k: i32, min_keep: usize) {
         let ctx = self.context.as_ptr();
         unsafe {
