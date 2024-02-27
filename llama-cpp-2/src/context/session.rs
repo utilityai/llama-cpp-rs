@@ -30,6 +30,12 @@ pub enum LoadSessionError {
 }
 
 impl LlamaContext<'_> {
+    /// Save the current session to a file.
+    ///
+    /// # Parameters
+    ///
+    /// * `path_session` - The file to save to.
+    /// * `tokens` - The tokens to associate the session with. This should be a prefix of a sequence of tokens that the context has processed, so that the relevant KV caches are already filled.
     pub fn save_session_file(&self, path_session: impl AsRef<Path>, tokens: &[LlamaToken]) -> Result<(), SaveSessionError> {
         let path = path_session.as_ref();
         let path = path
@@ -50,6 +56,12 @@ impl LlamaContext<'_> {
             Err(SaveSessionError::FailedToSave)
         }
     }
+    /// Load a session file into the current context.
+    ///
+    /// # Parameters
+    ///
+    /// * `path_session` - The file to load from. It must be a session file from a compatible context, otherwise the function will error.
+    /// * `max_tokens` - The maximum token length of the loaded session. If the session was saved with a longer length, the function will error.
     pub fn load_session_file(&mut self, path_session: impl AsRef<Path>, max_tokens: usize) -> Result<Vec<LlamaToken>, LoadSessionError> {
         let path = path_session.as_ref();
         let path = path
