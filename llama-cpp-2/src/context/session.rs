@@ -44,6 +44,10 @@ impl LlamaContext<'_> {
     ///
     /// * `path_session` - The file to save to.
     /// * `tokens` - The tokens to associate the session with. This should be a prefix of a sequence of tokens that the context has processed, so that the relevant KV caches are already filled.
+    /// 
+    /// # Errors
+    /// 
+    /// Fails if the path is not a valid utf8, is not a valid c string, or llama.cpp fails to save the session file.
     pub fn save_session_file(
         &self,
         path_session: impl AsRef<Path>,
@@ -77,6 +81,10 @@ impl LlamaContext<'_> {
     ///
     /// * `path_session` - The file to load from. It must be a session file from a compatible context, otherwise the function will error.
     /// * `max_tokens` - The maximum token length of the loaded session. If the session was saved with a longer length, the function will error.
+    /// 
+    /// # Errors
+    /// 
+    /// Fails if the path is not a valid utf8, is not a valid c string, or llama.cpp fails to load the session file. (e.g. the file does not exist, is not a session file, etc.)
     pub fn load_session_file(
         &mut self,
         path_session: impl AsRef<Path>,
@@ -95,7 +103,7 @@ impl LlamaContext<'_> {
             if llama_cpp_sys_2::llama_load_session_file(
                 self.context.as_ptr(),
                 cstr.as_ptr(),
-                tokens.as_mut_ptr() as *mut i32,
+                tokens.as_mut_ptr().cast::<i32>(),
                 max_tokens,
                 &mut n_out,
             ) {

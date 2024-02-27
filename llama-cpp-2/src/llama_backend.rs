@@ -64,7 +64,7 @@ impl LlamaBackend {
     pub fn init_numa(strategy: NumaStrategy) -> crate::Result<LlamaBackend> {
         Self::mark_init()?;
         unsafe {
-            llama_cpp_sys_2::llama_numa_init(llama_cpp_sys_2::ggml_numa_strategy::from(strategy))
+            llama_cpp_sys_2::llama_numa_init(llama_cpp_sys_2::ggml_numa_strategy::from(strategy));
         }
         Ok(LlamaBackend {})
     }

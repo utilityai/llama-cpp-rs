@@ -305,6 +305,8 @@ impl LlamaModel {
     /// # Errors
     ///
     /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
+    // we intentionally do not derive Copy on `LlamaContextParams` to allow llama.cpp to change the type to be non-trivially copyable.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new_context(
         &self,
         _: &LlamaBackend,

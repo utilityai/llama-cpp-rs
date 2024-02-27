@@ -58,7 +58,7 @@ enum Model {
 
 impl Model {
     /// Convert the model to a path - may download from huggingface
-    fn as_path(self) -> Result<PathBuf> {
+    fn get_or_load(self) -> Result<PathBuf> {
         match self {
             Model::Local { path } => Ok(path),
             Model::HuggingFace { model, repo } => ApiBuilder::new()
@@ -97,7 +97,7 @@ fn main() -> Result<()> {
     };
 
     let model_path = model
-        .as_path()
+        .get_or_load()
         .with_context(|| "failed to get model from args")?;
 
     let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
