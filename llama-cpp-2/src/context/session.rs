@@ -123,11 +123,10 @@ impl LlamaContext<'_> {
         if load_session_success {
             if n_out > max_tokens {
                 return Err(LoadSessionError::InsufficientMaxLength { n_out, max_tokens });
-            } else {
-                // SAFETY: we checked that n_out <= max_tokens and llama.cpp promises that n_out tokens will be written
-                unsafe {
-                    tokens.set_len(n_out);
-                }
+            }
+            // SAFETY: we checked that n_out <= max_tokens and llama.cpp promises that n_out tokens will be written
+            unsafe {
+                tokens.set_len(n_out);
             }
             Ok(tokens)
         } else {
@@ -136,7 +135,8 @@ impl LlamaContext<'_> {
     }
 
     /// Returns the maximum size in bytes of the state (rng, logits, embedding
-    /// and kv_cache) - will often be smaller after compacting tokens
+    /// and `kv_cache`) - will often be smaller after compacting tokens
+    #[must_use]
     pub fn get_state_size(&self) -> usize {
         unsafe { llama_cpp_sys_2::llama_get_state_size(self.context.as_ptr()) }
     }
