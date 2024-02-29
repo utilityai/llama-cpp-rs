@@ -56,6 +56,13 @@ impl LlamaModelParams {
         self
     }
 
+    /// sets the main GPU
+    #[must_use]
+    pub fn with_main_gpu(mut self, main_gpu: i32) -> Self {
+        self.params.main_gpu = main_gpu;
+        self
+    }
+
     /// sets `vocab_only`
     #[must_use]
     pub fn with_vocab_only(mut self, vocab_only: bool) -> Self {
