@@ -8,6 +8,7 @@ use llama_cpp_sys_2::llama_context;
 
 /// struct to hold params for sampling
 #[derive(Debug)]
+#[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
 pub struct Sampler<'grammar> {
     token_data_array: LlamaTokenDataArray,
     grammar: Option<&'grammar mut LlamaGrammar>,
@@ -15,6 +16,7 @@ pub struct Sampler<'grammar> {
 }
 
 impl<'grammar> Sampler<'grammar> {
+    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
     fn sample(self, llama_context: &mut LlamaContext) -> LlamaToken {
         match self {
             Sampler {
@@ -58,6 +60,7 @@ impl<'grammar> Sampler<'grammar> {
 
     /// Create a new sampler.
     #[must_use]
+    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
     pub fn new(llama_token_data_array: LlamaTokenDataArray) -> Self {
         Self {
             token_data_array: llama_token_data_array,
@@ -68,6 +71,7 @@ impl<'grammar> Sampler<'grammar> {
 
     /// Set the grammar for sampling.
     #[must_use]
+    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
     pub fn with_grammar(mut self, grammar: &'grammar mut LlamaGrammar) -> Self {
         self.grammar = Some(grammar);
         self
@@ -87,6 +91,7 @@ impl<'grammar> Sampler<'grammar> {
     ///     .with_temperature(0.5);
     /// ```
     #[must_use]
+    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
     pub fn with_temperature(mut self, temperature: f32) -> Self {
         if temperature == 0.0 {
             return self;
@@ -102,6 +107,7 @@ impl LlamaContext<'_> {
     /// # Panics
     ///
     /// - sampler contains no tokens
+    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
     pub fn sample(&mut self, sampler: Sampler) -> LlamaToken {
         sampler.sample(self)
     }
@@ -182,6 +188,61 @@ impl LlamaContext<'_> {
             )
         };
         LlamaToken(token)
+    }
+
+    /// Tail Free Sampling described in [Tail-Free-Sampling](https://www.trentonbricken.com/Tail-Free-Sampling/).
+    pub fn sample_tail_free(&self, token_data: &mut LlamaTokenDataArray, z: f32, min_keep: usize) {
+        let ctx = self.context.as_ptr();
+        unsafe {
+            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_tail_free(ctx, c_llama_token_data_array, z, min_keep);
+            });
+        }
+    }
+
+    /// Locally Typical Sampling implementation described in the [paper](https://arxiv.org/abs/2202.00666).
+    pub fn sample_typical(&self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
+        let ctx = self.context.as_ptr();
+        unsafe {
+            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_typical(ctx, c_llama_token_data_array, p, min_keep);
+            });
+        }
+    }
+
+    /// Nucleus sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)"
+    pub fn sample_top_p(&self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
+        let ctx = self.context.as_ptr();
+        unsafe {
+            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_top_p(ctx, c_llama_token_data_array, p, min_keep);
+            });
+        }
+    }
+
+    /// Minimum P sampling as described in [#3841](https://github.com/ggerganov/llama.cpp/pull/3841)
+    pub fn sample_min_p(
+        &self,
+        llama_token_data: &mut LlamaTokenDataArray,
+        p: f32,
+        min_keep: usize,
+    ) {
+        let ctx = self.context.as_ptr();
+        unsafe {
+            llama_token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_min_p(ctx, c_llama_token_data_array, p, min_keep);
+            });
+        }
+    }
+
+    /// Top-K sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)
+    pub fn sample_top_k(&self, token_data: &mut LlamaTokenDataArray, k: i32, min_keep: usize) {
+        let ctx = self.context.as_ptr();
+        unsafe {
+            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_top_k(ctx, c_llama_token_data_array, k, min_keep);
+            });
+        }
     }
 
     /// Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.

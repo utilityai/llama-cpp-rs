@@ -210,7 +210,7 @@ impl LlamaModel {
         }
 
         match self.token_type(token) {
-            LlamaTokenType::Normal => {}
+            LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
             LlamaTokenType::Control => {
                 if token == self.token_bos() || token == self.token_eos() {
                     return Ok(String::new());
@@ -219,7 +219,6 @@ impl LlamaModel {
             LlamaTokenType::Unknown
             | LlamaTokenType::Undefined
             | LlamaTokenType::Byte
-            | LlamaTokenType::UserDefined
             | LlamaTokenType::Unused => {
                 return Ok(String::new());
             }
@@ -306,6 +305,8 @@ impl LlamaModel {
     /// # Errors
     ///
     /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
+    // we intentionally do not derive Copy on `LlamaContextParams` to allow llama.cpp to change the type to be non-trivially copyable.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new_context(
         &self,
         _: &LlamaBackend,

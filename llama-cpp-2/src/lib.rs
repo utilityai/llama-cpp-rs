@@ -7,7 +7,11 @@
 //!
 //! # Examples
 //!
-//! - [simple](https://github.com/utilityai/llama-cpp-rs/blob/main/llama-cpp-2/examples/simple.rs)
+//! - [simple](https://github.com/utilityai/llama-cpp-rs/tree/main/simple)
+//!
+//! # Feature Flags
+//!
+//! - `cublas` enables CUDA gpu support.
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
@@ -129,7 +133,7 @@ pub fn max_devices() -> usize {
 /// ```
 #[must_use]
 pub fn mmap_supported() -> bool {
-    unsafe { llama_cpp_sys_2::llama_mmap_supported() }
+    unsafe { llama_cpp_sys_2::llama_supports_mmap() }
 }
 
 /// is memory locking supported according to llama.cpp
@@ -142,7 +146,7 @@ pub fn mmap_supported() -> bool {
 /// ```
 #[must_use]
 pub fn mlock_supported() -> bool {
-    unsafe { llama_cpp_sys_2::llama_mlock_supported() }
+    unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
 
 /// An error that can occur when converting a token to a string.
@@ -189,4 +193,20 @@ pub enum StringToTokenError {
 #[must_use]
 pub fn ggml_time_us() -> i64 {
     unsafe { llama_cpp_sys_2::ggml_time_us() }
+}
+
+/// checks if mlock is supported
+///
+/// ```
+/// # use llama_cpp_2::llama_supports_mlock;
+///
+/// if llama_supports_mlock() {
+///   println!("mlock is supported!");
+/// } else {
+///   println!("mlock is not supported!");
+/// }
+/// ```
+#[must_use]
+pub fn llama_supports_mlock() -> bool {
+    unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
