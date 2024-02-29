@@ -6,8 +6,6 @@ use crate::context::LlamaContext;
 impl LlamaContext<'_> {
     /// Copy the cache from one sequence to another.
     ///
-    /// Equivalent to `copy_kv_cache_seq` with `p0` set to `None` and `p1` set to `Some(size)`.
-    ///
     /// # Parameters
     ///
     /// * `src` - The sequence id to copy the cache from.
