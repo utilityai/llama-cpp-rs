@@ -277,10 +277,10 @@ impl LlamaModel {
     ///
     /// See [`LlamaModelLoadError`] for more information.
     #[tracing::instrument(skip_all)]
-    pub fn load_from_file<T>(
+    pub fn load_from_file(
         _: &LlamaBackend,
         path: impl AsRef<Path>,
-        params: &LlamaModelParams<T>,
+        params: &LlamaModelParams,
     ) -> Result<Self, LlamaModelLoadError> {
         let path = path.as_ref();
         debug_assert!(Path::new(path).exists(), "{path:?} does not exist");

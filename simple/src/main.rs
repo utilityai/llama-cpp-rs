@@ -120,7 +120,8 @@ fn main() -> Result<()> {
         LlamaModelParams::default()
     };
     
-    let mut model_params = LlamaModelParams::new_with_kv_overrides(model_params);
+    let mut model_params = Box::pin(model_params);
+    
     for (k, v) in key_value_overrides.iter() {
         let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {}", k))?;
         model_params.append_kv_override(k.as_c_str(), *v);

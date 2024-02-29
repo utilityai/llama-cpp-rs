@@ -13,25 +13,12 @@ pub mod kv_overrides;
 /// [`T`] is the type of the backing storage for the key-value overrides. Generally it can be left to [`()`] which will
 /// make your life with the borrow checker much easier.
 #[allow(clippy::module_name_repetitions)]
-pub struct LlamaModelParams<T> {
+pub struct LlamaModelParams {
     pub(crate) params: llama_cpp_sys_2::llama_model_params,
-    kv_overrides: T,
+    kv_overrides: Vec<llama_cpp_sys_2::llama_model_kv_override>,
 }
 
-impl Debug for LlamaModelParams<()> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LlamaModelParams")
-            .field("n_gpu_layers", &self.params.n_gpu_layers)
-            .field("main_gpu", &self.params.main_gpu)
-            .field("vocab_only", &self.params.vocab_only)
-            .field("use_mmap", &self.params.use_mmap)
-            .field("use_mlock", &self.params.use_mlock)
-            .field("kv_overrides", &self.kv_overrides)
-            .finish()
-    }
-}
-
-impl Debug for LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
+impl Debug for LlamaModelParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlamaModelParams")
             .field("n_gpu_layers", &self.params.n_gpu_layers)
@@ -44,36 +31,14 @@ impl Debug for LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     }
 }
 
-impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
-    /// Creates a new `LlamaModelParams` with the default parameters and a backing storage. As this struct will be
-    /// self-referential, it cannot be moved and thus is pinned.
-    ///
-    /// # Examples
-    /// ```rust
-    /// # use llama_cpp_2::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
-    /// ```
-    #[must_use]
-    pub fn new_with_kv_overrides(params: LlamaModelParams<()>) -> Pin<Box<Self>> {
-        Box::pin(Self {
-            params: params.params,
-            kv_overrides: vec![llama_cpp_sys_2::llama_model_kv_override {
-                key: [0; 128],
-                tag: 0,
-                __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    int_value: 0,
-                },
-            }],
-        })
-    }
-
+impl LlamaModelParams {
     /// See [`KvOverrides`]
     ///
     /// # Examples
     ///
     /// ```rust
     /// # use llama_cpp_2::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
+    /// let params = Box::pin(LlamaModelParams::default());
     /// let kv_overrides = params.kv_overrides();
     /// let count = kv_overrides.into_iter().count();
     /// assert_eq!(count, 0);
@@ -83,7 +48,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
         KvOverrides::new(self)
     }
 
-    /// Appends a key-value override to the model parameters.
+    /// Appends a key-value override to the model parameters. It must be pinned as this creates a self-referential struct.
     ///
     /// # Examples
     ///
@@ -91,7 +56,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     /// # use std::ffi::{CStr, CString};
     /// # use llama_cpp_2::model::params::LlamaModelParams;
     /// # use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
-    /// let mut params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
+    /// let mut params = Box::pin(LlamaModelParams::default());
     /// let key = CString::new("key").expect("CString::new failed");
     /// params.append_kv_override(&key, ParamOverrideValue::Int(50));
     ///
@@ -128,7 +93,8 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
         self.params.kv_overrides = null();
 
         // push the next one to ensure we maintain the iterator invariant of ending with a 0
-        self.kv_overrides.push(llama_cpp_sys_2::llama_model_kv_override {
+        self.kv_overrides
+            .push(llama_cpp_sys_2::llama_model_kv_override {
                 key: [0; 128],
                 tag: 0,
                 __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
@@ -143,7 +109,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     }
 }
 
-impl<T> LlamaModelParams<T> {
+impl LlamaModelParams {
     /// Get the number of layers to offload to the GPU.
     #[must_use]
     pub fn n_gpu_layers(&self) -> i32 {
@@ -222,12 +188,18 @@ impl<T> LlamaModelParams<T> {
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
 /// ```
-impl Default for LlamaModelParams<()> {
+impl Default for LlamaModelParams {
     fn default() -> Self {
         let default_params = unsafe { llama_cpp_sys_2::llama_model_default_params() };
         LlamaModelParams {
             params: default_params,
-            kv_overrides: (),
+            kv_overrides: vec![llama_cpp_sys_2::llama_model_kv_override {
+                key: [0; 128],
+                tag: 0,
+                __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
+                    int_value: 0,
+                },
+            }],
         }
     }
 }

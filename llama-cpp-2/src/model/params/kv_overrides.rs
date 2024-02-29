@@ -67,12 +67,12 @@ impl From<&llama_cpp_sys_2::llama_model_kv_override> for ParamOverrideValue {
 /// A struct implementing [`IntoIterator`] over the key-value overrides for a model.
 #[derive(Debug)]
 pub struct KvOverrides<'a> {
-    model_params: &'a LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>>,
+    model_params: &'a LlamaModelParams,
 }
 
 impl KvOverrides<'_> {
     pub(super) fn new(
-        model_params: &LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>>,
+        model_params: &LlamaModelParams,
     ) -> KvOverrides {
         KvOverrides { model_params }
     }
@@ -95,7 +95,7 @@ impl<'a> IntoIterator for KvOverrides<'a> {
 /// An iterator over the key-value overrides for a model.
 #[derive(Debug)]
 pub struct KvOverrideValueIterator<'a> {
-    model_params: &'a LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>>,
+    model_params: &'a LlamaModelParams,
     current: usize,
 }
 
