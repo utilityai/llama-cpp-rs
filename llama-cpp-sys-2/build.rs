@@ -108,7 +108,6 @@ fn main() {
                     build.flag("-mcpu=apple-m1");
                 } else if std::env::var("HOST") == std::env::var("TARGET") {
                     build.flag("-mcpu=native");
-                    build.flag("-mfpu=neon");
                 }
                 build.flag("-pthread");
             }
