@@ -35,7 +35,7 @@ pub enum LoadSessionError {
     /// failed to convert path to str
     #[error("failed to convert path {0} to str")]
     PathToStrError(PathBuf),
-    
+
     /// Insufficient max length
     #[error("max_length is not large enough to hold {n_out} (was {max_tokens})")]
     InsufficientMaxLength {
@@ -128,6 +128,31 @@ impl LlamaContext<'_> {
             } else {
                 Err(LoadSessionError::FailedToLoad)
             }
+        }
+    }
+
+    /// Returns the maximum size in bytes of the state (rng, logits, embedding
+    /// and kv_cache) - will often be smaller after compacting tokens
+    pub fn get_state_size(&self) -> usize {
+        unsafe { llama_cpp_sys_2::llama_get_state_size(self.context.as_ptr()) }
+    }
+
+    /// Copies the state to the specified destination address.
+    /// Destination needs to have allocated enough memory.
+    /// Returns the number of bytes copied
+    pub unsafe fn copy_state_data(&self, dest: *mut u8) -> usize {
+        unsafe {
+            llama_cpp_sys_2::llama_copy_state_data(self.context.as_ptr(), dest)
+        }
+    }
+
+    /// Set the state reading from the specified address
+    /// Returns the number of bytes read
+    pub unsafe fn set_state_data(&mut self, src: &[u8]) -> usize {
+        unsafe {
+            // we don't really need a mutable pointer for `src` -- this is a llama-cpp lapse,
+            // so we cast away the constness
+            llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr() as *mut u8)
         }
     }
 }
