@@ -18,7 +18,7 @@ pub struct LlamaModelParams<T> {
     kv_overrides: T,
 }
 
-impl<T> Debug for LlamaModelParams<T> {
+impl Debug for LlamaModelParams<()> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlamaModelParams")
             .field("n_gpu_layers", &self.params.n_gpu_layers)
@@ -26,6 +26,20 @@ impl<T> Debug for LlamaModelParams<T> {
             .field("vocab_only", &self.params.vocab_only)
             .field("use_mmap", &self.params.use_mmap)
             .field("use_mlock", &self.params.use_mlock)
+            .field("kv_overrides", &self.kv_overrides)
+            .finish()
+    }
+}
+
+impl Debug for LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlamaModelParams")
+            .field("n_gpu_layers", &self.params.n_gpu_layers)
+            .field("main_gpu", &self.params.main_gpu)
+            .field("vocab_only", &self.params.vocab_only)
+            .field("use_mmap", &self.params.use_mmap)
+            .field("use_mlock", &self.params.use_mlock)
+            .field("kv_overrides", &"vec of kv_overrides")
             .finish()
     }
 }
@@ -39,6 +53,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     /// # use llama_cpp_2::model::params::LlamaModelParams;
     /// let params = LlamaModelParams::new_with_kv_overrides();
     /// ```
+    #[must_use]
     pub fn new_with_kv_overrides() -> Pin<Box<Self>> {
         let params = unsafe { llama_cpp_sys_2::llama_model_default_params() };
         Box::pin(Self {
@@ -64,6 +79,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     /// let count = kv_overrides.into_iter().count();
     /// assert_eq!(count, 0);
     /// ```
+    #[must_use]
     pub fn kv_overrides(&self) -> KvOverrides {
         KvOverrides::new(self)
     }
@@ -88,12 +104,13 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     ///
     /// assert_eq!(k.to_bytes(), b"key", "expected key to be 'key', was {:?}", k);
     /// ```
+    #[allow(clippy::missing_panics_doc)] // panics are just to enforce internal invariants, not user errors
     pub fn append_kv_override(
         self: &mut Pin<Box<Self>>,
         key: &CStr,
         value: kv_overrides::ParamOverrideValue,
     ) {
-        let mut kv_override = self
+        let kv_override = self
             .kv_overrides
             .get_mut(0)
             .expect("kv_overrides did not have a next allocated");
@@ -101,10 +118,10 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
         assert_eq!(kv_override.key[0], 0, "last kv_override was not empty");
 
         // There should be some way to do this without iterating over everything.
-        for (i, &c) in key.to_bytes_with_nul().into_iter().enumerate() {
-            kv_override.key[i] = c as c_char;
+        for (i, &c) in key.to_bytes_with_nul().iter().enumerate() {
+            kv_override.key[i] = c_char::try_from(c).expect("invalid character in key");
         }
-        
+
         kv_override.tag = value.tag();
         kv_override.__bindgen_anon_1 = value.value();
 
@@ -122,7 +139,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
 
         // set the pointer to the (potentially) new vector
         self.params.kv_overrides = self.kv_overrides.as_ptr();
-        
+
         eprintln!("saved ptr: {:?}", self.params.kv_overrides);
     }
 }

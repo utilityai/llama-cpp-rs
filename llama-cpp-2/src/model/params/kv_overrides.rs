@@ -2,17 +2,7 @@
 
 use crate::model::params::LlamaModelParams;
 use std::ffi::{CStr, CString};
-
-#[derive(Default, Clone)]
-pub struct KvOverrideStorage {
-    inner: Vec<llama_cpp_sys_2::llama_model_kv_override>,
-}
-
-impl KvOverrideStorage {
-    fn new() -> KvOverrideStorage {
-        Default::default()
-    }
-}
+use std::fmt::Debug;
 
 /// An override value for a model parameter.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,6 +65,7 @@ impl From<&llama_cpp_sys_2::llama_model_kv_override> for ParamOverrideValue {
 }
 
 /// A struct implementing [`IntoIterator`] over the key-value overrides for a model.
+#[derive(Debug)]
 pub struct KvOverrides<'a> {
     model_params: &'a LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>>,
 }
@@ -121,20 +112,13 @@ impl<'a> Iterator for KvOverrideValueIterator<'a> {
         // the prev one in the last iteration, the next one should be valid or 0 (and thus safe to deref)
         let current = unsafe { *overrides.add(self.current) };
 
-        eprintln!("reading from {:?}", unsafe { overrides.add(self.current) });
-
         if current.key[0] == 0 {
-            eprintln!("contains no data");
             return None;
         }
-
-        eprintln!("contains data: {:?}", current.key);
 
         let value = ParamOverrideValue::from(&current);
 
         let key = unsafe { CStr::from_ptr(current.key.as_ptr()).to_owned() };
-
-        eprintln!("key from CStr: {:?}", key);
 
         self.current += 1;
         Some((key, value))
