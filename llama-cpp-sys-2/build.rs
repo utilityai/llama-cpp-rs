@@ -68,6 +68,52 @@ fn main() {
         llama_cpp.define("GGML_USE_CUBLAS", None);
     }
 
+    for build in [&mut ggml, &mut llama_cpp] {
+        let compiler = build.get_compiler();
+
+        if cfg!(target_arch = "i686") || cfg!(target_arch = "x86_64") {
+            let features = x86::Features::get_target();
+            if compiler.is_like_clang() || compiler.is_like_gnu() {
+                build.flag("-pthread");
+
+                if features.avx {
+                    build.flag("-mavx");
+                }
+                if features.avx2 {
+                    build.flag("-mavx2");
+                }
+                if features.fma {
+                    build.flag("-mfma");
+                }
+                if features.f16c {
+                    build.flag("-mf16c");
+                }
+                if features.sse3 {
+                    build.flag("-msse3");
+                }
+            } else if compiler.is_like_msvc() {
+                match (features.avx2, features.avx) {
+                    (true, _) => {
+                        build.flag("/arch:AVX2");
+                    }
+                    (_, true) => {
+                        build.flag("/arch:AVX");
+                    }
+                    _ => {}
+                }
+            }
+        } else if cfg!(target_arch = "aarch64") {
+            if compiler.is_like_clang() || compiler.is_like_gnu() {
+                if cfg!(target_os = "macos") {
+                    build.flag("-mcpu=apple-m1");
+                } else if std::env::var("HOST") == std::env::var("TARGET") {
+                    build.flag("-mcpu=native");
+                }
+                build.flag("-pthread");
+            }
+        }
+    }
+
     // https://github.com/ggerganov/llama.cpp/blob/191221178f51b6e81122c5bda0fd79620e547d07/Makefile#L133-L141
     if cfg!(target_os = "macos") {
         assert!(!cublas_enabled, "CUBLAS is not supported on macOS");
@@ -111,6 +157,16 @@ fn main() {
         .include("llama.cpp")
         .std("c++11")
         .file("llama.cpp/llama.cpp");
+
+    // Remove debug log output from `llama.cpp`
+    let is_release = env::var("PROFILE").unwrap() == "release";
+    if is_release {
+        ggml.define("NDEBUG", None);
+        llama_cpp.define("NDEBUG", None);
+        if let Some(cuda) = ggml_cuda.as_mut() {
+            cuda.define("NDEBUG", None);
+        }
+    }
 
     if let Some(ggml_cuda) = ggml_cuda {
         println!("compiling ggml-cuda");
@@ -182,4 +238,38 @@ fn metal_hack(build: &mut cc::Build) {
     };
 
     build.file(ggml_metal_path);
+}
+
+// Courtesy of https://github.com/rustformers/llm
+fn get_supported_target_features() -> std::collections::HashSet<String> {
+    env::var("CARGO_CFG_TARGET_FEATURE")
+        .unwrap()
+        .split(',')
+        .map(ToString::to_string)
+        .collect()
+}
+
+mod x86 {
+    #[allow(clippy::struct_excessive_bools)]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub struct Features {
+        pub fma: bool,
+        pub avx: bool,
+        pub avx2: bool,
+        pub f16c: bool,
+        pub sse3: bool,
+    }
+    impl Features {
+
+        pub fn get_target() -> Self {
+            let features = crate::get_supported_target_features();
+            Self {
+                fma: features.contains("fma"),
+                avx: features.contains("avx"),
+                avx2: features.contains("avx2"),
+                f16c: features.contains("f16c"),
+                sse3: features.contains("sse3"),
+            }
+        }
+    }
 }
