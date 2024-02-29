@@ -51,13 +51,12 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     /// # Examples
     /// ```rust
     /// # use llama_cpp_2::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::new_with_kv_overrides();
+    /// let params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
     /// ```
     #[must_use]
-    pub fn new_with_kv_overrides() -> Pin<Box<Self>> {
-        let params = unsafe { llama_cpp_sys_2::llama_model_default_params() };
+    pub fn new_with_kv_overrides(params: LlamaModelParams<()>) -> Pin<Box<Self>> {
         Box::pin(Self {
-            params,
+            params: params.params,
             kv_overrides: vec![llama_cpp_sys_2::llama_model_kv_override {
                 key: [0; 128],
                 tag: 0,

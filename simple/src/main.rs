@@ -6,7 +6,9 @@
     clippy::cast_sign_loss
 )]
 
-use anyhow::{bail, Context, Result};
+use std::collections::BTreeMap;
+use std::ffi::{CStr, CString};
+use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
@@ -20,7 +22,9 @@ use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
+use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
@@ -33,11 +37,30 @@ struct Args {
     /// set the length of the prompt + output in tokens
     #[arg(long, default_value_t = 32)]
     n_len: i32,
+    /// override some parameters of the model
+    #[arg(short = 'o', value_parser = parse_key_val)]
+    key_value_overrides: Vec<(String, ParamOverrideValue)>,
     /// Disable offloading layers to the gpu
     #[cfg(feature = "cublas")]
     #[clap(long)]
     disable_gpu: bool,
 }
+
+/// Parse a single key-value pair
+fn parse_key_val(s: &str) -> Result<(String, ParamOverrideValue)> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| anyhow!("invalid KEY=value: no `=` found in `{}`", s))?;
+    let key = s[..pos].parse()?;
+    let value: String = s[pos + 1..].parse()?;
+    let value = i64::from_str(&value).map(ParamOverrideValue::Int)
+        .or_else(|_| f64::from_str(&value).map(ParamOverrideValue::Float))
+        .or_else(|_| bool::from_str(&value).map(ParamOverrideValue::Bool))
+        .map_err(|_| anyhow!("must be one of i64, f64, or bool"))?;
+    
+    Ok((key, value))
+}
+
 
 #[derive(clap::Subcommand, Debug, Clone)]
 enum Model {
@@ -79,6 +102,7 @@ fn main() -> Result<()> {
         prompt,
         #[cfg(feature = "cublas")]
         disable_gpu,
+        key_value_overrides,
     } = Args::parse();
 
     // init LLM
@@ -95,6 +119,12 @@ fn main() -> Result<()> {
         #[cfg(not(feature = "cublas"))]
         LlamaModelParams::default()
     };
+    
+    let mut model_params = LlamaModelParams::new_with_kv_overrides(model_params);
+    for (k, v) in key_value_overrides.iter() {
+        let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {}", k))?;
+        model_params.append_kv_override(k.as_c_str(), *v);
+    }
 
     let model_path = model
         .get_or_load()
