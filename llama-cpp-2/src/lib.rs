@@ -133,7 +133,7 @@ pub fn max_devices() -> usize {
 /// ```
 #[must_use]
 pub fn mmap_supported() -> bool {
-    unsafe { llama_cpp_sys_2::llama_mmap_supported() }
+    unsafe { llama_cpp_sys_2::llama_supports_mmap() }
 }
 
 /// is memory locking supported according to llama.cpp
@@ -146,7 +146,7 @@ pub fn mmap_supported() -> bool {
 /// ```
 #[must_use]
 pub fn mlock_supported() -> bool {
-    unsafe { llama_cpp_sys_2::llama_mlock_supported() }
+    unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
 
 /// An error that can occur when converting a token to a string.
