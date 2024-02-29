@@ -105,29 +105,33 @@ impl LlamaContext<'_> {
             .ok_or(LoadSessionError::PathToStrError(path.to_path_buf()))?;
 
         let cstr = CString::new(path)?;
-        let mut tokens = Vec::with_capacity(max_tokens);
+        let mut tokens: Vec<LlamaToken> = Vec::with_capacity(max_tokens);
         let mut n_out = 0;
 
-        unsafe {
-            if llama_cpp_sys_2::llama_load_session_file(
+        // SAFETY: cast is valid as LlamaToken is repr(transparent)
+        let tokens_out = tokens.as_mut_ptr().cast::<llama_cpp_sys_2::llama_token>();
+
+        let load_session_success = unsafe {
+            llama_cpp_sys_2::llama_load_session_file(
                 self.context.as_ptr(),
                 cstr.as_ptr(),
-                // cast is valid as LlamaToken is repr(transparent) 
-                Vec::<LlamaToken>::as_mut_ptr(&mut tokens).cast::<llama_cpp_sys_2::llama_token>(),
+                tokens_out,
                 max_tokens,
                 &mut n_out,
-            ) {
-                if n_out > max_tokens {
-                    return Err(LoadSessionError::InsufficientMaxLength {
-                        n_out,
-                        max_tokens,
-                    });
-                }
-                tokens.set_len(n_out);
-                Ok(tokens)
+            )
+        };
+        if load_session_success {
+            if n_out > max_tokens {
+                return Err(LoadSessionError::InsufficientMaxLength { n_out, max_tokens });
             } else {
-                Err(LoadSessionError::FailedToLoad)
+                // SAFETY: we checked that n_out <= max_tokens and llama.cpp promises that n_out tokens will be written
+                unsafe {
+                    tokens.set_len(n_out);
+                }
             }
+            Ok(tokens)
+        } else {
+            Err(LoadSessionError::FailedToLoad)
         }
     }
 
@@ -138,19 +142,23 @@ impl LlamaContext<'_> {
     }
 
     /// Copies the state to the specified destination address.
-    /// Destination needs to have allocated enough memory.
+    ///
     /// Returns the number of bytes copied
+    ///
+    /// # Safety
+    ///
+    /// Destination needs to have allocated enough memory.
     pub unsafe fn copy_state_data(&self, dest: *mut u8) -> usize {
-        unsafe {
-            llama_cpp_sys_2::llama_copy_state_data(self.context.as_ptr(), dest)
-        }
+        unsafe { llama_cpp_sys_2::llama_copy_state_data(self.context.as_ptr(), dest) }
     }
 
     /// Set the state reading from the specified address
     /// Returns the number of bytes read
+    ///
+    /// # Safety
+    ///
+    /// help wanted: not entirely sure what the safety requirements are here.
     pub unsafe fn set_state_data(&mut self, src: &[u8]) -> usize {
-        unsafe {
-            llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr())
-        }
+        unsafe { llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr()) }
     }
 }

@@ -25,14 +25,10 @@ impl LlamaContext<'_> {
     /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is copied up to [p1].
     /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is copied starting from [p0].
     pub fn copy_kv_cache_seq(&mut self, src: i32, dest: i32, p0: Option<u16>, p1: Option<u16>) {
+        let p0 = p0.map_or(-1, i32::from);
+        let p1 = p1.map_or(-1, i32::from);
         unsafe {
-            llama_cpp_sys_2::llama_kv_cache_seq_cp(
-                self.context.as_ptr(),
-                src,
-                dest,
-                p0.map_or(-1, i32::from),
-                p1.map_or(-1, i32::from),
-            )
+            llama_cpp_sys_2::llama_kv_cache_seq_cp(self.context.as_ptr(), src, dest, p0, p1)
         }
     }
 
@@ -44,13 +40,10 @@ impl LlamaContext<'_> {
     /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is cleared up to [p1].
     /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is cleared from [p0].
     pub fn clear_kv_cache_seq(&mut self, src: i32, p0: Option<u16>, p1: Option<u16>) {
+        let p0 = p0.map_or(-1, i32::from);
+        let p1 = p1.map_or(-1, i32::from);
         unsafe {
-            llama_cpp_sys_2::llama_kv_cache_seq_rm(
-                self.context.as_ptr(),
-                src,
-                p0.map_or(-1, i32::from),
-                p1.map_or(-1, i32::from),
-            );
+            llama_cpp_sys_2::llama_kv_cache_seq_rm(self.context.as_ptr(), src, p0, p1);
         }
     }
 
@@ -85,14 +78,10 @@ impl LlamaContext<'_> {
     /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from [p0].
     /// * `delta` - The relative position to add to the tokens
     pub fn kv_cache_seq_add(&mut self, seq_id: i32, p0: Option<u16>, p1: Option<u16>, delta: i32) {
+        let p0 = p0.map_or(-1, i32::from);
+        let p1 = p1.map_or(-1, i32::from);
         unsafe {
-            llama_cpp_sys_2::llama_kv_cache_seq_add(
-                self.context.as_ptr(),
-                seq_id,
-                p0.map_or(-1, i32::from),
-                p1.map_or(-1, i32::from),
-                delta,
-            )
+            llama_cpp_sys_2::llama_kv_cache_seq_add(self.context.as_ptr(), seq_id, p0, p1, delta)
         }
     }
 
@@ -114,15 +103,10 @@ impl LlamaContext<'_> {
         p1: Option<u16>,
         d: NonZeroU8,
     ) {
-        unsafe {
-            llama_cpp_sys_2::llama_kv_cache_seq_div(
-                self.context.as_ptr(),
-                seq_id,
-                p0.map_or(-1, i32::from),
-                p1.map_or(-1, i32::from),
-                c_int::from(d.get()),
-            )
-        }
+        let p0 = p0.map_or(-1, i32::from);
+        let p1 = p1.map_or(-1, i32::from);
+        let d = c_int::from(d.get());
+        unsafe { llama_cpp_sys_2::llama_kv_cache_seq_div(self.context.as_ptr(), seq_id, p0, p1, d) }
     }
 
     /// Returns the largest position present in the KV cache for the specified sequence
