@@ -150,9 +150,7 @@ impl LlamaContext<'_> {
     /// Returns the number of bytes read
     pub unsafe fn set_state_data(&mut self, src: &[u8]) -> usize {
         unsafe {
-            // we don't really need a mutable pointer for `src` -- this is a llama-cpp lapse,
-            // so we cast away the constness
-            llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr() as *mut u8)
+            llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr())
         }
     }
 }
