@@ -115,7 +115,7 @@ impl LlamaContext<'_> {
                 seq_id,
                 p0.map_or(-1, i32::from),
                 p1.map_or(-1, i32::from),
-                d.get() as i32,
+                d.get().try_into().expect("d does not fit into a i32"),
             )
         }
     }
@@ -213,15 +213,15 @@ impl<'a> KVCacheView<'a> {
 
     /// Information for individual cells.
     pub fn cells(&self) -> impl Iterator<Item=KVCacheViewCell> {
-        unsafe { std::slice::from_raw_parts(self.view.cells, self.view.n_cells as usize) }
+        unsafe { std::slice::from_raw_parts(self.view.cells, self.view.n_cells.try_into().unwrap()) }
             .iter()
             .map(|&cell| KVCacheViewCell { pos: cell.pos })
     }
 
     /// The sequences for each cell. There will be n_max_seq items per cell.
     pub fn cells_sequences(&self) -> impl Iterator<Item=&[llama_cpp_sys_2::llama_seq_id]> {
-        unsafe { std::slice::from_raw_parts(self.view.cells_sequences, (self.view.n_cells * self.view.n_max_seq) as usize) }
-            .chunks(self.view.n_max_seq as usize)
+        unsafe { std::slice::from_raw_parts(self.view.cells_sequences, (self.view.n_cells * self.view.n_max_seq).try_into().unwrap()) }
+            .chunks(self.view.n_max_seq.try_into().unwrap())
     }
 }
 
