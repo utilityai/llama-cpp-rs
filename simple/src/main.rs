@@ -22,6 +22,7 @@ use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
+use std::pin::pin;
 use std::str::FromStr;
 use std::time::Duration;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
@@ -120,11 +121,11 @@ fn main() -> Result<()> {
         LlamaModelParams::default()
     };
     
-    let mut model_params = Box::pin(model_params);
+    let mut model_params = pin!(model_params);
     
     for (k, v) in key_value_overrides.iter() {
         let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {}", k))?;
-        model_params.as_mut().append_kv_override(k.as_c_str(), *v);
+        model_params.append_kv_override(k.as_c_str(), *v);
     }
 
     let model_path = model
