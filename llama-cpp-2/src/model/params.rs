@@ -73,7 +73,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     ///
     /// ```rust
     /// # use llama_cpp_2::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::new_with_kv_overrides();
+    /// let params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
     /// let kv_overrides = params.kv_overrides();
     /// let count = kv_overrides.into_iter().count();
     /// assert_eq!(count, 0);
@@ -91,7 +91,7 @@ impl LlamaModelParams<Vec<llama_cpp_sys_2::llama_model_kv_override>> {
     /// # use std::ffi::{CStr, CString};
     /// # use llama_cpp_2::model::params::LlamaModelParams;
     /// # use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
-    /// let mut params = LlamaModelParams::new_with_kv_overrides();
+    /// let mut params = LlamaModelParams::new_with_kv_overrides(LlamaModelParams::default());
     /// let key = CString::new("key").expect("CString::new failed");
     /// params.append_kv_override(&key, ParamOverrideValue::Int(50));
     ///
