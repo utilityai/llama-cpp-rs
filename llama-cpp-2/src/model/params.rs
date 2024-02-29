@@ -59,7 +59,7 @@ impl LlamaModelParams {
     /// # use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
     /// let mut params = pin!(LlamaModelParams::default());
     /// let key = CString::new("key").expect("CString::new failed");
-    /// params.append_kv_override(&key, ParamOverrideValue::Int(50));
+    /// params.as_mut().append_kv_override(&key, ParamOverrideValue::Int(50));
     ///
     /// let kv_overrides = params.kv_overrides().into_iter().collect::<Vec<_>>();
     /// assert_eq!(kv_overrides.len(), 1);
@@ -71,7 +71,7 @@ impl LlamaModelParams {
     /// ```
     #[allow(clippy::missing_panics_doc)] // panics are just to enforce internal invariants, not user errors
     pub fn append_kv_override(
-        self: &mut Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         key: &CStr,
         value: kv_overrides::ParamOverrideValue,
     ) {
