@@ -6,8 +6,7 @@
     clippy::cast_sign_loss
 )]
 
-use std::collections::BTreeMap;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
@@ -125,7 +124,7 @@ fn main() -> Result<()> {
     
     for (k, v) in key_value_overrides.iter() {
         let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {}", k))?;
-        model_params.append_kv_override(k.as_c_str(), *v);
+        model_params.as_mut().append_kv_override(k.as_c_str(), *v);
     }
 
     let model_path = model
