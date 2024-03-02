@@ -1,15 +1,16 @@
 //! A safe wrapper around `llama_model`.
-use crate::context::params::LlamaContextParams;
-use crate::context::LlamaContext;
-use crate::llama_backend::LlamaBackend;
-use crate::model::params::LlamaModelParams;
-use crate::token::LlamaToken;
-use crate::token_type::LlamaTokenType;
-use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
 use std::ffi::CString;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
+
+use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
+use crate::context::LlamaContext;
+use crate::context::params::LlamaContextParams;
+use crate::llama_backend::LlamaBackend;
+use crate::model::params::LlamaModelParams;
+use crate::token::LlamaToken;
+use crate::token_type::LlamaTokenType;
 
 pub mod params;
 
@@ -29,6 +30,7 @@ pub enum AddBos {
     /// Do not add the beginning of stream token to the start of the string.
     Never,
 }
+
 unsafe impl Send for LlamaModel {}
 
 unsafe impl Sync for LlamaModel {}
@@ -38,12 +40,12 @@ impl LlamaModel {
     ///
     /// # Panics
     ///
-    /// If the number of tokens the model was trained on does not fit into an `u16`. This should be impossible on most
+    /// If the number of tokens the model was trained on does not fit into an `u32`. This should be impossible on most
     /// platforms due to llama.cpp returning a `c_int` (i32 on most platforms) which is almost certainly positive.
     #[must_use]
-    pub fn n_ctx_train(&self) -> u16 {
+    pub fn n_ctx_train(&self) -> u32 {
         let n_ctx_train = unsafe { llama_cpp_sys_2::llama_n_ctx_train(self.model.as_ptr()) };
-        u16::try_from(n_ctx_train).expect("n_ctx_train fits into an u16")
+        u32::try_from(n_ctx_train).expect("n_ctx_train fits into an u32")
     }
 
     /// Get all tokens in the model.
@@ -54,6 +56,7 @@ impl LlamaModel {
             .map(LlamaToken::new)
             .map(|llama_token| (llama_token, self.token_to_str(llama_token)))
     }
+
     /// Get the beginning of stream token.
     #[must_use]
     pub fn token_bos(&self) -> LlamaToken {
@@ -276,7 +279,7 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`LlamaModelLoadError`] for more information.
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(params))]
     pub fn load_from_file(
         _: &LlamaBackend,
         path: impl AsRef<Path>,
@@ -290,13 +293,12 @@ impl LlamaModel {
 
         let cstr = CString::new(path)?;
         let llama_model = unsafe {
-            println!("{:?}", params.params);
             llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params)
         };
 
         let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 
-        println!("Loaded {path:?}");
+        tracing::debug!(?path, "Loaded model");
         Ok(LlamaModel { model })
     }
 
@@ -318,7 +320,7 @@ impl LlamaModel {
         };
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
-        Ok(LlamaContext::new(self, context))
+        Ok(LlamaContext::new(self, context, params.embedding()))
     }
 }
 

@@ -1,7 +1,8 @@
 //! A safe wrapper around `llama_context_params`.
-use llama_cpp_sys_2;
 use std::fmt::Debug;
 use std::num::NonZeroU32;
+
+use llama_cpp_sys_2;
 
 /// A rusty wrapper around `rope_scaling_type`.
 #[repr(i8)]
@@ -267,6 +268,19 @@ impl LlamaContextParams {
         self.context_params.n_threads
     }
 
+    /// Get the number of threads allocated for batches.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
+    /// assert_eq!(params.n_threads_batch(), 4);
+    /// ```
+    #[must_use]
+    pub fn n_threads_batch(&self) -> u32 {
+        self.context_params.n_threads_batch
+    }
+
     /// Set the number of threads.
     ///
     /// # Examples
@@ -280,6 +294,51 @@ impl LlamaContextParams {
     #[must_use]
     pub fn with_n_threads(mut self, n_threads: u32) -> Self {
         self.context_params.n_threads = n_threads;
+        self
+    }
+
+    /// Set the number of threads allocated for batches.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///    .with_n_threads_batch(8);
+    /// assert_eq!(params.n_threads_batch(), 8);
+    /// ```
+    #[must_use]
+    pub fn with_n_threads_batch(mut self, n_threads: u32) -> Self {
+        self.context_params.n_threads_batch = n_threads;
+        self
+    }
+
+    /// Check whether embeddings are enabled
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
+    /// assert!(!params.embedding());
+    /// ```
+    #[must_use]
+    pub fn embedding(&self) -> bool {
+        self.context_params.embedding
+    }
+
+    /// Enable the use of embeddings
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///    .with_embedding(true);
+    /// assert!(params.embedding());
+    /// ```
+    #[must_use]
+    pub fn with_embedding(mut self, embedding: bool) -> Self {
+        self.context_params.embedding = embedding;
         self
     }
 }
