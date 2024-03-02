@@ -127,6 +127,7 @@ impl LlamaBatch {
 
         unsafe {
             self.llama_batch.logits.add(n_tokens - 1).write(true as i8);
+            self.initialized_logits.push(self.llama_batch.n_tokens - 1);
         }
 
         Ok(())
