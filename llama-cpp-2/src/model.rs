@@ -432,7 +432,6 @@ impl LlamaModel {
             .collect();
         // Set the tmpl pointer
         let tmpl = tmpl.map(|v| CString::new(v));
-        eprintln!("TEMPLATE AGAIN: {:?}", tmpl);
         let tmpl_ptr = match tmpl {
             Some(str) => str?.as_ptr(),
             None => std::ptr::null(),
@@ -451,7 +450,6 @@ impl LlamaModel {
             if res > buff.len() as i32 {
                 return Err(ApplyChatTemplateError::BuffSizeError);
             }
-            println!("BUFF: {:?}", buff);
             String::from_utf8(buff.iter().filter(|c| **c > 0).map(|&c| c as u8).collect())
         };
         Ok(formatted_chat?)
