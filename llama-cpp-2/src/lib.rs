@@ -207,6 +207,28 @@ pub enum StringToTokenError {
     CIntConversionError(#[from] std::num::TryFromIntError),
 }
 
+/// Failed to apply model chat template.
+#[derive(Debug, thiserror::Error)]
+pub enum NewLlamaChatMessageError {
+    /// the string contained a null byte and thus could not be converted to a c string.
+    #[error("{0}")]
+    NulError(#[from] NulError),
+}
+
+/// Failed to apply model chat template.
+#[derive(Debug, thiserror::Error)]
+pub enum ApplyChatTemplateError {
+    /// the buffer was too small.
+    #[error("The buffer was too small. Please contact a maintainer")]
+    BuffSizeError,
+    /// the string contained a null byte and thus could not be converted to a c string.
+    #[error("{0}")]
+    NulError(#[from] NulError),
+    /// the string could not be converted to utf8.
+    #[error("{0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+}
+
 /// Get the time in microseconds according to ggml
 ///
 /// ```
