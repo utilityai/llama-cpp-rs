@@ -14,8 +14,8 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
-use llama_cpp_2::context::LlamaContext;
 
+use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -149,8 +149,7 @@ fn main() -> Result<()> {
     // we use this object to submit token data for decoding
     let mut batch = LlamaBatch::new(n_ctx, 1);
 
-    // Amount of tokens in the current batch
-    let mut s_batch = 0;
+    let mut max_seq_id_batch = 0;
     let mut output = Vec::with_capacity(tokens_lines_list.len());
 
     let t_main_start = ggml_time_us();
@@ -158,26 +157,25 @@ fn main() -> Result<()> {
     for tokens in &tokens_lines_list {
         // Flush the batch if the next prompt would exceed our batch size
         if (batch.n_tokens() as usize + tokens.len()) > n_ctx {
-            batch_decode(&mut ctx, &mut batch, s_batch, &mut output, normalise)?;
-            s_batch = 0;
+            batch_decode(&mut ctx, &mut batch, max_seq_id_batch, &mut output, normalise)?;
+            max_seq_id_batch = 0;
         }
 
-        batch.add_sequence(&tokens, s_batch, false)?;
-        s_batch += 1;
+        batch.add_sequence(&tokens, max_seq_id_batch, false)?;
+        max_seq_id_batch += 1;
     }
     // Handle final batch
-    batch_decode(&mut ctx, &mut batch, s_batch, &mut output, normalise)?;
+    batch_decode(&mut ctx, &mut batch, max_seq_id_batch, &mut output, normalise)?;
 
     let t_main_end = ggml_time_us();
 
     for (i, embeddings) in output.iter().enumerate() {
         eprintln!("Embeddings {i}: {embeddings:?}");
-        eprintln!("\n");
+        eprintln!();
     }
 
     let duration = Duration::from_micros((t_main_end - t_main_start) as u64);
     let total_tokens: usize = tokens_lines_list.iter().map(|v| v.len()).sum();
-
     eprintln!(
         "Created embeddings for {} tokens in {:.2} s, speed {:.2} t/s\n",
         total_tokens,
