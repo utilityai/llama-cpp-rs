@@ -5,7 +5,10 @@ use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
-use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
+use crate::{
+    ApplyChatTemplateError, LlamaContextLoadError, LlamaModelLoadError, NewLlamaChatMessageError,
+    StringToTokenError, TokenToStringError,
+};
 use std::ffi::CString;
 use std::os::raw::c_int;
 use std::path::Path;
@@ -19,6 +22,23 @@ pub mod params;
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModel {
     pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
+}
+
+/// A Safe wrapper around `llama_chat_message`
+#[derive(Debug)]
+pub struct LlamaChatMessage {
+    role: CString,
+    content: CString,
+}
+
+impl LlamaChatMessage {
+    /// Create a new `LlamaChatMessage`
+    pub fn new(role: String, content: String) -> Result<Self, NewLlamaChatMessageError> {
+        Ok(Self {
+            role: CString::new(role)?,
+            content: CString::new(content)?,
+        })
+    }
 }
 
 /// How to determine if we should prepend a bos token to tokens
@@ -319,6 +339,56 @@ impl LlamaModel {
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::new(self, context))
+    }
+
+    /// Apply the models chat template to some messages.
+    /// See https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
+    ///
+    /// # Errors
+    /// There are many ways this can fail. See [`ApplyChatTemplateError`] for more information.
+    #[tracing::instrument(skip_all)]
+    pub fn apply_chat_template(
+        &self,
+        tmpl: Option<String>,
+        chat: Vec<LlamaChatMessage>,
+        add_ass: bool,
+    ) -> Result<String, ApplyChatTemplateError> {
+        // Buffer is twice the length of messages per their recommendation
+        let message_length = chat.iter().fold(0, |acc, c| {
+            acc + c.role.to_bytes().len() + c.content.to_bytes().len()
+        });
+        let mut buff: Vec<i8> = vec![0_i8; message_length * 2];
+        // Build our llama_cpp_sys_2 chat messages
+        let chat: Vec<llama_cpp_sys_2::llama_chat_message> = chat
+            .iter()
+            .map(|c| llama_cpp_sys_2::llama_chat_message {
+                role: c.role.as_ptr(),
+                content: c.content.as_ptr(),
+            })
+            .collect();
+        // Set the tmpl pointer
+        let tmpl = tmpl.map(|v| CString::new(v));
+        let tmpl_ptr = match tmpl {
+            Some(str) => str?.as_ptr(),
+            None => std::ptr::null(),
+        };
+        let formatted_chat = unsafe {
+            let res = llama_cpp_sys_2::llama_chat_apply_template(
+                self.model.as_ptr(),
+                tmpl_ptr,
+                chat.as_ptr(),
+                chat.len(),
+                add_ass,
+                buff.as_mut_ptr(),
+                buff.len() as i32,
+            );
+            // This should never happen
+            if res > buff.len() as i32 {
+                return Err(ApplyChatTemplateError::BuffSizeError);
+            }
+            String::from_utf8(buff.iter().filter(|c| **c > 0).map(|&c| c as u8).collect())
+        };
+        Ok(formatted_chat?)
     }
 }
 
