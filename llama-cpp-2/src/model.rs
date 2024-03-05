@@ -320,7 +320,7 @@ impl LlamaModel {
         };
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
-        Ok(LlamaContext::new(self, context, params.embedding()))
+        Ok(LlamaContext::new(self, context, params.embeddings()))
     }
 }
 

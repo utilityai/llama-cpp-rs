@@ -109,7 +109,7 @@ fn main() -> Result<()> {
     // initialize the context
     let ctx_params = LlamaContextParams::default()
         .with_n_threads_batch(std::thread::available_parallelism()?.get() as u32)
-        .with_embedding(true);
+        .with_embeddings(true);
 
     let mut ctx = model
         .new_context(&backend, ctx_params)
@@ -193,10 +193,9 @@ fn main() -> Result<()> {
 fn batch_decode(ctx: &mut LlamaContext, batch: &mut LlamaBatch, s_batch: i32, output: &mut Vec<Vec<f32>>, normalise: bool) -> Result<()> {
     ctx.clear_kv_cache();
     ctx.decode(batch).with_context(|| "llama_decode() failed")?;
-    batch.clear();
 
     for i in 0..s_batch {
-        let embedding = ctx.embeddings_ith(i).with_context(|| "Failed to get embeddings")?;
+        let embedding = ctx.embeddings_seq_ith(i).with_context(|| "Failed to get embeddings")?;
         let output_embeddings = if normalise {
             normalize(embedding)
         } else {
@@ -205,6 +204,8 @@ fn batch_decode(ctx: &mut LlamaContext, batch: &mut LlamaBatch, s_batch: i32, ou
 
         output.push(output_embeddings);
     }
+
+    batch.clear();
 
     Ok(())
 }

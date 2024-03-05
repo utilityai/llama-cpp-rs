@@ -319,11 +319,11 @@ impl LlamaContextParams {
     ///
     /// ```rust
     /// let params = llama_cpp_2::context::params::LlamaContextParams::default();
-    /// assert!(!params.embedding());
+    /// assert!(!params.embeddings());
     /// ```
     #[must_use]
-    pub fn embedding(&self) -> bool {
-        self.context_params.embedding
+    pub fn embeddings(&self) -> bool {
+        self.context_params.embeddings
     }
 
     /// Enable the use of embeddings
@@ -333,12 +333,12 @@ impl LlamaContextParams {
     /// ```rust
     /// use llama_cpp_2::context::params::LlamaContextParams;
     /// let params = LlamaContextParams::default()
-    ///    .with_embedding(true);
-    /// assert!(params.embedding());
+    ///    .with_embeddings(true);
+    /// assert!(params.embeddings());
     /// ```
     #[must_use]
-    pub fn with_embedding(mut self, embedding: bool) -> Self {
-        self.context_params.embedding = embedding;
+    pub fn with_embeddings(mut self, embedding: bool) -> Self {
+        self.context_params.embeddings = embedding;
         self
     }
 }

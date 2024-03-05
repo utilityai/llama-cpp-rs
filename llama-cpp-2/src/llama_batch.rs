@@ -121,14 +121,13 @@ impl LlamaBatch {
                 let seq_id_ptr = *self.llama_batch.seq_id.add(j);
                 seq_id_ptr.write(seq_id);
                 self.llama_batch.n_seq_id.add(j).write(1);
-                self.llama_batch.logits.add(j).write(logits_all as i8)
+
+                let write_logits = logits_all || i == n_tokens - 1;
+                self.llama_batch.logits.add(j).write(write_logits as i8)
             }
         }
 
-        unsafe {
-            self.llama_batch.logits.add(n_tokens - 1).write(true as i8);
-            self.initialized_logits.push(self.llama_batch.n_tokens - 1);
-        }
+        self.initialized_logits.push(self.llama_batch.n_tokens - 1);
 
         Ok(())
     }
