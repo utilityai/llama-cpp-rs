@@ -123,11 +123,12 @@ impl LlamaBatch {
                 self.llama_batch.n_seq_id.add(j).write(1);
 
                 let write_logits = logits_all || i == n_tokens - 1;
-                self.llama_batch.logits.add(j).write(write_logits as i8)
+                self.llama_batch.logits.add(j).write(write_logits as i8);
+                if write_logits {
+                    self.initialized_logits.push(j as i32);
+                }
             }
         }
-
-        self.initialized_logits.push(self.llama_batch.n_tokens - 1);
 
         Ok(())
     }
