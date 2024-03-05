@@ -714,7 +714,7 @@ checksum = "c4cd1a83af159aa67994778be9070f0ae1bd732942279cabb14f86f986a21456"
 
 [[package]]
 name = "llama-cpp-2"
-version = "0.1.34"
+version = "0.1.35"
 dependencies = [
  "criterion",
  "hf-hub",
@@ -726,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-sys-2"
-version = "0.1.34"
+version = "0.1.35"
 dependencies = [
  "bindgen",
  "cc",
