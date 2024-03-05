@@ -189,11 +189,6 @@ impl<'model> LlamaContext<'model> {
         let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
         LlamaTimings { timings }
     }
-
-    /// Returns a reference to the raw [llama_cpp_sys_2::llama_context] pointer.
-    pub fn raw_ctx(&self) -> &NonNull<llama_cpp_sys_2::llama_context> {
-        &self.context
-    }
 }
 
 impl Drop for LlamaContext<'_> {
