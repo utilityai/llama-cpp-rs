@@ -33,10 +33,10 @@ pub enum LlamaTokenType {
 /// # use std::result::Result;
 /// # use llama_cpp_2::token_type::{LlamaTokenTypeFromIntError, LlamaTokenType};
 /// # fn main() -> Result<(), LlamaTokenTypeFromIntError> {
-/// let llama_token_type = LlamaTokenType::try_from(0 as c_int)?;
+/// let llama_token_type = LlamaTokenType::try_from(0 as llama_cpp_sys_2::llama_token_type)?;
 /// assert_eq!(llama_token_type, LlamaTokenType::Undefined);
 ///
-/// let bad_llama_token_type = LlamaTokenType::try_from(100 as c_int);
+/// let bad_llama_token_type = LlamaTokenType::try_from(100 as llama_cpp_sys_2::llama_token_type);
 /// assert_eq!(Err(LlamaTokenTypeFromIntError::UnknownValue(100)), bad_llama_token_type);
 /// # Ok(())
 /// # }
