@@ -108,26 +108,9 @@ impl LlamaBatch {
         if self.allocated < n_tokens_0 as usize + n_tokens {
             return Err(BatchAddError::InsufficientSpace(self.allocated));
         }
-        if n_tokens == 0 {
-            return Ok(())
-        }
 
-        self.llama_batch.n_tokens += n_tokens as i32;
         for (i, token) in tokens.iter().enumerate() {
-            let j = n_tokens_0 as usize + i;
-            unsafe {
-                self.llama_batch.token.add(j).write(token.0);
-                self.llama_batch.pos.add(j).write(i as i32);
-                let seq_id_ptr = *self.llama_batch.seq_id.add(j);
-                seq_id_ptr.write(seq_id);
-                self.llama_batch.n_seq_id.add(j).write(1);
-
-                let write_logits = logits_all || i == n_tokens - 1;
-                self.llama_batch.logits.add(j).write(write_logits as i8);
-                if write_logits {
-                    self.initialized_logits.push(j as i32);
-                }
-            }
+            self.add(*token, i as llama_pos, &[seq_id], logits_all || i == n_tokens - 1)?;
         }
 
         Ok(())
