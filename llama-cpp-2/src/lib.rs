@@ -52,6 +52,8 @@ pub enum LLamaCppError {
     /// There was an error adding a token to a batch.
     #[error["{0}"]]
     BatchAddError(#[from] BatchAddError),
+    #[error(transparent)]
+    EmbeddingError(#[from] EmbeddingsError),
 }
 
 /// Failed to Load context
@@ -74,6 +76,17 @@ pub enum DecodeError {
     /// An unknown error occurred.
     #[error("Decode Error {0}: unknown")]
     Unknown(c_int),
+}
+
+/// When embedding related functions fail
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum EmbeddingsError {
+    #[error("Embeddings weren't enabled in the context options")]
+    NotEnabled,
+    #[error("Logits were not enabled for the given token")]
+    LogitsNotEnabled,
+    #[error("Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE")]
+    NonePoolType,
 }
 
 /// Decode a error from llama.cpp into a [`DecodeError`].

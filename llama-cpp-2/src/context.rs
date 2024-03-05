@@ -2,15 +2,15 @@
 
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
+use std::ptr::NonNull;
+use std::slice;
 
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use crate::DecodeError;
-use std::ptr::NonNull;
-use std::slice;
+use crate::{DecodeError, EmbeddingsError};
 
 pub mod kv_cache;
 pub mod params;
@@ -24,6 +24,7 @@ pub struct LlamaContext<'a> {
     /// a reference to the contexts model.
     pub model: &'a LlamaModel,
     initialized_logits: Vec<i32>,
+    embeddings_enabled: bool,
 }
 
 impl Debug for LlamaContext<'_> {
@@ -38,11 +39,13 @@ impl<'model> LlamaContext<'model> {
     pub(crate) fn new(
         llama_model: &'model LlamaModel,
         llama_context: NonNull<llama_cpp_sys_2::llama_context>,
+        embeddings_enabled: bool,
     ) -> Self {
         Self {
             context: llama_context,
             model: llama_model,
             initialized_logits: Vec::new(),
+            embeddings_enabled,
         }
     }
 
@@ -77,6 +80,63 @@ impl<'model> LlamaContext<'model> {
                 Ok(())
             }
             Some(error) => Err(DecodeError::from(error)),
+        }
+    }
+
+    /// Get the embeddings for the `i`th sequence in the current context.
+    ///
+    /// # Returns
+    ///
+    /// A slice containing the embeddings for the last decoded batch.
+    /// The size corresponds to the `n_embd` parameter of the context's model.
+    ///
+    /// # Errors
+    ///
+    /// - When the current context was constructed without enabling embeddings.
+    /// - If the current model had a pooling type of [`llama_cpp_sys_2::LLAMA_POOLING_TYPE_NONE`]
+    /// - If the given sequence index exceeds the max sequence id.
+    pub fn embeddings_seq_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
+        if !self.embeddings_enabled {
+            return Err(EmbeddingsError::NotEnabled);
+        }
+
+        unsafe {
+            let embedding = llama_cpp_sys_2::llama_get_embeddings_seq(self.context.as_ptr(), i);
+
+            // Technically also possible whenever `i >= max(batch.n_seq)`, but can't check that here.
+            if embedding.is_null() {
+                Err(EmbeddingsError::NonePoolType)
+            } else {
+                Ok(std::slice::from_raw_parts(embedding, self.model.n_embd() as usize))
+            }
+        }
+    }
+
+    /// Get the embeddings for the `i`th token in the current context.
+    ///
+    /// # Returns
+    ///
+    /// A slice containing the embeddings for the last decoded batch of the given token.
+    /// The size corresponds to the `n_embd` parameter of the context's model.
+    ///
+    /// # Errors
+    ///
+    /// - When the current context was constructed without enabling embeddings.
+    /// - When the given token didn't have logits enabled when it was passed.
+    /// - If the given token index exceeds the max token id.
+    pub fn embeddings_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
+        if !self.embeddings_enabled {
+            return Err(EmbeddingsError::NotEnabled);
+        }
+
+        unsafe {
+            let embedding = llama_cpp_sys_2::llama_get_embeddings_ith(self.context.as_ptr(), i);
+            // Technically also possible whenever `i >= batch.n_tokens`, but no good way of checking `n_tokens` here.
+            if embedding.is_null() {
+                Err(EmbeddingsError::LogitsNotEnabled)
+            } else {
+                Ok(std::slice::from_raw_parts(embedding, self.model.n_embd() as usize))
+            }
         }
     }
 

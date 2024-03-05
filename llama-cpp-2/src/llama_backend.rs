@@ -3,6 +3,7 @@
 use crate::LLamaCppError;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+use llama_cpp_sys_2::ggml_log_level;
 
 /// Representation of an initialized llama backend
 /// This is required as a parameter for most llama functions as the backend must be initialized
@@ -67,6 +68,19 @@ impl LlamaBackend {
             llama_cpp_sys_2::llama_numa_init(llama_cpp_sys_2::ggml_numa_strategy::from(strategy));
         }
         Ok(LlamaBackend {})
+    }
+
+    /// Change the output of llama.cpp's logging to be voided instead of pushed to `stderr`.
+    pub fn void_logs(&mut self) {
+        unsafe extern "C" fn void_log(
+            _level: ggml_log_level,
+            _text: *const ::std::os::raw::c_char,
+            _user_data: *mut ::std::os::raw::c_void,
+        ) {}
+
+        unsafe {
+            llama_cpp_sys_2::llama_log_set(Some(void_log), std::ptr::null_mut())
+        }
     }
 }
 

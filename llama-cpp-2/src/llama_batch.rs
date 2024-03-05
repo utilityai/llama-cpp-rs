@@ -6,11 +6,11 @@ use llama_cpp_sys_2::{llama_batch, llama_batch_free, llama_batch_init, llama_pos
 /// A safe wrapper around `llama_batch`.
 #[derive(Debug)]
 pub struct LlamaBatch {
-    /// The number of tokens the batch was allocated with. they are safe to write to - but not necessarily read from as they are not necessarily initilized
+    /// The number of tokens the batch was allocated with. they are safe to write to - but not necessarily read from as they are not necessarily initialized
     allocated: usize,
-    /// The logits that are initilized. Used by [`LlamaContext`] to ensure that only initilized logits are accessed.
+    /// The logits that are initialized. Used by [`LlamaContext`] to ensure that only initialized logits are accessed.
     pub(crate) initialized_logits: Vec<i32>,
-    /// The llama_cpp batch. always initilize by `llama_cpp_sys_2::llama_batch_init(allocated, <unknown>, <unknown>)`
+    /// The llama_cpp batch. always initialize by `llama_cpp_sys_2::llama_batch_init(allocated, <unknown>, <unknown>)`
     pub(crate) llama_batch: llama_batch,
 }
 
@@ -31,7 +31,7 @@ impl LlamaBatch {
     }
 
     /// add a token to the batch for sequences [`seq_ids`] at position [pos]. If [logits] is true, the
-    /// token will be initilized and can be read from after the next decode.
+    /// token will be initialized and can be read from after the next decode.
     ///
     /// # Panics
     ///
@@ -90,7 +90,33 @@ impl LlamaBatch {
 
         Ok(())
     }
-    /// Create a new `LlamaBatch` that cab contain up to `n_tokens` tokens.
+
+    /// Add a sequence of tokens to the batch for the given sequence id. If [logits_all] is true, the
+    /// tokens will be initialized and can be read from after the next decode.
+    ///
+    /// Either way the last token in the sequence will have its logits set to `true`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is insufficient space in the buffer
+    pub fn add_sequence(&mut self, tokens: &[LlamaToken],
+                        seq_id: i32,
+                        logits_all: bool) -> Result<(), BatchAddError> {
+        let n_tokens_0 = self.llama_batch.n_tokens;
+        let n_tokens = tokens.len();
+
+        if self.allocated < n_tokens_0 as usize + n_tokens {
+            return Err(BatchAddError::InsufficientSpace(self.allocated));
+        }
+
+        for (i, token) in tokens.iter().enumerate() {
+            self.add(*token, i as llama_pos, &[seq_id], logits_all || i == n_tokens - 1)?;
+        }
+
+        Ok(())
+    }
+
+    /// Create a new `LlamaBatch` that can contain up to `n_tokens` tokens.
     ///
     /// # Arguments
     ///
