@@ -28,15 +28,15 @@ pub enum LlamaTokenType {
 ///
 /// ```
 /// # use std::convert::TryFrom;
-/// # use std::ffi::c_uint;
+/// # use std::ffi::c_int;
 /// # use std::num::TryFromIntError;
 /// # use std::result::Result;
 /// # use llama_cpp_2::token_type::{LlamaTokenTypeFromIntError, LlamaTokenType};
 /// # fn main() -> Result<(), LlamaTokenTypeFromIntError> {
-/// let llama_token_type = LlamaTokenType::try_from(0 as c_uint)?;
+/// let llama_token_type = LlamaTokenType::try_from(0 as c_int)?;
 /// assert_eq!(llama_token_type, LlamaTokenType::Undefined);
 ///
-/// let bad_llama_token_type = LlamaTokenType::try_from(100 as c_uint);
+/// let bad_llama_token_type = LlamaTokenType::try_from(100 as c_int);
 /// assert_eq!(Err(LlamaTokenTypeFromIntError::UnknownValue(100)), bad_llama_token_type);
 /// # Ok(())
 /// # }
