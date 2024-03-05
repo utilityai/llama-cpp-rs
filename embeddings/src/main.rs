@@ -52,9 +52,9 @@ enum Model {
     /// Download a model from huggingface (or use a cached version)
     #[clap(name = "hf-model")]
     HuggingFace {
-        /// the repo containing the model. e.g. `TheBloke/Llama-2-7B-Chat-GGUF`
+        /// the repo containing the model. e.g. `BAAI/bge-small-en-v1.5`
         repo: String,
-        /// the model name. e.g. `llama-2-7b-chat.Q4_K_M.gguf`
+        /// the model name. e.g. `BAAI-bge-small-v1.5.Q4_K_M.gguf`
         model: String,
     },
 }
@@ -147,7 +147,7 @@ fn main() -> Result<()> {
 
     // create a llama_batch with the size of the context
     // we use this object to submit token data for decoding
-    let mut batch = LlamaBatch::new(n_ctx, tokens_lines_list.len() as i32);
+    let mut batch = LlamaBatch::new(n_ctx, 1);
 
     // Amount of tokens in the current batch
     let mut s_batch = 0;
