@@ -93,9 +93,11 @@ impl LlamaTokenDataArray {
     ///
     /// * `ctx` - the context to use. May be `None` if you do not care to record the sample timings.
     /// * `last_tokens` - the last tokens in the context.
-    /// * `penalty_last_n` - the number of tokens to consider for the repetition penalty. (1.0 for no penalty)
-    /// * `penalty_repeat` - the repetition penalty. (0.0 for no penalty)
+    /// 
+    /// * `penalty_last_n` - the number of tokens back to consider for the repetition penalty. (0 for no penalty)
+    /// * `penalty_repeat` - the repetition penalty. (1.0 for no penalty)
     /// * `penalty_freq` - the frequency penalty. (0.0 for no penalty)
+    /// * `penalty_present` - the presence penalty. (0.0 for no penalty)
     ///
     /// # Example
     ///
