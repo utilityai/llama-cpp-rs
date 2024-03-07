@@ -1,5 +1,10 @@
 //! an rusty equivalent of `llama_token_data`.
+use std::cmp::min;
+use std::ptr;
+use llama_cpp_sys_2::llama_token;
+use crate::context::LlamaContext;
 use crate::token::data::LlamaTokenData;
+use crate::token::LlamaToken;
 
 /// a safe wrapper around `llama_token_data_array`.
 #[derive(Debug, Clone, PartialEq)]
@@ -73,11 +78,79 @@ impl LlamaTokenDataArray {
         };
         modify(&mut c_llama_token_data_array);
         assert!(
-            std::ptr::eq(data, c_llama_token_data_array.data),
+            ptr::eq(data, c_llama_token_data_array.data),
             "data pointer changed"
         );
         assert!(c_llama_token_data_array.size <= size, "size increased");
         self.data.set_len(c_llama_token_data_array.size);
         self.sorted = c_llama_token_data_array.sorted;
+    }
+
+    /// Repetition penalty described in CTRL academic paper https://arxiv.org/abs/1909.05858, with negative logit fix.
+    /// Frequency and presence penalties described in OpenAI API https://platform.openai.com/docs/api-reference/parameter-details.
+    /// 
+    /// # Parameters
+    /// 
+    /// * `ctx` - the context to use. May be `None` if you do not care to record the sample timings.
+    /// * `last_tokens` - the last tokens in the context.
+    /// * `penalty_last_n` - the number of tokens to consider for the repetition penalty.
+    /// * `penalty_repeat` - the repetition penalty.
+    /// * `penalty_freq` - the frequency penalty.
+    /// 
+    /// # Example
+    /// 
+    /// ```rust
+    /// # use std::collections::BTreeMap;
+    /// # use llama_cpp_2::token::data::LlamaTokenData;
+    /// # use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+    /// # use llama_cpp_2::token::LlamaToken;
+    /// let history = vec![
+    ///   LlamaToken::new(2),
+    ///   LlamaToken::new(1),
+    ///   LlamaToken::new(0),
+    /// ];
+    ///
+    /// let candidates = vec![
+    ///    LlamaToken::new(0),
+    ///    LlamaToken::new(1),
+    ///    LlamaToken::new(2),
+    ///    LlamaToken::new(3),
+    /// ];
+    ///
+    /// let mut candidates = LlamaTokenDataArray::from_iter(candidates.iter().map(|&token| LlamaTokenData::new(token, 0.0, 0.0)), false);
+    ///
+    /// candidates.sample_repetition_penalty(None, &history, 2, 1.1, 0.1, 0.1);
+    ///
+    /// let token_logits = candidates.data.into_iter().map(|token_data| (token_data.id(), token_data.logit())).collect::<BTreeMap<_, _>>();
+    /// assert_eq!(token_logits[&LlamaToken(0)], 0.0, "expected no penalty as it is out of `penalty_last_n`"); 
+    /// assert!(token_logits[&LlamaToken(1)] < 0.0, "expected penalty as it is in `penalty_last_n`"); 
+    /// assert!(token_logits[&LlamaToken(2)] < 0.0, "expected penalty as it is in `penalty_last_n`"); 
+    /// assert_eq!(token_logits[&LlamaToken(3)], 0.0, "expected no penalty as it is not in `history`");
+    /// ```
+    pub fn sample_repetition_penalty(
+        &mut self,
+        ctx: Option<&mut LlamaContext>,
+        last_tokens: &[LlamaToken],
+        penalty_last_n: usize,
+        penalty_repeat: f32,
+        penalty_freq: f32,
+        penalty_present: f32,
+    ) {
+        let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
+        let penalty_last_n = min(penalty_last_n, last_tokens.len().saturating_sub(1));
+        unsafe {
+            self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_repetition_penalties(
+                    ctx,
+                    c_llama_token_data_array,
+                    // safe cast as LlamaToken is repr(transparent)
+                    last_tokens.as_ptr().cast::<llama_token>(),
+                    penalty_last_n,
+                    penalty_repeat,
+                    penalty_freq,
+                    penalty_present,
+                );
+            });
+        }
     }
 }
