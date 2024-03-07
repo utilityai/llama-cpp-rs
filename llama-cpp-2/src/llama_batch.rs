@@ -91,7 +91,7 @@ impl LlamaBatch {
         Ok(())
     }
 
-    /// Add a sequence of tokens to the batch for the given sequence id. If [logits_all] is true, the
+    /// Add a sequence of tokens to the batch for the given sequence id. If [`logits_all`] is true, the
     /// tokens will be initialized and can be read from after the next decode.
     ///
     /// Either way the last token in the sequence will have its logits set to `true`.
@@ -99,18 +99,29 @@ impl LlamaBatch {
     /// # Errors
     ///
     /// Returns an error if there is insufficient space in the buffer
-    pub fn add_sequence(&mut self, tokens: &[LlamaToken],
-                        seq_id: i32,
-                        logits_all: bool) -> Result<(), BatchAddError> {
-        let n_tokens_0 = self.llama_batch.n_tokens;
+    ///
+    /// # Panics
+    ///
+    /// - [`self.llama_batch.n_tokens`] does not fit into a [`usize`]
+    /// - [`n_tokens - 1`] does not fit into a [`llama_pos`]
+    pub fn add_sequence(
+        &mut self,
+        tokens: &[LlamaToken],
+        seq_id: i32,
+        logits_all: bool,
+    ) -> Result<(), BatchAddError> {
+        let n_tokens_0 =
+            usize::try_from(self.llama_batch.n_tokens).expect("cannot fit n_tokens into a usize");
         let n_tokens = tokens.len();
 
-        if self.allocated < n_tokens_0 as usize + n_tokens {
+        if self.allocated < n_tokens_0 + n_tokens {
             return Err(BatchAddError::InsufficientSpace(self.allocated));
         }
 
-        for (i, token) in tokens.iter().enumerate() {
-            self.add(*token, i as llama_pos, &[seq_id], logits_all || i == n_tokens - 1)?;
+        let last_index = llama_pos::try_from(n_tokens.saturating_sub(1))
+            .expect("cannot fit n_tokens into a llama_pos");
+        for (i, token) in (0..).zip(tokens.iter()) {
+            self.add(*token, i, &[seq_id], logits_all || i == last_index)?;
         }
 
         Ok(())

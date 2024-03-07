@@ -4,13 +4,13 @@ use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
 
-use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
-use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
+use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
+use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
 
 pub mod params;
 
@@ -292,9 +292,8 @@ impl LlamaModel {
             .ok_or(LlamaModelLoadError::PathToStrError(path.to_path_buf()))?;
 
         let cstr = CString::new(path)?;
-        let llama_model = unsafe {
-            llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params)
-        };
+        let llama_model =
+            unsafe { llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params) };
 
         let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 

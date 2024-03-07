@@ -67,6 +67,7 @@ impl LlamaContext<'_> {
         unsafe { llama_cpp_sys_2::llama_kv_cache_seq_keep(self.context.as_ptr(), seq_id) }
     }
 
+    #[allow(clippy::doc_markdown)]
     /// Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
     /// If the KV cache is RoPEd, the KV data is updated accordingly:
     ///   - lazily on next [`LlamaContext::decode`]
@@ -212,9 +213,9 @@ impl<'a> KVCacheView<'a> {
     }
 
     /// Information for individual cells.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// - if `n_cells` does not fit into usize.
     pub fn cells(&self) -> impl Iterator<Item = KVCacheViewCell> {
         unsafe {
@@ -228,9 +229,9 @@ impl<'a> KVCacheView<'a> {
     }
 
     /// The sequences for each cell. There will be `n_max_seq` items per cell.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// - if `n_cells * n_max_seq` does not fit into usize.
     /// - if `n_max_seq` does not fit into usize.
     pub fn cells_sequences(&self) -> impl Iterator<Item = &[llama_cpp_sys_2::llama_seq_id]> {

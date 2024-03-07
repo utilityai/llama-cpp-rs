@@ -6,7 +6,6 @@
     clippy::cast_sign_loss
 )]
 
-use std::ffi::CString;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
@@ -14,17 +13,18 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use std::ffi::CString;
 use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
 use std::pin::pin;
 use std::str::FromStr;
 use std::time::Duration;
-use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
@@ -53,14 +53,14 @@ fn parse_key_val(s: &str) -> Result<(String, ParamOverrideValue)> {
         .ok_or_else(|| anyhow!("invalid KEY=value: no `=` found in `{}`", s))?;
     let key = s[..pos].parse()?;
     let value: String = s[pos + 1..].parse()?;
-    let value = i64::from_str(&value).map(ParamOverrideValue::Int)
+    let value = i64::from_str(&value)
+        .map(ParamOverrideValue::Int)
         .or_else(|_| f64::from_str(&value).map(ParamOverrideValue::Float))
         .or_else(|_| bool::from_str(&value).map(ParamOverrideValue::Bool))
         .map_err(|_| anyhow!("must be one of i64, f64, or bool"))?;
-    
+
     Ok((key, value))
 }
-
 
 #[derive(clap::Subcommand, Debug, Clone)]
 enum Model {
@@ -119,11 +119,11 @@ fn main() -> Result<()> {
         #[cfg(not(feature = "cublas"))]
         LlamaModelParams::default()
     };
-    
+
     let mut model_params = pin!(model_params);
-    
-    for (k, v) in key_value_overrides.iter() {
-        let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {}", k))?;
+
+    for (k, v) in &key_value_overrides {
+        let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {k}"))?;
         model_params.as_mut().append_kv_override(k.as_c_str(), *v);
     }
 

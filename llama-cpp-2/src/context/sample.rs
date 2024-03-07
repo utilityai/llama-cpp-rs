@@ -4,11 +4,13 @@ use crate::context::LlamaContext;
 use crate::grammar::LlamaGrammar;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
-use llama_cpp_sys_2::llama_context;
 
 /// struct to hold params for sampling
 #[derive(Debug)]
-#[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+#[deprecated(
+    since = "0.1.32",
+    note = "this does not scale well with many params and does not allow for changing of orders."
+)]
 pub struct Sampler<'grammar> {
     token_data_array: LlamaTokenDataArray,
     grammar: Option<&'grammar mut LlamaGrammar>,
@@ -16,7 +18,10 @@ pub struct Sampler<'grammar> {
 }
 
 impl<'grammar> Sampler<'grammar> {
-    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+    #[deprecated(
+        since = "0.1.32",
+        note = "this does not scale well with many params and does not allow for changing of orders."
+    )]
     fn sample(self, llama_context: &mut LlamaContext) -> LlamaToken {
         match self {
             Sampler {
@@ -60,7 +65,10 @@ impl<'grammar> Sampler<'grammar> {
 
     /// Create a new sampler.
     #[must_use]
-    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+    #[deprecated(
+        since = "0.1.32",
+        note = "this does not scale well with many params and does not allow for changing of orders."
+    )]
     pub fn new(llama_token_data_array: LlamaTokenDataArray) -> Self {
         Self {
             token_data_array: llama_token_data_array,
@@ -71,7 +79,10 @@ impl<'grammar> Sampler<'grammar> {
 
     /// Set the grammar for sampling.
     #[must_use]
-    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+    #[deprecated(
+        since = "0.1.32",
+        note = "this does not scale well with many params and does not allow for changing of orders."
+    )]
     pub fn with_grammar(mut self, grammar: &'grammar mut LlamaGrammar) -> Self {
         self.grammar = Some(grammar);
         self
@@ -91,7 +102,10 @@ impl<'grammar> Sampler<'grammar> {
     ///     .with_temperature(0.5);
     /// ```
     #[must_use]
-    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+    #[deprecated(
+        since = "0.1.32",
+        note = "this does not scale well with many params and does not allow for changing of orders."
+    )]
     pub fn with_temperature(mut self, temperature: f32) -> Self {
         if temperature == 0.0 {
             return self;
@@ -107,7 +121,10 @@ impl LlamaContext<'_> {
     /// # Panics
     ///
     /// - sampler contains no tokens
-    #[deprecated(since = "0.1.32", note = "this does not scale well with many params and does not allow for changing of orders.")]
+    #[deprecated(
+        since = "0.1.32",
+        note = "this does not scale well with many params and does not allow for changing of orders."
+    )]
     pub fn sample(&mut self, sampler: Sampler) -> LlamaToken {
         sampler.sample(self)
     }
@@ -157,7 +174,7 @@ impl LlamaContext<'_> {
         if temperature == 0.0 {
             return;
         }
-        let ctx: *mut llama_context = self.context.as_ptr();
+        let ctx: *mut llama_cpp_sys_2::llama_context = self.context.as_ptr();
         unsafe {
             token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
                 llama_cpp_sys_2::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
@@ -253,5 +270,25 @@ impl LlamaContext<'_> {
                 llama_cpp_sys_2::llama_sample_softmax(ctx, c_llama_token_data_array);
             });
         }
+    }
+
+    /// See [`LlamaTokenDataArray::sample_repetition_penalty`]
+    pub fn sample_repetition_penalty(
+        &mut self,
+        token_data: &mut LlamaTokenDataArray,
+        last_tokens: &[LlamaToken],
+        penalty_last_n: usize,
+        penalty_repeat: f32,
+        penalty_freq: f32,
+        penalty_present: f32,
+    ) {
+        token_data.sample_repetition_penalty(
+            Some(self),
+            last_tokens,
+            penalty_last_n,
+            penalty_repeat,
+            penalty_freq,
+            penalty_present,
+        );
     }
 }
