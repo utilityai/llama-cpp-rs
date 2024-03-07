@@ -102,15 +102,15 @@ fn main() {
                     _ => {}
                 }
             }
-        } else if cfg!(target_arch = "aarch64") {
-            if compiler.is_like_clang() || compiler.is_like_gnu() {
-                if cfg!(target_os = "macos") {
-                    build.flag("-mcpu=apple-m1");
-                } else if std::env::var("HOST") == std::env::var("TARGET") {
-                    build.flag("-mcpu=native");
-                }
-                build.flag("-pthread");
+        } else if cfg!(target_arch = "aarch64")
+            && (compiler.is_like_clang() || compiler.is_like_gnu())
+        {
+            if cfg!(target_os = "macos") {
+                build.flag("-mcpu=apple-m1");
+            } else if env::var("HOST") == env::var("TARGET") {
+                build.flag("-mcpu=native");
             }
+            build.flag("-pthread");
         }
     }
 
@@ -260,7 +260,6 @@ mod x86 {
         pub sse3: bool,
     }
     impl Features {
-
         pub fn get_target() -> Self {
             let features = crate::get_supported_target_features();
             Self {

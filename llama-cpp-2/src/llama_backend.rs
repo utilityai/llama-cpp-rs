@@ -1,9 +1,9 @@
 //! Representation of an initialized llama backend
 
 use crate::LLamaCppError;
+use llama_cpp_sys_2::ggml_log_level;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
-use llama_cpp_sys_2::ggml_log_level;
 
 /// Representation of an initialized llama backend
 /// This is required as a parameter for most llama functions as the backend must be initialized
@@ -76,10 +76,11 @@ impl LlamaBackend {
             _level: ggml_log_level,
             _text: *const ::std::os::raw::c_char,
             _user_data: *mut ::std::os::raw::c_void,
-        ) {}
+        ) {
+        }
 
         unsafe {
-            llama_cpp_sys_2::llama_log_set(Some(void_log), std::ptr::null_mut())
+            llama_cpp_sys_2::llama_log_set(Some(void_log), std::ptr::null_mut());
         }
     }
 }

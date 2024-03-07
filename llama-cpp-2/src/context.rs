@@ -95,10 +95,17 @@ impl<'model> LlamaContext<'model> {
     /// - When the current context was constructed without enabling embeddings.
     /// - If the current model had a pooling type of [`llama_cpp_sys_2::LLAMA_POOLING_TYPE_NONE`]
     /// - If the given sequence index exceeds the max sequence id.
+    ///
+    /// # Panics
+    ///
+    /// * `n_embd` does not fit into a usize
     pub fn embeddings_seq_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
         if !self.embeddings_enabled {
             return Err(EmbeddingsError::NotEnabled);
         }
+
+        let n_embd =
+            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
 
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_seq(self.context.as_ptr(), i);
@@ -107,7 +114,7 @@ impl<'model> LlamaContext<'model> {
             if embedding.is_null() {
                 Err(EmbeddingsError::NonePoolType)
             } else {
-                Ok(std::slice::from_raw_parts(embedding, self.model.n_embd() as usize))
+                Ok(slice::from_raw_parts(embedding, n_embd))
             }
         }
     }
@@ -124,10 +131,17 @@ impl<'model> LlamaContext<'model> {
     /// - When the current context was constructed without enabling embeddings.
     /// - When the given token didn't have logits enabled when it was passed.
     /// - If the given token index exceeds the max token id.
+    ///
+    /// # Panics
+    ///
+    /// * `n_embd` does not fit into a usize
     pub fn embeddings_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
         if !self.embeddings_enabled {
             return Err(EmbeddingsError::NotEnabled);
         }
+
+        let n_embd =
+            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
 
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_ith(self.context.as_ptr(), i);
@@ -135,7 +149,7 @@ impl<'model> LlamaContext<'model> {
             if embedding.is_null() {
                 Err(EmbeddingsError::LogitsNotEnabled)
             } else {
-                Ok(std::slice::from_raw_parts(embedding, self.model.n_embd() as usize))
+                Ok(slice::from_raw_parts(embedding, n_embd))
             }
         }
     }

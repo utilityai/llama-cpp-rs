@@ -1,28 +1,27 @@
 //! This is a translation of embedding.cpp in llama.cpp using llama-cpp-2.
 #![allow(
-clippy::cast_possible_wrap,
-clippy::cast_possible_truncation,
-clippy::cast_precision_loss,
-clippy::cast_sign_loss
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss
 )]
 
 use std::io::Write;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
 
-use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
+use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::params::LlamaModelParams;
 
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
@@ -40,7 +39,6 @@ struct Args {
     #[clap(long)]
     disable_gpu: bool,
 }
-
 
 #[derive(clap::Subcommand, Debug, Clone)]
 enum Model {
@@ -119,7 +117,8 @@ fn main() -> Result<()> {
     let prompt_lines = prompt.lines();
 
     // tokenize the prompt
-    let tokens_lines_list = prompt_lines.map(|line| model.str_to_token(&line, AddBos::Always))
+    let tokens_lines_list = prompt_lines
+        .map(|line| model.str_to_token(line, AddBos::Always))
         .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("failed to tokenize {prompt}"))?;
 
@@ -140,7 +139,7 @@ fn main() -> Result<()> {
         for token in token_line {
             eprintln!(" {} --> {}", token, model.token_to_str(*token)?);
         }
-        eprintln!()
+        eprintln!();
     }
 
     std::io::stderr().flush()?;
@@ -157,15 +156,27 @@ fn main() -> Result<()> {
     for tokens in &tokens_lines_list {
         // Flush the batch if the next prompt would exceed our batch size
         if (batch.n_tokens() as usize + tokens.len()) > n_ctx {
-            batch_decode(&mut ctx, &mut batch, max_seq_id_batch, &mut output, normalise)?;
+            batch_decode(
+                &mut ctx,
+                &mut batch,
+                max_seq_id_batch,
+                &mut output,
+                normalise,
+            )?;
             max_seq_id_batch = 0;
         }
 
-        batch.add_sequence(&tokens, max_seq_id_batch, false)?;
+        batch.add_sequence(tokens, max_seq_id_batch, false)?;
         max_seq_id_batch += 1;
     }
     // Handle final batch
-    batch_decode(&mut ctx, &mut batch, max_seq_id_batch, &mut output, normalise)?;
+    batch_decode(
+        &mut ctx,
+        &mut batch,
+        max_seq_id_batch,
+        &mut output,
+        normalise,
+    )?;
 
     let t_main_end = ggml_time_us();
 
@@ -175,7 +186,7 @@ fn main() -> Result<()> {
     }
 
     let duration = Duration::from_micros((t_main_end - t_main_start) as u64);
-    let total_tokens: usize = tokens_lines_list.iter().map(|v| v.len()).sum();
+    let total_tokens: usize = tokens_lines_list.iter().map(Vec::len).sum();
     eprintln!(
         "Created embeddings for {} tokens in {:.2} s, speed {:.2} t/s\n",
         total_tokens,
@@ -188,12 +199,20 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn batch_decode(ctx: &mut LlamaContext, batch: &mut LlamaBatch, s_batch: i32, output: &mut Vec<Vec<f32>>, normalise: bool) -> Result<()> {
+fn batch_decode(
+    ctx: &mut LlamaContext,
+    batch: &mut LlamaBatch,
+    s_batch: i32,
+    output: &mut Vec<Vec<f32>>,
+    normalise: bool,
+) -> Result<()> {
     ctx.clear_kv_cache();
     ctx.decode(batch).with_context(|| "llama_decode() failed")?;
 
     for i in 0..s_batch {
-        let embedding = ctx.embeddings_seq_ith(i).with_context(|| "Failed to get embeddings")?;
+        let embedding = ctx
+            .embeddings_seq_ith(i)
+            .with_context(|| "Failed to get embeddings")?;
         let output_embeddings = if normalise {
             normalize(embedding)
         } else {
@@ -209,7 +228,10 @@ fn batch_decode(ctx: &mut LlamaContext, batch: &mut LlamaBatch, s_batch: i32, ou
 }
 
 fn normalize(input: &[f32]) -> Vec<f32> {
-    let magnitude = input.iter().fold(0.0, |acc, &val| val.mul_add(val, acc)).sqrt();
+    let magnitude = input
+        .iter()
+        .fold(0.0, |acc, &val| val.mul_add(val, acc))
+        .sqrt();
 
     input.iter().map(|&val| val / magnitude).collect()
 }
