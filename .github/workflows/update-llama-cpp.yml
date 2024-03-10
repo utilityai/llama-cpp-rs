@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr list --json number,title --jq '.[] | select(.title | contains("Update llama-cpp")) | .number' | xargs -I {} gh pr close {}
-      - name: create draft pr
+      - name: Create open PR
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --fill --draft --body "please close and reopen this pull request to trigger the checks" --base update-llama-cpp-fix --head update-llama-cpp-${{ env.DATE }} 
+          gh pr create --fill --base update-llama-cpp-fix --head update-llama-cpp-${{ env.DATE }} --title "Update llama-cpp"
