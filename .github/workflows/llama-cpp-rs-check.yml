@@ -5,6 +5,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+  repository_dispatch:
+    types: [ trigger-llama-cpp-rs-check ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
