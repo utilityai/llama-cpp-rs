@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - update-llama-cpp-*
+      - update-llama-cpp-fix
   workflow_dispatch:
   repository_dispatch:
     types: [ trigger-llama-cpp-rs-check ]
