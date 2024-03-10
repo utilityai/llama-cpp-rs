@@ -40,7 +40,7 @@ jobs:
       - name: create open pr
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --fill
+          gh pr create --fill --base update-llama-cpp-fix --head $BRANCH_NAME
       - name: Trigger the llama-cpp-rs-check workflow
         run: |
           curl -X POST \
