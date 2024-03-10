@@ -2,7 +2,7 @@ name: Update version in TOML files
 
 on:
   repository_dispatch:
-    types: [trigger-update-toml-version]
+    types: [ trigger-update-toml-version ]
   workflow_dispatch:
 
 permissions:
@@ -39,4 +39,4 @@ jobs:
           git checkout -b version-bump-$NEXT_VERSION
           # Push the changes and create a pull request
           git push origin version-bump-$NEXT_VERSION --force
-          gh pr create --base main --head version-bump-$NEXT_VERSION --title "Bump version to $NEXT_VERSION" --fill
+          gh pr create --base update-toml-workflow-fix-2 --head version-bump-$NEXT_VERSION --title "Bump version to $NEXT_VERSION" --fill
