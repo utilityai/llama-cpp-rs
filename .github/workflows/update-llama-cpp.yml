@@ -2,7 +2,7 @@ name: Update llama cpp nightly
 on:
   schedule:
     - cron: '0 0 * * *'
-  workflow_dispatch: { }
+  workflow_dispatch: {}
 
 permissions:
   pull-requests: write
@@ -17,11 +17,8 @@ jobs:
         name: Checkout latest
         with:
           submodules: recursive
-      - name: create branch and save branch name
-        run: |
-          BRANCH_NAME=update-llama-cpp-$(date -I)
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          git checkout -b $BRANCH_NAME
+      - name: create branch
+        run: git checkout -b update-llama-cpp-$(date -I)
       - name: update submodules
         run: git submodule update --remote
       - name: config git
@@ -32,11 +29,11 @@ jobs:
         run: git commit -am "updated llama.cpp"
       - name: push
         run: git push --set-upstream origin $BRANCH_NAME --force
-      - name: close any outdated prs with the same name
+      - name: close any outdated prs with the name update-llama-cpp-$(date -I)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr list --state open --json number,title | jq -r '.[] | select(.title | contains("'"$BRANCH_NAME"'")) | .number' | xargs -I {} gh pr close {}
+            gh pr list --json state=open --json number --json title | jq -r '.[] | select(.title | contains("update-llama-cpp-$(date -I)")) | .number' | xargs -I {} gh pr close {}
       - name: create open pr
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
