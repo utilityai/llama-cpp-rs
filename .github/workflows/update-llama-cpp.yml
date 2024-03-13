@@ -30,14 +30,15 @@ jobs:
       - name: Commit
         run: git commit -am "updated llama.cpp"
       - name: Push
-        run: |    
-          git -c "http.https://github.com/.extraheader=AUTHORIZATION: bearer ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION }}" push --set-upstream origin update-llama-cpp-${{ env.DATE }} --force
+        run: git push --set-upstream origin update-llama-cpp-${{ env.DATE }} --force
       - name: Close any outdated PRs
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh pr list --json number,title --jq '.[] | select(.title | contains("Updated llama-cpp (bot)")) | .number' | xargs -I {} gh pr close {}
       - name: Create open PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION}}
         run: |
           echo ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION }} | gh auth login --with-token
-          gh pr create --fill --head update-llama-cpp-${{ env.DATE }} --base llama-cpp-update-CI-fix --title "Updated llama-cpp (bot)" 
+          gh pr create --fill --head update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)" --base llama-cpp-update-CI-fix
