@@ -29,9 +29,12 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" llama-cpp-sys-2/Cargo.toml
           # Update version in llama-cpp-2 Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" llama-cpp-2/Cargo.toml
-          sed -i "s/^\(llama-cpp-sys-2 = { path = \"\.\.\/llama-cpp-sys-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" llama-cpp-2/Cargo.toml
-          sed -i "s/^\(llama-cpp-2 = { path = \"\.\.\/llama-cpp-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" simple/Cargo.toml
-          sed -i "s/^\(llama-cpp-2 = { version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" Cargo.toml
+          sed -i "s/^\(llama-cpp-sys-2 = { path = \"\.\.\/llama-cpp-sys-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" llama-cpp-2/Cargo.toml       
+          # Update the version in the simple Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" simple/Cargo.toml
+          sed -i "s/^\(llama-cpp-2 = { path = \"\.\.\/llama-cpp-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" simple/Cargo.toml       
+          # Update the version in the root Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" Cargo.toml
           # Commit the changes
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
