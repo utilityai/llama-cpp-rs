@@ -40,5 +40,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION}}
         run: |
+          unset GITHUB_TOKEN
           echo ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION }} | gh auth login --with-token
           gh pr create --fill --head update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)" --base llama-cpp-update-CI-fix
