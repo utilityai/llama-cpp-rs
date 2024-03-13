@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          submodules: recursive
 
       - name: Update version in TOML files
         env:
@@ -43,7 +45,7 @@ jobs:
           git config --global user.name "GitHub Actions"
           git add llama-cpp-sys-2/Cargo.toml llama-cpp-2/Cargo.toml simple/Cargo.toml embeddings/Cargo.toml Cargo.lock
           git commit -m "Bump version to $NEXT_VERSION [skip ci]"
-          # Create a branch for the changes
+          # Create a  branch for the changes
           git checkout -b version-bump-$NEXT_VERSION
           # Push the changes and create a pull request
           git push origin version-bump-$NEXT_VERSION --force
