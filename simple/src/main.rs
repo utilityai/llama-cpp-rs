@@ -170,7 +170,7 @@ either reduce n_len or increase n_ctx"
     eprintln!();
 
     for token in &tokens_list {
-        eprint!("{}", model.token_to_str(*token)?);
+        eprint!("{:?}: '{}'", token, model.token_to_str(*token)?);
     }
 
     std::io::stderr().flush()?;
