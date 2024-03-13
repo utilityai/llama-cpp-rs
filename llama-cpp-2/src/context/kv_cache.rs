@@ -238,11 +238,11 @@ impl<'a> KVCacheView<'a> {
         unsafe {
             std::slice::from_raw_parts(
                 self.view.cells_sequences,
-                usize::try_from(self.view.n_cells * self.view.n_max_seq)
+                usize::try_from(self.view.n_cells * self.view.n_seq_max)
                     .expect("failed to fit n_cells * n_max_seq into usize"),
             )
         }
-        .chunks(usize::try_from(self.view.n_max_seq).expect("failed to fit n_max_seq into usize"))
+        .chunks(usize::try_from(self.view.n_seq_max).expect("failed to fit n_max_seq into usize"))
     }
 }
 
