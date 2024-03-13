@@ -36,10 +36,12 @@ jobs:
           # Update the version in the root embeddings Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" embeddings/Cargo.toml
           sed -i "s/^\(llama-cpp-2 = { path = \"\.\.\/llama-cpp-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" embeddings/Cargo.toml
+          # Update Cargo.lock by running cargo check
+          cargo check
           # Commit the changes
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
-          git add llama-cpp-sys-2/Cargo.toml llama-cpp-2/Cargo.toml simple/Cargo.toml embeddings/Cargo.toml 
+          git add llama-cpp-sys-2/Cargo.toml llama-cpp-2/Cargo.toml simple/Cargo.toml embeddings/Cargo.toml Cargo.lock
           git commit -m "Bump version to $NEXT_VERSION [skip ci]"
           # Create a branch for the changes
           git checkout -b version-bump-$NEXT_VERSION
