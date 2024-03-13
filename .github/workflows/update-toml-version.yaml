@@ -41,4 +41,5 @@ jobs:
           git checkout -b version-bump-$NEXT_VERSION
           # Push the changes and create a pull request
           git push origin version-bump-$NEXT_VERSION --force
-          gh pr create --base main --head version-bump-$NEXT_VERSION --title "Bumped version to $NEXT_VERSION" --fill
+          gh pr create --base toml-v-update-fix --head version-bump-$NEXT_VERSION --title "Bumped version to $NEXT_VERSION" --fill
+
