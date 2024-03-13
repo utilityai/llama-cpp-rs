@@ -39,4 +39,4 @@ jobs:
       - name: Create open PR
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --fill update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)"
+          gh pr create --fill --base update-llama-cpp-fix --head update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)"
