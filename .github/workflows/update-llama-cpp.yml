@@ -35,8 +35,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh pr list --json number,title --jq '.[] | select(.title | contains("Updated llama-cpp-${{ env.DATE }}")) | .number' | xargs -I {} gh pr close {}
+          gh pr list --json number,title --jq '.[] | select(.title | contains("Updated llama-cpp (bot)")) | .number' | xargs -I {} gh pr close {}
       - name: Create open PR
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --fill update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp-${{ env.DATE }}"
+          gh pr create --fill update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)"
