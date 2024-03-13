@@ -37,6 +37,9 @@ jobs:
         run: |
           gh pr list --json number,title --jq '.[] | select(.title | contains("Updated llama-cpp (bot)")) | .number' | xargs -I {} gh pr close {}
       - name: Create open PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION}}
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh pr create --fill --head update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)" --body "Please close and reopen the pull request for the checks to trigger."
+          unset GITHUB_TOKEN
+          echo ${{ secrets.LLAMA_CPP_RS_UPDATE_LLAMA_CPP_ACTION }} | gh auth login --with-token
+          gh pr create --fill --head update-llama-cpp-${{ env.DATE }} --title "Updated llama-cpp (bot)"
