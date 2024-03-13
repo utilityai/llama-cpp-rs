@@ -33,8 +33,9 @@ jobs:
           # Update the version in the simple Cargo.toml
           sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" simple/Cargo.toml
           sed -i "s/^\(llama-cpp-2 = { path = \"\.\.\/llama-cpp-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" simple/Cargo.toml       
-          # Update the version in the root Cargo.toml
-          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" Cargo.toml
+          # Update the version in the root embeddings Cargo.toml
+          sed -i "s/^version = \".*\"/version = \"$NEXT_VERSION\"/g" embeddings/Cargo.toml
+          sed -i "s/^\(llama-cpp-2 = { path = \"\.\.\/llama-cpp-2\", version = \)\"$CURRENT_VERSION\"/\1\"$NEXT_VERSION\"/" embeddings/Cargo.toml
           # Commit the changes
           git config --global user.email "actions@github.com"
           git config --global user.name "GitHub Actions"
