@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - llama-cpp-update-CI-fix
   workflow_dispatch:
 
 concurrency:
