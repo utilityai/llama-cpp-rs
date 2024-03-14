@@ -54,8 +54,10 @@ pub type SampleFinalizer<C> = dyn Fn(LlamaTokenDataArray, &mut C) -> Vec<LlamaTo
 
 /// A series of sampling steps that will produce a vector of token data.
 ///
-/// `C` is dynamic context that will be passed to the sampling functions. I expect `C` will
-/// often be [`()`], [`crate::context::LlamaContext`] or a token history (or some combination of these).
+/// `C` is dynamic context that will be passed to the sampling functions. Some sampling steps may
+/// require state to be maintained across multiple samples, and this context can be used to store
+/// that state. For example, [`LlamaTokenDataArray::sample_token_mirostat_v2`] requires a `mu` to be
+/// shared across multiple samples.
 pub struct Sampler<'a, C> {
     /// The steps to take when sampling.
     pub steps: Vec<&'a SampleStep<C>>,
