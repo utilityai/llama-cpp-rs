@@ -155,4 +155,41 @@ impl LlamaTokenDataArray {
             });
         }
     }
+
+    /// Sorts candidate tokens by their logits in descending order and calculate probabilities based on logits.
+    /// 
+    /// # Example 
+    /// 
+    /// ```rust
+    /// # use llama_cpp_2::token::data::LlamaTokenData;
+    /// # use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+    /// # use llama_cpp_2::token::LlamaToken;
+    ///
+    /// let lowest = LlamaTokenData::new(LlamaToken::new(0), 0.1, 0.0);
+    /// let middle = LlamaTokenData::new(LlamaToken::new(1), 0.2, 0.0);
+    /// let highest = LlamaTokenData::new(LlamaToken::new(2), 0.7, 0.0);
+    /// 
+    /// let candidates = vec![lowest, middle, highest];
+    ///
+    /// let mut candidates = LlamaTokenDataArray::from_iter(candidates, false);
+    /// candidates.sample_softmax(None);
+    ///
+    /// assert!(candidates.sorted);
+    /// assert_eq!(candidates.data[0].id(), highest.id());
+    /// assert_eq!(candidates.data[0].logit(), highest.logit());
+    /// assert!(candidates.data[0].p() > candidates.data[1].p());
+    /// assert_eq!(candidates.data[1].id(), middle.id());
+    /// assert_eq!(candidates.data[1].logit(), middle.logit());
+    /// assert!(candidates.data[1].p() > candidates.data[2].p());
+    /// assert_eq!(candidates.data[2].id(), lowest.id());
+    /// assert_eq!(candidates.data[2].logit(), lowest.logit());
+    /// ```
+    pub fn sample_softmax(&mut self, ctx: Option<&mut LlamaContext>) {
+        unsafe {
+            let ctx = ctx.map_or(ptr::null_mut(), |ctx| ctx.context.as_ptr());
+            self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_softmax(ctx, c_llama_token_data_array);
+            });
+        }
+    }
 }
