@@ -6,7 +6,7 @@ use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
 
 #[cfg(feature = "sampler")]
-mod sampler;
+pub mod sampler;
 
 impl LlamaContext<'_> {
     /// Accept a token into the grammar.
@@ -37,36 +37,18 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Modify [`token_data`] in place using temperature sampling.
-    ///
-    /// # Panics
-    ///
-    /// - [`temperature`] is not between 0.0 and 1.0
+    /// See [`LlamaTokenDataArray::sample_temp`]
     pub fn sample_temp(&mut self, token_data: &mut LlamaTokenDataArray, temperature: f32) {
-        assert!(
-            temperature >= 0.0,
-            "temperature must be positive (was {temperature})"
-        );
-        assert!(
-            temperature <= 1.0,
-            "temperature must be less than or equal to 1.0 (was {temperature})"
-        );
-        if temperature == 0.0 {
-            return;
-        }
-        let ctx: *mut llama_cpp_sys_2::llama_context = self.context.as_ptr();
-        unsafe {
-            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_temp(ctx, c_llama_token_data_array, temperature);
-            });
-        }
+        token_data.sample_temp(Some(self), temperature);
     }
 
-    /// Sample a token greedily.
+    /// Sample a token greedily. Note that this *does not* take into account anything that has modified the probabilities - it only looks at logits.
+    ///
+    /// Most of the time [`LlamaTokenDataArray::sample_softmax`] or [`LlamaTokenDataArray::sample_token`] should be used instead.
     ///
     /// # Panics
     ///
-    /// - [`token_data`] is empty
+    /// - if [`token_data`] is empty
     #[must_use]
     pub fn sample_token_greedy(&mut self, mut token_data: LlamaTokenDataArray) -> LlamaToken {
         assert!(!token_data.data.is_empty(), "no tokens");
@@ -87,34 +69,29 @@ impl LlamaContext<'_> {
         LlamaToken(token)
     }
 
-    /// Tail Free Sampling described in [Tail-Free-Sampling](https://www.trentonbricken.com/Tail-Free-Sampling/).
-    pub fn sample_tail_free(&mut self, token_data: &mut LlamaTokenDataArray, z: f32, min_keep: usize) {
-        let ctx = self.context.as_ptr();
-        unsafe {
-            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_tail_free(ctx, c_llama_token_data_array, z, min_keep);
-            });
-        }
+    /// See [`LlamaTokenDataArray::sample_tail_free`]
+    pub fn sample_tail_free(
+        &mut self,
+        token_data: &mut LlamaTokenDataArray,
+        z: f32,
+        min_keep: usize,
+    ) {
+        token_data.sample_tail_free(Some(self), z, min_keep);
     }
 
-    /// Locally Typical Sampling implementation described in the [paper](https://arxiv.org/abs/2202.00666).
-    pub fn sample_typical(&mut self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
-        let ctx = self.context.as_ptr();
-        unsafe {
-            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_typical(ctx, c_llama_token_data_array, p, min_keep);
-            });
-        }
+    /// See [`LlamaTokenDataArray::sample_typical`]
+    pub fn sample_typical(
+        &mut self,
+        token_data: &mut LlamaTokenDataArray,
+        p: f32,
+        min_keep: usize,
+    ) {
+        token_data.sample_typical(Some(self), p, min_keep);
     }
 
-    /// Nucleus sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)"
+    /// See [`LlamaTokenDataArray::sample_top_p`]
     pub fn sample_top_p(&mut self, token_data: &mut LlamaTokenDataArray, p: f32, min_keep: usize) {
-        let ctx = self.context.as_ptr();
-        unsafe {
-            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_top_p(ctx, c_llama_token_data_array, p, min_keep);
-            });
-        }
+        token_data.sample_top_p(Some(self), p, min_keep);
     }
 
     /// Minimum P sampling as described in [#3841](https://github.com/ggerganov/llama.cpp/pull/3841)
@@ -132,14 +109,9 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Top-K sampling described in academic paper [The Curious Case of Neural Text Degeneration](https://arxiv.org/abs/1904.09751)
+    /// See [`LlamaTokenDataArray::sample_top_k`]
     pub fn sample_top_k(&mut self, token_data: &mut LlamaTokenDataArray, k: i32, min_keep: usize) {
-        let ctx = self.context.as_ptr();
-        unsafe {
-            token_data.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sample_top_k(ctx, c_llama_token_data_array, k, min_keep);
-            });
-        }
+        token_data.sample_top_k(Some(self), k, min_keep);
     }
 
     /// See [`LlamaTokenDataArray::sample_softmax`]
