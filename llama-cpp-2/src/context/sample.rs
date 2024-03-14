@@ -48,7 +48,7 @@ impl LlamaContext<'_> {
     ///
     /// # Panics
     ///
-    /// - if [`token_data`] is empty
+    /// - if `token_data` is empty
     #[must_use]
     pub fn sample_token_greedy(&mut self, mut token_data: LlamaTokenDataArray) -> LlamaToken {
         assert!(!token_data.data.is_empty(), "no tokens");

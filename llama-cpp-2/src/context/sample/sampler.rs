@@ -40,7 +40,7 @@ pub type SampleFinalizer<'a> = Box<dyn FnMut(LlamaTokenDataArray) -> Vec<LlamaTo
 
 /// A series of sampling steps that will produce a vector of token data.
 ///
-/// [`a`] is the lifetime of captured references in the steps and finalizer.
+/// `a` is the lifetime of captured references in the steps and finalizer.
 #[non_exhaustive]
 pub struct Sampler<'a> {
     /// The steps to take when sampling.
