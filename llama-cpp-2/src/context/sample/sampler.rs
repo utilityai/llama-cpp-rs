@@ -1,6 +1,10 @@
-//! Create a sampler struct to encapsulate the sampling process.
+//! Create a sampler struct to encapsulate the sampling process. This allows passing all the possible
+//! sampling parameters around as a single struct, and also allow late binding of expensive context
+//! like [`crate::context::LlamaContext`] or token history to the sampler.
 //!
 //! # Example
+//! 
+//! **Llama.cpp default sampler**
 //!
 //! ```rust
 //! use llama_cpp_2::context::sample::sampler::{Sampler, SampleStep};
@@ -8,6 +12,7 @@
 //! use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 //! use llama_cpp_2::token::LlamaToken;
 //!
+//! // Sample a token greedily and add to the history.
 //! let mut finalizer = &|mut canidates: LlamaTokenDataArray, history: &mut Vec<LlamaToken>| {
 //!     canidates.sample_softmax(None);
 //!     let token = canidates.data[0];
@@ -26,8 +31,9 @@
 //! sampler.push_step(&|c, _| c.sample_min_p(None, 0.05, 1));
 //! sampler.push_step(&|c, _| c.sample_temp(None, 0.5));
 //!
+//! // random candidates
 //! let candidates = LlamaTokenDataArray::from_iter((0..4).map(|i| LlamaTokenData::new(LlamaToken::new(i), i as f32 / 6.0, 0.0)), false);
-//! 
+//!
 //! for _ in 0..10 {
 //!    let tokens = sampler.sample(&mut history, candidates.clone());
 //!    assert_eq!(tokens.len(), 1);
@@ -43,14 +49,13 @@ use std::fmt::{Debug, Formatter};
 /// A single step to sample tokens from the remaining candidates.
 pub type SampleStep<C> = dyn Fn(&mut LlamaTokenDataArray, &mut C);
 
-
-/// The final step to select one or more tokens from the remaining candidates.
+/// The final step to select tokens from the remaining candidates.
 pub type SampleFinalizer<C> = dyn Fn(LlamaTokenDataArray, &mut C) -> Vec<LlamaTokenData>;
 
 /// A series of sampling steps that will produce a vector of token data.
 ///
-/// `a` is the lifetime of captured references in the steps and finalizer.
-#[non_exhaustive]
+/// `C` is dynamic context that will be passed to the sampling functions. I expect `C` will
+/// often be [`()`], [`crate::context::LlamaContext`] or a token history (or some combination of these).
 pub struct Sampler<'a, C> {
     /// The steps to take when sampling.
     pub steps: Vec<&'a SampleStep<C>>,
@@ -58,8 +63,7 @@ pub struct Sampler<'a, C> {
     pub finalizer: &'a SampleFinalizer<C>,
 }
 
-impl<T> Debug for Sampler<'_, T>
-{
+impl<T> Debug for Sampler<'_, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Sampler")
             .field(
@@ -93,7 +97,11 @@ impl<'a, T> Sampler<'a, T> {
 
     /// Sample a token from the given candidates.
     #[must_use]
-    pub fn sample(&mut self, context: &mut T, mut candidates: LlamaTokenDataArray) -> Vec<LlamaTokenData> {
+    pub fn sample(
+        &mut self,
+        context: &mut T,
+        mut candidates: LlamaTokenDataArray,
+    ) -> Vec<LlamaTokenData> {
         for step in &self.steps {
             step(&mut candidates, context);
         }
