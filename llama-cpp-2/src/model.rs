@@ -201,7 +201,7 @@ impl LlamaModel {
     ///
     /// # Panics
     ///
-    /// - if [`buffer_size`] does not fit into a [`c_int`].
+    /// - if `buffer_size` does not fit into a [`c_int`].
     /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
     pub fn token_to_str_with_size(
         &self,

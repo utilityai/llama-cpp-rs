@@ -34,7 +34,7 @@ jobs:
       - name: Fmt
         run: cargo fmt
       - name: Test
-        run: cargo test
+        run: cargo test --features sampler
   arm64:
     name: Check that it builds on various targets
     runs-on: ubuntu-latest
@@ -67,7 +67,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build
+        run: cargo build --features sampler
   windows:
     name: Check that it builds on windows
     runs-on: windows-latest
@@ -79,4 +79,4 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build
+        run: cargo build --features sampler

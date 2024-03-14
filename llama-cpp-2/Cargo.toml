@@ -28,6 +28,7 @@ harness = false
 
 [features]
 cublas = ["llama-cpp-sys-2/cublas"]
+sampler = []
 
 [lints]
 workspace = true
