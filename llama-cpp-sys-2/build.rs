@@ -155,9 +155,13 @@ fn main() {
     llama_cpp
         .define("_XOPEN_SOURCE", Some("600"))
         .include("llama.cpp")
+        .include("llama.cpp/common")
+        .include("llama.cpp/examples/llava")
         .std("c++11")
         .file("llama.cpp/llama.cpp")
-        .file("llama.cpp/unicode.cpp");
+        .file("llama.cpp/unicode.cpp")
+        .file("llama.cpp/examples/llava/clip.cpp")
+        .file("llama.cpp/examples/llava/llava.cpp");
 
     // Remove debug log output from `llama.cpp`
     let is_release = env::var("PROFILE").unwrap() == "release";
@@ -189,6 +193,11 @@ fn main() {
 
     let bindings = bindgen::builder()
         .header(header)
+        .header("llama.cpp/examples/llava/clip.h")
+        .header("llama.cpp/examples/llava/llava.h")
+        .clang_arg(format!("-I{}", "llama.cpp"))
+        .clang_arg(format!("-I{}", "llama.cpp/common"))
+        .clang_arg(format!("-I{}", "llama.cpp/examples/llava"))
         .derive_partialeq(true)
         .no_debug("llama_grammar_element")
         .prepend_enum_name(false)
