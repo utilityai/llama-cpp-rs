@@ -41,6 +41,9 @@ pub enum LLamaCppError {
     /// is idempotent.
     #[error("BackendAlreadyInitialized")]
     BackendAlreadyInitialized,
+    /// There was an error while get the chat template from model.
+    #[error("{0}")]
+    ChatTemplateError(#[from] ChatTemplateError),
     /// There was an error while decoding a batch.
     #[error("{0}")]
     DecodeError(#[from] DecodeError),
@@ -56,6 +59,13 @@ pub enum LLamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
+}
+
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum ChatTemplateError {
+    /// gguf has no chat template
+    #[error("model has no chat template in gguf")]
+    NullReturn,
 }
 
 /// Failed to Load context

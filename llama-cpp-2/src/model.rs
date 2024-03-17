@@ -10,7 +10,10 @@ use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
-use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
+use crate::{
+    ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError, StringToTokenError,
+    TokenToStringError,
+};
 
 pub mod params;
 
@@ -272,6 +275,35 @@ impl LlamaModel {
     #[must_use]
     pub fn n_embd(&self) -> c_int {
         unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
+    }
+
+    /// get chat template from model
+    /// let chat_template = model.get_chat_template()?;
+    ///
+    pub fn get_chat_template(&self) -> Result<String, ChatTemplateError> {
+        let chat_template: String = unsafe {
+            // longest known template is about 1200 bytes from llama.cpp
+            let chat_temp = match CString::new(Vec::<u8>::with_capacity(2048)) {
+                Ok(c) => c,
+                Err(_) => return Err(ChatTemplateError::NullReturn),
+            };
+            let chat_ptr = chat_temp.into_raw();
+            let chat_name = match CString::new("tokenizer.chat_template") {
+                Ok(c) => c,
+                Err(_) => return Err(ChatTemplateError::NullReturn),
+            };
+            llama_cpp_sys_2::llama_model_meta_val_str(
+                self.model.as_ptr(),
+                chat_name.as_ptr(),
+                chat_ptr,
+                250,
+            );
+            match CString::from_raw(chat_ptr).to_str() {
+                Ok(s) => s.to_string(),
+                Err(_) => return Err(ChatTemplateError::NullReturn),
+            }
+        };
+        Ok(chat_template)
     }
 
     /// loads a model from a file.
