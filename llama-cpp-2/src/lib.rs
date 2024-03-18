@@ -30,6 +30,7 @@ pub mod model;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+pub mod llava;
 
 /// A failable result from a llama.cpp function.
 pub type Result<T> = std::result::Result<T, LLamaCppError>;
