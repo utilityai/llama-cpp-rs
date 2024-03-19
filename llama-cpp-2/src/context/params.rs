@@ -161,7 +161,7 @@ impl LlamaContextParams {
     /// ```rust
     /// use llama_cpp_2::context::params::LlamaContextParams;
     /// let params = LlamaContextParams::default();
-    /// assert_eq!(params.n_batch(), 512);
+    /// assert_eq!(params.n_batch(), 2048);
     /// ```
     #[must_use]
     pub fn n_batch(&self) -> u32 {

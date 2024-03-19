@@ -61,11 +61,15 @@ pub enum LLamaCppError {
     EmbeddingError(#[from] EmbeddingsError),
 }
 
+/// There was an error while getting the chat template from a model.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ChatTemplateError {
     /// gguf has no chat template
-    #[error("model has no chat template in gguf")]
-    NullReturn,
+    #[error("the model has no meta val - returned code {0}")]
+    MissingTemplate(i32),
+    /// The chat template was not valid utf8.
+    #[error(transparent)]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 /// Failed to Load context

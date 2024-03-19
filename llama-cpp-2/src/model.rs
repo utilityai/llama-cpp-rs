@@ -277,32 +277,35 @@ impl LlamaModel {
         unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
     }
 
-    /// get chat template from model
-    /// let chat_template = model.get_chat_template()?;
+    /// Get chat template from model.
     ///
-    pub fn get_chat_template(&self) -> Result<String, ChatTemplateError> {
+    /// # Errors
+    /// 
+    /// * If the model has no chat template
+    /// * If the chat template is not a valid [`CString`].
+    #[allow(clippy::missing_panics_doc)] // we statically know this will not panic as
+    pub fn get_chat_template(&self, buf_size: usize) -> Result<String, ChatTemplateError> {
+        
+        // longest known template is about 1200 bytes from llama.cpp
+        let chat_temp = CString::new(vec![b'*'; buf_size]).expect("no null");
+        let chat_ptr = chat_temp.into_raw();
+        let chat_name = CString::new("tokenizer.chat_template").expect("no null bytes");
+        
         let chat_template: String = unsafe {
-            // longest known template is about 1200 bytes from llama.cpp
-            let chat_temp = match CString::new(Vec::<u8>::with_capacity(2048)) {
-                Ok(c) => c,
-                Err(_) => return Err(ChatTemplateError::NullReturn),
-            };
-            let chat_ptr = chat_temp.into_raw();
-            let chat_name = match CString::new("tokenizer.chat_template") {
-                Ok(c) => c,
-                Err(_) => return Err(ChatTemplateError::NullReturn),
-            };
-            llama_cpp_sys_2::llama_model_meta_val_str(
+            let ret = llama_cpp_sys_2::llama_model_meta_val_str(
                 self.model.as_ptr(),
                 chat_name.as_ptr(),
                 chat_ptr,
-                250,
+                buf_size,
             );
-            match CString::from_raw(chat_ptr).to_str() {
-                Ok(s) => s.to_string(),
-                Err(_) => return Err(ChatTemplateError::NullReturn),
+            if ret < 0 {
+                return Err(ChatTemplateError::MissingTemplate(ret));
             }
+            let template = CString::from_raw(chat_ptr).to_str()?.to_string();
+            debug_assert_eq!(usize::try_from(ret).unwrap(), template.len(), "llama.cpp guarantees that the returned int {ret} is the length of the string {} but that was not the case", template.len());
+            template
         };
+        
         Ok(chat_template)
     }
 
