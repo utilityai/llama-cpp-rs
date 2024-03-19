@@ -22,8 +22,8 @@ impl LlamaContext<'_> {
     ///
     /// * `src` - The sequence id to copy the cache from.
     /// * `dest` - The sequence id to copy the cache to.
-    /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is copied up to [p1].
-    /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is copied starting from [p0].
+    /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is copied up to `p1`.
+    /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is copied starting from `p0`.
     pub fn copy_kv_cache_seq(&mut self, src: i32, dest: i32, p0: Option<u16>, p1: Option<u16>) {
         let p0 = p0.map_or(-1, i32::from);
         let p1 = p1.map_or(-1, i32::from);
@@ -37,8 +37,8 @@ impl LlamaContext<'_> {
     /// # Parameters
     ///
     /// * `src` - The sequence id to clear the cache for.
-    /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is cleared up to [p1].
-    /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is cleared from [p0].
+    /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is cleared up to `p1`.
+    /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is cleared from `p0`.
     pub fn clear_kv_cache_seq(&mut self, src: i32, p0: Option<u16>, p1: Option<u16>) {
         let p0 = p0.map_or(-1, i32::from);
         let p1 = p1.map_or(-1, i32::from);
@@ -68,7 +68,7 @@ impl LlamaContext<'_> {
     }
 
     #[allow(clippy::doc_markdown)]
-    /// Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in [p0, p1)
+    /// Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in `[p0, p1)`
     /// If the KV cache is RoPEd, the KV data is updated accordingly:
     ///   - lazily on next [`LlamaContext::decode`]
     ///   - explicitly with [`Self::kv_cache_update`]
@@ -76,8 +76,8 @@ impl LlamaContext<'_> {
     /// # Parameters
     ///
     /// * `seq_id` - The sequence id to update
-    /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to [p1].
-    /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from [p0].
+    /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to `p1`.
+    /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from `p0`.
     /// * `delta` - The relative position to add to the tokens
     pub fn kv_cache_seq_add(&mut self, seq_id: i32, p0: Option<u16>, p1: Option<u16>, delta: i32) {
         let p0 = p0.map_or(-1, i32::from);
@@ -95,8 +95,8 @@ impl LlamaContext<'_> {
     /// # Parameters
     ///
     /// * `seq_id` - The sequence id to update
-    /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to [p1].
-    /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from [p0].
+    /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to `p1`.
+    /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from `p0`.
     /// * `d` - The factor to divide the positions by
     pub fn kv_cache_seq_div(
         &mut self,
@@ -238,11 +238,11 @@ impl<'a> KVCacheView<'a> {
         unsafe {
             std::slice::from_raw_parts(
                 self.view.cells_sequences,
-                usize::try_from(self.view.n_cells * self.view.n_max_seq)
+                usize::try_from(self.view.n_cells * self.view.n_seq_max)
                     .expect("failed to fit n_cells * n_max_seq into usize"),
             )
         }
-        .chunks(usize::try_from(self.view.n_max_seq).expect("failed to fit n_max_seq into usize"))
+        .chunks(usize::try_from(self.view.n_seq_max).expect("failed to fit n_max_seq into usize"))
     }
 }
 

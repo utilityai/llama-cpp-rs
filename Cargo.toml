@@ -17,8 +17,8 @@ criterion = "0.5.1"
 pprof = "0.13.0"
 bindgen = "0.69.4"
 cc = "1.0.90"
-anyhow = "1.0.80"
-clap = "4.5.2"
+anyhow = "1.0.81"
+clap = "4.5.3"
 
 [workspace.lints.rust]
 missing_docs = { level = "warn" }

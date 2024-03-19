@@ -10,7 +10,10 @@ use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
-use crate::{LlamaContextLoadError, LlamaModelLoadError, StringToTokenError, TokenToStringError};
+use crate::{
+    ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError, StringToTokenError,
+    TokenToStringError,
+};
 
 pub mod params;
 
@@ -201,7 +204,7 @@ impl LlamaModel {
     ///
     /// # Panics
     ///
-    /// - if [`buffer_size`] does not fit into a [`c_int`].
+    /// - if `buffer_size` does not fit into a [`c_int`].
     /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
     pub fn token_to_str_with_size(
         &self,
@@ -272,6 +275,38 @@ impl LlamaModel {
     #[must_use]
     pub fn n_embd(&self) -> c_int {
         unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
+    }
+
+    /// Get chat template from model.
+    ///
+    /// # Errors
+    /// 
+    /// * If the model has no chat template
+    /// * If the chat template is not a valid [`CString`].
+    #[allow(clippy::missing_panics_doc)] // we statically know this will not panic as
+    pub fn get_chat_template(&self, buf_size: usize) -> Result<String, ChatTemplateError> {
+        
+        // longest known template is about 1200 bytes from llama.cpp
+        let chat_temp = CString::new(vec![b'*'; buf_size]).expect("no null");
+        let chat_ptr = chat_temp.into_raw();
+        let chat_name = CString::new("tokenizer.chat_template").expect("no null bytes");
+        
+        let chat_template: String = unsafe {
+            let ret = llama_cpp_sys_2::llama_model_meta_val_str(
+                self.model.as_ptr(),
+                chat_name.as_ptr(),
+                chat_ptr,
+                buf_size,
+            );
+            if ret < 0 {
+                return Err(ChatTemplateError::MissingTemplate(ret));
+            }
+            let template = CString::from_raw(chat_ptr).to_str()?.to_string();
+            debug_assert_eq!(usize::try_from(ret).unwrap(), template.len(), "llama.cpp guarantees that the returned int {ret} is the length of the string {} but that was not the case", template.len());
+            template
+        };
+        
+        Ok(chat_template)
     }
 
     /// loads a model from a file.

@@ -12,6 +12,7 @@
 //! # Feature Flags
 //!
 //! - `cublas` enables CUDA gpu support.
+//! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
 use std::ffi::NulError;
 use std::fmt::Debug;
 use std::num::NonZeroI32;
@@ -40,6 +41,9 @@ pub enum LLamaCppError {
     /// is idempotent.
     #[error("BackendAlreadyInitialized")]
     BackendAlreadyInitialized,
+    /// There was an error while get the chat template from model.
+    #[error("{0}")]
+    ChatTemplateError(#[from] ChatTemplateError),
     /// There was an error while decoding a batch.
     #[error("{0}")]
     DecodeError(#[from] DecodeError),
@@ -55,6 +59,17 @@ pub enum LLamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
+}
+
+/// There was an error while getting the chat template from a model.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum ChatTemplateError {
+    /// gguf has no chat template
+    #[error("the model has no meta val - returned code {0}")]
+    MissingTemplate(i32),
+    /// The chat template was not valid utf8.
+    #[error(transparent)]
+    Utf8Error(#[from] std::str::Utf8Error),
 }
 
 /// Failed to Load context

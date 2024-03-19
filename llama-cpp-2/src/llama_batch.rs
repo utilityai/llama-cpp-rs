@@ -30,7 +30,7 @@ impl LlamaBatch {
         self.initialized_logits.clear();
     }
 
-    /// add a token to the batch for sequences [`seq_ids`] at position [pos]. If [logits] is true, the
+    /// add a token to the batch for sequences `seq_ids` at position `pos`. If `logits` is true, the
     /// token will be initialized and can be read from after the next decode.
     ///
     /// # Panics
@@ -91,7 +91,7 @@ impl LlamaBatch {
         Ok(())
     }
 
-    /// Add a sequence of tokens to the batch for the given sequence id. If [`logits_all`] is true, the
+    /// Add a sequence of tokens to the batch for the given sequence id. If `logits_all` is true, the
     /// tokens will be initialized and can be read from after the next decode.
     ///
     /// Either way the last token in the sequence will have its logits set to `true`.

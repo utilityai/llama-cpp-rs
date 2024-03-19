@@ -9,9 +9,6 @@ use std::ptr::null;
 pub mod kv_overrides;
 
 /// A safe wrapper around `llama_model_params`.
-///
-/// [`T`] is the type of the backing storage for the key-value overrides. Generally it can be left to [`()`] which will
-/// make your life with the borrow checker much easier.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModelParams {
     pub(crate) params: llama_cpp_sys_2::llama_model_params,

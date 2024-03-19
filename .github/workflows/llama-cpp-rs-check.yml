@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           submodules: recursive
       - name: Install Compile Deps
@@ -34,7 +34,7 @@ jobs:
       - name: Fmt
         run: cargo fmt
       - name: Test
-        run: cargo test
+        run: cargo test --features sampler
   arm64:
     name: Check that it builds on various targets
     runs-on: ubuntu-latest
@@ -43,13 +43,13 @@ jobs:
         target: [ linux/arm64, linux/amd64 ]
     steps:
       - name: checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
       - name: Setup QEMU
         uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3
         with:
           platforms: arm64,amd64
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@0d103c3126aa41d772a8362f6aa67afac040f80c
+        uses: docker/setup-buildx-action@2b51285047da1547ffb1b2203d8be4c0af6b1f20
       - name: Build
         uses: docker/build-push-action@v5
         with:
@@ -61,24 +61,24 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           submodules: recursive
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build
+        run: cargo build --features sampler
   windows:
     name: Check that it builds on windows
     runs-on: windows-latest
     steps:
       - name: checkout
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633
         with:
           submodules: recursive
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build
+        run: cargo build --features sampler
       - name: Test
-        run: cargo test
+        run: cargo test --features sampler

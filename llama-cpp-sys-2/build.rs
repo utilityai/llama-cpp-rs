@@ -219,7 +219,7 @@ fn metal_hack(build: &mut cc::Build) {
         let ggml_metal =
             std::fs::read_to_string(GGML_METAL_PATH).expect("Could not read ggml-metal.m");
 
-        let needle = r#"NSString * src = [NSString stringWithContentsOfFile:sourcePath encoding:NSUTF8StringEncoding error:&error];"#;
+        let needle = r#"NSString * src = [NSString stringWithContentsOfFile:path_source encoding:NSUTF8StringEncoding error:&error];"#;
         if !ggml_metal.contains(needle) {
             panic!("ggml-metal.m does not contain the needle to be replaced; the patching logic needs to be reinvestigated. Contact a `llama-cpp-sys-2` developer!");
         }
