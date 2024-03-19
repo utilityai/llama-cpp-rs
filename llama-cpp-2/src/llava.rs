@@ -1,14 +1,17 @@
 //! safe wrapper for multimodel model `llava`.
 
-mod clip;
+
 
 use std::{
     ffi::{c_int, CString},
     path::Path,
     ptr::NonNull,
 };
+mod clip;
+mod llava_sampling;
 
 pub use clip::*;
+pub use llava_sampling::*;
 
 use crate::{context::LlamaContext, LlamaModelLoadError};
 

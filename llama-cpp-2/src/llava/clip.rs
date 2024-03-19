@@ -1,4 +1,5 @@
 //! safe wrapper for multimodel model llava
+//! CLIP(Contrastive Language–Image Pre-training)
 
 use std::{
     ffi::{c_int, CString},
@@ -20,7 +21,6 @@ impl ClipCtx {
     /// load clip context from a path
     #[tracing::instrument(skip_all, fields(params))]
     pub fn load_from_file(
-        _: &LlamaBackend,
         path: impl AsRef<Path>,
         verbosity: c_int,
     ) -> Result<Self, LlamaModelLoadError> {
@@ -41,7 +41,6 @@ impl ClipCtx {
     /// load CPU-only clip context from a path
     #[tracing::instrument(skip_all, fields(params))]
     pub fn load_cpu_from_file(
-        _: &LlamaBackend,
         path: impl AsRef<Path>,
         verbosity: c_int,
     ) -> Result<Self, LlamaModelLoadError> {

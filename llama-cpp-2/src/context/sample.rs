@@ -8,7 +8,7 @@ use crate::token::LlamaToken;
 #[cfg(feature = "sampler")]
 pub mod sampler;
 
-impl LlamaContext<'_> {
+impl LlamaContext {
     /// Accept a token into the grammar.
     pub fn grammar_accept_token(&mut self, grammar: &mut LlamaGrammar, token: LlamaToken) {
         unsafe {

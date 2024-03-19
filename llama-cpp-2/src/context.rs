@@ -4,6 +4,7 @@ use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
 use std::ptr::NonNull;
 use std::slice;
+use std::sync::Arc;
 
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
@@ -19,15 +20,15 @@ pub mod session;
 
 /// Safe wrapper around `llama_context`.
 #[allow(clippy::module_name_repetitions)]
-pub struct LlamaContext<'a> {
+pub struct LlamaContext {
     pub(crate) context: NonNull<llama_cpp_sys_2::llama_context>,
     /// a reference to the contexts model.
-    pub model: &'a LlamaModel,
+    pub model: Arc<LlamaModel>,
     initialized_logits: Vec<i32>,
     embeddings_enabled: bool,
 }
 
-impl Debug for LlamaContext<'_> {
+impl Debug for LlamaContext {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlamaContext")
             .field("context", &self.context)
@@ -35,15 +36,15 @@ impl Debug for LlamaContext<'_> {
     }
 }
 
-impl<'model> LlamaContext<'model> {
+impl LlamaContext {
     pub(crate) fn new(
-        llama_model: &'model LlamaModel,
+        llama_model: &Arc<LlamaModel>,
         llama_context: NonNull<llama_cpp_sys_2::llama_context>,
         embeddings_enabled: bool,
     ) -> Self {
         Self {
             context: llama_context,
-            model: llama_model,
+            model: llama_model.clone(),
             initialized_logits: Vec::new(),
             embeddings_enabled,
         }
@@ -205,7 +206,7 @@ impl<'model> LlamaContext<'model> {
     }
 }
 
-impl Drop for LlamaContext<'_> {
+impl Drop for LlamaContext {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::llama_free(self.context.as_ptr()) }
     }

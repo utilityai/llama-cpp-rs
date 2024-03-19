@@ -3,6 +3,7 @@ use std::ffi::CString;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
+use std::sync::Arc;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
@@ -319,7 +320,7 @@ impl LlamaModel {
         _: &LlamaBackend,
         path: impl AsRef<Path>,
         params: &LlamaModelParams,
-    ) -> Result<Self, LlamaModelLoadError> {
+    ) -> Result<Arc<Self>, LlamaModelLoadError> {
         let path = path.as_ref();
         debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
         let path = path
@@ -333,7 +334,7 @@ impl LlamaModel {
         let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 
         tracing::debug!(?path, "Loaded model");
-        Ok(LlamaModel { model })
+        Ok(Arc::new(LlamaModel { model }))
     }
 
     /// Create a new context from this model.
@@ -344,7 +345,7 @@ impl LlamaModel {
     // we intentionally do not derive Copy on `LlamaContextParams` to allow llama.cpp to change the type to be non-trivially copyable.
     #[allow(clippy::needless_pass_by_value)]
     pub fn new_context(
-        &self,
+        self: &Arc<LlamaModel>,
         _: &LlamaBackend,
         params: LlamaContextParams,
     ) -> Result<LlamaContext, LlamaContextLoadError> {

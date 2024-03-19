@@ -4,7 +4,7 @@ use crate::context::LlamaContext;
 use std::ffi::c_int;
 use std::num::NonZeroU8;
 
-impl LlamaContext<'_> {
+impl LlamaContext {
     /// Copy the cache from one sequence to another.
     ///
     /// # Parameters
@@ -167,7 +167,7 @@ pub struct KVCacheViewCell {
 /// An updateable view of the KV cache. (use only for debugging purposes)
 #[derive(Debug)]
 pub struct KVCacheView<'a> {
-    ctx: &'a LlamaContext<'a>,
+    ctx: &'a LlamaContext,
     view: llama_cpp_sys_2::llama_kv_cache_view,
 }
 

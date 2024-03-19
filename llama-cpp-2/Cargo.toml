@@ -13,6 +13,15 @@ llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.44" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+hf-hub = { workspace = true }
+criterion = { workspace = true }
+pprof = { workspace = true, features = ["criterion", "flamegraph"] }
+
+anyhow = { workspace = true }
+clap = { workspace = true , features = ["derive"] }
+
+
 [features]
 cublas = ["llama-cpp-sys-2/cublas"]
 sampler = []

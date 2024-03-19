@@ -134,6 +134,9 @@ fn main() {
 
         metal_hack(&mut ggml);
         ggml.include("./llama.cpp/ggml-metal.h");
+
+        ggml.flag("-Wno-unused-function");
+        llama_cpp.flag("-Wno-unused-function");
     }
 
     if cfg!(target_os = "dragonfly") {
@@ -160,6 +163,10 @@ fn main() {
         .std("c++11")
         .file("llama.cpp/llama.cpp")
         .file("llama.cpp/unicode.cpp")
+        .file("llama.cpp/common/common.cpp")
+        .file("llama.cpp/common/grammar-parser.cpp")
+        .file("llama.cpp/common/sampling.cpp")
+        .file("src/llava_sampling.cpp")
         .file("llama.cpp/examples/llava/clip.cpp")
         .file("llama.cpp/examples/llava/llava.cpp");
 
@@ -190,9 +197,11 @@ fn main() {
     let header = "llama.cpp/llama.h";
 
     println!("cargo:rerun-if-changed={header}");
+    println!("cargo:rerun-if-changed=src/llava_sampling.h");
 
     let bindings = bindgen::builder()
         .header(header)
+        .header("src/llava_sampling.h")
         .header("llama.cpp/examples/llava/clip.h")
         .header("llama.cpp/examples/llava/llava.h")
         .clang_arg(format!("-I{}", "llama.cpp"))
