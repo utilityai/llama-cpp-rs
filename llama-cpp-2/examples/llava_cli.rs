@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::{ffi::CString, pin::pin};
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -25,7 +25,7 @@ use llama_cpp_2::{
     },
 };
 
-mod common;
+// mod common;
 
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -82,7 +82,7 @@ fn parse_key_val(s: &str) -> Result<(String, ParamOverrideValue)> {
 struct LlavaContext {
     ctx_clip: ClipCtx,
     ctx_llama: LlamaContext,
-    model: Arc<LlamaModel>,
+    _model: Arc<LlamaModel>,
 }
 
 fn llava_init<'a>(args: &'a Args) -> Result<LlavaContext> {
@@ -126,7 +126,7 @@ fn llava_init<'a>(args: &'a Args) -> Result<LlavaContext> {
     Ok(LlavaContext {
         ctx_clip,
         ctx_llama: ctx_llama,
-        model: llama_model,
+        _model: llama_model,
     })
 }
 
@@ -139,7 +139,7 @@ fn load_image(ctx_llava: &mut LlavaContext, args: &Args) -> Result<LlavaImageEmb
 fn process_prompt(
     ctx_llava: &mut LlavaContext,
     image_embed: &LlavaImageEmbed,
-    args: &Args,
+    _args: &Args,
     prompt: &str,
 ) -> Result<()> {
     let system_prompt = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions.\nUSER:";
@@ -172,9 +172,9 @@ fn process_prompt(
     let params_sampling = LlamaSamplingParams::default()?;
     let mut ctx_sampling = LlamaSamplingContext::init(&params_sampling)?;
     let mut response = "".to_owned();
-    const max_tgt_len: c_int = 256;
+    let max_tgt_len: c_int = 256;
 
-    for i in 0..max_tgt_len {
+    for _i in 0..max_tgt_len {
         let tmp = llava_sample(&mut ctx_sampling, &mut ctx_llava.ctx_llama, &mut n_past);
         response.push_str(&tmp);
         if tmp == "</s>" {
