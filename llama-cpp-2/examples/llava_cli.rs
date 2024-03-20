@@ -1,6 +1,7 @@
 //! llava-cli demo
 
 use std::ffi::c_int;
+use std::io::Write;
 use std::num::NonZeroU32;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -192,7 +193,11 @@ fn process_prompt(
             // Yi-VL behavior
             break;
         }
+        
         print!("{}", tmp);
+        std::io::stdout().flush()?;
+
+
         if response.contains("<|im_end|>") {
             // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
             break;
