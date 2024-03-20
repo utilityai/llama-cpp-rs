@@ -130,7 +130,7 @@ fn main() {
         llama_cpp.define("GGML_USE_ACCELERATE", None);
         llama_cpp.define("ACCELERATE_NEW_LAPACK", None);
         llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
-        println!("cargo:rustc-link-arg=framework=Accelerate");
+        println!("cargo:rustc-link-lib=framework=Accelerate");
 
         metal_hack(&mut ggml);
         ggml.include("./llama.cpp/ggml-metal.h");
@@ -156,7 +156,8 @@ fn main() {
         .define("_XOPEN_SOURCE", Some("600"))
         .include("llama.cpp")
         .std("c++11")
-        .file("llama.cpp/llama.cpp");
+        .file("llama.cpp/llama.cpp")
+        .file("llama.cpp/unicode.cpp");
 
     // Remove debug log output from `llama.cpp`
     let is_release = env::var("PROFILE").unwrap() == "release";
@@ -199,6 +200,9 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("failed to write bindings to file");
+    let llama_cpp_dir = PathBuf::from("llama.cpp").canonicalize().unwrap();
+    println!("cargo:INCLUDE={}", llama_cpp_dir.to_str().unwrap());
+    println!("cargo:OUT_DIR={}", out_path.to_str().unwrap());
 }
 
 // courtesy of https://github.com/rustformers/llm
