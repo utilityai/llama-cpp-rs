@@ -161,7 +161,6 @@ fn process_prompt(
         AddBos::Always,
     )?;
 
-
     // eval image
     // eprintln!("evaluating image...");
     image_embed.eval(&mut ctx_llava.ctx_llama, n_batch, &mut n_past);
@@ -193,17 +192,16 @@ fn process_prompt(
             // Yi-VL behavior
             break;
         }
-        
+
         print!("{}", tmp);
         std::io::stdout().flush()?;
-
 
         if response.contains("<|im_end|>") {
             // Yi-34B llava-1.6 - for some reason those decode not as the correct token (tokenizer works)
             break;
         }
         if response.contains("<|im_start|>") {
-            // // Yi-34B llava-1.6
+            // Yi-34B llava-1.6
             break;
         }
         if response.contains("USER:") {
