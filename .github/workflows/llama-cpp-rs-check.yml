@@ -80,3 +80,5 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Build
         run: cargo build --features sampler
+      - name: Test
+        run: cargo test --features sampler
