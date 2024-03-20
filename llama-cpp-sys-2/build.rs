@@ -130,7 +130,7 @@ fn main() {
         llama_cpp.define("GGML_USE_ACCELERATE", None);
         llama_cpp.define("ACCELERATE_NEW_LAPACK", None);
         llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
-        println!("cargo:rustc-link-arg=framework=Accelerate");
+        println!("cargo:rustc-link-lib=framework=Accelerate");
 
         metal_hack(&mut ggml);
         ggml.include("./llama.cpp/ggml-metal.h");
