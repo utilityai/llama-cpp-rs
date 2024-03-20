@@ -156,7 +156,8 @@ fn main() {
         .define("_XOPEN_SOURCE", Some("600"))
         .include("llama.cpp")
         .std("c++11")
-        .file("llama.cpp/llama.cpp");
+        .file("llama.cpp/llama.cpp")
+        .file("llama.cpp/unicode.cpp");
 
     // Remove debug log output from `llama.cpp`
     let is_release = env::var("PROFILE").unwrap() == "release";
