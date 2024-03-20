@@ -32,6 +32,7 @@ include = [
     "/llama.cpp/llama.cpp",
     "/llama.cpp/llama.h",
     "/llama.cpp/unicode.h",
+    "/llama.cpp/unicode.cpp",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
