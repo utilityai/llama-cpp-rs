@@ -199,6 +199,9 @@ fn main() {
     bindings
         .write_to_file(out_path.join("bindings.rs"))
         .expect("failed to write bindings to file");
+    let llama_cpp_dir = PathBuf::from("llama.cpp").canonicalize().unwrap();
+    println!("cargo:INCLUDE={}", llama_cpp_dir.to_str().unwrap());
+    println!("cargo:OUT_DIR={}", out_path.to_str().unwrap());
 }
 
 // courtesy of https://github.com/rustformers/llm
