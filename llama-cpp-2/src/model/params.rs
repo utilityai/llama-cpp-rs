@@ -183,7 +183,7 @@ impl LlamaModelParams {
 /// #[cfg(not(target_os = "macos"))]
 /// assert_eq!(params.n_gpu_layers(), 0, "n_gpu_layers should be 0");
 /// #[cfg(target_os = "macos")]
-/// assert_eq!(params.n_gpu_layers(), 999, "n_gpu_layers should be 0");
+/// assert_eq!(params.n_gpu_layers(), 999, "n_gpu_layers should be 999");
 /// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
