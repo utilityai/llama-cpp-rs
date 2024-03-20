@@ -189,7 +189,9 @@ impl Drop for LlamaBatch {
     /// # }
     fn drop(&mut self) {
         unsafe {
-            llama_batch_free(self.llama_batch);
+            if self.allocated > 0 {
+                llama_batch_free(self.llama_batch);
+            }
         }
     }
 }

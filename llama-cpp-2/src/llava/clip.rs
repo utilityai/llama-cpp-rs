@@ -168,7 +168,10 @@ impl ClipCtx {
 
 impl Drop for ClipCtx {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::clip_free(self.ctx.as_ptr()) }
+        unsafe {
+            let ctx = self.ctx.as_ptr();
+            llama_cpp_sys_2::clip_free(ctx);
+        }
     }
 }
 

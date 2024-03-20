@@ -151,6 +151,7 @@ fn process_prompt(
     let n_batch = 2048; // logical batch size for prompt processing (must be >=32 to use BLAS)
 
     // eval system prompt
+    // eprintln!("evaluating system prompt...");
     eval_string(
         &mut ctx_llava.ctx_llama,
         system_prompt,
@@ -158,9 +159,14 @@ fn process_prompt(
         &mut n_past,
         AddBos::Always,
     )?;
+
+
     // eval image
+    // eprintln!("evaluating image...");
     image_embed.eval(&mut ctx_llava.ctx_llama, n_batch, &mut n_past);
+
     // eval user prompt
+    // eprintln!("evaluating user prompt...");
     eval_string(
         &mut ctx_llava.ctx_llama,
         &user_prompt,
