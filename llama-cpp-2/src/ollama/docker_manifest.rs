@@ -1,6 +1,10 @@
 //! customized docker manifest for ollama
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
+
+use crate::ollama::OllamaError;
+use crate::ollama::OLLAMA_BLOBS;
 
 /// Represents the root structure of the Docker manifest JSON data.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -18,6 +22,30 @@ pub struct Manifest {
 
     /// A list of layers that make up the Docker image.
     pub layers: Vec<Layer>,
+}
+
+impl Manifest {
+    /// get image model
+    pub fn get_model_layer(&self) -> Result<&Layer, OllamaError> {
+        const MEDIA_TYPE: &str = "application/vnd.ollama.image.model";
+        for layer in self.layers.iter() {
+            if layer.media_type == MEDIA_TYPE {
+                return Ok(layer);
+            }
+        }
+        Err(OllamaError::ModelNotFound)
+    }
+
+    /// get projector model
+    pub fn get_projector_layer(&self) -> Result<&Layer, OllamaError> {
+        const MEDIA_TYPE: &str = "application/vnd.ollama.image.projector";
+        for layer in self.layers.iter() {
+            if layer.media_type == MEDIA_TYPE {
+                return Ok(layer);
+            }
+        }
+        Err(OllamaError::ModelNotFound)
+    }
 }
 
 /// Represents the configuration for the Docker image specified in the manifest.
@@ -46,6 +74,18 @@ pub struct Layer {
 
     /// Size of the layer in bytes.
     pub size: u64,
+}
+
+impl Layer {
+    /// get path
+    pub fn get_path(&self) -> Result<PathBuf, OllamaError> {
+        let path = dirs::home_dir()
+            .ok_or(OllamaError::HomeDirNotFound)?
+            .join(OLLAMA_BLOBS)
+            .join(&self.digest);
+
+        Ok(path)
+    }
 }
 
 #[cfg(test)]

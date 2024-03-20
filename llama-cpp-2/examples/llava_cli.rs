@@ -14,6 +14,7 @@ use llama_cpp_2::llava::{
     llava_sample, LlamaSamplingContext, LlamaSamplingParams, LlavaImageEmbed,
 };
 use llama_cpp_2::model::AddBos;
+use llama_cpp_2::ollama::get_model_manifest;
 use llama_cpp_2::token::LlamaToken;
 use llama_cpp_2::{
     context::LlamaContext,
@@ -35,11 +36,11 @@ use llama_cpp_2::{
 )]
 struct Args {
     /// llama model
-    #[arg(short, long)]
+    #[arg(short, long, default_value = "ollama:llava:latest")]
     model: String,
 
     /// CLIP(Contrastive Language–Image Pre-training) model
-    #[arg(long)]
+    #[arg(long, default_value = "ollama:llava:latest")]
     mmproj: String,
 
     /// temperature. Note: a lower temperature value like 0.1 is recommended for better quality.
@@ -57,10 +58,11 @@ struct Args {
     /// override some parameters of the model, e.g. key=value
     #[arg(short = 'o', value_parser = parse_key_val)]
     key_value_overrides: Vec<(String, ParamOverrideValue)>,
-    // /// Disable offloading layers to the gpu
-    // #[cfg(feature = "cublas")]
-    // #[clap(long)]
-    // disable_gpu: bool,
+
+    /// Disable offloading layers to the gpu
+    #[cfg(feature = "cublas")]
+    #[clap(long)]
+    disable_gpu: bool,
 }
 
 /// Parse a single key-value pair
@@ -246,7 +248,16 @@ fn eval_token(
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
+    if args.model.starts_with("ollama:") {
+        let manifest = get_model_manifest(&args.model)?;
+
+        let layer = manifest.get_model_layer()?;
+        args.model = layer.get_path()?.to_string_lossy().to_string();
+
+        let layer = manifest.get_projector_layer()?;
+        args.mmproj = layer.get_path()?.to_string_lossy().to_string();
+    }
     println!("args: {:#?}", args);
 
     let mut ctx_llava = llava_init(&args)?;

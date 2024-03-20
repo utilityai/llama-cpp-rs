@@ -225,14 +225,28 @@ fn main() {
 
 // courtesy of https://github.com/rustformers/llm
 fn metal_hack(build: &mut cc::Build) {
+    const GGML_COMMON_H_PATH: &str = "llama.cpp/ggml-common.h";
     const GGML_METAL_METAL_PATH: &str = "llama.cpp/ggml-metal.metal";
     const GGML_METAL_PATH: &str = "llama.cpp/ggml-metal.m";
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not defined"));
 
     let ggml_metal_path = {
+        let ggml_common_h =
+            std::fs::read_to_string(GGML_COMMON_H_PATH).expect("Failed to read ggml-common.h");
+
         let ggml_metal_metal = std::fs::read_to_string(GGML_METAL_METAL_PATH)
-            .expect("Could not read ggml-metal.metal")
+            .expect("Could not read ggml-metal.metal");
+
+        let needle = r#"#include "ggml-common.h""#;
+        if !ggml_metal_metal.contains(needle) {
+            panic!("ggml-metal.metal does not contain the needle to be replaced; the patching logic needs to be reinvestigated. Contact a `llama-cpp-sys-2` developer!");
+        }
+
+        // Replace the runtime read of the file with a compile-time string
+        let ggml_metal_metal = ggml_metal_metal.replace(needle, &ggml_common_h);
+
+        let ggml_metal_metal = ggml_metal_metal
             .replace('\\', "\\\\")
             .replace('\n', "\\n")
             .replace('\r', "\\r")
