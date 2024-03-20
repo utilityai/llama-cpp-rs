@@ -205,8 +205,8 @@ fn process_prompt(
             // mistral llava-1.6
             break;
         }
-        println!();
     }
+    println!();
 
     Ok(())
 }
@@ -271,6 +271,8 @@ fn main() -> Result<()> {
     let image_embed = load_image(&mut ctx_llava, &args)?;
 
     process_prompt(&mut ctx_llava, &image_embed, &args, &args.prompt)?;
+
+    println!();
 
     Ok(())
 }
