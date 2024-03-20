@@ -770,9 +770,12 @@ dependencies = [
  "anyhow",
  "clap",
  "criterion",
+ "dirs",
  "hf-hub",
  "llama-cpp-sys-2",
  "pprof",
+ "serde",
+ "serde_json",
  "thiserror",
  "tracing",
 ]

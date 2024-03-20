@@ -38,7 +38,7 @@ struct Args {
     #[arg(short, long)]
     model: String,
 
-    /// clip model
+    /// CLIP(Contrastive Language–Image Pre-training) model
     #[arg(long)]
     mmproj: String,
 
@@ -54,7 +54,7 @@ struct Args {
     #[arg(short, long, default_value = "describe the image in detail.")]
     prompt: String,
 
-    /// override some parameters of the model
+    /// override some parameters of the model, e.g. key=value
     #[arg(short = 'o', value_parser = parse_key_val)]
     key_value_overrides: Vec<(String, ParamOverrideValue)>,
     // /// Disable offloading layers to the gpu

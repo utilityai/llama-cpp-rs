@@ -26,11 +26,13 @@ pub mod context;
 pub mod grammar;
 pub mod llama_backend;
 pub mod llama_batch;
+pub mod llava;
 pub mod model;
+#[cfg(feature = "ollama")]
+pub mod ollama;
 pub mod timing;
 pub mod token;
 pub mod token_type;
-pub mod llava;
 
 /// A failable result from a llama.cpp function.
 pub type Result<T> = std::result::Result<T, LLamaCppError>;
