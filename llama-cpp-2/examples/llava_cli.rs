@@ -15,7 +15,6 @@ use llama_cpp_2::llava::{
     llava_sample, LlamaSamplingContext, LlamaSamplingParams, LlavaImageEmbed,
 };
 use llama_cpp_2::model::AddBos;
-use llama_cpp_2::ollama::get_model_manifest;
 use llama_cpp_2::token::LlamaToken;
 use llama_cpp_2::{
     context::LlamaContext,
@@ -258,8 +257,10 @@ fn eval_token(
 
 fn main() -> Result<()> {
     let mut args = Args::parse();
+
+    #[cfg(feature = "ollama")]
     if args.model.starts_with("ollama:") {
-        let manifest = get_model_manifest(&args.model)?;
+        let manifest = llama_cpp_2::ollama::get_model_manifest(&args.model)?;
 
         let layer = manifest.get_model_layer()?;
         args.model = layer.get_path()?.to_string_lossy().to_string();

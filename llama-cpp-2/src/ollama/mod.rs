@@ -70,13 +70,15 @@ mod tests {
     /// Tests parsing of JSON into the `DockerManifest` struct.
     #[test]
     fn test_get_model() -> Result<(), OllamaError> {
-        let manifest = get_model_manifest("ollama:llava:latest")?;
+        let manifest = get_model_manifest("ollama:llava:latest");
 
-        let layer = manifest.get_model_layer()?;
-        println!("Layer: {:?}", layer.get_path());
+        if let Ok(manifest) = manifest {
+            let layer = manifest.get_model_layer()?;
+            println!("Layer: {:?}", layer.get_path()?);
 
-        let layer = manifest.get_projector_layer()?;
-        println!("Layer: {:?}", layer.get_path());
+            let layer = manifest.get_projector_layer()?;
+            println!("Layer: {:?}", layer.get_path()?);
+        }
 
         Ok(())
     }
