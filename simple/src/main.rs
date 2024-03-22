@@ -32,8 +32,11 @@ struct Args {
     #[command(subcommand)]
     model: Model,
     /// The prompt
-    #[clap(default_value = "Hello my name is")]
-    prompt: String,
+    #[clap(short = 'p', long)]
+    prompt: Option<String>,
+    /// Read the prompt from a file
+    #[clap(short = 'f', long, help = "prompt file to start generation")]
+    file: Option<String>,
     /// set the length of the prompt + output in tokens
     #[arg(long, default_value_t = 32)]
     n_len: i32,
@@ -44,6 +47,25 @@ struct Args {
     #[cfg(feature = "cublas")]
     #[clap(long)]
     disable_gpu: bool,
+    #[arg(short = 's', long, help = "RNG seed (default: 1234)")]
+    seed: Option<u32>,
+    #[arg(
+        short = 't',
+        long,
+        help = "number of threads to use during generation (default: use all available threads)"
+    )]
+    threads: Option<u32>,
+    #[arg(
+        long,
+        help = "number of threads to use during batch and prompt processing (default: use all available threads)"
+    )]
+    threads_batch: Option<u32>,
+    #[arg(
+        short = 'c',
+        long,
+        help = "size of the prompt context (default: loaded from themodel)"
+    )]
+    ctx_size: Option<NonZeroU32>,
 }
 
 /// Parse a single key-value pair
@@ -100,9 +122,14 @@ fn main() -> Result<()> {
         n_len,
         model,
         prompt,
+        file,
         #[cfg(feature = "cublas")]
         disable_gpu,
         key_value_overrides,
+        seed,
+        threads,
+        threads_batch,
+        ctx_size,
     } = Args::parse();
 
     // init LLM
@@ -120,6 +147,17 @@ fn main() -> Result<()> {
         LlamaModelParams::default()
     };
 
+    let prompt = if let Some(str) = prompt {
+        if file.is_some() {
+            bail!("either prompt or file must be specified, but not both")
+        }
+        str
+    } else if let Some(file) = file {
+        std::fs::read_to_string(&file).with_context(|| format!("unable to read {file}"))?
+    } else {
+        "Hello my name is".to_string()
+    };
+
     let mut model_params = pin!(model_params);
 
     for (k, v) in &key_value_overrides {
@@ -135,9 +173,15 @@ fn main() -> Result<()> {
         .with_context(|| "unable to load model")?;
 
     // initialize the context
-    let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(NonZeroU32::new(2048))
-        .with_seed(1234);
+    let mut ctx_params = LlamaContextParams::default()
+        .with_n_ctx(ctx_size.or(Some(NonZeroU32::new(2048).unwrap())))
+        .with_seed(seed.unwrap_or(1234));
+    if let Some(threads) = threads {
+        ctx_params = ctx_params.with_n_threads(threads);
+    }
+    if let Some(threads_batch) = threads_batch.or(threads) {
+        ctx_params = ctx_params.with_n_threads_batch(threads_batch);
+    }
 
     let mut ctx = model
         .new_context(&backend, ctx_params)
