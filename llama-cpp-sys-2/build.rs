@@ -134,6 +134,9 @@ fn main() {
 
         metal_hack(&mut ggml);
         ggml.include("./llama.cpp/ggml-metal.h");
+
+        ggml.flag("-Wno-unused-function");
+        llama_cpp.flag("-Wno-unused-function");
     }
 
     if cfg!(target_os = "dragonfly") {
@@ -155,9 +158,17 @@ fn main() {
     llama_cpp
         .define("_XOPEN_SOURCE", Some("600"))
         .include("llama.cpp")
+        .include("llama.cpp/common")
+        .include("llama.cpp/examples/llava")
         .std("c++11")
         .file("llama.cpp/llama.cpp")
-        .file("llama.cpp/unicode.cpp");
+        .file("llama.cpp/unicode.cpp")
+        .file("llama.cpp/common/common.cpp")
+        .file("llama.cpp/common/grammar-parser.cpp")
+        .file("llama.cpp/common/sampling.cpp")
+        .file("src/llava_sampling.cpp")
+        .file("llama.cpp/examples/llava/clip.cpp")
+        .file("llama.cpp/examples/llava/llava.cpp");
 
     // Remove debug log output from `llama.cpp`
     let is_release = env::var("PROFILE").unwrap() == "release";
@@ -186,9 +197,16 @@ fn main() {
     let header = "llama.cpp/llama.h";
 
     println!("cargo:rerun-if-changed={header}");
+    println!("cargo:rerun-if-changed=src/llava_sampling.h");
 
     let bindings = bindgen::builder()
         .header(header)
+        .header("src/llava_sampling.h")
+        .header("llama.cpp/examples/llava/clip.h")
+        .header("llama.cpp/examples/llava/llava.h")
+        .clang_arg(format!("-I{}", "llama.cpp"))
+        .clang_arg(format!("-I{}", "llama.cpp/common"))
+        .clang_arg(format!("-I{}", "llama.cpp/examples/llava"))
         .derive_partialeq(true)
         .no_debug("llama_grammar_element")
         .prepend_enum_name(false)
@@ -207,14 +225,28 @@ fn main() {
 
 // courtesy of https://github.com/rustformers/llm
 fn metal_hack(build: &mut cc::Build) {
+    const GGML_COMMON_H_PATH: &str = "llama.cpp/ggml-common.h";
     const GGML_METAL_METAL_PATH: &str = "llama.cpp/ggml-metal.metal";
     const GGML_METAL_PATH: &str = "llama.cpp/ggml-metal.m";
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not defined"));
 
     let ggml_metal_path = {
+        let ggml_common_h =
+            std::fs::read_to_string(GGML_COMMON_H_PATH).expect("Failed to read ggml-common.h");
+
         let ggml_metal_metal = std::fs::read_to_string(GGML_METAL_METAL_PATH)
-            .expect("Could not read ggml-metal.metal")
+            .expect("Could not read ggml-metal.metal");
+
+        let needle = r#"#include "ggml-common.h""#;
+        if !ggml_metal_metal.contains(needle) {
+            panic!("ggml-metal.metal does not contain the needle to be replaced; the patching logic needs to be reinvestigated. Contact a `llama-cpp-sys-2` developer!");
+        }
+
+        // Replace the runtime read of the file with a compile-time string
+        let ggml_metal_metal = ggml_metal_metal.replace(needle, &ggml_common_h);
+
+        let ggml_metal_metal = ggml_metal_metal
             .replace('\\', "\\\\")
             .replace('\n', "\\n")
             .replace('\r', "\\r")

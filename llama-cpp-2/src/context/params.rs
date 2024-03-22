@@ -2,8 +2,6 @@
 use std::fmt::Debug;
 use std::num::NonZeroU32;
 
-use llama_cpp_sys_2;
-
 /// A rusty wrapper around `rope_scaling_type`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
