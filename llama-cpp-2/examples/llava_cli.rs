@@ -277,6 +277,8 @@ fn main() -> Result<()> {
     process_prompt(&mut ctx_llava, &image_embed, &args, &args.prompt)?;
 
     println!();
+    println!("{}", ctx_llava.ctx_llama.timings());
+    println!();
 
     Ok(())
 }
