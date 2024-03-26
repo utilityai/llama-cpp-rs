@@ -242,3 +242,13 @@ pub fn ggml_time_us() -> i64 {
 pub fn llama_supports_mlock() -> bool {
     unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn smoke_test() {
+        ggml_time_us();
+    }
+}

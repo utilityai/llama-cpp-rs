@@ -28,3 +28,15 @@ impl Debug for llama_grammar_element {
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smoke_test() {
+        unsafe {
+            llama_time_us();
+        }
+    }
+}

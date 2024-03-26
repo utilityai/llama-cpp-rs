@@ -42,7 +42,7 @@ include = [
 
 [build-dependencies]
 bindgen = { workspace = true }
-cc = { workspace = true, features = ["parallel"] }
+cmake = { workspace = true }
 
 [features]
 cublas = []
