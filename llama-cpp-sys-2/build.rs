@@ -209,6 +209,7 @@ fn main() {
 fn metal_hack(build: &mut cc::Build) {
     const GGML_METAL_METAL_PATH: &str = "llama.cpp/ggml-metal.metal";
     const GGML_METAL_PATH: &str = "llama.cpp/ggml-metal.m";
+    const GGML_COMMON_PATH: &str = "llama.cpp/ggml-common.h";
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is not defined"));
 
@@ -219,6 +220,18 @@ fn metal_hack(build: &mut cc::Build) {
             .replace('\n', "\\n")
             .replace('\r', "\\r")
             .replace('\"', "\\\"");
+
+        let ggml_common = std::fs::read_to_string(GGML_COMMON_PATH).expect("Could not read ggml-common.h")
+            .replace('\\', "\\\\")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\"', "\\\"");
+
+        let includged_ggml_metal_metal = ggml_metal_metal.replace(
+            "#include \\\"ggml-common.h\\\"",
+            &format!("{ggml_common}")
+        );
+        print!("{}", &includged_ggml_metal_metal);
 
         let ggml_metal =
             std::fs::read_to_string(GGML_METAL_PATH).expect("Could not read ggml-metal.m");
@@ -231,7 +244,7 @@ fn metal_hack(build: &mut cc::Build) {
         // Replace the runtime read of the file with a compile-time string
         let ggml_metal = ggml_metal.replace(
             needle,
-            &format!(r#"NSString * src  = @"{ggml_metal_metal}";"#),
+            &format!(r#"NSString * src  = @"{includged_ggml_metal_metal}";"#),
         );
 
         let patched_ggml_metal_path = out_dir.join("ggml-metal.m");
