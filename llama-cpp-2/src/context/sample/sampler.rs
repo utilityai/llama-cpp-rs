@@ -3,7 +3,7 @@
 //! like [`crate::context::LlamaContext`] or token history to the sampler.
 //!
 //! # Example
-//! 
+//!
 //! **Llama.cpp default sampler**
 //!
 //! ```rust

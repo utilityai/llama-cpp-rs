@@ -246,7 +246,7 @@ pub fn llama_supports_mlock() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn smoke_test() {
         ggml_time_us();

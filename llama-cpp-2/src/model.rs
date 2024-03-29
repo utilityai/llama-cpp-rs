@@ -280,17 +280,16 @@ impl LlamaModel {
     /// Get chat template from model.
     ///
     /// # Errors
-    /// 
+    ///
     /// * If the model has no chat template
     /// * If the chat template is not a valid [`CString`].
     #[allow(clippy::missing_panics_doc)] // we statically know this will not panic as
     pub fn get_chat_template(&self, buf_size: usize) -> Result<String, ChatTemplateError> {
-        
         // longest known template is about 1200 bytes from llama.cpp
         let chat_temp = CString::new(vec![b'*'; buf_size]).expect("no null");
         let chat_ptr = chat_temp.into_raw();
         let chat_name = CString::new("tokenizer.chat_template").expect("no null bytes");
-        
+
         let chat_template: String = unsafe {
             let ret = llama_cpp_sys_2::llama_model_meta_val_str(
                 self.model.as_ptr(),
@@ -305,7 +304,7 @@ impl LlamaModel {
             debug_assert_eq!(usize::try_from(ret).unwrap(), template.len(), "llama.cpp guarantees that the returned int {ret} is the length of the string {} but that was not the case", template.len());
             template
         };
-        
+
         Ok(chat_template)
     }
 
