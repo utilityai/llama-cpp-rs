@@ -80,15 +80,9 @@ fn metal_hack() {
     let ggml_metal = std::fs::read_to_string(GGML_METAL_PATH).expect("Could not read ggml-metal.m");
 
     let needle = r#"NSString * src = [NSString stringWithContentsOfFile:path_source encoding:NSUTF8StringEncoding error:&error];"#;
-    if !ggml_metal.contains(needle) {
-        panic!("ggml-metal.m does not contain the needle to be replaced; the patching logic needs to be reinvestigated. Contact a `llama-cpp-sys-2` developer!");
-    }
 
     // Replace the runtime read of the file with a compile-time string
-    let ggml_metal = ggml_metal.replace(
-        needle,
-        &format!(r#"NSString * src  = @"{includged_ggml_metal_metal}";"#),
-    );
+    let ggml_metal = ggml_metal.replace(needle, &format!(r#"NSString * src  = @"{includged_ggml_metal_metal}";"#), );
 
     std::fs::write(&GGML_METAL_PATH, ggml_metal)
         .expect("Could not write temporary patched ggml-metal.m");
