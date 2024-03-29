@@ -46,4 +46,5 @@ cmake = { workspace = true }
 
 [features]
 cublas = []
+vulkan = []
 

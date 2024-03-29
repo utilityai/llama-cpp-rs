@@ -15,6 +15,7 @@ tracing = { workspace = true }
 
 [features]
 cublas = ["llama-cpp-sys-2/cublas"]
+vulkan = ["llama-cpp-sys-2/vulkan"]
 sampler = []
 
 [lints]

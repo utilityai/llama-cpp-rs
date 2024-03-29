@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 
 [features]
 cublas = ["llama-cpp-2/cublas"]
+vulkan = ["llama-cpp-2/vulkan"]
 
 [lints]
 workspace = true

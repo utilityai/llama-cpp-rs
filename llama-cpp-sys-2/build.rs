@@ -22,6 +22,11 @@ fn main() {
                 "OFF"
             },
         )
+        .define("LLAMA_VULKAN", if cfg!(feature = "vulkan") {
+            "ON"
+        } else {
+            "OFF"
+        })
         .define("BUILD_SHARED_LIBS", "ON")
         .define("LLAMA_BUILD_EXAMPLES", "OFF")
         .define("LLAMA_BUILD_TESTS", "OFF")
