@@ -76,7 +76,6 @@ fn metal_hack() {
 
     let includged_ggml_metal_metal =
         ggml_metal_metal.replace("#include \\\"ggml-common.h\\\"", &format!("{ggml_common}"));
-    print!("{}", &includged_ggml_metal_metal);
 
     let ggml_metal = std::fs::read_to_string(GGML_METAL_PATH).expect("Could not read ggml-metal.m");
 
