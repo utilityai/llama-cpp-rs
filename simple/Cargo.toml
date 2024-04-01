@@ -10,6 +10,7 @@ llama-cpp-2 = { path = "../llama-cpp-2", version = "0.1.46" }
 hf-hub = { workspace = true }
 clap = { workspace = true , features = ["derive"] }
 anyhow = { workspace = true }
+encoding_rs = { workspace = true }
 
 [features]
 cublas = ["llama-cpp-2/cublas"]

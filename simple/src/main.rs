@@ -240,6 +240,9 @@ either reduce n_len or increase n_ctx"
 
     let t_main_start = ggml_time_us();
 
+    // The `Decoder`
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+
     while n_cur <= n_len {
         // sample the next token
         {
@@ -256,7 +259,11 @@ either reduce n_len or increase n_ctx"
                 break;
             }
 
-            print!("{}", model.token_to_str(new_token_id)?);
+            let output_bytes = model.token_to_bytes(new_token_id)?;
+            // use `Decoder.decode_to_string()` to avoid the intermediate buffer
+            let mut output_string = String::with_capacity(32);
+            let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);
+            print!("{}", output_string);
             std::io::stdout().flush()?;
 
             batch.clear();
