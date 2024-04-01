@@ -90,6 +90,15 @@ impl LlamaModel {
         self.token_to_str_with_size(token, 32)
     }
 
+    /// Convert single token to bytes.
+    ///
+    /// # Errors
+    ///
+    /// See [`TokenToStringError`] for more information.
+    pub fn token_to_bytes(&self, token: LlamaToken) -> Result<Vec<u8>, TokenToStringError> {
+        self.token_to_bytes_with_size(token, 32)
+    }
+
     /// Convert a vector of tokens to a single string.
     ///
     /// # Errors
@@ -211,22 +220,45 @@ impl LlamaModel {
         token: LlamaToken,
         buffer_size: usize,
     ) -> Result<String, TokenToStringError> {
+        let bytes = self.token_to_bytes_with_size(token, buffer_size)?;
+        Ok(String::from_utf8(bytes)?)
+    }
+
+    /// Convert a token to bytes with a specified buffer size.
+    ///
+    /// Generally you should use [`LlamaModel::token_to_bytes`] instead as 8 bytes is enough for most words and
+    /// the extra bytes do not really matter.
+    ///
+    /// # Errors
+    ///
+    /// - if the token type is unknown
+    /// - the resultant token is larger than `buffer_size`.
+    ///
+    /// # Panics
+    ///
+    /// - if `buffer_size` does not fit into a [`c_int`].
+    /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
+    pub fn token_to_bytes_with_size(
+        &self,
+        token: LlamaToken,
+        buffer_size: usize,
+    ) -> Result<Vec<u8>, TokenToStringError> {
         if token == self.token_nl() {
-            return Ok(String::from("\n"));
+            return Ok(String::from("\n").into_bytes());
         }
 
         match self.token_type(token) {
             LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
             LlamaTokenType::Control => {
                 if token == self.token_bos() || token == self.token_eos() {
-                    return Ok(String::new());
+                    return Ok(Vec::new());
                 }
             }
             LlamaTokenType::Unknown
             | LlamaTokenType::Undefined
             | LlamaTokenType::Byte
             | LlamaTokenType::Unused => {
-                return Ok(String::new());
+                return Ok(Vec::new());
             }
         }
 
@@ -246,7 +278,7 @@ impl LlamaModel {
                 let mut bytes = string.into_bytes();
                 let len = usize::try_from(size).expect("size is positive and fits into usize");
                 bytes.truncate(len);
-                Ok(String::from_utf8(bytes)?)
+                Ok(bytes)
             }
         }
     }
