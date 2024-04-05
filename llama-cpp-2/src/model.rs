@@ -26,7 +26,7 @@ pub struct LlamaModel {
 }
 
 /// A Safe wrapper around `llama_chat_message`
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct LlamaChatMessage {
     role: CString,
     content: CString,
@@ -408,6 +408,8 @@ impl LlamaModel {
     /// Apply the models chat template to some messages.
     /// See https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
     ///
+    /// `tmpl` of None means to use the default template provided by llama.cpp for the model
+    ///
     /// # Errors
     /// There are many ways this can fail. See [`ApplyChatTemplateError`] for more information.
     #[tracing::instrument(skip_all)]
@@ -431,7 +433,7 @@ impl LlamaModel {
             })
             .collect();
         // Set the tmpl pointer
-        let tmpl = tmpl.map(|v| CString::new(v));
+        let tmpl = tmpl.map(CString::new);
         let tmpl_ptr = match tmpl {
             Some(str) => str?.as_ptr(),
             None => std::ptr::null(),
@@ -446,13 +448,14 @@ impl LlamaModel {
                 buff.as_mut_ptr(),
                 buff.len() as i32,
             );
-            // This should never happen
+            // A buffer twice the size should be sufficient for all models, if this is not the case for a new model, we can increase it
+            // The error message informs the user to contact a maintainer
             if res > buff.len() as i32 {
                 return Err(ApplyChatTemplateError::BuffSizeError);
             }
             String::from_utf8(buff.iter().filter(|c| **c > 0).map(|&c| c as u8).collect())
-        };
-        Ok(formatted_chat?)
+        }?;
+        Ok(formatted_chat)
     }
 }
 

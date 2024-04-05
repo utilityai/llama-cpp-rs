@@ -219,7 +219,7 @@ pub enum NewLlamaChatMessageError {
 #[derive(Debug, thiserror::Error)]
 pub enum ApplyChatTemplateError {
     /// the buffer was too small.
-    #[error("The buffer was too small. Please contact a maintainer")]
+    #[error("The buffer was too small. Please contact a maintainer and we will update it.")]
     BuffSizeError,
     /// the string contained a null byte and thus could not be converted to a c string.
     #[error("{0}")]
