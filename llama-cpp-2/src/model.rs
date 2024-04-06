@@ -11,8 +11,8 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::LlamaTokenType;
 use crate::{
-    ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError, StringToTokenError,
-    TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError,
+    NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
 };
 
 pub mod params;
@@ -23,6 +23,23 @@ pub mod params;
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModel {
     pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
+}
+
+/// A Safe wrapper around `llama_chat_message`
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct LlamaChatMessage {
+    role: CString,
+    content: CString,
+}
+
+impl LlamaChatMessage {
+    /// Create a new `LlamaChatMessage`
+    pub fn new(role: String, content: String) -> Result<Self, NewLlamaChatMessageError> {
+        Ok(Self {
+            role: CString::new(role)?,
+            content: CString::new(content)?,
+        })
+    }
 }
 
 /// How to determine if we should prepend a bos token to tokens
@@ -312,17 +329,16 @@ impl LlamaModel {
     /// Get chat template from model.
     ///
     /// # Errors
-    /// 
+    ///
     /// * If the model has no chat template
     /// * If the chat template is not a valid [`CString`].
     #[allow(clippy::missing_panics_doc)] // we statically know this will not panic as
     pub fn get_chat_template(&self, buf_size: usize) -> Result<String, ChatTemplateError> {
-        
         // longest known template is about 1200 bytes from llama.cpp
         let chat_temp = CString::new(vec![b'*'; buf_size]).expect("no null");
         let chat_ptr = chat_temp.into_raw();
         let chat_name = CString::new("tokenizer.chat_template").expect("no null bytes");
-        
+
         let chat_template: String = unsafe {
             let ret = llama_cpp_sys_2::llama_model_meta_val_str(
                 self.model.as_ptr(),
@@ -337,7 +353,7 @@ impl LlamaModel {
             debug_assert_eq!(usize::try_from(ret).unwrap(), template.len(), "llama.cpp guarantees that the returned int {ret} is the length of the string {} but that was not the case", template.len());
             template
         };
-        
+
         Ok(chat_template)
     }
 
@@ -387,6 +403,60 @@ impl LlamaModel {
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::new(self, context, params.embeddings()))
+    }
+
+    /// Apply the models chat template to some messages.
+    /// See https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
+    ///
+    /// `tmpl` of None means to use the default template provided by llama.cpp for the model
+    ///
+    /// # Errors
+    /// There are many ways this can fail. See [`ApplyChatTemplateError`] for more information.
+    #[tracing::instrument(skip_all)]
+    pub fn apply_chat_template(
+        &self,
+        tmpl: Option<String>,
+        chat: Vec<LlamaChatMessage>,
+        add_ass: bool,
+    ) -> Result<String, ApplyChatTemplateError> {
+        // Buffer is twice the length of messages per their recommendation
+        let message_length = chat.iter().fold(0, |acc, c| {
+            acc + c.role.to_bytes().len() + c.content.to_bytes().len()
+        });
+        let mut buff: Vec<i8> = vec![0_i8; message_length * 2];
+
+        // Build our llama_cpp_sys_2 chat messages
+        let chat: Vec<llama_cpp_sys_2::llama_chat_message> = chat
+            .iter()
+            .map(|c| llama_cpp_sys_2::llama_chat_message {
+                role: c.role.as_ptr(),
+                content: c.content.as_ptr(),
+            })
+            .collect();
+        // Set the tmpl pointer
+        let tmpl = tmpl.map(CString::new);
+        let tmpl_ptr = match tmpl {
+            Some(str) => str?.as_ptr(),
+            None => std::ptr::null(),
+        };
+        let formatted_chat = unsafe {
+            let res = llama_cpp_sys_2::llama_chat_apply_template(
+                self.model.as_ptr(),
+                tmpl_ptr,
+                chat.as_ptr(),
+                chat.len(),
+                add_ass,
+                buff.as_mut_ptr().cast::<std::os::raw::c_char>(),
+                buff.len() as i32,
+            );
+            // A buffer twice the size should be sufficient for all models, if this is not the case for a new model, we can increase it
+            // The error message informs the user to contact a maintainer
+            if res > buff.len() as i32 {
+                return Err(ApplyChatTemplateError::BuffSizeError);
+            }
+            String::from_utf8(buff.iter().filter(|c| **c > 0).map(|&c| c as u8).collect())
+        }?;
+        Ok(formatted_chat)
     }
 }
 
