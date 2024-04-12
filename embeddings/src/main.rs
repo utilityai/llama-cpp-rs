@@ -149,7 +149,6 @@ fn main() -> Result<()> {
         eprintln!();
     }
 
-    
     std::io::stderr().flush()?;
 
     // create a llama_batch with the size of the context
