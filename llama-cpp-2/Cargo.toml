@@ -15,7 +15,11 @@ tracing = { workspace = true }
 
 [features]
 cublas = ["llama-cpp-sys-2/cublas"]
+metal = ["llama-cpp-sys-2/metal"]
 sampler = []
+
+[target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]  
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features=["metal"], version = "0.1.48" }
 
 [lints]
 workspace = true

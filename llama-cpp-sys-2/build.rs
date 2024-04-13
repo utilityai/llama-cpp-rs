@@ -23,6 +23,18 @@ fn main() {
     ggml.cpp(false);
     llama_cpp.cpp(true);
 
+    // CMakeFiles.txt: set(LLAMA_SCHED_MAX_COPIES  "4" CACHE STRING "llama: max input copies for pipeline parallelism")
+    // get LLAMA_SCHED_MAX_COPIES from env, default to 4
+    let mut max_copies = "4".to_owned();
+    if let Ok(env_max_copies) = env::var("LLAMA_SCHED_MAX_COPIES") {
+        if let Ok(v) = env_max_copies.parse::<u32>() {
+            if v > 0 {
+                max_copies = env_max_copies;
+            }
+        } 
+    } 
+    ggml.define("GGML_SCHED_MAX_COPIES", Some(max_copies.as_str()));
+
     // https://github.com/ggerganov/llama.cpp/blob/a836c8f534ab789b02da149fbdaf7735500bff74/Makefile#L364-L368
     if let Some(ggml_cuda) = &mut ggml_cuda {
         for lib in [
@@ -118,22 +130,30 @@ fn main() {
     if cfg!(target_os = "macos") {
         assert!(!cublas_enabled, "CUBLAS is not supported on macOS");
 
-        println!("cargo:rustc-link-lib=framework=Metal");
+        let metal_enabled = env::var("CARGO_FEATURE_METAL").is_ok();
+
         println!("cargo:rustc-link-lib=framework=Foundation");
-        println!("cargo:rustc-link-lib=framework=MetalPerformanceShaders");
-        println!("cargo:rustc-link-lib=framework=MetalKit");
+        if metal_enabled {
+            println!("cargo:rustc-link-lib=framework=Metal");
+            println!("cargo:rustc-link-lib=framework=MetalPerformanceShaders");
+            println!("cargo:rustc-link-lib=framework=MetalKit");
+        }
 
         llama_cpp.define("_DARWIN_C_SOURCE", None);
 
         // https://github.com/ggerganov/llama.cpp/blob/3c0d25c4756742ebf15ad44700fabc0700c638bd/Makefile#L340-L343
-        llama_cpp.define("GGML_USE_METAL", None);
+        if metal_enabled {
+            llama_cpp.define("GGML_USE_METAL", None);
+        }
         llama_cpp.define("GGML_USE_ACCELERATE", None);
         llama_cpp.define("ACCELERATE_NEW_LAPACK", None);
         llama_cpp.define("ACCELERATE_LAPACK_ILP64", None);
         println!("cargo:rustc-link-lib=framework=Accelerate");
 
-        metal_hack(&mut ggml);
-        ggml.include("./llama.cpp/ggml-metal.h");
+        if metal_enabled {
+            metal_hack(&mut ggml);
+            ggml.include("./llama.cpp/ggml-metal.h");
+        }
     }
 
     if cfg!(target_os = "dragonfly") {
@@ -167,6 +187,9 @@ fn main() {
         if let Some(cuda) = ggml_cuda.as_mut() {
             cuda.define("NDEBUG", None);
         }
+
+        ggml.opt_level(3);
+        llama_cpp.opt_level(3);
     }
 
     if let Some(ggml_cuda) = ggml_cuda {
