@@ -20,7 +20,7 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::AddBos;
+use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::model::LlamaModel;
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -137,7 +137,7 @@ fn main() -> Result<()> {
     for (i, token_line) in tokens_lines_list.iter().enumerate() {
         eprintln!("Prompt {i}");
         for token in token_line {
-            eprintln!(" {} --> {}", token, model.token_to_str(*token)?);
+            eprintln!(" {} --> {}", token, model.token_to_str(*token, Special::Tokenize)?);
         }
         eprintln!();
     }
