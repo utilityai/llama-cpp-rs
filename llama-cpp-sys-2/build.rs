@@ -1,4 +1,5 @@
 use std::env;
+use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -67,6 +68,12 @@ fn main() {
             .cuda(true)
             .flag("-arch=all")
             .file("llama.cpp/ggml-cuda.cu")
+            .files(std::fs::read_dir("llama.cpp/ggml-cuda")
+                .expect("failed to read 'llama.cpp/ggml-cuda'")
+                .map(|e| e.expect("failed to ready entry").path())
+                .filter(|p| p.extension().is_some_and(|it| it == OsStr::new("cu")))
+            )
+            .include("llama.cpp/ggml-cuda")
             .include("llama.cpp");
 
         if ggml_cuda.get_compiler().is_like_msvc() {
@@ -75,9 +82,9 @@ fn main() {
             ggml_cuda.flag("-std=c++11").std("c++11");
         }
 
-        ggml.define("GGML_USE_CUBLAS", None);
-        ggml_cuda.define("GGML_USE_CUBLAS", None);
-        llama_cpp.define("GGML_USE_CUBLAS", None);
+        ggml.define("GGML_USE_CUDA", None);
+        ggml_cuda.define("GGML_USE_CUDA", None);
+        llama_cpp.define("GGML_USE_CUDA", None);
     }
 
     for build in [&mut ggml, &mut llama_cpp] {
@@ -177,7 +184,8 @@ fn main() {
         .include("llama.cpp")
         .std("c++11")
         .file("llama.cpp/llama.cpp")
-        .file("llama.cpp/unicode.cpp");
+        .file("llama.cpp/unicode.cpp")
+        .file("llama.cpp/unicode-data.cpp");
 
     // Remove debug log output from `llama.cpp`
     let is_release = env::var("PROFILE").unwrap() == "release";
@@ -193,18 +201,18 @@ fn main() {
     }
 
     if let Some(ggml_cuda) = ggml_cuda {
-        println!("compiling ggml-cuda");
+        eprintln!("compiling ggml-cuda");
         ggml_cuda.compile("ggml-cuda");
-        println!("compiled ggml-cuda");
+        eprintln!("compiled ggml-cuda");
     }
 
-    println!("compiling ggml");
+    eprintln!("compiling ggml");
     ggml.compile("ggml");
-    println!("compiled ggml");
+    eprintln!("compiled ggml");
 
-    println!("compiling llama");
+    eprintln!("compiling llama");
     llama_cpp.compile("llama");
-    println!("compiled llama");
+    eprintln!("compiled llama");
 
     let header = "llama.cpp/llama.h";
 
