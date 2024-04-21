@@ -51,6 +51,15 @@ pub enum AddBos {
     Never,
 }
 
+/// How to determine if we should tokenize special tokens
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Special {
+    /// Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
+    Tokenize,
+    /// Treat special and/or control tokens as plaintext.
+    Plaintext,
+}
+
 unsafe impl Send for LlamaModel {}
 
 unsafe impl Sync for LlamaModel {}
@@ -71,10 +80,11 @@ impl LlamaModel {
     /// Get all tokens in the model.
     pub fn tokens(
         &self,
+        special: Special,
     ) -> impl Iterator<Item = (LlamaToken, Result<String, TokenToStringError>)> + '_ {
         (0..self.n_vocab())
             .map(LlamaToken::new)
-            .map(|llama_token| (llama_token, self.token_to_str(llama_token)))
+            .map(move |llama_token| (llama_token, self.token_to_str(llama_token, special)))
     }
 
     /// Get the beginning of stream token.
@@ -103,8 +113,8 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`TokenToStringError`] for more information.
-    pub fn token_to_str(&self, token: LlamaToken) -> Result<String, TokenToStringError> {
-        self.token_to_str_with_size(token, 32)
+    pub fn token_to_str(&self, token: LlamaToken, special: Special) -> Result<String, TokenToStringError> {
+        self.token_to_str_with_size(token, 32, special)
     }
 
     /// Convert single token to bytes.
@@ -121,9 +131,9 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`TokenToStringError`] for more information.
-    pub fn tokens_to_str(&self, tokens: &[LlamaToken]) -> Result<String, TokenToStringError> {
+    pub fn tokens_to_str(&self, tokens: &[LlamaToken], special: Special) -> Result<String, TokenToStringError> {
         let mut builder = String::with_capacity(tokens.len() * 4);
-        for str in tokens.iter().copied().map(|t| self.token_to_str(t)) {
+        for str in tokens.iter().copied().map(|t| self.token_to_str(t, special)) {
             builder += &str?;
         }
         Ok(builder)
@@ -236,6 +246,7 @@ impl LlamaModel {
         &self,
         token: LlamaToken,
         buffer_size: usize,
+        special: Special,
     ) -> Result<String, TokenToStringError> {
         let bytes = self.token_to_bytes_with_size(token, buffer_size)?;
         Ok(String::from_utf8(bytes)?)
@@ -264,6 +275,7 @@ impl LlamaModel {
             return Ok(String::from("\n").into_bytes());
         }
 
+        // unsure what to do with this in the face of the 'special' arg
         match self.token_type(token) {
             LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
             LlamaTokenType::Control => {
@@ -279,12 +291,17 @@ impl LlamaModel {
             }
         }
 
+        let special = match special {
+            Special::Tokenize => true,
+            Special::Plaintext => false,
+        };
+
         let string = CString::new(vec![b'*'; buffer_size]).expect("no null");
         let len = string.as_bytes().len();
         let len = c_int::try_from(len).expect("length fits into c_int");
         let buf = string.into_raw();
         let size = unsafe {
-            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len)
+            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len, special)
         };
 
         match size {
