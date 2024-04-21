@@ -259,7 +259,7 @@ either reduce n_len or increase n_ctx"
                 break;
             }
 
-            let output_bytes = model.token_to_bytes(new_token_id)?;
+            let output_bytes = model.token_to_bytes(new_token_id, Special::Tokenize)?;
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
             let mut output_string = String::with_capacity(32);
             let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);

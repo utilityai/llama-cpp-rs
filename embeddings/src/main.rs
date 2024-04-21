@@ -20,7 +20,7 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::AddBos;
+use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::model::LlamaModel;
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -138,7 +138,7 @@ fn main() -> Result<()> {
         eprintln!("Prompt {i}");
         for token in token_line {
             // Attempt to convert token to string and print it; if it fails, print the token instead
-            match model.token_to_str(*token) {
+            match model.token_to_str(*token, Special::Tokenize) {
                 Ok(token_str) => eprintln!(" {} --> {}", token, token_str),
                 Err(e) => {
                     eprintln!("Failed to convert token to string, error: {}", e);

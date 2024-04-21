@@ -122,8 +122,8 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`TokenToStringError`] for more information.
-    pub fn token_to_bytes(&self, token: LlamaToken) -> Result<Vec<u8>, TokenToStringError> {
-        self.token_to_bytes_with_size(token, 32)
+    pub fn token_to_bytes(&self, token: LlamaToken, special: Special) -> Result<Vec<u8>, TokenToStringError> {
+        self.token_to_bytes_with_size(token, 32, special)
     }
 
     /// Convert a vector of tokens to a single string.
@@ -248,7 +248,7 @@ impl LlamaModel {
         buffer_size: usize,
         special: Special,
     ) -> Result<String, TokenToStringError> {
-        let bytes = self.token_to_bytes_with_size(token, buffer_size)?;
+        let bytes = self.token_to_bytes_with_size(token, buffer_size, special)?;
         Ok(String::from_utf8(bytes)?)
     }
 
@@ -270,6 +270,7 @@ impl LlamaModel {
         &self,
         token: LlamaToken,
         buffer_size: usize,
+        special: Special,
     ) -> Result<Vec<u8>, TokenToStringError> {
         if token == self.token_nl() {
             return Ok(String::from("\n").into_bytes());
