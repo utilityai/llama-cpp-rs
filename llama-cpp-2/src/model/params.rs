@@ -96,7 +96,7 @@ impl LlamaModelParams {
                 key: [0; 128],
                 tag: 0,
                 __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    int_value: 0,
+                    val_i64: 0,
                 },
             });
 
@@ -194,11 +194,12 @@ impl Default for LlamaModelParams {
         let default_params = unsafe { llama_cpp_sys_2::llama_model_default_params() };
         LlamaModelParams {
             params: default_params,
+            // push the next one to ensure we maintain the iterator invariant of ending with a 0
             kv_overrides: vec![llama_cpp_sys_2::llama_model_kv_override {
                 key: [0; 128],
                 tag: 0,
                 __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    int_value: 0,
+                    val_i64: 0,
                 },
             }],
         }
