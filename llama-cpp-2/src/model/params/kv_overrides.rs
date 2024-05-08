@@ -13,6 +13,8 @@ pub enum ParamOverrideValue {
     Float(f64),
     /// A integer value
     Int(i64),
+    /// A string value
+    Str([std::os::raw::c_char; 128]),
 }
 
 impl ParamOverrideValue {
@@ -21,21 +23,27 @@ impl ParamOverrideValue {
             ParamOverrideValue::Bool(_) => llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_BOOL,
             ParamOverrideValue::Float(_) => llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_FLOAT,
             ParamOverrideValue::Int(_) => llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_INT,
+            ParamOverrideValue::Str(_) => llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_STR,
         }
     }
 
     pub(crate) fn value(&self) -> llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
         match self {
             ParamOverrideValue::Bool(value) => {
-                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { bool_value: *value }
+                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_bool: *value }
             }
             ParamOverrideValue::Float(value) => {
                 llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    float_value: *value,
+                    val_f64: *value,
                 }
             }
             ParamOverrideValue::Int(value) => {
-                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { int_value: *value }
+                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_i64: *value }
+            }
+            ParamOverrideValue::Str(c_string) => {
+                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
+                    val_str: *c_string,
+                }
             }
         }
     }
@@ -51,13 +59,16 @@ impl From<&llama_cpp_sys_2::llama_model_kv_override> for ParamOverrideValue {
     ) -> Self {
         match *tag {
             llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_INT => {
-                ParamOverrideValue::Int(unsafe { __bindgen_anon_1.int_value })
+                ParamOverrideValue::Int(unsafe { __bindgen_anon_1.val_i64 })
             }
             llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_FLOAT => {
-                ParamOverrideValue::Float(unsafe { __bindgen_anon_1.float_value })
+                ParamOverrideValue::Float(unsafe { __bindgen_anon_1.val_f64 })
             }
             llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_BOOL => {
-                ParamOverrideValue::Bool(unsafe { __bindgen_anon_1.bool_value })
+                ParamOverrideValue::Bool(unsafe { __bindgen_anon_1.val_bool })
+            }
+            llama_cpp_sys_2::LLAMA_KV_OVERRIDE_TYPE_STR => {
+                ParamOverrideValue::Str(unsafe { __bindgen_anon_1.val_str })
             }
             _ => unreachable!("Unknown tag of {tag}"),
         }
