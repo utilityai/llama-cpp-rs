@@ -20,8 +20,8 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::model::{AddBos, Special};
 
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
@@ -35,7 +35,7 @@ struct Args {
     #[clap(short)]
     normalise: bool,
     /// Disable offloading layers to the gpu
-    #[cfg(feature = "cublas")]
+    #[cfg(feature = "cuda")]
     #[clap(long)]
     disable_gpu: bool,
 }
@@ -78,7 +78,7 @@ fn main() -> Result<()> {
         model,
         prompt,
         normalise,
-        #[cfg(feature = "cublas")]
+        #[cfg(feature = "cuda")]
         disable_gpu,
     } = Args::parse();
 
@@ -87,13 +87,13 @@ fn main() -> Result<()> {
 
     // offload all layers to the gpu
     let model_params = {
-        #[cfg(feature = "cublas")]
+        #[cfg(feature = "cuda")]
         if !disable_gpu {
             LlamaModelParams::default().with_n_gpu_layers(1000)
         } else {
             LlamaModelParams::default()
         }
-        #[cfg(not(feature = "cublas"))]
+        #[cfg(not(feature = "cuda"))]
         LlamaModelParams::default()
     };
 
