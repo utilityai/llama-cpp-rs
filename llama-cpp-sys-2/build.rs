@@ -413,8 +413,6 @@ fn compile_hipblas(cx: &mut Build, cxx: &mut Build, mut hip: Build) -> &'static 
 fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'static str {
     println!("Compiling CUDA GGML..");
 
-    // CUDA gets linked through the cudarc crate.
-
     cx.define("GGML_USE_CUDA", None);
     cxx.define("GGML_USE_CUDA", None);
 
@@ -425,12 +423,27 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
         .define("K_QUANTS_PER_ITERATION", Some("2"))
         .define("GGML_CUDA_PEER_MAX_BATCH_SIZE", Some("128"));
 
-    if cfg!(target_os = "linux") {
-        nvcc.flag("-Wno-pedantic");
-        // TODO Are these links needed?
-        println!("cargo:rustc-link-lib=pthread");
-        println!("cargo:rustc-link-lib=dl");
-        println!("cargo:rustc-link-lib=rt");
+    // if cfg!(target_os = "linux") {
+    //     nvcc.flag("-Wno-pedantic");
+    // }
+
+    for lib in [
+        "cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt",
+    ] {
+        println!("cargo:rustc-link-lib={}", lib);
+    }
+    if !nvcc.get_compiler().is_like_msvc() {
+        for lib in ["culibos", "pthread", "dl", "rt"] {
+            println!("cargo:rustc-link-lib={}", lib);
+        }
+    }
+
+    println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+
+    if nvcc.get_compiler().is_like_msvc() {
+        nvcc.std("c++14");
+    } else {
+        nvcc.flag("-std=c++11").std("c++11");
     }
 
     if cfg!(feature = "cuda_dmmv") {
