@@ -11,7 +11,7 @@
 //!
 //! # Feature Flags
 //!
-//! - `cublas` enables CUDA gpu support.
+//! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
 use std::ffi::NulError;
 use std::fmt::Debug;

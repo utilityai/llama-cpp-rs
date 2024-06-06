@@ -8,7 +8,7 @@ RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 ENV PATH=/root/.cargo/bin:$PATH
 
 COPY . .
-RUN cargo build --bin simple --features cublas
+RUN cargo build --bin simple --features cuda
 
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-runtime-ubuntu${UBUNTU_VERSION} as base-cuda-runtime
 
