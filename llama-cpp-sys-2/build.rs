@@ -507,8 +507,7 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     let common = LLAMA_PATH.join("ggml-common.h");
 
     let input_file = File::open(ggml_metal_shader_path).expect("Failed to open input file");
-    let mut output_file =
-        File::create(&ggml_metal_shader_out_path).expect("Failed to create output file");
+    let output_file = File::create(&ggml_metal_shader_out_path).expect("Failed to create output file");
 
     let output = Command::new("sed")
         .arg("-e")
@@ -656,7 +655,7 @@ fn main() {
     push_warn_flags(&mut cx, &mut cxx);
     push_feature_flags(&mut cx, &mut cxx);
 
-    let feat_lib = if cfg!(feature = "vulkan") {
+    let _feat_lib = if cfg!(feature = "vulkan") {
         Some(compile_vulkan(&mut cx, &mut cxx))
     } else if cfg!(feature = "cuda") {
         Some(compile_cuda(&mut cx, &mut cxx, featless_cxx))
