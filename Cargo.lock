@@ -494,6 +494,7 @@ version = "0.1.56"
 dependencies = [
  "bindgen",
  "cc",
+ "glob",
  "once_cell",
 ]
 
