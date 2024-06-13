@@ -476,7 +476,7 @@ impl LlamaModel {
         // Set the tmpl pointer
         let tmpl = tmpl.map(CString::new);
         let tmpl_ptr = match &tmpl {
-            Some(str) => str.as_ref().map_err(|e| e.clone())?.as_ptr(),
+            Some(str) => str.as_ref().map_err(Clone::clone)?.as_ptr(),
             None => std::ptr::null(),
         };
 

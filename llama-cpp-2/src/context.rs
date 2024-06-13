@@ -76,7 +76,7 @@ impl<'model> LlamaContext<'model> {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits = batch.initialized_logits.clone();
+                self.initialized_logits.clone_from(&batch.initialized_logits);
                 Ok(())
             }
             Some(error) => Err(DecodeError::from(error)),

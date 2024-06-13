@@ -555,7 +555,7 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     // Create a static library for our metal embed code.
     let ggml_metal_embed_library_path = PathBuf::from(&out_dir).join("libggml-metal-embed.a");
     Command::new("ar")
-        .args(&[
+        .args([
             "crus",
             ggml_metal_embed_library_path.to_str().unwrap(),
             ggml_metal_embed_object_path.to_str().unwrap(),

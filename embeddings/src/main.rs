@@ -139,10 +139,10 @@ fn main() -> Result<()> {
         for token in token_line {
             // Attempt to convert token to string and print it; if it fails, print the token instead
             match model.token_to_str(*token, Special::Tokenize) {
-                Ok(token_str) => eprintln!(" {} --> {}", token, token_str),
+                Ok(token_str) => eprintln!("{token} --> {token_str}"),
                 Err(e) => {
-                    eprintln!("Failed to convert token to string, error: {}", e);
-                    eprintln!("Token value: {}", token);
+                    eprintln!("Failed to convert token to string, error: {e}");
+                    eprintln!("Token value: {token}");
                 }
             }
         }
