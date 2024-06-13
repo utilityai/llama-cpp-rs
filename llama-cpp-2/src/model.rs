@@ -9,7 +9,7 @@ use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
-use crate::token_type::LlamaTokenType;
+use crate::token_type::LlamaTokenAttr;
 use crate::{
     ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError,
     NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
@@ -238,9 +238,9 @@ impl LlamaModel {
     ///
     /// If the token type is not known to this library.
     #[must_use]
-    pub fn token_type(&self, LlamaToken(id): LlamaToken) -> LlamaTokenType {
-        let token_type = unsafe { llama_cpp_sys_2::llama_token_get_type(self.model.as_ptr(), id) };
-        LlamaTokenType::try_from(token_type).expect("token type is valid")
+    pub fn token_attr(&self, LlamaToken(id): LlamaToken) -> LlamaTokenAttr {
+        let token_type = unsafe { llama_cpp_sys_2::llama_token_get_attr(self.model.as_ptr(), id) };
+        LlamaTokenAttr::try_from(token_type).expect("token type is valid")
     }
 
     /// Convert a token to a string with a specified buffer size.
@@ -292,18 +292,23 @@ impl LlamaModel {
             return Ok(String::from("\n").into_bytes());
         }
 
-        // unsure what to do with this in the face of the 'special' arg
-        match self.token_type(token) {
-            LlamaTokenType::Normal | LlamaTokenType::UserDefined => {}
-            LlamaTokenType::Control => {
+        // unsure what to do with this in the face of the 'special' arg + attr changes
+        match self.token_attr(token) {
+            LlamaTokenAttr::Normal
+            | LlamaTokenAttr::UserDefined
+            | LlamaTokenAttr::Normalized
+            | LlamaTokenAttr::LStrip
+            | LlamaTokenAttr::RStrip
+            | LlamaTokenAttr::SingleWord => {}
+            LlamaTokenAttr::Control => {
                 if token == self.token_bos() || token == self.token_eos() {
                     return Ok(Vec::new());
                 }
             }
-            LlamaTokenType::Unknown
-            | LlamaTokenType::Undefined
-            | LlamaTokenType::Byte
-            | LlamaTokenType::Unused => {
+            LlamaTokenAttr::Unknown
+            | LlamaTokenAttr::Undefined
+            | LlamaTokenAttr::Byte
+            | LlamaTokenAttr::Unused => {
                 return Ok(Vec::new());
             }
         }
