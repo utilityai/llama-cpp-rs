@@ -203,7 +203,7 @@ pub enum StringToTokenError {
     #[error("{0}")]
     NulError(#[from] NulError),
     #[error("{0}")]
-    /// Failed to convert a provided integer to a c_int.
+    /// Failed to convert a provided integer to a [`c_int`].
     CIntConversionError(#[from] std::num::TryFromIntError),
 }
 

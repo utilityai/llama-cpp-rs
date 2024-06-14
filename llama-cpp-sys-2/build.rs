@@ -463,10 +463,17 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
         .map(|f| f.unwrap())
         .filter(|entry| entry.file_name().to_string_lossy().ends_with(".cu"))
         .map(|entry| entry.path());
+    
+    let template_instances = read_dir(cuda_path.join("template-instances"))
+        .unwrap()
+        .map(|f| f.unwrap())
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".cu"))
+        .map(|entry| entry.path());
 
     nvcc.include(cuda_path.as_path())
         .include(LLAMA_PATH.as_path())
         .files(cuda_sources)
+        .files(template_instances)
         .file(LLAMA_PATH.join("ggml-cuda.cu"))
         .compile(lib_name);
 
@@ -555,7 +562,7 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     // Create a static library for our metal embed code.
     let ggml_metal_embed_library_path = PathBuf::from(&out_dir).join("libggml-metal-embed.a");
     Command::new("ar")
-        .args(&[
+        .args([
             "crus",
             ggml_metal_embed_library_path.to_str().unwrap(),
             ggml_metal_embed_object_path.to_str().unwrap(),

@@ -39,6 +39,8 @@ include = [
     "/llama.cpp/ggml-common.h",
     "/llama.cpp/ggml-cuda",
     "/llama.cpp/sgemm.h",
+    "/llama.cpp/ggml-cuda/*",
+    "/llama.cpp/ggml-cuda/template_instances/*",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
