@@ -463,10 +463,17 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
         .map(|f| f.unwrap())
         .filter(|entry| entry.file_name().to_string_lossy().ends_with(".cu"))
         .map(|entry| entry.path());
+    
+    let template_instances = read_dir(cuda_path.join("template-instances"))
+        .unwrap()
+        .map(|f| f.unwrap())
+        .filter(|entry| entry.file_name().to_string_lossy().ends_with(".cu"))
+        .map(|entry| entry.path());
 
     nvcc.include(cuda_path.as_path())
         .include(LLAMA_PATH.as_path())
         .files(cuda_sources)
+        .files(template_instances)
         .file(LLAMA_PATH.join("ggml-cuda.cu"))
         .compile(lib_name);
 
