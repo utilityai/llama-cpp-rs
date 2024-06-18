@@ -9,7 +9,7 @@ use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
-use crate::token_type::LlamaTokenAttr;
+use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
     ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError,
     NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
@@ -238,9 +238,9 @@ impl LlamaModel {
     ///
     /// If the token type is not known to this library.
     #[must_use]
-    pub fn token_attr(&self, LlamaToken(id): LlamaToken) -> LlamaTokenAttr {
+    pub fn token_attr(&self, LlamaToken(id): LlamaToken) -> LlamaTokenAttrs {
         let token_type = unsafe { llama_cpp_sys_2::llama_token_get_attr(self.model.as_ptr(), id) };
-        LlamaTokenAttr::try_from(token_type).expect("token type is valid")
+        LlamaTokenAttrs::try_from(token_type).expect("token type is valid")
     }
 
     /// Convert a token to a string with a specified buffer size.
@@ -293,24 +293,16 @@ impl LlamaModel {
         }
 
         // unsure what to do with this in the face of the 'special' arg + attr changes
-        match self.token_attr(token) {
-            LlamaTokenAttr::Normal
-            | LlamaTokenAttr::UserDefined
-            | LlamaTokenAttr::Normalized
-            | LlamaTokenAttr::LStrip
-            | LlamaTokenAttr::RStrip
-            | LlamaTokenAttr::SingleWord => {}
-            LlamaTokenAttr::Control => {
-                if token == self.token_bos() || token == self.token_eos() {
-                    return Ok(Vec::new());
-                }
-            }
-            LlamaTokenAttr::Unknown
-            | LlamaTokenAttr::Undefined
-            | LlamaTokenAttr::Byte
-            | LlamaTokenAttr::Unused => {
-                return Ok(Vec::new());
-            }
+        let attrs = self.token_attr(token);
+        if attrs.contains(LlamaTokenAttr::Control)
+            && (token == self.token_bos() || token == self.token_eos())
+        {
+            return Ok(Vec::new());
+        } else if attrs.is_empty()
+            || attrs
+                .intersects(LlamaTokenAttr::Unknown | LlamaTokenAttr::Byte | LlamaTokenAttr::Unused)
+        {
+            return Ok(Vec::new());
         }
 
         let special = match special {
