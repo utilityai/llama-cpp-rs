@@ -339,6 +339,43 @@ impl LlamaContextParams {
         self.context_params.embeddings = embedding;
         self
     }
+
+    /// Set the evaluation callback.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// extern "C" fn cb_eval_fn(
+    ///     t: *mut llama_cpp_sys_2::ggml_tensor,
+    ///     ask: bool,
+    ///     user_data: *mut std::ffi::c_void,
+    /// ) -> bool {
+    ///     false
+    /// }
+    ///
+    /// params.with_cb_eval(Some(cb_eval_fn)); // Register the callback.
+    /// params.with_cb_eval(None); // Unregister a callback.
+    /// ```
+    pub fn with_cb_eval(
+        mut self,
+        cb_eval: llama_cpp_sys_2::ggml_backend_sched_eval_callback,
+    ) -> Self {
+        self.context_params.cb_eval = cb_eval;
+        self
+    }
+
+    /// Set the evaluation callback user data.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let user_data = std::ptr::null_mut();
+    /// params.with_cb_eval_user_data(user_data);
+    /// ```
+    pub fn with_cb_eval_user_data(mut self, cb_eval_user_data: *mut std::ffi::c_void) -> Self {
+        self.context_params.cb_eval_user_data = cb_eval_user_data;
+        self
+    }
 }
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
