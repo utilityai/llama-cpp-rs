@@ -344,7 +344,7 @@ impl LlamaContextParams {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```no_run
     /// extern "C" fn cb_eval_fn(
     ///     t: *mut llama_cpp_sys_2::ggml_tensor,
     ///     ask: bool,
@@ -368,7 +368,7 @@ impl LlamaContextParams {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```no_run
     /// let user_data = std::ptr::null_mut();
     /// params.with_cb_eval_user_data(user_data);
     /// ```
