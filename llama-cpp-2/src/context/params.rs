@@ -353,8 +353,9 @@ impl LlamaContextParams {
     ///     false
     /// }
     ///
-    /// params.with_cb_eval(Some(cb_eval_fn)); // Register the callback.
-    /// params.with_cb_eval(None); // Unregister a callback.
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// params.with_cb_eval(Some(cb_eval_fn));
     /// ```
     pub fn with_cb_eval(
         mut self,
@@ -369,6 +370,8 @@ impl LlamaContextParams {
     /// # Examples
     ///
     /// ```no_run
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
     /// let user_data = std::ptr::null_mut();
     /// params.with_cb_eval_user_data(user_data);
     /// ```
