@@ -55,3 +55,36 @@ fn check_parse_simple() {
         parse_state
     );
 }
+
+#[test]
+fn check_parse_char_range() {
+    let parse_state = ParseState::from_str(r#"root ::= [a-zA-Z]"#).unwrap();
+    assert_eq!(
+        ParseState {
+            symbol_ids: BTreeMap::from([("root".to_string(), 0),]),
+            rules: vec![vec![
+                llama_grammar_element {
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR,
+                    value: 'a' as u32
+                },
+                llama_grammar_element {
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_RNG_UPPER,
+                    value: 'z' as u32
+                },
+                llama_grammar_element {
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_ALT,
+                    value: 'A' as u32
+                },
+                llama_grammar_element {
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_RNG_UPPER,
+                    value: 'Z' as u32
+                },
+                llama_grammar_element {
+                    type_: llama_cpp_sys_2::LLAMA_GRETYPE_END,
+                    value: 0
+                }
+            ]]
+        },
+        parse_state
+    );
+}
