@@ -23,6 +23,8 @@ sampler = []
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx"] }
 [target.'cfg(target_feature = "avx2")'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx2"] }
+[target.'cfg(target_feature = "avx512f")'.dependencies]
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx512"] }
 [target.'cfg(target_feature = "avx512vbmi")'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx512_vmbi"] }
 [target.'cfg(target_feature = "avx512vnni")'.dependencies]
