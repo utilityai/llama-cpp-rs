@@ -1,11 +1,13 @@
-use std::env;
+use std::env::{self, VarError};
 use std::fs::{read_dir, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 
 use cc::Build;
 use once_cell::sync::Lazy;
+use glob::glob;
 
 // This build file is based on:
 // https://github.com/mdrokz/rust-llama.cpp/blob/master/build.rs
@@ -365,23 +367,16 @@ fn compile_blis(cx: &mut Build) {
 }
 
 fn compile_hipblas(cx: &mut Build, cxx: &mut Build, mut hip: Build) -> &'static str {
-    const DEFAULT_ROCM_PATH_STR: &str = "/opt/rocm/";
+    let rocm_path_str = env::var("ROCM_PATH").or(Ok::<String, VarError>(String::from_str("/opt/rocm/").unwrap())).unwrap();
 
-    let rocm_path_str = env::var("ROCM_PATH")
-        .map_err(|_| DEFAULT_ROCM_PATH_STR.to_string())
-        .unwrap();
-    println!("Compiling HIPBLAS GGML. Using ROCm from {rocm_path_str}");
+    println!("Compiling hipBLAS GGML. Using ROCm from {rocm_path_str}");
 
     let rocm_path = PathBuf::from(rocm_path_str);
     let rocm_include = rocm_path.join("include");
     let rocm_lib = rocm_path.join("lib");
     let rocm_hip_bin = rocm_path.join("bin/hipcc");
 
-    let cuda_lib = "ggml-cuda";
-    let cuda_file = cuda_lib.to_string() + ".cu";
-    let cuda_header = cuda_lib.to_string() + ".h";
-
-    let defines = ["GGML_USE_HIPBLAS", "GGML_USE_CUBLAS"];
+    let defines = ["GGML_USE_HIPBLAS", "GGML_USE_CUDA"];
     for def in defines {
         cx.define(def, None);
         cxx.define(def, None);
@@ -390,24 +385,39 @@ fn compile_hipblas(cx: &mut Build, cxx: &mut Build, mut hip: Build) -> &'static 
     cx.include(&rocm_include);
     cxx.include(&rocm_include);
 
+    let ggml_cuda = glob(LLAMA_PATH.join("ggml-cuda").join("*.cu").to_str().unwrap())
+        .unwrap().filter_map(Result::ok).collect::<Vec<_>>();
+    let ggml_template_fattn = glob(LLAMA_PATH.join("ggml-cuda").join("template-instances").join("fattn-vec*.cu").to_str().unwrap())
+        .unwrap().filter_map(Result::ok).collect::<Vec<_>>();
+    let ggml_template_wmma = glob(LLAMA_PATH.join("ggml-cuda").join("template-instances").join("fattn-wmma*.cu").to_str().unwrap())
+        .unwrap().filter_map(Result::ok).collect::<Vec<_>>();
+    let ggml_template_mmq = glob(LLAMA_PATH.join("ggml-cuda").join("template-instances").join("mmq*.cu").to_str().unwrap())
+        .unwrap().filter_map(Result::ok).collect::<Vec<_>>();
+
     hip.compiler(rocm_hip_bin)
         .std("c++11")
-        .file(LLAMA_PATH.join(cuda_file))
-        .include(LLAMA_PATH.join(cuda_header))
+        .define("LLAMA_CUDA_DMMV_X", Some("32"))
+        .define("LLAMA_CUDA_MMV_Y", Some("1"))
+        .define("LLAMA_CUDA_KQUANTS_ITER", Some("2"))
+        .file(LLAMA_PATH.join("ggml-cuda.cu"))
+        .files(ggml_cuda)
+        .files(ggml_template_fattn)
+        .files(ggml_template_wmma)
+        .files(ggml_template_mmq)
+        .include(LLAMA_PATH.join(""))
+        .include(LLAMA_PATH.join("ggml-cuda"))
         .define("GGML_USE_HIPBLAS", None)
-        .compile(cuda_lib);
+        .define("GGML_USE_CUDA", None)
+        .compile("ggml-cuda");
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        rocm_lib.to_string_lossy()
-    );
+    println!("cargo:rustc-link-search=native={}", rocm_lib.to_string_lossy());
 
     let rocm_libs = ["hipblas", "rocblas", "amdhip64"];
     for lib in rocm_libs {
         println!("cargo:rustc-link-lib={lib}");
     }
 
-    cuda_lib
+    "ggml-cuda"
 }
 
 fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'static str {
@@ -507,8 +517,7 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     let common = LLAMA_PATH.join("ggml-common.h");
 
     let input_file = File::open(ggml_metal_shader_path).expect("Failed to open input file");
-    let mut output_file =
-        File::create(&ggml_metal_shader_out_path).expect("Failed to create output file");
+    let output_file = File::create(&ggml_metal_shader_out_path).expect("Failed to create output file");
 
     let output = Command::new("sed")
         .arg("-e")
@@ -656,7 +665,7 @@ fn main() {
     push_warn_flags(&mut cx, &mut cxx);
     push_feature_flags(&mut cx, &mut cxx);
 
-    let feat_lib = if cfg!(feature = "vulkan") {
+    let _feat_lib = if cfg!(feature = "vulkan") {
         Some(compile_vulkan(&mut cx, &mut cxx))
     } else if cfg!(feature = "cuda") {
         Some(compile_cuda(&mut cx, &mut cxx, featless_cxx))
