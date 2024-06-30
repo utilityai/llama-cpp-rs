@@ -294,8 +294,8 @@ impl ParseState {
                         type_: gre_type,
                         value: c as _,
                     });
-                    if rest.starts_with("-]") {
-                        let (c, r) = Self::parse_char(rest)?;
+                    if rest.starts_with("-") && rest.get(1..).is_some_and(|r| !r.starts_with("]")) {
+                        let (c, r) = Self::parse_char(&rest[1..])?;
                         rest = r;
                         rule.push(llama_grammar_element {
                             type_: llama_cpp_sys_2::LLAMA_GRETYPE_CHAR_RNG_UPPER,
