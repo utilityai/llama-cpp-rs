@@ -607,6 +607,7 @@ fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
         .include(LLAMA_PATH.as_path())
         .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
         .compile(lib_name);
+    println!("cargo:rustc-link-lib=vulkan");
 
     lib_name
 }
