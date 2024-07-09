@@ -17,6 +17,8 @@ tracing = { workspace = true }
 [features]
 cuda = ["llama-cpp-sys-2/cuda"]
 metal = ["llama-cpp-sys-2/metal"]
+vulkan = ["llama-cpp-sys-2/vulkan"]
+native = ["llama-cpp-sys-2/native"]
 sampler = []
 
 [target.'cfg(target_feature = "avx")'.dependencies]

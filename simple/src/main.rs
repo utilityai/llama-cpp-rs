@@ -44,7 +44,7 @@ struct Args {
     #[arg(short = 'o', value_parser = parse_key_val)]
     key_value_overrides: Vec<(String, ParamOverrideValue)>,
     /// Disable offloading layers to the gpu
-    #[cfg(feature = "cuda")]
+    #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[clap(long)]
     disable_gpu: bool,
     #[arg(short = 's', long, help = "RNG seed (default: 1234)")]
@@ -124,7 +124,7 @@ fn main() -> Result<()> {
         model,
         prompt,
         file,
-        #[cfg(feature = "cuda")]
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
         disable_gpu,
         key_value_overrides,
         seed,
@@ -138,13 +138,13 @@ fn main() -> Result<()> {
 
     // offload all layers to the gpu
     let model_params = {
-        #[cfg(feature = "cuda")]
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
         if !disable_gpu {
             LlamaModelParams::default().with_n_gpu_layers(1000)
         } else {
             LlamaModelParams::default()
         }
-        #[cfg(not(feature = "cuda"))]
+        #[cfg(not(any(feature = "cuda", feature = "vulkan")))]
         LlamaModelParams::default()
     };
 

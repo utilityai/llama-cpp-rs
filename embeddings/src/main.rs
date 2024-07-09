@@ -35,7 +35,7 @@ struct Args {
     #[clap(short)]
     normalise: bool,
     /// Disable offloading layers to the gpu
-    #[cfg(feature = "cuda")]
+    #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[clap(long)]
     disable_gpu: bool,
 }
@@ -78,7 +78,7 @@ fn main() -> Result<()> {
         model,
         prompt,
         normalise,
-        #[cfg(feature = "cuda")]
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
         disable_gpu,
     } = Args::parse();
 
@@ -87,13 +87,13 @@ fn main() -> Result<()> {
 
     // offload all layers to the gpu
     let model_params = {
-        #[cfg(feature = "cuda")]
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
         if !disable_gpu {
             LlamaModelParams::default().with_n_gpu_layers(1000)
         } else {
             LlamaModelParams::default()
         }
-        #[cfg(not(feature = "cuda"))]
+        #[cfg(not(any(feature = "cuda", feature = "vulkan")))]
         LlamaModelParams::default()
     };
 
