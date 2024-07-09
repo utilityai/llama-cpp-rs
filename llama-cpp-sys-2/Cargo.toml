@@ -53,7 +53,14 @@ cc = { workspace = true, features = ["parallel"] }
 once_cell = "1.19.0"
 
 [features]
+avx = []
+avx2 = []
+avx512 = []
+avx512_vmbi = []
+avx512_vnni = []
 cuda = []
+f16c = []
+fma = []
 metal = []
 vulkan = []
 native = []
