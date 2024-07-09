@@ -463,7 +463,7 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
         .map(|f| f.unwrap())
         .filter(|entry| entry.file_name().to_string_lossy().ends_with(".cu"))
         .map(|entry| entry.path());
-    
+
     let template_instances = read_dir(cuda_path.join("template-instances"))
         .unwrap()
         .map(|f| f.unwrap())
@@ -507,7 +507,7 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     let common = LLAMA_PATH.join("ggml-common.h");
 
     let input_file = File::open(ggml_metal_shader_path).expect("Failed to open input file");
-    let mut output_file =
+    let output_file =
         File::create(&ggml_metal_shader_out_path).expect("Failed to create output file");
 
     let output = Command::new("sed")
@@ -583,10 +583,34 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
         .file(LLAMA_PATH.join("ggml-metal.m"));
 }
 
+fn find_windows_vulkan_sdk() -> PathBuf {
+    // if the vulkan sdk is installed in the standard location then this should be pretty fast,
+    // but we still must search recursively because we don't know the exact version number.
+    // if it's installed somewhere else, this will take a while, but it's better than failing.
+    let vulkan_root = Command::new("powershell.exe")
+            .arg("-Command")
+            .arg(r#"
+if (test-path -pathtype Container "/VulkanSDK") {
+    $root = "/VulkanSDK"
+} else {
+    $root = "/"
+}
+get-childitem -path $root -recurse -filter "vulkan.h" 2>$null | foreach-object { $_.directory.parent.parent.fullname }
+"#)
+            .output()
+            .expect("could not find vulkan.h")
+            .stdout;
+    let vulkan_root = String::from_utf8_lossy(
+        vulkan_root
+            .split(|c| *c == b'\n')
+            .next()
+            .expect("could not find vulkan.h"),
+    );
+    PathBuf::from(vulkan_root.trim())
+}
+
 fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
     println!("Compiling Vulkan GGML..");
-
-    // Vulkan gets linked through the ash crate.
 
     if cfg!(debug_assertions) {
         cx.define("GGML_VULKAN_DEBUG", None)
@@ -602,13 +626,25 @@ fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
 
     let lib_name = "ggml-vulkan";
 
-    cxx.clone()
-        .include("./thirdparty/Vulkan-Headers/include/")
-        .include(LLAMA_PATH.as_path())
-        .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
-        .compile(lib_name);
-    println!("cargo:rustc-link-lib=vulkan");
-
+    if cfg!(target_os = "windows") {
+        let vulkan_root = find_windows_vulkan_sdk();
+        cxx.clone()
+            .include(vulkan_root.join("Include"))
+            .include(LLAMA_PATH.as_path())
+            .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
+            .compile(lib_name);
+        println!(
+            "cargo:rustc-link-search=native={}",
+            vulkan_root.join("Lib").display()
+        );
+        println!("cargo:rustc-link-lib=vulkan-1");
+    } else {
+        cxx.clone()
+            .include(LLAMA_PATH.as_path())
+            .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
+            .compile(lib_name);
+        println!("cargo:rustc-link-lib=vulkan");
+    }
     lib_name
 }
 
@@ -657,6 +693,7 @@ fn main() {
     push_warn_flags(&mut cx, &mut cxx);
     push_feature_flags(&mut cx, &mut cxx);
 
+    #[allow(unused_variables)]
     let feat_lib = if cfg!(feature = "vulkan") {
         Some(compile_vulkan(&mut cx, &mut cxx))
     } else if cfg!(feature = "cuda") {
