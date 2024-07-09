@@ -23,22 +23,38 @@ native = ["llama-cpp-sys-2/native"]
 sampler = []
 
 [target.'cfg(target_feature = "avx")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "avx",
+] }
 [target.'cfg(target_feature = "avx2")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx2"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "avx2",
+] }
 [target.'cfg(target_feature = "avx512f")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx512"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "avx512",
+] }
 [target.'cfg(target_feature = "avx512vbmi")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx512_vmbi"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "avx512_vmbi",
+] }
 [target.'cfg(target_feature = "avx512vnni")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["avx512_vnni"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "avx512_vnni",
+] }
 [target.'cfg(target_feature = "f16c")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["f16c"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "f16c",
+] }
 [target.'cfg(target_feature = "fma")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features = ["fma"] }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "fma",
+] }
 
-[target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]  
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", features=["metal"], version = "0.1.48" }
+[target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.61", features = [
+    "metal",
+] }
 
 [lints]
 workspace = true
