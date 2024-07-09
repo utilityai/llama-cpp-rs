@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-sys-2"
 description = "Low Level Bindings to llama.cpp"
-version = "0.1.60"
+version = "0.1.61"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
@@ -53,6 +53,15 @@ cc = { workspace = true, features = ["parallel"] }
 once_cell = "1.19.0"
 
 [features]
+avx = []
+avx2 = []
+avx512 = []
+avx512_vmbi = []
+avx512_vnni = []
 cuda = []
+f16c = []
+fma = []
 metal = []
 dynamic_link = []
+vulkan = []
+native = []
