@@ -450,7 +450,9 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
     }
 
     let lib_name = "ggml-cuda";
-    let cuda_path = LLAMA_PATH.join("ggml-cuda");
+    let ggml_path = LLAMA_PATH.join("ggml");
+    let ggml_src = ggml_path.join("src");
+    let cuda_path = ggml_src.join("ggml-cuda");
     let cuda_sources = read_dir(cuda_path.as_path())
         .unwrap()
         .map(|f| f.unwrap())
@@ -464,10 +466,11 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
         .map(|entry| entry.path());
 
     nvcc.include(cuda_path.as_path())
-        .include(LLAMA_PATH.as_path())
+        .include(ggml_src.as_path())
+        .include(ggml_path.join("include").as_path())
         .files(cuda_sources)
         .files(template_instances)
-        .file(LLAMA_PATH.join("ggml-cuda.cu"))
+        .file(ggml_src.join("ggml-cuda.cu"))
         .compile(lib_name);
 
     lib_name
