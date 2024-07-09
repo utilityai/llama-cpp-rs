@@ -86,11 +86,11 @@ compile_error!("feature \"vulkan\" cannot be enabled alongside other GPU based f
 
 static LLAMA_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("./llama.cpp"));
 
-fn compile_bindings(out_path: &Path) {
+fn compile_bindings(out_path: &Path, llama_header_path: &Path) {
     println!("Generating bindings..");
     let bindings = bindgen::Builder::default()
-        .header(LLAMA_PATH.join("ggml.h").to_string_lossy())
-        .header(LLAMA_PATH.join("llama.h").to_string_lossy())
+        // .header(llama_header_path.join("ggml.h").to_string_lossy())
+        .header(llama_header_path.join("llama.h").to_string_lossy())
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
@@ -670,6 +670,25 @@ fn compile_llama(mut cxx: Build, _out_path: impl AsRef<Path>) {
 }
 
 fn main() {
+    let out_path = PathBuf::from(env::var("OUT_DIR").expect("No out dir found"));
+
+    if cfg!(feature = "dynamic_link") {
+        println!("cargo:rustc-link-lib=llama");
+        println!("cargo:rustc-link-lib=ggml");
+
+        let llama_header_path = std::env::var("LLAMA_HEADE");
+        if let Ok(llama_header_path) = llama_header_path {
+            compile_bindings(&out_path, Path::new(&llama_header_path));
+        } else {
+            compile_bindings(&out_path, &LLAMA_PATH);
+        }
+
+        if let Ok(llama_lib_path) = std::env::var("LLAMA_LIB") {
+            println!("cargo:rustc-link-search={llama_lib_path}");
+        }
+        return;
+    }
+
     if std::fs::read_dir(LLAMA_PATH.as_path()).is_err() {
         panic!(
             "Could not find {}. Did you forget to initialize submodules?",
@@ -677,11 +696,9 @@ fn main() {
         );
     }
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").expect("No out dir found"));
-
     println!("cargo:rerun-if-changed={}", LLAMA_PATH.display());
 
-    compile_bindings(&out_path);
+    compile_bindings(&out_path, &LLAMA_PATH);
 
     let mut cx = Build::new();
     let mut cxx = Build::new();
