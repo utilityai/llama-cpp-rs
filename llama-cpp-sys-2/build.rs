@@ -86,11 +86,24 @@ compile_error!("feature \"vulkan\" cannot be enabled alongside other GPU based f
 
 static LLAMA_PATH: Lazy<PathBuf> = Lazy::new(|| PathBuf::from("./llama.cpp"));
 
-fn compile_bindings(out_path: &Path, llama_header_path: &Path) {
+fn compile_bindings(
+    out_path: &Path,
+    llama_header_path: &Path,
+) -> Result<(), Box<dyn std::error::Error + 'static>> {
     println!("Generating bindings..");
+    
+    let includes = [
+        llama_header_path.join("ggml").join("include"),
+    ];
+    
     let bindings = bindgen::Builder::default()
-        // .header(llama_header_path.join("ggml.h").to_string_lossy())
-        .header(llama_header_path.join("llama.h").to_string_lossy())
+        .clang_args(includes.map(|path| format!("-I{}", path.to_string_lossy())))
+        .header(
+            llama_header_path
+                .join("include")
+                .join("llama.h")
+                .to_string_lossy(),
+        )
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
@@ -106,11 +119,11 @@ fn compile_bindings(out_path: &Path, llama_header_path: &Path) {
         bindings = bindings.parse_callbacks(Box::new(GGMLLinkRename {}));
     }
 
-    let bindings = bindings.generate().expect("Unable to generate bindings");
+    let bindings = bindings.generate()?;
 
-    bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    bindings.write_to_file(out_path.join("bindings.rs"))?;
+
+    Ok(())
 }
 
 #[cfg(all(
@@ -317,26 +330,6 @@ fn push_feature_flags(cx: &mut Build, cxx: &mut Build) {
             }
         }
     }
-}
-
-fn compile_opencl(cx: &mut Build, cxx: &mut Build) {
-    println!("Compiling OpenCL GGML..");
-
-    // TODO
-    println!("cargo:warning=OpenCL compilation and execution has not been properly tested yet");
-
-    cx.define("GGML_USE_CLBLAST", None);
-    cxx.define("GGML_USE_CLBLAST", None);
-
-    if cfg!(target_os = "linux") {
-        println!("cargo:rustc-link-lib=OpenCL");
-        println!("cargo:rustc-link-lib=clblast");
-    } else if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-lib=framework=OpenCL");
-        println!("cargo:rustc-link-lib=clblast");
-    }
-
-    cxx.file(LLAMA_PATH.join("ggml-opencl.cpp"));
 }
 
 fn compile_openblas(cx: &mut Build) {
@@ -650,22 +643,28 @@ fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
 
 fn compile_ggml(mut cx: Build) {
     println!("Compiling GGML..");
+    let ggml_src = LLAMA_PATH.join("ggml").join("src");
+    let ggml_include = LLAMA_PATH.join("ggml").join("include");
     cx.std("c11")
-        .include(LLAMA_PATH.as_path())
-        .file(LLAMA_PATH.join("ggml.c"))
-        .file(LLAMA_PATH.join("ggml-alloc.c"))
-        .file(LLAMA_PATH.join("ggml-backend.c"))
-        .file(LLAMA_PATH.join("ggml-quants.c"))
+        .include(ggml_include)
+        .file(ggml_src.join("ggml.c"))
+        .file(ggml_src.join("ggml-alloc.c"))
+        .file(ggml_src.join("ggml-backend.c"))
+        .file(ggml_src.join("ggml-quants.c"))
         .compile("ggml");
 }
 
 fn compile_llama(mut cxx: Build, _out_path: impl AsRef<Path>) {
     println!("Compiling Llama.cpp..");
+    let llama_cpp_src = LLAMA_PATH.join("src");
+    let llama_include = LLAMA_PATH.join("include");
+    let ggml_include = LLAMA_PATH.join("ggml").join("include");
     cxx.std("c++11")
-        .include(LLAMA_PATH.as_path())
-        .file(LLAMA_PATH.join("unicode.cpp"))
-        .file(LLAMA_PATH.join("unicode-data.cpp"))
-        .file(LLAMA_PATH.join("llama.cpp"))
+        .include(llama_include)
+        .include(ggml_include)
+        .file(llama_cpp_src.join("unicode.cpp"))
+        .file(llama_cpp_src.join("unicode-data.cpp"))
+        .file(llama_cpp_src.join("llama.cpp"))
         .compile("llama");
 }
 
@@ -678,9 +677,10 @@ fn main() {
 
         let llama_header_path = std::env::var("LLAMA_HEADE");
         if let Ok(llama_header_path) = llama_header_path {
-            compile_bindings(&out_path, Path::new(&llama_header_path));
+            compile_bindings(&out_path, Path::new(&llama_header_path))
+                .expect("failed to generate bindings");
         } else {
-            compile_bindings(&out_path, &LLAMA_PATH);
+            compile_bindings(&out_path, &LLAMA_PATH).expect("failed to generate bindings");
         }
 
         if let Ok(llama_lib_path) = std::env::var("LLAMA_LIB") {
@@ -698,7 +698,7 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", LLAMA_PATH.display());
 
-    compile_bindings(&out_path, &LLAMA_PATH);
+    compile_bindings(&out_path, &LLAMA_PATH).expect("failed to generate bindings");
 
     let mut cx = Build::new();
     let mut cxx = Build::new();
@@ -715,9 +715,6 @@ fn main() {
         Some(compile_vulkan(&mut cx, &mut cxx))
     } else if cfg!(feature = "cuda") {
         Some(compile_cuda(&mut cx, &mut cxx, featless_cxx))
-    } else if cfg!(feature = "opencl") {
-        compile_opencl(&mut cx, &mut cxx);
-        None
     } else if cfg!(feature = "openblas") {
         compile_openblas(&mut cx);
         None
