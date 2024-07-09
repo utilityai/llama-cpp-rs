@@ -55,4 +55,4 @@ once_cell = "1.19.0"
 [features]
 cuda = []
 metal = []
-
+dynamic_link = []

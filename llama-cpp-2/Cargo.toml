@@ -17,6 +17,7 @@ tracing = { workspace = true }
 [features]
 cuda = ["llama-cpp-sys-2/cuda"]
 metal = ["llama-cpp-sys-2/metal"]
+dynamic_link = ["llama-cpp-sys-2/dynamic_link"]
 sampler = []
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]  
