@@ -22,35 +22,6 @@ vulkan = ["llama-cpp-sys-2/vulkan"]
 native = ["llama-cpp-sys-2/native"]
 sampler = []
 
-[target.'cfg(target_feature = "avx")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "avx",
-] }
-[target.'cfg(target_feature = "avx2")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "avx2",
-] }
-[target.'cfg(target_feature = "avx512f")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "avx512",
-] }
-[target.'cfg(target_feature = "avx512vbmi")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "avx512_vmbi",
-] }
-[target.'cfg(target_feature = "avx512vnni")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "avx512_vnni",
-] }
-[target.'cfg(target_feature = "f16c")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "f16c",
-] }
-[target.'cfg(target_feature = "fma")'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
-    "fma",
-] }
-
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.63", features = [
     "metal",

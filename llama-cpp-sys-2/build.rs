@@ -259,59 +259,59 @@ fn push_feature_flags(cx: &mut Build, cxx: &mut Build) {
             cxx.flag("-march=native");
         }
 
-        if cfg!(feature = "fma") && cfg!(target_family = "unix") {
+        if cfg!(target_feature = "fma") && cfg!(target_family = "unix") {
             cx.flag("-mfma");
             cxx.flag("-mfma");
         }
 
-        if cfg!(feature = "f16c") && cfg!(target_family = "unix") {
+        if cfg!(target_feature = "f16c") && cfg!(target_family = "unix") {
             cx.flag("-mf16c");
             cxx.flag("-mf16c");
         }
 
         if cfg!(target_family = "unix") {
-            if cfg!(feature = "avx512") {
+            if cfg!(target_feature = "avx512f") {
                 cx.flag("-mavx512f").flag("-mavx512bw");
                 cxx.flag("-mavx512f").flag("-mavx512bw");
 
-                if cfg!(feature = "avx512_vmbi") {
+                if cfg!(target_feature = "avx512vbmi") {
                     cx.flag("-mavx512vbmi");
                     cxx.flag("-mavx512vbmi");
                 }
 
-                if cfg!(feature = "avx512_vnni") {
+                if cfg!(target_feature = "avx512vnni") {
                     cx.flag("-mavx512vnni");
                     cxx.flag("-mavx512vnni");
                 }
             }
 
-            if cfg!(feature = "avx2") {
+            if cfg!(target_feature = "avx2") {
                 cx.flag("-mavx2");
                 cxx.flag("-mavx2");
             }
 
-            if cfg!(feature = "avx") {
+            if cfg!(target_feature = "avx") {
                 cx.flag("-mavx");
                 cxx.flag("-mavx");
             }
         } else if cfg!(target_family = "windows") {
-            if cfg!(feature = "avx512") {
+            if cfg!(target_feature = "avx512f") {
                 cx.flag("/arch:AVX512");
                 cxx.flag("/arch:AVX512");
 
-                if cfg!(feature = "avx512_vmbi") {
+                if cfg!(target_feature = "avx512vbmi") {
                     cx.define("__AVX512VBMI__", None);
                     cxx.define("__AVX512VBMI__", None);
                 }
 
-                if cfg!(feature = "avx512_vnni") {
+                if cfg!(target_feature = "avx512vnni") {
                     cx.define("__AVX512VNNI__", None);
                     cxx.define("__AVX512VNNI__", None);
                 }
-            } else if cfg!(feature = "avx2") {
+            } else if cfg!(target_feature = "avx2") {
                 cx.flag("/arch:AVX2");
                 cxx.flag("/arch:AVX2");
-            } else if cfg!(feature = "avx") {
+            } else if cfg!(target_feature = "avx") {
                 cx.flag("/arch:AVX");
                 cxx.flag("/arch:AVX");
             }
