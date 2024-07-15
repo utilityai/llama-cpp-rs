@@ -271,8 +271,13 @@ fn push_feature_flags(cx: &mut Build, cxx: &mut Build) {
 
         if cfg!(target_family = "unix") {
             if cfg!(target_feature = "avx512f") {
-                cx.flag("-mavx512f").flag("-mavx512bw");
-                cxx.flag("-mavx512f").flag("-mavx512bw");
+                cx.flag("-mavx512f");
+                cxx.flag("-mavx512f");
+
+                if cfg!(target_feature = "avx512bw") {
+                    cx.flag("-mavx512bw");
+                    cxx.flag("-mavx512bw");
+                }
 
                 if cfg!(target_feature = "avx512vbmi") {
                     cx.flag("-mavx512vbmi");
