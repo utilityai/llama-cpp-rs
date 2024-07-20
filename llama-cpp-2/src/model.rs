@@ -454,7 +454,7 @@ impl LlamaModel {
         let message_length = chat.iter().fold(0, |acc, c| {
             acc + c.role.to_bytes().len() + c.content.to_bytes().len()
         });
-        let mut buff: Vec<i8> = vec![0_i8; message_length * 2];
+        let mut buff: Vec<i8> = vec![0_i8; message_length * 4];
 
         // Build our llama_cpp_sys_2 chat messages
         let chat: Vec<llama_cpp_sys_2::llama_chat_message> = chat
