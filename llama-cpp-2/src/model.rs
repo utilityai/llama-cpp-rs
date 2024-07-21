@@ -370,22 +370,28 @@ impl LlamaModel {
         let chat_ptr = chat_temp.into_raw();
         let chat_name = CString::new("tokenizer.chat_template").expect("no null bytes");
 
-        let chat_template: String = unsafe {
-            let ret = llama_cpp_sys_2::llama_model_meta_val_str(
+        let ret = unsafe {
+            llama_cpp_sys_2::llama_model_meta_val_str(
                 self.model.as_ptr(),
                 chat_name.as_ptr(),
                 chat_ptr,
                 buf_size,
-            );
-            if ret < 0 {
-                return Err(ChatTemplateError::MissingTemplate(ret));
-            }
-            let template = CString::from_raw(chat_ptr).to_str()?.to_string();
-            debug_assert_eq!(usize::try_from(ret).unwrap(), template.len(), "llama.cpp guarantees that the returned int {ret} is the length of the string {} but that was not the case", template.len());
-            template
+            )
         };
 
-        Ok(chat_template)
+        if ret < 0 {
+            return Err(ChatTemplateError::MissingTemplate(ret));
+        }
+
+        let template_c = unsafe { CString::from_raw(chat_ptr) };
+        let template = template_c.to_str()?;
+
+        let ret: usize = ret.try_into().unwrap();
+        if template.len() < ret {
+            return Err(ChatTemplateError::BuffSizeError(ret + 1));
+        }
+
+        Ok(template.to_owned())
     }
 
     /// loads a model from a file.
