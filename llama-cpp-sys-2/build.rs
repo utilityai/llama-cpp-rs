@@ -687,7 +687,7 @@ fn main() {
         println!("cargo:rustc-link-lib=llama");
         println!("cargo:rustc-link-lib=ggml");
 
-        let llama_header_path = std::env::var("LLAMA_HEADE");
+        let llama_header_path = std::env::var("LLAMA_HEADER");
         if let Ok(llama_header_path) = llama_header_path {
             compile_bindings(&out_path, Path::new(&llama_header_path))
                 .expect("failed to generate bindings");
