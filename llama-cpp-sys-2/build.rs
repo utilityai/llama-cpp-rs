@@ -457,7 +457,7 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
     let lib_name = "ggml-cuda";
     let ggml_path = LLAMA_PATH.join("ggml");
     let ggml_src = ggml_path.join("src");
-    let cuda_path = ggml_src.join("ggml-cuda");
+    let cuda_path = ggml_src.join(lib_name);
     let cuda_sources = read_dir(cuda_path.as_path())
         .unwrap()
         .map(|f| f.unwrap())
@@ -497,15 +497,19 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     // It's idiomatic to use OUT_DIR for intermediate c/c++ artifacts
     let out_dir = env::var("OUT_DIR").unwrap();
 
-    let ggml_metal_shader_path = LLAMA_PATH.join("ggml-metal.metal");
+    let lib_name = "ggml-metal.metal";
+    let ggml_path = LLAMA_PATH.join("ggml");
+    let ggml_src = ggml_path.join("src");
+    let ggml_include = ggml_path.join("include");
+    let ggml_metal_shader_path = ggml_src.join(lib_name);
 
     // Create a temporary assembly file that will allow for static linking to the metal shader.
     let ggml_metal_embed_assembly_path = PathBuf::from(&out_dir).join("ggml-metal-embed.asm");
     let mut ggml_metal_embed_assembly_file = File::create(&ggml_metal_embed_assembly_path)
         .expect("Failed to open ggml-metal-embed.asm file");
 
-    let ggml_metal_shader_out_path = PathBuf::from(&out_dir).join("ggml-metal.metal");
-    let common = LLAMA_PATH.join("ggml-common.h");
+    let ggml_metal_shader_out_path = PathBuf::from(&out_dir).join(lib_name);
+    let common = ggml_src.join("ggml-common.h");
 
     let input_file = File::open(ggml_metal_shader_path).expect("Failed to open input file");
     let output_file =
@@ -580,8 +584,8 @@ fn compile_metal(cx: &mut Build, cxx: &mut Build) {
     println!("cargo:rustc-link-search=native={}", &out_dir);
     println!("cargo:rustc-link-lib=static=ggml-metal-embed");
 
-    cx.include(LLAMA_PATH.join("ggml-metal.h"))
-        .file(LLAMA_PATH.join("ggml-metal.m"));
+    cx.include(ggml_include.join("ggml-metal.h"))
+        .file(ggml_src.join("ggml-metal.m"));
 }
 
 fn find_windows_vulkan_sdk() -> PathBuf {
@@ -683,7 +687,7 @@ fn main() {
         println!("cargo:rustc-link-lib=llama");
         println!("cargo:rustc-link-lib=ggml");
 
-        let llama_header_path = std::env::var("LLAMA_HEADE");
+        let llama_header_path = std::env::var("LLAMA_HEADER");
         if let Ok(llama_header_path) = llama_header_path {
             compile_bindings(&out_path, Path::new(&llama_header_path))
                 .expect("failed to generate bindings");
