@@ -13,8 +13,8 @@ impl LlamaContext<'_> {
     pub fn grammar_accept_token(&mut self, grammar: &mut LlamaGrammar, token: LlamaToken) {
         unsafe {
             llama_cpp_sys_2::llama_grammar_accept_token(
-                self.context.as_ptr(),
                 grammar.grammar.as_ptr(),
+                self.context.as_ptr(),
                 token.0,
             );
         }
