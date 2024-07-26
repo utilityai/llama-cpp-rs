@@ -1,5 +1,6 @@
 //! A safe wrapper around `llama_model`.
 use std::ffi::CString;
+use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
@@ -131,7 +132,7 @@ impl LlamaModel {
         token: LlamaToken,
         special: Special,
     ) -> Result<Vec<u8>, TokenToStringError> {
-        self.token_to_bytes_with_size(token, 32, special)
+        self.token_to_bytes_with_size(token, 32, special, None)
     }
 
     /// Convert a vector of tokens to a single string.
@@ -264,7 +265,7 @@ impl LlamaModel {
         buffer_size: usize,
         special: Special,
     ) -> Result<String, TokenToStringError> {
-        let bytes = self.token_to_bytes_with_size(token, buffer_size, special)?;
+        let bytes = self.token_to_bytes_with_size(token, buffer_size, special, None)?;
         Ok(String::from_utf8(bytes)?)
     }
 
@@ -287,6 +288,7 @@ impl LlamaModel {
         token: LlamaToken,
         buffer_size: usize,
         special: Special,
+        lstrip: Option<NonZeroU16>
     ) -> Result<Vec<u8>, TokenToStringError> {
         if token == self.token_nl() {
             return Ok(String::from("\n").into_bytes());
@@ -314,8 +316,9 @@ impl LlamaModel {
         let len = string.as_bytes().len();
         let len = c_int::try_from(len).expect("length fits into c_int");
         let buf = string.into_raw();
+        let lstrip = lstrip.map(|it| i32::from(it.get())).unwrap_or(0);
         let size = unsafe {
-            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len, special)
+            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len, lstrip, special)
         };
 
         match size {
