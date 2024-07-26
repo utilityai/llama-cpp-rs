@@ -614,8 +614,49 @@ get-childitem -path $root -recurse -filter "vulkan.h" 2>$null | foreach-object {
     PathBuf::from(vulkan_root.trim())
 }
 
-fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
+fn gen_vulkan_shaders(out_path: impl AsRef<Path>) -> (impl AsRef<Path>, impl AsRef<Path>) {
+    println!("Compiling Vulkan shader generator...");
+    let vulkan_shaders_src = LLAMA_PATH.join("ggml").join("src").join("vulkan-shaders");
+
+    let cxx = Build::new()
+        .target(&env::var("HOST").expect("No host triple found"))
+        .cpp(true)
+        .get_compiler();
+
+    assert!(!cxx.is_like_msvc(), "Compiling Vulkan GGML with MSVC is not supported at this time.");
+
+    let vulkan_shaders_gen_bin = out_path.as_ref().join("vulkan-shaders-gen");
+
+    cxx.to_command()
+        .args([
+            vulkan_shaders_src.join("vulkan-shaders-gen.cpp").as_os_str(),
+            "-o".as_ref(), vulkan_shaders_gen_bin.as_os_str()
+        ])
+        .output().expect("Could not compile Vulkan shader generator");
+
+    let header = out_path.as_ref().join("ggml-vulkan-shaders.hpp");
+    let source = out_path.as_ref().join("ggml-vulkan-shaders.cpp");
+
+    Command::new(vulkan_shaders_gen_bin)
+        .args([
+            "--glslc".as_ref(), "glslc".as_ref(),
+            "--input-dir".as_ref(), vulkan_shaders_src.as_os_str(),
+            "--output-dir".as_ref(), out_path.as_ref().join("vulkan-shaders.spv").as_os_str(),
+            "--target-hpp".as_ref(), header.as_os_str(),
+            "--target-cpp".as_ref(), source.as_os_str(),
+            "--no-clean".as_ref()
+        ])
+        .output().expect("Could not run Vulkan shader generator");
+    
+    (out_path, source)
+}
+
+fn compile_vulkan(cx: &mut Build, cxx: &mut Build, out_path: impl AsRef<Path>) -> &'static str {
+    let (vs_header, vs_source) = gen_vulkan_shaders(&out_path);
+
     println!("Compiling Vulkan GGML..");
+    let ggml_src = LLAMA_PATH.join("ggml").join("src");
+    let ggml_include = LLAMA_PATH.join("ggml").join("include");
 
     if cfg!(debug_assertions) {
         cx.define("GGML_VULKAN_DEBUG", None)
@@ -635,8 +676,10 @@ fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
         let vulkan_root = find_windows_vulkan_sdk();
         cxx.clone()
             .include(vulkan_root.join("Include"))
-            .include(LLAMA_PATH.as_path())
-            .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
+            .include(ggml_include)
+            .include(vs_header)
+            .file(ggml_src.join("ggml-vulkan.cpp"))
+            .file(vs_source)
             .compile(lib_name);
         println!(
             "cargo:rustc-link-search=native={}",
@@ -645,8 +688,10 @@ fn compile_vulkan(cx: &mut Build, cxx: &mut Build) -> &'static str {
         println!("cargo:rustc-link-lib=vulkan-1");
     } else {
         cxx.clone()
-            .include(LLAMA_PATH.as_path())
-            .file(LLAMA_PATH.join("ggml-vulkan.cpp"))
+            .include(ggml_include)
+            .include(vs_header)
+            .file(ggml_src.join("ggml-vulkan.cpp"))
+            .file(vs_source)
             .compile(lib_name);
         println!("cargo:rustc-link-lib=vulkan");
     }
@@ -663,6 +708,7 @@ fn compile_ggml(mut cx: Build) {
         .file(ggml_src.join("ggml-alloc.c"))
         .file(ggml_src.join("ggml-backend.c"))
         .file(ggml_src.join("ggml-quants.c"))
+        .file(ggml_src.join("ggml-aarch64.c"))
         .compile("ggml");
 }
 
@@ -727,7 +773,7 @@ fn main() {
 
     #[allow(unused_variables)]
     let feat_lib = if cfg!(feature = "vulkan") {
-        Some(compile_vulkan(&mut cx, &mut cxx))
+        Some(compile_vulkan(&mut cx, &mut cxx, &out_path))
     } else if cfg!(feature = "cuda") {
         Some(compile_cuda(&mut cx, &mut cxx, featless_cxx))
     } else if cfg!(feature = "openblas") {
