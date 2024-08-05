@@ -6,11 +6,14 @@ use std::ptr::NonNull;
 use std::slice;
 
 use crate::llama_batch::LlamaBatch;
-use crate::model::LlamaModel;
+use crate::model::{LlamaLoraAdapter, LlamaModel};
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
-use crate::{DecodeError, EmbeddingsError};
+use crate::{
+    DecodeError, EmbeddingsError, EncodeError, LlamaLoraAdapterRemoveError,
+    LlamaLoraAdapterSetError,
+};
 
 pub mod kv_cache;
 pub mod params;
@@ -76,10 +79,34 @@ impl<'model> LlamaContext<'model> {
 
         match NonZeroI32::new(result) {
             None => {
-                self.initialized_logits.clone_from(&batch.initialized_logits);
+                self.initialized_logits
+                    .clone_from(&batch.initialized_logits);
                 Ok(())
             }
             Some(error) => Err(DecodeError::from(error)),
+        }
+    }
+
+    /// Encodes the batch.
+    ///
+    /// # Errors
+    ///
+    /// - `EncodeError` if the decoding failed.
+    ///
+    /// # Panics
+    ///
+    /// - the returned [`std::ffi::c_int`] from llama-cpp does not fit into a i32 (this should never happen on most systems)
+    pub fn encode(&mut self, batch: &mut LlamaBatch) -> Result<(), EncodeError> {
+        let result =
+            unsafe { llama_cpp_sys_2::llama_encode(self.context.as_ptr(), batch.llama_batch) };
+
+        match NonZeroI32::new(result) {
+            None => {
+                self.initialized_logits
+                    .clone_from(&batch.initialized_logits);
+                Ok(())
+            }
+            Some(error) => Err(EncodeError::from(error)),
         }
     }
 
@@ -202,6 +229,54 @@ impl<'model> LlamaContext<'model> {
     pub fn timings(&mut self) -> LlamaTimings {
         let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
         LlamaTimings { timings }
+    }
+
+    /// Sets a lora adapter.
+    ///
+    /// # Errors
+    ///
+    /// See [`LlamaLoraAdapterSetError`] for more information.
+    pub fn lora_adapter_set(
+        &self,
+        adapter: &mut LlamaLoraAdapter,
+        scale: f32,
+    ) -> Result<(), LlamaLoraAdapterSetError> {
+        let err_code = unsafe {
+            llama_cpp_sys_2::llama_lora_adapter_set(
+                self.context.as_ptr(),
+                adapter.lora_adapter.as_ptr(),
+                scale,
+            )
+        };
+        if err_code != 0 {
+            return Err(LlamaLoraAdapterSetError::ErrorResult(err_code));
+        }
+
+        tracing::debug!("Set lora adapter");
+        Ok(())
+    }
+
+    /// Remove a lora adapter.
+    ///
+    /// # Errors
+    ///
+    /// See [`LlamaLoraAdapterRemoveError`] for more information.
+    pub fn lora_adapter_remove(
+        &self,
+        adapter: &mut LlamaLoraAdapter,
+    ) -> Result<(), LlamaLoraAdapterRemoveError> {
+        let err_code = unsafe {
+            llama_cpp_sys_2::llama_lora_adapter_remove(
+                self.context.as_ptr(),
+                adapter.lora_adapter.as_ptr(),
+            )
+        };
+        if err_code != 0 {
+            return Err(LlamaLoraAdapterRemoveError::ErrorResult(err_code));
+        }
+
+        tracing::debug!("Remove lora adapter");
+        Ok(())
     }
 }
 
