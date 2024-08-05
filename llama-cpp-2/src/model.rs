@@ -12,8 +12,8 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaModelLoadError,
-    NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
+    LlamaModelLoadError, NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
 };
 
 pub mod params;
@@ -24,6 +24,14 @@ pub mod params;
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModel {
     pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
+}
+
+/// A safe wrapper around `llama_lora_adapter`.
+#[derive(Debug)]
+#[repr(transparent)]
+#[allow(clippy::module_name_repetitions)]
+pub struct LlamaLoraAdapter {
+    pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_lora_adapter>,
 }
 
 /// A Safe wrapper around `llama_chat_message`
@@ -106,6 +114,14 @@ impl LlamaModel {
     #[must_use]
     pub fn token_nl(&self) -> LlamaToken {
         let token = unsafe { llama_cpp_sys_2::llama_token_nl(self.model.as_ptr()) };
+        LlamaToken(token)
+    }
+
+    /// Get the decoder start token token.
+    #[must_use]
+    pub fn decode_start_token(&self) -> LlamaToken {
+        let token =
+            unsafe { llama_cpp_sys_2::llama_model_decoder_start_token(self.model.as_ptr()) };
         LlamaToken(token)
     }
 
@@ -288,7 +304,7 @@ impl LlamaModel {
         token: LlamaToken,
         buffer_size: usize,
         special: Special,
-        lstrip: Option<NonZeroU16>
+        lstrip: Option<NonZeroU16>,
     ) -> Result<Vec<u8>, TokenToStringError> {
         if token == self.token_nl() {
             return Ok(String::from("\n").into_bytes());
@@ -318,7 +334,14 @@ impl LlamaModel {
         let buf = string.into_raw();
         let lstrip = lstrip.map(|it| i32::from(it.get())).unwrap_or(0);
         let size = unsafe {
-            llama_cpp_sys_2::llama_token_to_piece(self.model.as_ptr(), token.0, buf, len, lstrip, special)
+            llama_cpp_sys_2::llama_token_to_piece(
+                self.model.as_ptr(),
+                token.0,
+                buf,
+                len,
+                lstrip,
+                special,
+            )
         };
 
         match size {
@@ -397,7 +420,7 @@ impl LlamaModel {
         Ok(template.to_owned())
     }
 
-    /// loads a model from a file.
+    /// Loads a model from a file.
     ///
     /// # Errors
     ///
@@ -422,6 +445,36 @@ impl LlamaModel {
 
         tracing::debug!(?path, "Loaded model");
         Ok(LlamaModel { model })
+    }
+
+    /// Initializes a lora adapter from a file.
+    ///
+    /// # Errors
+    ///
+    /// See [`LlamaLoraAdapterInitError`] for more information.
+    pub fn lora_adapter_init(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<LlamaLoraAdapter, LlamaLoraAdapterInitError> {
+        let path = path.as_ref();
+        debug_assert!(Path::new(path).exists(), "{path:?} does not exist");
+
+        let path = path
+            .to_str()
+            .ok_or(LlamaLoraAdapterInitError::PathToStrError(
+                path.to_path_buf(),
+            ))?;
+
+        let cstr = CString::new(path)?;
+        let adapter =
+            unsafe { llama_cpp_sys_2::llama_lora_adapter_init(self.model.as_ptr(), cstr.as_ptr()) };
+
+        let adapter = NonNull::new(adapter).ok_or(LlamaLoraAdapterInitError::NullResult)?;
+
+        tracing::debug!(?path, "Initialized lora adapter");
+        Ok(LlamaLoraAdapter {
+            lora_adapter: adapter,
+        })
     }
 
     /// Create a new context from this model.
