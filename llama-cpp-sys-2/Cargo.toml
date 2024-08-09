@@ -30,6 +30,13 @@ include = [
     "/llama.cpp/ggml/src/ggml-quants.c",
     "/llama.cpp/ggml/src/ggml-quants.h",
     "/llama.cpp/src/llama.cpp",
+    "/llama.cpp/src/llama-impl.h",
+    "/llama.cpp/src/llama-vocab.h",
+    "/llama.cpp/src/llama-vocab.cpp",
+    "/llama.cpp/src/llama-grammar.h",
+    "/llama.cpp/src/llama-grammar.cpp",
+    "/llama.cpp/src/llama-sampling.h",
+    "/llama.cpp/src/llama-sampling.cpp",
     "/llama.cpp/include/llama.h",
     "/llama.cpp/src/unicode.h",
     "/llama.cpp/src/unicode.cpp",
@@ -41,6 +48,8 @@ include = [
     "/llama.cpp/ggml/sgemm.h",
     "/llama.cpp/ggml/src/ggml-cuda/*",
     "/llama.cpp/ggml/src/ggml-cuda/template_instances/*",
+    "/llama.cpp/ggml/src/ggml-aarch64.h",
+    "/llama.cpp/ggml/src/ggml-aarch64.c",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
