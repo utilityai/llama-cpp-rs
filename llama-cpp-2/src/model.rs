@@ -1,5 +1,6 @@
 //! A safe wrapper around `llama_model`.
 use std::ffi::CString;
+use std::ffi::CStr;
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
