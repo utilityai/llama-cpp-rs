@@ -426,7 +426,7 @@ fn compile_cuda(cx: &mut Build, cxx: &mut Build, featless_cxx: Build) -> &'stati
     // }
 
     for lib in [
-        "cuda", "cublas", "culibos", "cudart", "cublasLt", "pthread", "dl", "rt",
+        "cuda", "cublas", "cudart", "cublasLt"
     ] {
         println!("cargo:rustc-link-lib={}", lib);
     }
