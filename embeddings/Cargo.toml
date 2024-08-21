@@ -1,10 +1,10 @@
 [package]
 name = "embeddings"
-version = "0.1.67"
+version = "0.1.68"
 edition = "2021"
 
 [dependencies]
-llama-cpp-2 = { path = "../llama-cpp-2", version = "0.1.67" }
+llama-cpp-2 = { path = "../llama-cpp-2", version = "0.1.68" }
 hf-hub = { workspace = true }
 clap = { workspace = true , features = ["derive"] }
 anyhow = { workspace = true }
