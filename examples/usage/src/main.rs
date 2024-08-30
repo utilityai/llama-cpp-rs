@@ -1,9 +1,13 @@
-/*
-git clone --recursive https://github.com/utilityai/llama-cpp-rs
-cd llama-cpp-rs/examples/usage
-wget https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q4_0.gguf
-cargo run qwen2-1_5b-instruct-q4_0.gguf
-*/
+//! # Usage
+//! 
+//! This is just about the smallest possible way to do inference. To fetch a model from hugging face:
+//! 
+//! ```bash
+//! git clone --recursive https://github.com/utilityai/llama-cpp-rs
+//! cd llama-cpp-rs/examples/usage
+//! wget https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q4_0.gguf
+//! cargo run --bin usage -- qwen2-1_5b-instruct-q4_0.gguf
+//! ```
 use std::io::Write;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -13,6 +17,7 @@ use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 fn main() {
     let model_path = std::env::args().nth(1).expect("Please specify model path");
     let backend = LlamaBackend::init().unwrap();
@@ -28,14 +33,14 @@ fn main() {
         .expect("unable to create the llama_context");
     let tokens_list = model
         .str_to_token(&prompt, AddBos::Always)
-        .expect(&format!("failed to tokenize {prompt}"));
+        .unwrap_or_else(|_| panic!("failed to tokenize {prompt}"));
     let n_len = 64;
 
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
     let mut batch = LlamaBatch::new(512, 1);
 
-    let last_index: i32 = (tokens_list.len() - 1) as i32;
+    let last_index = tokens_list.len() as i32 - 1;
     for (i, token) in (0_i32..).zip(tokens_list.into_iter()) {
         // llama_decode will output logits only for the last token of the prompt
         let is_last = i == last_index;

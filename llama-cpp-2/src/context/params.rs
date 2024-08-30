@@ -262,7 +262,7 @@ impl LlamaContextParams {
     /// assert_eq!(params.n_threads(), 4);
     /// ```
     #[must_use]
-    pub fn n_threads(&self) -> u32 {
+    pub fn n_threads(&self) -> i32 {
         self.context_params.n_threads
     }
 
@@ -275,7 +275,7 @@ impl LlamaContextParams {
     /// assert_eq!(params.n_threads_batch(), 4);
     /// ```
     #[must_use]
-    pub fn n_threads_batch(&self) -> u32 {
+    pub fn n_threads_batch(&self) -> i32 {
         self.context_params.n_threads_batch
     }
 
@@ -290,7 +290,7 @@ impl LlamaContextParams {
     /// assert_eq!(params.n_threads(), 8);
     /// ```
     #[must_use]
-    pub fn with_n_threads(mut self, n_threads: u32) -> Self {
+    pub fn with_n_threads(mut self, n_threads: i32) -> Self {
         self.context_params.n_threads = n_threads;
         self
     }
@@ -306,7 +306,7 @@ impl LlamaContextParams {
     /// assert_eq!(params.n_threads_batch(), 8);
     /// ```
     #[must_use]
-    pub fn with_n_threads_batch(mut self, n_threads: u32) -> Self {
+    pub fn with_n_threads_batch(mut self, n_threads: i32) -> Self {
         self.context_params.n_threads_batch = n_threads;
         self
     }
@@ -354,9 +354,9 @@ impl LlamaContextParams {
     /// }
     ///
     /// use llama_cpp_2::context::params::LlamaContextParams;
-    /// let params = LlamaContextParams::default();
-    /// params.with_cb_eval(Some(cb_eval_fn));
+    /// let params = LlamaContextParams::default().with_cb_eval(Some(cb_eval_fn));
     /// ```
+    #[must_use]
     pub fn with_cb_eval(
         mut self,
         cb_eval: llama_cpp_sys_2::ggml_backend_sched_eval_callback,
@@ -373,8 +373,9 @@ impl LlamaContextParams {
     /// use llama_cpp_2::context::params::LlamaContextParams;
     /// let params = LlamaContextParams::default();
     /// let user_data = std::ptr::null_mut();
-    /// params.with_cb_eval_user_data(user_data);
+    /// let params = params.with_cb_eval_user_data(user_data);
     /// ```
+    #[must_use]
     pub fn with_cb_eval_user_data(mut self, cb_eval_user_data: *mut std::ffi::c_void) -> Self {
         self.context_params.cb_eval_user_data = cb_eval_user_data;
         self
