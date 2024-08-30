@@ -354,9 +354,9 @@ impl LlamaContextParams {
     /// }
     ///
     /// use llama_cpp_2::context::params::LlamaContextParams;
-    /// let params = LlamaContextParams::default();
-    /// params.with_cb_eval(Some(cb_eval_fn));
+    /// let params = LlamaContextParams::default().with_cb_eval(Some(cb_eval_fn));
     /// ```
+    #[must_use]
     pub fn with_cb_eval(
         mut self,
         cb_eval: llama_cpp_sys_2::ggml_backend_sched_eval_callback,
@@ -373,8 +373,9 @@ impl LlamaContextParams {
     /// use llama_cpp_2::context::params::LlamaContextParams;
     /// let params = LlamaContextParams::default();
     /// let user_data = std::ptr::null_mut();
-    /// params.with_cb_eval_user_data(user_data);
+    /// let params = params.with_cb_eval_user_data(user_data);
     /// ```
+    #[must_use]
     pub fn with_cb_eval_user_data(mut self, cb_eval_user_data: *mut std::ffi::c_void) -> Self {
         self.context_params.cb_eval_user_data = cb_eval_user_data;
         self

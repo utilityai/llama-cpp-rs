@@ -20,7 +20,7 @@ pub enum LlamaTokenAttr {
     SingleWord = llama_cpp_sys_2::LLAMA_TOKEN_ATTR_SINGLE_WORD as _,
 }
 
-/// A set of LlamaTokenAttrs
+/// A set of `LlamaTokenAttrs`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaTokenAttrs(pub BitFlags<LlamaTokenAttr>);
 
@@ -42,7 +42,7 @@ impl TryFrom<llama_cpp_sys_2::llama_token_type> for LlamaTokenAttrs {
     type Error = LlamaTokenTypeFromIntError;
 
     fn try_from(value: llama_cpp_sys_2::llama_vocab_type) -> Result<Self, Self::Error> {
-        Ok(Self(BitFlags::from_bits(value as u32).map_err(|e| {
+        Ok(Self(BitFlags::from_bits(value).map_err(|e| {
             LlamaTokenTypeFromIntError::UnknownValue(e.invalid_bits())
         })?))
     }

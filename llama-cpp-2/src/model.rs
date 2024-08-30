@@ -333,7 +333,7 @@ impl LlamaModel {
         let len = string.as_bytes().len();
         let len = c_int::try_from(len).expect("length fits into c_int");
         let buf = string.into_raw();
-        let lstrip = lstrip.map(|it| i32::from(it.get())).unwrap_or(0);
+        let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
         let size = unsafe {
             llama_cpp_sys_2::llama_token_to_piece(
                 self.model.as_ptr(),
