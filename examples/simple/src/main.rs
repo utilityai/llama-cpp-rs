@@ -54,12 +54,12 @@ struct Args {
         long,
         help = "number of threads to use during generation (default: use all available threads)"
     )]
-    threads: Option<u32>,
+    threads: Option<i32>,
     #[arg(
         long,
         help = "number of threads to use during batch and prompt processing (default: use all available threads)"
     )]
-    threads_batch: Option<u32>,
+    threads_batch: Option<i32>,
     #[arg(
         short = 'c',
         long,
