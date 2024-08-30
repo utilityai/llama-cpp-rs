@@ -1231,6 +1231,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "usage"
+version = "0.1.69"
+dependencies = [
+ "encoding_rs",
+ "llama-cpp-2",
+]
+
+[[package]]
 name = "utf16_iter"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
