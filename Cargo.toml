@@ -1,10 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "llama-cpp-sys-2",
-    "llama-cpp-2",
-    "simple", "embeddings",
-]
+members = ["llama-cpp-sys-2", "llama-cpp-2", "simple", "embeddings", "examples/usage"]
 
 [workspace.dependencies]
 # core library deps
@@ -26,4 +22,4 @@ missing_docs = { level = "warn" }
 missing_debug_implementations = { level = "warn" }
 
 [workspace.lints.clippy]
-pedantic = { level = "warn"  }
+pedantic = { level = "warn" }
