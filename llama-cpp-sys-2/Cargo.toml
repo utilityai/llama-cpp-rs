@@ -66,6 +66,6 @@ glob = "0.3.1"
 [features]
 cuda = []
 metal = []
-dynamic_link = []
+dynamic-link = []
 vulkan = []
 native = []

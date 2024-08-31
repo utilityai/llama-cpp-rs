@@ -20,7 +20,7 @@ encoding_rs = { workspace = true }
 [features]
 cuda = ["llama-cpp-sys-2/cuda"]
 metal = ["llama-cpp-sys-2/metal"]
-dynamic_link = ["llama-cpp-sys-2/dynamic_link"]
+dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
 native = ["llama-cpp-sys-2/native"]
 sampler = []
