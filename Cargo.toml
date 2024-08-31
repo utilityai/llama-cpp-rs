@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["llama-cpp-sys-2", "llama-cpp-2", "embeddings", "examples/usage", "examples/simple"]
+members = ["llama-cpp-sys-2", "llama-cpp-2", "embeddings", "examples/simple"]
 
 [workspace.dependencies]
 # core library deps
