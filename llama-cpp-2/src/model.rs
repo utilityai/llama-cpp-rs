@@ -1,6 +1,6 @@
 //! A safe wrapper around `llama_model`.
-use std::ffi::CString;
 use std::ffi::CStr;
+use std::ffi::CString;
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
@@ -550,7 +550,11 @@ impl LlamaModel {
             if res > buff.len() as i32 {
                 return Err(ApplyChatTemplateError::BuffSizeError);
             }
-            Ok::<String, ApplyChatTemplateError>(CStr::from_ptr(buff.as_mut_ptr()).to_string_lossy().to_string())
+            Ok::<String, ApplyChatTemplateError>(
+                CStr::from_ptr(buff.as_mut_ptr())
+                    .to_string_lossy()
+                    .to_string(),
+            )
         }?;
         Ok(formatted_chat)
     }

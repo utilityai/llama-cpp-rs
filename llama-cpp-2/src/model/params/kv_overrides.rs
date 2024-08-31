@@ -33,17 +33,13 @@ impl ParamOverrideValue {
                 llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_bool: *value }
             }
             ParamOverrideValue::Float(value) => {
-                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    val_f64: *value,
-                }
+                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_f64: *value }
             }
             ParamOverrideValue::Int(value) => {
                 llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_i64: *value }
             }
             ParamOverrideValue::Str(c_string) => {
-                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
-                    val_str: *c_string,
-                }
+                llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 { val_str: *c_string }
             }
         }
     }
