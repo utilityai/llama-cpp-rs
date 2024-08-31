@@ -151,7 +151,7 @@ fn main() {
     let llama_dst = out_dir.join("llama.cpp");
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
     let llama_src = Path::new(&manifest_dir).join("llama.cpp");
-    let build_shared_libs = cfg!(feature = "directml") || cfg!(feature = "cuda");
+    let build_shared_libs = cfg!(feature = "cuda") || cfg!(feature = "dynamic-link");
 
     let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
         .map(|v| v == "1")
@@ -225,8 +225,25 @@ fn main() {
     if cfg!(windows) {
         config.static_crt(static_crt);
     }
+    
 
+    if cfg!(feature = "vulkan") {
+        config.define("GGML_VULKAN", "ON");
+        if cfg!(windows) {
+            let vulkan_path = env::var("VULKAN_SDK").expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
+            let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
+            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+            println!("cargo:rustc-link-lib=vulkan-1");
+        }
 
+        if cfg!(target_os = "linux") {
+            println!("cargo:rustc-link-lib=vulkan");
+        }
+    }
+
+    if cfg!(feature = "cuda") {
+        config.define("GGML_CUDA", "ON");
+    }
 
     // General
     config
@@ -266,7 +283,6 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=Metal");
         println!("cargo:rustc-link-lib=framework=MetalKit");
         println!("cargo:rustc-link-lib=framework=Accelerate");
-        
         println!("cargo:rustc-link-lib=c++");
     }
 
