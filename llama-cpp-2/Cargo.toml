@@ -14,6 +14,9 @@ llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.69" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+encoding_rs = { workspace = true }
+
 [features]
 cuda = ["llama-cpp-sys-2/cuda"]
 metal = ["llama-cpp-sys-2/metal"]
@@ -32,3 +35,7 @@ workspace = true
 
 [package.metadata.docs.rs]
 features = ["sampler"]
+
+[[example]]
+name = "usage"
+path = "../examples/usage.rs"

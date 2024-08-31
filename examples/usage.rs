@@ -1,14 +1,13 @@
 //! # Usage
-//! 
+//!
 //! This is just about the smallest possible way to do inference. To fetch a model from hugging face:
-//! 
-//! ```bash
+//!
+//! ```console
 //! git clone --recursive https://github.com/utilityai/llama-cpp-rs
 //! cd llama-cpp-rs/examples/usage
 //! wget https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q4_0.gguf
-//! cargo run --bin usage -- qwen2-1_5b-instruct-q4_0.gguf
+//! cargo run --example usage -- qwen2-1_5b-instruct-q4_0.gguf
 //! ```
-use std::io::Write;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -16,6 +15,7 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
+use std::io::Write;
 
 #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
 fn main() {
@@ -23,7 +23,8 @@ fn main() {
     let backend = LlamaBackend::init().unwrap();
     let params = LlamaModelParams::default();
 
-    let prompt = "<|im_start|>user\nHello! how are you?<|im_end|>\n<|im_start|>assistant\n".to_string();
+    let prompt =
+        "<|im_start|>user\nHello! how are you?<|im_end|>\n<|im_start|>assistant\n".to_string();
     LlamaContextParams::default();
     let model =
         LlamaModel::load_from_file(&backend, model_path, &params).expect("unable to load model");
@@ -48,13 +49,10 @@ fn main() {
     }
     ctx.decode(&mut batch).expect("llama_decode() failed");
 
-
     let mut n_cur = batch.n_tokens();
-
 
     // The `Decoder`
     let mut decoder = encoding_rs::UTF_8.new_decoder();
-
 
     while n_cur <= n_len {
         // sample the next token
@@ -72,7 +70,9 @@ fn main() {
                 break;
             }
 
-            let output_bytes = model.token_to_bytes(new_token_id, Special::Tokenize).unwrap();
+            let output_bytes = model
+                .token_to_bytes(new_token_id, Special::Tokenize)
+                .unwrap();
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
             let mut output_string = String::with_capacity(32);
             let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);
