@@ -42,7 +42,7 @@ impl TryFrom<llama_cpp_sys_2::llama_token_type> for LlamaTokenAttrs {
     type Error = LlamaTokenTypeFromIntError;
 
     fn try_from(value: llama_cpp_sys_2::llama_vocab_type) -> Result<Self, Self::Error> {
-        Ok(Self(BitFlags::from_bits(value).map_err(|e| {
+        Ok(Self(BitFlags::from_bits(value as _).map_err(|e| {
             LlamaTokenTypeFromIntError::UnknownValue(e.invalid_bits())
         })?))
     }
