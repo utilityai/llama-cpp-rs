@@ -159,7 +159,7 @@ fn main() {
     let profile = env::var("LLAMA_LIB_PROFILE").unwrap_or("Release".to_string());
     let static_crt = env::var("LLAMA_STATIC_CRT")
         .map(|v| v == "1")
-        .unwrap_or(true);
+        .unwrap_or(false);
 
     debug_log!("TARGET: {}", target);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
