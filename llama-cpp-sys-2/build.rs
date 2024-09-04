@@ -245,6 +245,10 @@ fn main() {
         config.define("GGML_CUDA", "ON");
     }
 
+    if cfg!(feature = "openmp") {
+        config.define("GGML_OPENMP", "ON");
+    }
+
     // General
     config
         .profile(&profile)
@@ -270,6 +274,13 @@ fn main() {
             "{}",
             format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib)
         );
+    }
+
+    // OpenMP
+    if cfg!(feature = "openmp") {
+        if target.contains("gnu") {
+            println!("cargo:rustc-link-lib=gomp");
+        }
     }
 
     // Windows debug
