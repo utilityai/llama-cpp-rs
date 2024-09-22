@@ -247,7 +247,7 @@ either reduce n_len or increase n_ctx"
     while n_cur <= n_len {
         // sample the next token
         {
-            let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
+            let candidates = ctx.candidates();
 
             let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
 
