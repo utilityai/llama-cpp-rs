@@ -255,7 +255,7 @@ either reduce n_len or increase n_ctx"
             let new_token_id = ctx.sample_token_greedy(candidates_p);
 
             // is it an end of stream?
-            if new_token_id == model.token_eos() {
+            if model.is_eog_token(new_token_id) {
                 eprintln!();
                 break;
             }
