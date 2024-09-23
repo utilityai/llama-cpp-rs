@@ -121,6 +121,27 @@ impl LlamaContext<'_> {
         unsafe { llama_cpp_sys_2::llama_kv_cache_seq_pos_max(self.context.as_ptr(), seq_id) }
     }
 
+    /// Remove all tokens within the specified range `[p0, p1)` from the KV cache
+    /// Returns `false` only when partial sequence removals fail. Full sequence removals always succeed.
+    ///
+    /// # Parameters
+    ///
+    /// * `seq_id` - The sequence id to remove the tokens from. If `None`, matches all sequences
+    /// * `p0` - The start position of the cache to remove. If `None`, the entire cache is removed up to `p1`
+    /// * `p1` - The end position of the cache to remove. If `None`, the entire cache is removed starting from `p0`
+    #[must_use]
+    pub fn kv_cache_seq_rm(
+        &mut self,
+        seq_id: Option<u16>,
+        p0: Option<u16>,
+        p1: Option<u16>,
+    ) -> bool {
+        let seq_id = seq_id.map_or(-1, i32::from);
+        let p0 = p0.map_or(-1, i32::from);
+        let p1 = p1.map_or(-1, i32::from);
+        unsafe { llama_cpp_sys_2::llama_kv_cache_seq_rm(self.context.as_ptr(), seq_id, p0, p1) }
+    }
+
     /// Defragment the KV cache
     /// This will be applied:
     ///   - lazily on next [`LlamaContext::decode`]
