@@ -52,10 +52,16 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Gets the max number of tokens in a batch.
+    /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to n_ubatch.
     #[must_use]
     pub fn n_batch(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_n_batch(self.context.as_ptr()) }
+    }
+
+    /// Gets the max number of physical tokens (hardware level) to decode in batch. Must be less than or equal to n_batch.
+    #[must_use]
+    pub fn n_ubatch(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_n_ubatch(self.context.as_ptr()) }
     }
 
     /// Gets the size of the context.
