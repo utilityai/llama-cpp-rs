@@ -118,6 +118,12 @@ impl LlamaModel {
         LlamaToken(token)
     }
 
+    /// Check if a token represents the end of generation (end of turn, end of sequence, etc.)
+    #[must_use]
+    pub fn is_eog_token(&self, token: LlamaToken) -> bool {
+        unsafe { llama_cpp_sys_2::llama_token_is_eog(self.model.as_ptr(), token.0) }
+    }
+
     /// Get the decoder start token token.
     #[must_use]
     pub fn decode_start_token(&self) -> LlamaToken {

@@ -197,6 +197,66 @@ impl LlamaContextParams {
         self.context_params.n_ubatch
     }
 
+    /// Set the `flash_attention` parameter
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_flash_attention(true);
+    /// assert_eq!(params.flash_attention(), true);
+    /// ```
+    #[must_use]
+    pub fn with_flash_attention(mut self, enabled: bool) -> Self {
+        self.context_params.flash_attn = enabled;
+        self
+    }
+
+    /// Get the `flash_attention` parameter
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.flash_attention(), false);
+    /// ```
+    #[must_use]
+    pub fn flash_attention(&self) -> bool {
+        self.context_params.flash_attn
+    }
+
+    /// Set the `offload_kqv` parameter to control offloading KV cache & KQV ops to GPU
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_offload_kqv(false);
+    /// assert_eq!(params.offload_kqv(), false);
+    /// ```
+    #[must_use]
+    pub fn with_offload_kqv(mut self, enabled: bool) -> Self {
+        self.context_params.offload_kqv = enabled;
+        self
+    }
+
+    /// Get the `offload_kqv` parameter
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.offload_kqv(), true);
+    /// ```
+    #[must_use]
+    pub fn offload_kqv(&self) -> bool {
+        self.context_params.offload_kqv
+    }
+
     /// Set the type of rope scaling.
     ///
     /// # Examples
