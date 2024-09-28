@@ -374,4 +374,37 @@ impl LlamaTokenDataArray {
         *mu = unsafe { *mu_ptr };
         LlamaToken(token)
     }
+
+    ///  Mirostat 1.0 algorithm described in the [paper](https://arxiv.org/abs/2007.14966). Uses tokens instead of words.
+    ///
+    /// # Parameters
+    ///
+    /// * `tau`  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+    /// * `eta`  The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+    /// * `m`  The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+    /// * `mu`  Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
+    pub fn sample_token_mirostat_v1(
+        &mut self,
+        ctx: &mut LlamaContext,
+        tau: f32,
+        eta: f32,
+        m: i32,
+        mu: &mut f32,
+    ) -> LlamaToken {
+        let mu_ptr = ptr::from_mut(mu);
+        let token = unsafe {
+            self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_sample_token_mirostat(
+                    ctx.context.as_ptr(),
+                    c_llama_token_data_array,
+                    tau,
+                    eta,
+                    m,
+                    mu_ptr,
+                )
+            })
+        };
+        *mu = unsafe { *mu_ptr };
+        LlamaToken(token)
+    }
 }

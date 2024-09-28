@@ -52,10 +52,16 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Gets the max number of tokens in a batch.
+    /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to n_ubatch.
     #[must_use]
     pub fn n_batch(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_n_batch(self.context.as_ptr()) }
+    }
+
+    /// Gets the max number of physical tokens (hardware level) to decode in batch. Must be less than or equal to n_batch.
+    #[must_use]
+    pub fn n_ubatch(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_n_ubatch(self.context.as_ptr()) }
     }
 
     /// Gets the size of the context.
@@ -179,6 +185,45 @@ impl<'model> LlamaContext<'model> {
                 Ok(slice::from_raw_parts(embedding, n_embd))
             }
         }
+    }
+
+    /// Get the logits for the last token in the context.
+    ///
+    /// # Returns
+    /// An iterator over unsorted `LlamaTokenData` containing the
+    /// logits for the last token in the context.
+    ///
+    /// # Panics
+    ///
+    /// - underlying logits data is null
+    pub fn candidates(&self) -> impl Iterator<Item = LlamaTokenData> + '_ {
+        (0_i32..).zip(self.get_logits()).map(|(i, logit)| {
+            let token = LlamaToken::new(i);
+            LlamaTokenData::new(token, *logit, 0_f32)
+        })
+    }
+
+    /// Token logits obtained from the last call to `decode()`.
+    /// The logits for which `batch.logits[i] != 0` are stored contiguously
+    /// in the order they have appeared in the batch.
+    /// Rows: number of tokens for which `batch.logits[i] != 0`
+    /// Cols: `n_vocab`
+    ///
+    /// # Returns
+    ///
+    /// A slice containing the logits for the last decoded token.
+    /// The size corresponds to the `n_vocab` parameter of the context's model.
+    ///
+    /// # Panics
+    ///
+    /// - `n_vocab` does not fit into a usize
+    /// - token data returned is null
+    pub fn get_logits(&self) -> &[f32] {
+        let data = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
+        assert!(!data.is_null(), "logits data for last token is null");
+        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
+
+        unsafe { slice::from_raw_parts(data, len) }
     }
 
     /// Get the logits for the ith token in the context.
