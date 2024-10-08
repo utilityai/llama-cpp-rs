@@ -11,46 +11,46 @@ include = [
     "wrapper.h",
     "build.rs",
     "/src",
-    "/llama.cpp/ggml/src/ggml.c",
-    "/llama.cpp/ggml/include/ggml.h",
-    "/llama.cpp/ggml/src/ggml-alloc.c",
-    "/llama.cpp/ggml/include/ggml-alloc.h",
-    "/llama.cpp/ggml/src/ggml-backend.c",
-    "/llama.cpp/ggml/include/ggml-backend.h",
-    "/llama.cpp/ggml/src/ggml-backend-impl.h",
+
+    "/llama.cpp/common/*.h",
+    "/llama.cpp/common/*.hpp",
+    "/llama.cpp/common/*.cpp",
+    "/llama.cpp/ggml/include/*.h",
+    "/llama.cpp/ggml/src/*.h",
+    "/llama.cpp/ggml/src/*.c",
+    "/llama.cpp/ggml/src/*.cpp",
+    "/llama.cpp/src/*.h",
+    "/llama.cpp/src/*.cpp",
+
+    "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
+
+    "/llama.cpp/common/build-info.cpp.in",
+
     "/llama.cpp/ggml/src/ggml-cuda.cu",
-    "/llama.cpp/ggml/include/ggml-cuda.h",
-    "/llama.cpp/ggml/src/ggml-impl.h",
     "/llama.cpp/ggml/src/ggml-metal.m",
     "/llama.cpp/ggml/src/ggml-metal.metal",
-    "/llama.cpp/ggml/include/ggml-metal.h",
-    "/llama.cpp/ggml/src/ggml-mpi.c",
-    "/llama.cpp/ggml/src/ggml-mpi.h",
-    "/llama.cpp/ggml/src/ggml-opencl.cpp",
-    "/llama.cpp/ggml/src/ggml-opencl.h",
-    "/llama.cpp/ggml/src/ggml-quants.c",
-    "/llama.cpp/ggml/src/ggml-quants.h",
-    "/llama.cpp/src/llama.cpp",
-    "/llama.cpp/src/llama-impl.h",
-    "/llama.cpp/src/llama-vocab.h",
-    "/llama.cpp/src/llama-vocab.cpp",
-    "/llama.cpp/src/llama-grammar.h",
-    "/llama.cpp/src/llama-grammar.cpp",
-    "/llama.cpp/src/llama-sampling.h",
-    "/llama.cpp/src/llama-sampling.cpp",
+
     "/llama.cpp/include/llama.h",
-    "/llama.cpp/src/unicode.h",
-    "/llama.cpp/src/unicode.cpp",
-    "/llama.cpp/src/unicode-data.h",
-    "/llama.cpp/src/unicode-data.h",
-    "/llama.cpp/src/unicode-data.cpp",
-    "/llama.cpp/ggml/src/ggml-common.h",
-    "/llama.cpp/ggml/src/ggml-cuda",
-    "/llama.cpp/ggml/sgemm.h",
-    "/llama.cpp/ggml/src/ggml-cuda/*",
-    "/llama.cpp/ggml/src/ggml-cuda/template_instances/*",
-    "/llama.cpp/ggml/src/ggml-aarch64.h",
-    "/llama.cpp/ggml/src/ggml-aarch64.c",
+
+    "/llama.cpp/ggml/src/ggml-cuda/**/*",
+
+    "/llama.cpp/ggml/src/vulkan-shaders/**/*",
+
+    "/llama.cpp/ggml/src/llamafile/sgemm.h",
+    "/llama.cpp/ggml/src/llamafile/sgemm.cpp",
+
+    "/llama.cpp/pocs",
+
+    "/llama.cpp/CMakeLists.txt",
+    "/llama.cpp/common/CMakeLists.txt",
+    "/llama.cpp/ggml/CMakeLists.txt",
+    "/llama.cpp/ggml/src/CMakeLists.txt",
+    "/llama.cpp/ggml/src/vulkan-shaders/CMakeLists.txt",
+    "/llama.cpp/src/CMakeLists.txt",
+
+    "/llama.cpp/cmake",
+    "/llama.cpp/ggml/cmake",
+    "/llama.cpp/common/cmake",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

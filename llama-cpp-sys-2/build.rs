@@ -212,11 +212,17 @@ fn main() {
 
     let mut config = Config::new(&llama_dst);
 
-    config
-        .define(
-            "BUILD_SHARED_LIBS",
-            if build_shared_libs { "ON" } else { "OFF" },
-        );
+    // Would require extra source files to pointlessly
+    // be included in what's uploaded to and downloaded from
+    // crates.io, so deactivating these instead
+    config.define("LLAMA_BUILD_TESTS", "OFF");
+    config.define("LLAMA_BUILD_EXAMPLES", "OFF");
+    config.define("LLAMA_BUILD_SERVER", "OFF");
+
+    config.define(
+        "BUILD_SHARED_LIBS",
+        if build_shared_libs { "ON" } else { "OFF" },
+    );
 
     if cfg!(target_os = "macos") {
         config.define("GGML_BLAS", "OFF");
