@@ -523,7 +523,7 @@ impl LlamaModel {
         let message_length = chat.iter().fold(0, |acc, c| {
             acc + c.role.to_bytes().len() + c.content.to_bytes().len()
         });
-        let mut buff: Vec<i8> = vec![0_i8; message_length * 4];
+        let mut buff = vec![0; message_length * 4];
 
         // Build our llama_cpp_sys_2 chat messages
         let chat: Vec<llama_cpp_sys_2::llama_chat_message> = chat
@@ -548,7 +548,7 @@ impl LlamaModel {
                 chat.as_ptr(),
                 chat.len(),
                 add_ass,
-                buff.as_mut_ptr().cast::<std::os::raw::c_char>(),
+                buff.as_mut_ptr(),
                 buff.len() as i32,
             );
             // A buffer twice the size should be sufficient for all models, if this is not the case for a new model, we can increase it
