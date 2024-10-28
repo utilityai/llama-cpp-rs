@@ -65,7 +65,7 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
             "*.a"
         }
     };
-    let libs_dir = out_dir.join("lib");
+    let libs_dir = out_dir.join("lib*");
     let pattern = libs_dir.join(lib_pattern);
     debug_log!("Extract libs {}", pattern.display());
 
@@ -265,11 +265,13 @@ fn main() {
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
+    println!("cargo:rustc-link-search={}", out_dir.join("lib64").display());
     println!("cargo:rustc-link-search={}", build_dir.display());
 
     // Link libraries
     let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
     let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
+    assert_ne!(llama_libs.len(), 0);
 
     for lib in llama_libs {
         debug_log!(
