@@ -149,6 +149,25 @@ impl LlamaBatch {
         }
     }
 
+    /// llama_batch_get_one
+    /// Return batch for single sequence of tokens starting at pos_0
+    ///
+    /// NOTE: this is a helper function to facilitate transition to the new batch API
+    ///
+    pub fn get_one(tokens: &[LlamaToken], pos_0: llama_pos, seq_id: llama_seq_id) -> Self {
+        unsafe {
+            let ptr = tokens.as_ptr() as *mut i32;
+            let batch =
+                llama_cpp_sys_2::llama_batch_get_one(ptr, tokens.len() as i32, pos_0, seq_id);
+
+            crate::llama_batch::LlamaBatch {
+                allocated: 0,
+                initialized_logits: vec![],
+                llama_batch: batch,
+            }
+        }
+    }
+
     /// Returns the number of tokens in the batch.
     #[must_use]
     pub fn n_tokens(&self) -> i32 {
@@ -170,7 +189,9 @@ impl Drop for LlamaBatch {
     /// # }
     fn drop(&mut self) {
         unsafe {
-            llama_batch_free(self.llama_batch);
+            if self.allocated > 0 {
+                llama_batch_free(self.llama_batch);
+            }
         }
     }
 }
