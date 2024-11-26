@@ -1,6 +1,6 @@
 //! Safe wrapper around `llama_batch`.
 
-use crate::token::{self, LlamaToken};
+use crate::token::LlamaToken;
 use llama_cpp_sys_2::{llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id};
 
 /// A safe wrapper around `llama_batch`.
