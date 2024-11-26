@@ -47,7 +47,7 @@ impl From<RopeScalingType> for i32 {
 pub enum LlamaPoolingType {
     /// The pooling type is unspecified
     Unspecified = -1,
-    /// No pooling    
+    /// No pooling
     None = 0,
     /// Mean pooling
     Mean = 1,
@@ -95,10 +95,8 @@ impl From<LlamaPoolingType> for i32 {
 /// use llama_cpp_2::context::params::LlamaContextParams;
 ///
 ///let ctx_params = LlamaContextParams::default()
-///    .with_n_ctx(NonZeroU32::new(2048))
-///    .with_seed(1234);
+///    .with_n_ctx(NonZeroU32::new(2048));
 ///
-/// assert_eq!(ctx_params.seed(), 1234);
 /// assert_eq!(ctx_params.n_ctx(), NonZeroU32::new(2048));
 /// ```
 #[derive(Debug, Clone)]

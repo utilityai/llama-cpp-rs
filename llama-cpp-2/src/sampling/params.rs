@@ -1,7 +1,6 @@
-//! Safe wrapper around `llama_sampler`.
+//! Safe wrapper around `llama_sampler_chain_params`.
 
 use std::fmt::{Debug, Formatter};
-use std::ptr::NonNull;
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSamplerChainParams {
@@ -25,11 +24,15 @@ impl Default for LlamaSamplerChainParams {
 }
 
 impl LlamaSamplerChainParams {
-    pub fn with_no_perf(&mut self, no_perf: bool) -> &mut Self {
+    /// Set whether to measure performance timings
+    #[must_use]
+    pub fn with_no_perf(mut self, no_perf: bool) -> Self {
         self.sampler_chain_params.no_perf = no_perf;
         self
     }
 
+    /// Get whether to measure performance timings
+    #[must_use]
     pub fn no_perf(&self) -> bool {
         self.sampler_chain_params.no_perf
     }
