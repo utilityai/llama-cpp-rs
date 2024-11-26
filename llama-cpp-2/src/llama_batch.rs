@@ -1,6 +1,6 @@
 //! Safe wrapper around `llama_batch`.
 
-use crate::token::LlamaToken;
+use crate::token::{self, LlamaToken};
 use llama_cpp_sys_2::{llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id};
 
 /// A safe wrapper around `llama_batch`.
@@ -20,6 +20,9 @@ pub enum BatchAddError {
     /// There was not enough space in the batch to add the token.
     #[error("Insufficient Space of {0}")]
     InsufficientSpace(usize),
+    /// Empty buffer is provided for get_one
+    #[error("Empty buffer")]
+    EmptyBuffer,
 }
 
 impl LlamaBatch {
@@ -154,18 +157,24 @@ impl LlamaBatch {
     ///
     /// NOTE: this is a helper function to facilitate transition to the new batch API
     ///
-    pub fn get_one(tokens: &[LlamaToken], pos_0: llama_pos, seq_id: llama_seq_id) -> Self {
-        unsafe {
-            let ptr = tokens.as_ptr() as *mut i32;
-            let batch =
-                llama_cpp_sys_2::llama_batch_get_one(ptr, tokens.len() as i32, pos_0, seq_id);
-
-            crate::llama_batch::LlamaBatch {
-                allocated: 0,
-                initialized_logits: vec![],
-                llama_batch: batch,
-            }
+    pub fn get_one(
+        tokens: &[LlamaToken],
+        pos_0: llama_pos,
+        seq_id: llama_seq_id,
+    ) -> Result<Self, BatchAddError> {
+        if tokens.is_empty() {
+            return Err(BatchAddError::EmptyBuffer);
         }
+        let batch = unsafe {
+            let ptr = tokens.as_ptr() as *mut i32;
+            llama_cpp_sys_2::llama_batch_get_one(ptr, tokens.len() as i32, pos_0, seq_id)
+        };
+        let batch = Self {
+            allocated: 0,
+            initialized_logits: vec![(tokens.len() - 1) as i32],
+            llama_batch: batch,
+        };
+        Ok(batch)
     }
 
     /// Returns the number of tokens in the batch.
