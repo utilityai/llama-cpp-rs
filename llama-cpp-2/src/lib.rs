@@ -26,6 +26,7 @@ pub mod context;
 pub mod llama_backend;
 pub mod llama_batch;
 pub mod model;
+pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
@@ -61,6 +62,7 @@ pub enum LLamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
+    // See [`LlamaSamplerError`]
 }
 
 /// There was an error while getting the chat template from a model.
@@ -191,6 +193,14 @@ pub enum LlamaLoraAdapterRemoveError {
     /// llama.cpp returned a non-zero error code.
     #[error("error code from llama cpp")]
     ErrorResult(i32),
+}
+
+/// An error that can occur when initializing a sampler.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum LlamaSamplerError {
+    /// llama.cpp returned null
+    #[error("null reference from llama.cpp")]
+    NullReturn,
 }
 
 /// get the time (in microseconds) according to llama.cpp
