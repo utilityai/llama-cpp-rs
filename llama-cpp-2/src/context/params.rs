@@ -116,37 +116,6 @@ unsafe impl Send for LlamaContextParams {}
 unsafe impl Sync for LlamaContextParams {}
 
 impl LlamaContextParams {
-    /// Set the seed of the context
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use llama_cpp_2::context::params::LlamaContextParams;
-    /// let params = LlamaContextParams::default();
-    /// let params = params.with_seed(1234);
-    /// assert_eq!(params.seed(), 1234);
-    /// ```
-    #[must_use]
-    pub fn with_seed(mut self, seed: u32) -> Self {
-        self.context_params.seed = seed;
-        self
-    }
-
-    /// Get the seed of the context
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use llama_cpp_2::context::params::LlamaContextParams;
-    /// let params = LlamaContextParams::default()
-    ///     .with_seed(1234);
-    /// assert_eq!(params.seed(), 1234);
-    /// ```
-    #[must_use]
-    pub fn seed(&self) -> u32 {
-        self.context_params.seed
-    }
-
     /// Set the side of the context
     ///
     /// # Examples
