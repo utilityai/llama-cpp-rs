@@ -7,7 +7,6 @@ use std::slice;
 
 use crate::llama_batch::LlamaBatch;
 use crate::model::{LlamaLoraAdapter, LlamaModel};
-use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::LlamaToken;
 use crate::{
@@ -17,7 +16,6 @@ use crate::{
 
 pub mod kv_cache;
 pub mod params;
-pub mod sample;
 pub mod session;
 
 /// Safe wrapper around `llama_context`.
@@ -263,17 +261,6 @@ impl<'model> LlamaContext<'model> {
         let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
-    }
-
-    /// Reset the timings for the context.
-    pub fn reset_timings(&mut self) {
-        unsafe { llama_cpp_sys_2::llama_reset_timings(self.context.as_ptr()) }
-    }
-
-    /// Returns the timings for the context.
-    pub fn timings(&mut self) -> LlamaTimings {
-        let timings = unsafe { llama_cpp_sys_2::llama_get_timings(self.context.as_ptr()) };
-        LlamaTimings { timings }
     }
 
     /// Sets a lora adapter.
