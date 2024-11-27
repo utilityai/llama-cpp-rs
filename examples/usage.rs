@@ -14,6 +14,8 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
+use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
+use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::token::data_array::LlamaTokenDataArray;
 use std::io::Write;
 
@@ -54,25 +56,25 @@ fn main() {
     // The `Decoder`
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
+    let sampler_params = LlamaSamplerChainParams::default();
+    let mut sampler = LlamaSampler::new(sampler_params)
+        .expect("Failed to create sampler")
+        .add_greedy();
+
     while n_cur <= n_len {
         // sample the next token
         {
-            let candidates = ctx.candidates_ith(batch.n_tokens() - 1);
+            let token = sampler.sample(&ctx, batch.n_tokens() - 1);
 
-            let candidates_p = LlamaTokenDataArray::from_iter(candidates, false);
-
-            // sample the most likely token
-            let new_token_id = ctx.sample_token_greedy(candidates_p);
+            sampler.accept(token);
 
             // is it an end of stream?
-            if new_token_id == model.token_eos() {
+            if token == model.token_eos() {
                 eprintln!();
                 break;
             }
 
-            let output_bytes = model
-                .token_to_bytes(new_token_id, Special::Tokenize)
-                .unwrap();
+            let output_bytes = model.token_to_bytes(token, Special::Tokenize).unwrap();
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
             let mut output_string = String::with_capacity(32);
             let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);
@@ -80,7 +82,7 @@ fn main() {
             std::io::stdout().flush().unwrap();
 
             batch.clear();
-            batch.add(new_token_id, n_cur, &[0], true).unwrap();
+            batch.add(token, n_cur, &[0], true).unwrap();
         }
 
         n_cur += 1;
