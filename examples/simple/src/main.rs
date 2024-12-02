@@ -247,7 +247,9 @@ either reduce n_len or increase n_ctx"
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
     let sampler_params = LlamaSamplerChainParams::default();
-    let mut sampler = LlamaSampler::new(sampler_params)?.add_dist(seed.unwrap_or(1234));
+    let mut sampler = LlamaSampler::new(sampler_params)?
+        .add_dist(seed.unwrap_or(1234))
+        .add_greedy();
 
     while n_cur <= n_len {
         // sample the next token
