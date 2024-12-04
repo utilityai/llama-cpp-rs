@@ -7,6 +7,7 @@ use std::ptr::NonNull;
 
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
 use crate::LlamaSamplerError;
 
@@ -132,11 +133,22 @@ impl LlamaSampler {
         self
     }
 
+    /// XTC sampling as described in <https://github.com/oobabooga/text-generation-webui/pull/6335>.
+    #[must_use]
+    #[allow(unused_mut)]
+    pub fn add_xtc(mut self, p: f32, t: f32, min_keep: usize, seed: u32) -> Self {
+        unsafe {
+            let xtc_sampler = llama_cpp_sys_2::llama_sampler_init_xtc(p, t, min_keep, seed);
+            llama_cpp_sys_2::llama_sampler_chain_add(self.sampler.as_ptr(), xtc_sampler);
+        }
+
+        self
+    }
+
     /// Mirostat 1.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
     ///
     /// # Arguments
     ///
-    /// * `candidates` - A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
     /// * `tau` -  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
     /// * `eta` - The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
     /// * `m` - The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
@@ -157,7 +169,6 @@ impl LlamaSampler {
     ///
     /// # Arguments
     ///
-    /// * `candidates` - A vector of `llama_token_data` containing the candidate tokens, their probabilities (p), and log-odds (logit) for the current position in the generated text.
     /// * `tau` -  The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
     /// * `eta` - The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
     /// * `mu` - Maximum cross-entropy. This value is initialized to be twice the target cross-entropy (`2 * tau`) and is updated in the algorithm based on the error between the target and observed surprisal.
@@ -231,6 +242,74 @@ impl LlamaSampler {
         self
     }
 
+    /// Adds penalties to the sampler. This can be used to penalize certain patterns in the generated text, such as repeating the same token multiple times or using the same token too frequently.
+    #[allow(unused_mut)]
+    #[must_use]
+    pub fn add_penalties_simple(
+        mut self,
+        model: &LlamaModel,
+        penalty_last_n: i32,
+        penalty_repeat: f32,
+        penalty_freq: f32,
+        penalty_present: f32,
+    ) -> Self {
+        self.add_penalties(
+            model.n_vocab(),
+            model.token_eos().0,
+            model.token_nl().0,
+            penalty_last_n,
+            penalty_repeat,
+            penalty_freq,
+            penalty_present,
+            false,
+            true,
+        )
+    }
+
+    /// Adds DRY repetition penalty to the sampler.
+    ///
+    /// DRY sampler, designed by p-e-w, as described in: <https://github.com/oobabooga/text-generation-webui/pull/5677>, porting Koboldcpp implementation authored by pi6am: <https://github.com/LostRuins/koboldcpp/pull/982>
+    #[allow(unused_mut)]
+    #[must_use]
+    pub fn add_dry(
+        mut self,
+        model: &LlamaModel,
+        dry_multiplier: f32,
+        dry_base: f32,
+        dry_allowed_length: i32,
+        dry_penalty_last_n: i32,
+        seq_breakers: &[impl AsRef<[u8]>],
+    ) -> Self {
+        let seq_breakers: Vec<CString> = seq_breakers
+            .iter()
+            .map(|s| {
+                let bytes = s.as_ref();
+                let null_byte = bytes.iter().position(|b| *b == 0).unwrap_or(bytes.len());
+                CString::new(&bytes[..null_byte]).expect("Failed to slice away null bytes!")
+            })
+            .collect();
+
+        let mut seq_breaker_pointers: Vec<*const i8> =
+            seq_breakers.iter().map(|s| s.as_ptr()).collect();
+
+        unsafe {
+            // Memory safety: llama_sampler_init_dry does not hold a reference to
+            // seq_breaker_pointers, so this will not UAF in future operations.
+            let dry_sampler = llama_cpp_sys_2::llama_sampler_init_dry(
+                model.model.as_ptr(),
+                dry_multiplier,
+                dry_base,
+                dry_allowed_length,
+                dry_penalty_last_n,
+                seq_breaker_pointers.as_mut_ptr(),
+                seq_breaker_pointers.len(),
+            );
+            llama_cpp_sys_2::llama_sampler_chain_add(self.sampler.as_ptr(), dry_sampler);
+        }
+
+        self
+    }
+
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
     pub fn sample(&self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
@@ -239,6 +318,10 @@ impl LlamaSampler {
         };
 
         LlamaToken(token)
+    }
+
+    pub fn apply(&mut self, data_array: &mut LlamaTokenDataArray) {
+        unsafe { data_array.apply_sampler(self.sampler.as_ptr()) }
     }
 
     /// Accepts a token from the sampler, possibly updating the internal state of certain samplers (e.g. grammar, repetition, etc.)
