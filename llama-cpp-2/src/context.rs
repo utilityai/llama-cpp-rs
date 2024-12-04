@@ -218,10 +218,7 @@ impl<'model> LlamaContext<'model> {
     /// - underlying logits data is null
     #[must_use]
     pub fn token_data_array(&self) -> LlamaTokenDataArray {
-        LlamaTokenDataArray::from_iter(
-            self.candidates(),
-            false,
-        )
+        LlamaTokenDataArray::from_iter(self.candidates(), false)
     }
 
     /// Token logits obtained from the last call to `decode()`.
@@ -275,10 +272,7 @@ impl<'model> LlamaContext<'model> {
     /// - logit `i` is not initialized.
     #[must_use]
     pub fn token_data_array_ith(&self, i: i32) -> LlamaTokenDataArray {
-        LlamaTokenDataArray::from_iter(
-            self.candidates_ith(i),
-            false,
-        )
+        LlamaTokenDataArray::from_iter(self.candidates_ith(i), false)
     }
 
     /// Get the logits for the ith token in the context.
