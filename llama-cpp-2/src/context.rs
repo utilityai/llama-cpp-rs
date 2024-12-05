@@ -207,10 +207,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// This is a convience method that implements:
     /// ```no_run
-    /// LlamaTokenDataArray::from_iter(
-    ///     self.candidates(),
-    ///     false,
-    /// )
+    /// LlamaTokenDataArray::from_iter(ctx.candidates(), false)
     /// ```
     ///
     /// # Panics
@@ -261,10 +258,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// This is a convience method that implements:
     /// ```no_run
-    /// LlamaTokenDataArray::from_iter(
-    ///     self.candidates_ith(i),
-    ///     false,
-    /// )
+    /// LlamaTokenDataArray::from_iter(ctx.candidates_ith(i), false)
     /// ```
     ///
     /// # Panics
