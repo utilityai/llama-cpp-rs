@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-sys-2"
 description = "Low Level Bindings to llama.cpp"
-version = "0.1.85"
+version = "0.1.86"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
@@ -35,6 +35,7 @@ include = [
 
     "/llama.cpp/ggml/src/ggml-cpu/**/*",
     "/llama.cpp/ggml/src/ggml-cuda/**/*",
+    "/llama.cpp/ggml/src/ggml-metal/**/*",
     "/llama.cpp/ggml/src/ggml-vulkan/**/*",
 
     "/llama.cpp/ggml/src/llamafile/sgemm.h",
