@@ -35,6 +35,7 @@ include = [
 
     "/llama.cpp/ggml/src/ggml-cpu/**/*",
     "/llama.cpp/ggml/src/ggml-cuda/**/*",
+    "/llama.cpp/ggml/src/ggml-metal/**/*",
     "/llama.cpp/ggml/src/ggml-vulkan/**/*",
 
     "/llama.cpp/ggml/src/llamafile/sgemm.h",
