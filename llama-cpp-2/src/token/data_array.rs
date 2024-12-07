@@ -1,8 +1,7 @@
 //! an rusty equivalent of `llama_token_data_array`.
-use std::{ffi::CString, ptr};
+use std::ptr;
 
 use crate::{
-    model::LlamaModel,
     sampling::{params::LlamaSamplerParams, LlamaSampler},
     token::data::LlamaTokenData,
 };
