@@ -206,7 +206,7 @@ impl<'model> LlamaContext<'model> {
     /// Get the token data array for the last token in the context.
     ///
     /// This is a convience method that implements:
-    /// ```no_run
+    /// ```ignore
     /// LlamaTokenDataArray::from_iter(ctx.candidates(), false)
     /// ```
     ///
@@ -257,7 +257,7 @@ impl<'model> LlamaContext<'model> {
     /// Get the token data array for the ith token in the context.
     ///
     /// This is a convience method that implements:
-    /// ```no_run
+    /// ```ignore
     /// LlamaTokenDataArray::from_iter(ctx.candidates_ith(i), false)
     /// ```
     ///
