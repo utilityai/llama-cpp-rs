@@ -112,6 +112,16 @@ unsafe fn new_inner(params: LlamaSamplerParams) -> *mut llama_cpp_sys_2::llama_s
             penalize_nl,
             ignore_eos,
         ),
+        LlamaSamplerParams::Mirostat {
+            n_vocab,
+            tau,
+            eta,
+            m,
+            seed,
+        } => llama_cpp_sys_2::llama_sampler_init_mirostat(n_vocab, seed, tau, eta, m),
+        LlamaSamplerParams::MirostatV2 { tau, eta, seed } => {
+            llama_cpp_sys_2::llama_sampler_init_mirostat_v2(seed, tau, eta)
+        }
         LlamaSamplerParams::Dist { seed } => llama_cpp_sys_2::llama_sampler_init_dist(seed),
         LlamaSamplerParams::Greedy => llama_cpp_sys_2::llama_sampler_init_greedy(),
     }

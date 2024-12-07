@@ -85,6 +85,30 @@ pub enum LlamaSamplerParams<'a> {
         ignore_eos: bool,
     },
 
+    /// Mirostat 1.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
+    Mirostat {
+        /// ``model.n_vocab()``
+        n_vocab: i32,
+        /// The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+        tau: f32,
+        /// The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+        eta: f32,
+        /// The number of tokens considered in the estimation of `s_hat`. This is an arbitrary value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`. In the paper, they use `m = 100`, but you can experiment with different values to see how it affects the performance of the algorithm.
+        m: i32,
+        /// Seed to initialize random generation with
+        seed: u32,
+    },
+
+    /// Mirostat 2.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
+    MirostatV2 {
+        /// The target cross-entropy (or surprise) value you want to achieve for the generated text. A higher value corresponds to more surprising or less predictable text, while a lower value corresponds to less surprising or more predictable text.
+        tau: f32,
+        /// The learning rate used to update `mu` based on the error between the target and observed surprisal of the sampled word. A larger learning rate will cause `mu` to be updated more quickly, while a smaller learning rate will result in slower updates.
+        eta: f32,
+        /// Seed to initialize random generation with
+        seed: u32,
+    },
+
     /// Select a token at random based on each token's probabilities
     Dist {
         /// Seed to initialize random generation with
@@ -146,7 +170,7 @@ impl<'a> LlamaSamplerParams<'a> {
         Self::MinP { p, min_keep: 1 }
     }
 
-    /// Whether this sampler's outputs are dependent on the tokens in the model's context. 
+    /// Whether this sampler's outputs are dependent on the tokens in the model's context.
     pub(crate) fn uses_context_tokens(&self) -> bool {
         match self {
             LlamaSamplerParams::Chain { stages, .. } => {
@@ -164,6 +188,8 @@ impl<'a> LlamaSamplerParams<'a> {
             | LlamaSamplerParams::TopP { .. }
             | LlamaSamplerParams::MinP { .. }
             | LlamaSamplerParams::Xtc { .. }
+            | LlamaSamplerParams::Mirostat { .. }
+            | LlamaSamplerParams::MirostatV2 { .. }
             | LlamaSamplerParams::Dist { .. }
             | LlamaSamplerParams::Greedy => false,
         }
