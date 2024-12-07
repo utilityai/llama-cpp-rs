@@ -73,12 +73,14 @@ impl LlamaTokenDataArray {
     ///
     /// # Panics
     ///
-    /// Panics if some of the safety conditions are not met. (we cannot check all of them at runtime so breaking them is UB)
+    /// Panics if some of the safety conditions are not met. (we cannot check all of them at
+    /// runtime so breaking them is UB)
     ///
     /// SAFETY:
-    /// [modify] cannot change the data pointer.
+    /// The returned array formed by the data pointer and the length must entirely consist of
+    /// initialized token data and the length must be less than the capacity of this array's data
+    /// buffer.
     /// if the data is not sorted, sorted must be false.
-    /// the size of the data can only decrease (i.e you cannot add new elements).
     pub(crate) unsafe fn modify_as_c_llama_token_data_array<T>(
         &mut self,
         modify: impl FnOnce(&mut llama_cpp_sys_2::llama_token_data_array) -> T,
@@ -97,13 +99,20 @@ impl LlamaTokenDataArray {
         };
 
         let result = modify(&mut c_llama_token_data_array);
-        assert!(
-            ptr::eq(data, c_llama_token_data_array.data),
-            "data pointer changed"
-        );
-        assert!(c_llama_token_data_array.size <= size, "size increased");
 
+        assert!(
+            c_llama_token_data_array.size <= self.data.capacity(),
+            "Size of the returned array exceeds the data buffer's capacity!"
+        );
+        if !ptr::eq(c_llama_token_data_array.data, data) {
+            ptr::copy(
+                c_llama_token_data_array.data,
+                data,
+                c_llama_token_data_array.size,
+            );
+        }
         self.data.set_len(c_llama_token_data_array.size);
+
         self.sorted = c_llama_token_data_array.sorted;
         self.selected = c_llama_token_data_array
             .selected
