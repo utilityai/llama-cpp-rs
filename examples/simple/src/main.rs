@@ -245,7 +245,7 @@ either reduce n_len or increase n_ctx"
     // The `Decoder`
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
-    let mut sampler = LlamaSampler::chain(vec![
+    let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::dist(seed.unwrap_or(1234)),
         LlamaSampler::greedy(),
     ]);

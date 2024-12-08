@@ -58,7 +58,7 @@ impl LlamaSampler {
     }
 
     #[must_use]
-    pub fn chain(samplers: Vec<Self>, no_perf: bool) -> Self {
+    pub fn chain(samplers: impl IntoIterator<Item = Self>, no_perf: bool) -> Self {
         unsafe {
             let chain = llama_cpp_sys_2::llama_sampler_chain_init(
                 llama_cpp_sys_2::llama_sampler_chain_params { no_perf },
@@ -78,7 +78,7 @@ impl LlamaSampler {
 
     /// Same as [`Self::chain`] with `no_perf = false`.
     #[must_use]
-    pub fn chain_simple(samplers: Vec<Self>) -> Self {
+    pub fn chain_simple(samplers: impl IntoIterator<Item = Self>) -> Self {
         Self::chain(samplers, false)
     }
 
