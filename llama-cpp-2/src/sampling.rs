@@ -58,7 +58,7 @@ impl LlamaSampler {
     }
 
     #[must_use]
-    pub fn chain_with_no_perf(samplers: Vec<Self>, no_perf: bool) -> Self {
+    pub fn chain(samplers: Vec<Self>, no_perf: bool) -> Self {
         unsafe {
             let chain = llama_cpp_sys_2::llama_sampler_chain_init(
                 llama_cpp_sys_2::llama_sampler_chain_params { no_perf },
@@ -76,9 +76,10 @@ impl LlamaSampler {
         }
     }
 
+    /// Same as [`Self::chain`] with `no_perf = false`.
     #[must_use]
-    pub fn chain(samplers: Vec<Self>) -> Self {
-        Self::chain_with_no_perf(samplers, false)
+    pub fn chain_simple(samplers: Vec<Self>) -> Self {
+        Self::chain(samplers, false)
     }
 
     #[must_use]
@@ -196,6 +197,8 @@ impl LlamaSampler {
         Self { sampler }
     }
 
+    /// Same as [`Self::penalties`], but with `n_vocab`, `special_eos_id`, and `linefeed_id`
+    /// initialized from `model`, `penalize_nl = false`, and `ignore_eos = true`.
     #[must_use]
     pub fn penalties_simple(
         model: &LlamaModel,
