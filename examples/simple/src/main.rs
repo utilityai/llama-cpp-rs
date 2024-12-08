@@ -17,7 +17,6 @@ use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
-use llama_cpp_2::sampling::params::LlamaSamplerChainParams;
 use llama_cpp_2::sampling::LlamaSampler;
 
 use std::ffi::CString;
@@ -246,10 +245,10 @@ either reduce n_len or increase n_ctx"
     // The `Decoder`
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
-    let sampler_params = LlamaSamplerChainParams::default();
-    let mut sampler = LlamaSampler::new(sampler_params)?
-        .add_dist(seed.unwrap_or(1234))
-        .add_greedy();
+    let mut sampler = LlamaSampler::chain_simple([
+        LlamaSampler::dist(seed.unwrap_or(1234)),
+        LlamaSampler::greedy(),
+    ]);
 
     while n_cur <= n_len {
         // sample the next token

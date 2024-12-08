@@ -143,7 +143,6 @@ fn macos_link_search_path() -> Option<String> {
 }
 
 fn main() {
-
     let target = env::var("TARGET").unwrap();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
@@ -196,7 +195,6 @@ fn main() {
         .generate()
         .expect("Failed to generate bindings");
 
-
     // Write the generated bindings to an output file
     let bindings_path = out_dir.join("bindings.rs");
     bindings
@@ -231,12 +229,12 @@ fn main() {
     if cfg!(windows) {
         config.static_crt(static_crt);
     }
-    
 
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
         if cfg!(windows) {
-            let vulkan_path = env::var("VULKAN_SDK").expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
+            let vulkan_path = env::var("VULKAN_SDK")
+                .expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
             let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
             println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
             println!("cargo:rustc-link-lib=vulkan-1");
@@ -265,7 +263,10 @@ fn main() {
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
-    println!("cargo:rustc-link-search={}", out_dir.join("lib64").display());
+    println!(
+        "cargo:rustc-link-search={}",
+        out_dir.join("lib64").display()
+    );
     println!("cargo:rustc-link-search={}", build_dir.display());
 
     // Link libraries
@@ -332,7 +333,7 @@ fn main() {
             debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
             if !dst.exists() {
                 std::fs::hard_link(asset.clone(), dst).unwrap();
-            }          
+            }
 
             // Copy DLLs to examples as well
             if target_dir.join("examples").exists() {
