@@ -13,7 +13,8 @@ This implementation adds a new pooling type `LLAMA_POOLING_TYPE_RANK` which enab
 ## Installation
 
 ```bash
-# Clone the repository
+# Follow instructions to clone repo.
+# Navigate to examples reranker
 cd examples/reranker
 
 # Build the project
@@ -67,4 +68,8 @@ Not tested others, but anything supported by llama.cpp should work.
 
 ## Implementation Details
 
-This is a close Rust implementation of the reranker implementation discussed in [llama.cpp PR #9510](https://github.com/ggerganov/llama.cpp/pull/9510). Key features include:
+This is a close Rust implementation of the reranker implementation discussed in [llama.cpp PR #9510](https://github.com/ggerganov/llama.cpp/pull/9510).
+
+## Potential issues
+
+The bos, eos, sep tokens are being hardcoded. We need to ideally get it from the model and build out the prompts based on each specific model. 
