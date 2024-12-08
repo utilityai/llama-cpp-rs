@@ -2,7 +2,7 @@
 use std::ptr;
 
 use crate::{
-    sampling::{params::LlamaSamplerParams, LlamaSampler},
+    sampling::LlamaSampler,
     token::data::LlamaTokenData,
 };
 
@@ -123,18 +123,6 @@ impl LlamaTokenDataArray {
         result
     }
 
-    /// Applies a sampler constructed from [`LlamaSamplerParams`]. This will call
-    /// [`LlamaSampler::accept_many`] on the provided tokens if the sampler uses tokens.
-    pub fn apply_sampler_from_params(&mut self, params: LlamaSamplerParams, tokens: &[LlamaToken]) {
-        let mut sampler = LlamaSampler::new(params);
-
-        if params.uses_context_tokens() {
-            sampler.accept_many(tokens);
-        }
-
-        self.apply_sampler(&mut sampler);
-    }
-
     /// Modifies the data array by applying a sampler to it
     pub fn apply_sampler(&mut self, sampler: &mut LlamaSampler) {
         unsafe {
@@ -146,14 +134,14 @@ impl LlamaTokenDataArray {
 
     /// Randomly selects a token from the candidates based on their probabilities.
     pub fn sample_token(&mut self, seed: u32) -> LlamaToken {
-        self.apply_sampler_from_params(LlamaSamplerParams::Dist { seed }, &[]);
+        self.apply_sampler(&mut LlamaSampler::dist(seed));
         self.selected_token()
             .expect("Dist sampler failed to select a token!")
     }
 
     /// Selects the token with the highest probability.
     pub fn sample_token_greedy(&mut self) -> LlamaToken {
-        self.apply_sampler_from_params(LlamaSamplerParams::Greedy, &[]);
+        self.apply_sampler(&mut LlamaSampler::greedy());
         self.selected_token()
             .expect("Greedy sampler failed to select a token!")
     }
