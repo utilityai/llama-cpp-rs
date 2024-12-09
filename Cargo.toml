@@ -20,7 +20,7 @@ bindgen = "0.69.5"
 cc = "1.2.2"
 anyhow = "1.0.93"
 clap = "4.5.22"
-encoding_rs = "0.8.34"
+encoding_rs = "0.8.35"
 
 [workspace.lints.rust]
 missing_docs = { level = "warn" }
