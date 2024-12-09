@@ -84,6 +84,34 @@ impl LlamaSampler {
     }
 
     /// Same as [`Self::chain`] with `no_perf = false`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use llama_cpp_2::token::{
+    ///    LlamaToken,
+    ///    data::LlamaTokenData,
+    ///    data_array::LlamaTokenDataArray
+    /// };
+    /// use llama_cpp_2::sampling::LlamaSampler;
+    ///
+    /// let mut data_array = LlamaTokenDataArray::new(vec![
+    ///     LlamaTokenData::new(LlamaToken(0), 0., 0.),
+    ///     LlamaTokenData::new(LlamaToken(1), 1., 0.),
+    ///     LlamaTokenData::new(LlamaToken(2), 2., 0.),
+    /// ], false);
+    ///
+    /// data_array.apply_sampler(&mut LlamaSampler::chain_simple([
+    ///     LlamaSampler::temp(0.5),
+    ///     LlamaSampler::greedy(),
+    /// ]));
+    ///
+    /// assert_eq!(data_array.data[0].logit(), 0.);
+    /// assert_eq!(data_array.data[1].logit(), 2.);
+    /// assert_eq!(data_array.data[2].logit(), 4.);
+    ///
+    /// assert_eq!(data_array.data.len(), 3);
+    /// assert_eq!(data_array.selected_token(), Some(LlamaToken(2)));
+    /// ```
     #[must_use]
     pub fn chain_simple(samplers: impl IntoIterator<Item = Self>) -> Self {
         Self::chain(samplers, false)
