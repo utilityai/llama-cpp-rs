@@ -31,3 +31,24 @@ impl LlamaToken {
         Self(token_id)
     }
 }
+
+/// convert a vector of `llama_token` to a vector of `LlamaToken` without memory allocation, 
+/// and consume the original vector.
+/// SAFETY: cast is valid as LlamaToken is repr(transparent)
+pub fn from_vec_token_sys(mut vec_sys: Vec<llama_cpp_sys_2::llama_token>) -> Vec<LlamaToken> {
+    let ptr = vec_sys.as_mut_ptr() as *mut LlamaToken;
+    unsafe {
+        Vec::from_raw_parts(ptr, vec_sys.len(), vec_sys.capacity())
+    }
+}
+
+/// convert a vector of `LlamaToken` to a vector of `llama_token` without memory allocation, 
+/// and consume the original vector.
+/// SAFETY: cast is valid as LlamaToken is repr(transparent)
+pub fn to_vec_token_sys(mut vec_llama: Vec<LlamaToken>) -> Vec<llama_cpp_sys_2::llama_token> {
+    let ptr = vec_llama.as_mut_ptr() as *mut llama_cpp_sys_2::llama_token;
+    unsafe {
+        Vec::from_raw_parts(ptr, vec_llama.len(), vec_llama.capacity())
+    }
+}
+
