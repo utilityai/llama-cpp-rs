@@ -43,16 +43,16 @@ impl LlamaSampler {
 
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
-    pub fn accept_many(&mut self, tokens: &[LlamaToken]) {
+    pub fn accept_many(&mut self, tokens: impl IntoIterator<Item = impl AsRef<LlamaToken>>) {
         for token in tokens {
-            unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.0) }
+            unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.as_ref().0) }
         }
     }
 
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
     #[must_use]
-    pub fn with_tokens(mut self, tokens: &[LlamaToken]) -> Self {
+    pub fn with_tokens(mut self, tokens: impl IntoIterator<Item = impl AsRef<LlamaToken>>) -> Self {
         self.accept_many(tokens);
         self
     }
