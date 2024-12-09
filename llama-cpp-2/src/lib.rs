@@ -195,14 +195,6 @@ pub enum LlamaLoraAdapterRemoveError {
     ErrorResult(i32),
 }
 
-/// An error that can occur when initializing a sampler.
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum LlamaSamplerError {
-    /// llama.cpp returned null
-    #[error("null reference from llama.cpp")]
-    NullReturn,
-}
-
 /// get the time (in microseconds) according to llama.cpp
 /// ```
 /// # use llama_cpp_2::llama_time_us;
