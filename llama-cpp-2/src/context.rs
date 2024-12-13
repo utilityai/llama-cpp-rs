@@ -9,6 +9,7 @@ use crate::llama_batch::LlamaBatch;
 use crate::model::{LlamaLoraAdapter, LlamaModel};
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
+use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
 use crate::{
     DecodeError, EmbeddingsError, EncodeError, LlamaLoraAdapterRemoveError,
@@ -202,6 +203,21 @@ impl<'model> LlamaContext<'model> {
         })
     }
 
+    /// Get the token data array for the last token in the context.
+    ///
+    /// This is a convience method that implements:
+    /// ```ignore
+    /// LlamaTokenDataArray::from_iter(ctx.candidates(), false)
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// - underlying logits data is null
+    #[must_use]
+    pub fn token_data_array(&self) -> LlamaTokenDataArray {
+        LlamaTokenDataArray::from_iter(self.candidates(), false)
+    }
+
     /// Token logits obtained from the last call to `decode()`.
     /// The logits for which `batch.logits[i] != 0` are stored contiguously
     /// in the order they have appeared in the batch.
@@ -217,6 +233,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - `n_vocab` does not fit into a usize
     /// - token data returned is null
+    #[must_use]
     pub fn get_logits(&self) -> &[f32] {
         let data = unsafe { llama_cpp_sys_2::llama_get_logits(self.context.as_ptr()) };
         assert!(!data.is_null(), "logits data for last token is null");
@@ -235,6 +252,21 @@ impl<'model> LlamaContext<'model> {
             let token = LlamaToken::new(i);
             LlamaTokenData::new(token, *logit, 0_f32)
         })
+    }
+
+    /// Get the token data array for the ith token in the context.
+    ///
+    /// This is a convience method that implements:
+    /// ```ignore
+    /// LlamaTokenDataArray::from_iter(ctx.candidates_ith(i), false)
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// - logit `i` is not initialized.
+    #[must_use]
+    pub fn token_data_array_ith(&self, i: i32) -> LlamaTokenDataArray {
+        LlamaTokenDataArray::from_iter(self.candidates_ith(i), false)
     }
 
     /// Get the logits for the ith token in the context.
