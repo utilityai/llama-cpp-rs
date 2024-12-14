@@ -10,6 +10,7 @@ use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
+use crate::token::from_vec_token_sys;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
@@ -253,7 +254,9 @@ impl LlamaModel {
 
         // Safety: `size` < `capacity` and llama-cpp has initialized elements up to `size`
         unsafe { buffer.set_len(size) }
-        Ok(buffer.into_iter().map(LlamaToken).collect())
+        // convert to LlamaToken without memory copy
+        let tokens = from_vec_token_sys(buffer);
+        Ok(tokens)
     }
 
     /// Get the type of a token.
