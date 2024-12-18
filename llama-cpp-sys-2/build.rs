@@ -230,6 +230,25 @@ fn main() {
         config.static_crt(static_crt);
     }
 
+    if target.contains("android") && target.contains("aarch64") {
+        // build flags for android taken from this doc
+        // https://github.com/ggerganov/llama.cpp/blob/master/docs/android.md
+        let android_ndk = env::var("ANDROID_NDK")
+            .expect("Please install Android NDK and ensure that ANDROID_NDK env variable is set");
+        config.define("LLAMA_CURL", "OFF");
+        config.define(
+            "CMAKE_TOOLCHAIN_FILE",
+            format!("{android_ndk}/build/cmake/android.toolchain.cmake"),
+        );
+        config.define("ANDROID_ABI", "arm64-v8a");
+        config.define("ANDROID_PLATFORM", "android-28");
+        config.define("CMAKE_SYSTEM_PROCESSOR", "arm64");
+        config.define("CMAKE_C_FLAGS", "-march=armv8.7a");
+        config.define("CMAKE_CXX_FLAGS", "-march=armv8.7a");
+        config.define("GGML_OPENMP", "OFF");
+        config.define("GGML_LLAMAFILE", "OFF");
+    }
+
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
         if cfg!(windows) {
