@@ -235,7 +235,6 @@ fn main() {
         // https://github.com/ggerganov/llama.cpp/blob/master/docs/android.md
         let android_ndk = env::var("ANDROID_NDK")
             .expect("Please install Android NDK and ensure that ANDROID_NDK env variable is set");
-        config.define("LLAMA_CURL", "OFF");
         config.define(
             "CMAKE_TOOLCHAIN_FILE",
             format!("{android_ndk}/build/cmake/android.toolchain.cmake"),
