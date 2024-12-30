@@ -1,10 +1,7 @@
 //! an rusty equivalent of `llama_token_data_array`.
 use std::ptr;
 
-use crate::{
-    sampling::LlamaSampler,
-    token::data::LlamaTokenData,
-};
+use crate::{sampling::LlamaSampler, token::data::LlamaTokenData};
 
 use super::LlamaToken;
 
@@ -124,7 +121,7 @@ impl LlamaTokenDataArray {
     }
 
     /// Modifies the data array by applying a sampler to it
-    pub fn apply_sampler(&mut self, sampler: &mut LlamaSampler) {
+    pub fn apply_sampler(&mut self, sampler: &LlamaSampler) {
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
                 llama_cpp_sys_2::llama_sampler_apply(sampler.sampler, c_llama_token_data_array);
