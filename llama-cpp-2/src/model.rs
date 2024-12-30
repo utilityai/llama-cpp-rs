@@ -572,7 +572,7 @@ impl LlamaModel {
                     buff.len() as i32,
                 )
             };
-            assert!(res > buff.len() as i32);
+            assert_eq!(res, buff.len() as i32);
         }
         buff.truncate(res as usize);
         Ok(String::from_utf8(buff)?)
