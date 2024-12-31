@@ -546,7 +546,7 @@ impl LlamaModel {
             None => std::ptr::null(),
         };
 
-        let mut res = unsafe {
+        let res = unsafe {
             llama_cpp_sys_2::llama_chat_apply_template(
                 self.model.as_ptr(),
                 tmpl_ptr,
@@ -561,7 +561,7 @@ impl LlamaModel {
         if res > buff.len() as i32 {
             buff.resize(res as usize, 0);
 
-            res = unsafe {
+            let res = unsafe {
                 llama_cpp_sys_2::llama_chat_apply_template(
                     self.model.as_ptr(),
                     tmpl_ptr,
