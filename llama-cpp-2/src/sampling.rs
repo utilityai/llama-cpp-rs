@@ -20,6 +20,15 @@ impl Debug for LlamaSampler {
     }
 }
 
+// this is needed for the dry sampler to typecheck on android
+// ...because what is normally an i8, is an u8 
+#[cfg(target_os = "android")]
+type CChar = u8;
+
+#[cfg(not(target_os = "android"))]
+type CChar = i8;
+
+
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
@@ -257,7 +266,7 @@ impl LlamaSampler {
             .into_iter()
             .map(|s| CString::new(s.as_ref()).unwrap())
             .collect();
-        let mut seq_breaker_pointers: Vec<*const i8> =
+        let mut seq_breaker_pointers: Vec<*const CChar> =
             seq_breakers.iter().map(|s| s.as_ptr()).collect();
 
         let sampler = unsafe {
