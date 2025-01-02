@@ -23,7 +23,7 @@ impl Debug for LlamaSampler {
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
-    pub fn sample(&self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
+    pub fn sample(&mut self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
         let token = unsafe {
             llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.context.as_ptr(), idx)
         };
@@ -32,7 +32,7 @@ impl LlamaSampler {
     }
 
     /// Applies this sampler to a [`LlamaTokenDataArray`].
-    pub fn apply(&mut self, data_array: &mut LlamaTokenDataArray) {
+    pub fn apply(&self, data_array: &mut LlamaTokenDataArray) {
         data_array.apply_sampler(self);
     }
 
@@ -53,7 +53,10 @@ impl LlamaSampler {
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
     #[must_use]
-    pub fn with_tokens(mut self, tokens: impl IntoIterator<Item = impl Borrow<LlamaToken>>) -> Self {
+    pub fn with_tokens(
+        mut self,
+        tokens: impl IntoIterator<Item = impl Borrow<LlamaToken>>,
+    ) -> Self {
         self.accept_many(tokens);
         self
     }
@@ -215,7 +218,7 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Grammar sampler 
+    /// Grammar sampler
     ///
     /// # Panics
     /// If either of ``grammar_str`` or ``grammar_root`` contain null bytes.
@@ -386,10 +389,10 @@ impl LlamaSampler {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_dist(seed) };
         Self { sampler }
     }
- 
+
     /// Selects the most likely token
     ///
-    /// # Example: 
+    /// # Example:
     /// ```rust
     /// use llama_cpp_2::token::{
     ///    LlamaToken,
