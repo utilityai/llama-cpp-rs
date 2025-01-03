@@ -9,7 +9,7 @@ pub struct LlamaBatch {
     /// The number of tokens the batch was allocated with. they are safe to write to - but not necessarily read from as they are not necessarily initialized
     allocated: usize,
     /// The logits that are initialized. Used by [`LlamaContext`] to ensure that only initialized logits are accessed.
-    pub(crate) initialized_logits: Vec<i32>,
+    pub initialized_logits: Vec<i32>,
     /// The llama_cpp batch. always initialize by `llama_cpp_sys_2::llama_batch_init(allocated, <unknown>, <unknown>)`
     pub(crate) llama_batch: llama_batch,
 }
