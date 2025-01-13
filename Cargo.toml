@@ -17,7 +17,7 @@ hf-hub = { version = "0.3.2" }
 criterion = "0.5.1"
 pprof = "0.13.0"
 bindgen = "0.69.5"
-cc = "1.2.6"
+cc = "1.2.9"
 anyhow = "1.0.95"
 clap = "4.5.23"
 encoding_rs = "0.8.35"
