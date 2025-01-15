@@ -101,7 +101,8 @@ fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
         "*.so"
     };
 
-    let libs_dir = out_dir.join("lib");
+    let shared_libs_dir = if cfg!(windows) { "bin" } else { "lib" };
+    let libs_dir = out_dir.join(shared_libs_dir);
     let pattern = libs_dir.join(shared_lib_pattern);
     debug_log!("Extract lib assets {}", pattern.display());
     let mut files = Vec::new();
