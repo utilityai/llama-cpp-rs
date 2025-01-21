@@ -21,13 +21,12 @@ impl Debug for LlamaSampler {
 }
 
 // this is needed for the dry sampler to typecheck on android
-// ...because what is normally an i8, is an u8 
+// ...because what is normally an i8, is an u8
 #[cfg(target_os = "android")]
 type CChar = u8;
 
 #[cfg(not(target_os = "android"))]
 type CChar = i8;
-
 
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
@@ -129,6 +128,7 @@ impl LlamaSampler {
         Self::chain(samplers, false)
     }
 
+    #[allow(clippy::doc_markdown)]
     /// Updates the logits l_i' = l_i/t. When t <= 0.0f, the maximum logit is kept at it's original
     /// value, the rest are set to -inf
     ///
@@ -272,7 +272,10 @@ impl LlamaSampler {
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_dry(
                 model.vocab_ptr(),
-                model.n_ctx_train().try_into().expect("n_ctx_train is greater than two billion"),
+                model
+                    .n_ctx_train()
+                    .try_into()
+                    .expect("n_ctx_train exceeds i32::MAX"),
                 multiplier,
                 base,
                 allowed_length,

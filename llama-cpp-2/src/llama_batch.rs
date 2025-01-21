@@ -10,6 +10,7 @@ pub struct LlamaBatch {
     allocated: usize,
     /// The logits that are initialized. Used by [`LlamaContext`] to ensure that only initialized logits are accessed.
     pub(crate) initialized_logits: Vec<i32>,
+    #[allow(clippy::doc_markdown)]
     /// The llama_cpp batch. always initialize by `llama_cpp_sys_2::llama_batch_init(allocated, <unknown>, <unknown>)`
     pub(crate) llama_batch: llama_batch,
 }
@@ -20,7 +21,7 @@ pub enum BatchAddError {
     /// There was not enough space in the batch to add the token.
     #[error("Insufficient Space of {0}")]
     InsufficientSpace(usize),
-    /// Empty buffer is provided for get_one
+    /// Empty buffer is provided for [`LlamaBatch::get_one`]
     #[error("Empty buffer")]
     EmptyBuffer,
 }
@@ -152,22 +153,35 @@ impl LlamaBatch {
         }
     }
 
-    /// llama_batch_get_one
-    /// Return batch for single sequence of tokens starting at pos_0
+    /// ``llama_batch_get_one``
+    /// Return batch for single sequence of tokens
     ///
     /// NOTE: this is a helper function to facilitate transition to the new batch API
     ///
+    /// # Errors
+    /// If the provided token buffer is empty.
+    ///
+    /// # Panics
+    /// If the number of tokens in ``tokens`` exceeds [`i32::MAX`].
     pub fn get_one(tokens: &[LlamaToken]) -> Result<Self, BatchAddError> {
         if tokens.is_empty() {
             return Err(BatchAddError::EmptyBuffer);
         }
         let batch = unsafe {
             let ptr = tokens.as_ptr() as *mut i32;
-            llama_cpp_sys_2::llama_batch_get_one(ptr, tokens.len() as i32)
+            llama_cpp_sys_2::llama_batch_get_one(
+                ptr,
+                tokens
+                    .len()
+                    .try_into()
+                    .expect("number of tokens exceeds i32::MAX"),
+            )
         };
         let batch = Self {
             allocated: 0,
-            initialized_logits: vec![(tokens.len() - 1) as i32],
+            initialized_logits: vec![(tokens.len() - 1)
+                .try_into()
+                .expect("number of tokens exceeds i32::MAX + 1")],
             llama_batch: batch,
         };
         Ok(batch)

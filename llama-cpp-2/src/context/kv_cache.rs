@@ -6,6 +6,7 @@ use std::num::{NonZeroU8, TryFromIntError};
 
 /// Errors that can occur when attempting to prepare values for the kv cache
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[allow(clippy::module_name_repetitions)]
 pub enum KvCacheConversionError {
     /// Sequence id conversion to i32 failed
     #[error("Provided sequence id is too large for a i32")]
@@ -33,15 +34,16 @@ impl LlamaContext<'_> {
     /// Copy the cache from one sequence to another.
     ///
     /// # Returns
-    /// A `Result` indicating whether the operation was successful. If the either position exceeds
-    /// the maximum i32 value, no copy is attempted and an `Err` is returned.
+    /// A `Result` indicating whether the operation was successful.
     ///
     /// # Parameters
-    ///
     /// * `src` - The sequence id to copy the cache from.
     /// * `dest` - The sequence id to copy the cache to.
     /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is copied up to `p1`.
     /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is copied starting from `p0`.
+    ///
+    /// # Errors
+    /// If either position exceeds [`i32::MAX`].
     pub fn copy_kv_cache_seq(
         &mut self,
         src: i32,
@@ -51,10 +53,10 @@ impl LlamaContext<'_> {
     ) -> Result<(), KvCacheConversionError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P0TooLarge(e))?;
+            .map_err(KvCacheConversionError::P0TooLarge)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P1TooLarge(e))?;
+            .map_err(KvCacheConversionError::P1TooLarge)?;
         unsafe {
             llama_cpp_sys_2::llama_kv_cache_seq_cp(self.context.as_ptr(), src, dest, p0, p1);
         }
@@ -69,10 +71,12 @@ impl LlamaContext<'_> {
     /// either position exceeds the maximum i32 value, no removal is attempted and an `Err` is returned.
     ///
     /// # Parameters
-    ///
     /// * `src` - The sequence id to clear the cache for. If `None`, matches all sequences
     /// * `p0` - The start position of the cache to clear. If `None`, the entire cache is cleared up to `p1`.
     /// * `p1` - The end position of the cache to clear. If `None`, the entire cache is cleared from `p0`.
+    ///
+    /// # Errors
+    /// If the sequence id or either position exceeds [`i32::MAX`].
     pub fn clear_kv_cache_seq(
         &mut self,
         src: Option<u32>,
@@ -81,13 +85,13 @@ impl LlamaContext<'_> {
     ) -> Result<bool, KvCacheConversionError> {
         let src = src
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::SeqIdTooLarge(e))?;
+            .map_err(KvCacheConversionError::SeqIdTooLarge)?;
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P0TooLarge(e))?;
+            .map_err(KvCacheConversionError::P0TooLarge)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P1TooLarge(e))?;
+            .map_err(KvCacheConversionError::P1TooLarge)?;
         Ok(unsafe { llama_cpp_sys_2::llama_kv_cache_seq_rm(self.context.as_ptr(), src, p0, p1) })
     }
 
@@ -118,8 +122,7 @@ impl LlamaContext<'_> {
     ///   - explicitly with [`Self::kv_cache_update`]
     ///
     /// # Returns
-    /// A `Result` indicating whether the operation was successful. If either position
-    /// exceeds the maximum i32 value, no update is attempted and an `Err` is returned.
+    /// A `Result` indicating whether the operation was successful.
     ///
     /// # Parameters
     ///
@@ -127,6 +130,9 @@ impl LlamaContext<'_> {
     /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to `p1`.
     /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from `p0`.
     /// * `delta` - The relative position to add to the tokens
+    ///
+    /// # Errors
+    /// If either position exceeds [`i32::MAX`].
     pub fn kv_cache_seq_add(
         &mut self,
         seq_id: i32,
@@ -136,10 +142,10 @@ impl LlamaContext<'_> {
     ) -> Result<(), KvCacheConversionError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P0TooLarge(e))?;
+            .map_err(KvCacheConversionError::P0TooLarge)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P1TooLarge(e))?;
+            .map_err(KvCacheConversionError::P1TooLarge)?;
         unsafe {
             llama_cpp_sys_2::llama_kv_cache_seq_add(self.context.as_ptr(), seq_id, p0, p1, delta);
         }
@@ -152,8 +158,7 @@ impl LlamaContext<'_> {
     ///   - explicitly with [`Self::kv_cache_update`]
     ///
     /// # Returns
-    /// A `Result` indicating whether the operation was successful. If either position
-    /// exceeds the maximum i32 value, no update is attempted and an `Err` is returned.
+    /// A `Result` indicating whether the operation was successful.
     ///
     /// # Parameters
     ///
@@ -161,6 +166,9 @@ impl LlamaContext<'_> {
     /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to `p1`.
     /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from `p0`.
     /// * `d` - The factor to divide the positions by
+    ///
+    /// # Errors
+    /// If either position exceeds [`i32::MAX`].
     pub fn kv_cache_seq_div(
         &mut self,
         seq_id: i32,
@@ -170,10 +178,10 @@ impl LlamaContext<'_> {
     ) -> Result<(), KvCacheConversionError> {
         let p0 = p0
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P0TooLarge(e))?;
+            .map_err(KvCacheConversionError::P0TooLarge)?;
         let p1 = p1
             .map_or(Ok(-1), i32::try_from)
-            .map_err(|e| KvCacheConversionError::P1TooLarge(e))?;
+            .map_err(KvCacheConversionError::P1TooLarge)?;
         let d = c_int::from(d.get());
         unsafe { llama_cpp_sys_2::llama_kv_cache_seq_div(self.context.as_ptr(), seq_id, p0, p1, d) }
         Ok(())
@@ -239,7 +247,7 @@ pub struct KVCacheView<'a> {
     view: llama_cpp_sys_2::llama_kv_cache_view,
 }
 
-impl<'a> KVCacheView<'a> {
+impl KVCacheView<'_> {
     /// Update the KV cache view structure with the current state of the KV cache. (use only for debugging purposes)
     pub fn update(&mut self) {
         unsafe {
@@ -314,7 +322,7 @@ impl<'a> KVCacheView<'a> {
     }
 }
 
-impl<'a> Drop for KVCacheView<'a> {
+impl Drop for KVCacheView<'_> {
     fn drop(&mut self) {
         unsafe {
             llama_cpp_sys_2::llama_kv_cache_view_free(&mut self.view);

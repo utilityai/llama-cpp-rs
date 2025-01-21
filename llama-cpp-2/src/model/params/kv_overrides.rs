@@ -104,7 +104,7 @@ pub struct KvOverrideValueIterator<'a> {
     current: usize,
 }
 
-impl<'a> Iterator for KvOverrideValueIterator<'a> {
+impl Iterator for KvOverrideValueIterator<'_> {
     type Item = (CString, ParamOverrideValue);
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -43,6 +43,9 @@ pub struct LlamaChatMessage {
 
 impl LlamaChatMessage {
     /// Create a new `LlamaChatMessage`
+    ///
+    /// # Errors
+    /// If either of ``role`` or ``content`` contain null bytes.
     pub fn new(role: String, content: String) -> Result<Self, NewLlamaChatMessageError> {
         Ok(Self {
             role: CString::new(role)?,
@@ -152,17 +155,24 @@ impl LlamaModel {
     /// Convert single token to bytes.
     ///
     /// # Errors
-    ///
     /// See [`TokenToStringError`] for more information.
+    ///
+    /// # Panics
+    /// If a [`TokenToStringError::InsufficientBufferSpace`] error returned by
+    /// [`Self::token_to_bytes_with_size`] contains a positive nonzero value. This should never
+    /// happen.
     pub fn token_to_bytes(
         &self,
         token: LlamaToken,
         special: Special,
     ) -> Result<Vec<u8>, TokenToStringError> {
         match self.token_to_bytes_with_size(token, 8, special, None) {
-            Err(TokenToStringError::InsufficientBufferSpace(i)) => {
-                self.token_to_bytes_with_size(token, -i as usize, special, None)
-            }
+            Err(TokenToStringError::InsufficientBufferSpace(i)) => self.token_to_bytes_with_size(
+                token,
+                (-i).try_into().expect("Error buffer size is positive"),
+                special,
+                None,
+            ),
             x => x,
         }
     }
@@ -232,7 +242,7 @@ impl LlamaModel {
                 self.vocab_ptr(),
                 c_string.as_ptr(),
                 c_int::try_from(c_string.as_bytes().len())?,
-                buffer.as_mut_ptr() as *mut llama_cpp_sys_2::llama_token,
+                buffer.as_mut_ptr().cast::<llama_cpp_sys_2::llama_token>(),
                 buffer_capacity,
                 add_bos,
                 true,
@@ -248,7 +258,7 @@ impl LlamaModel {
                     self.vocab_ptr(),
                     c_string.as_ptr(),
                     c_int::try_from(c_string.as_bytes().len())?,
-                    buffer.as_mut_ptr() as *mut llama_cpp_sys_2::llama_token,
+                    buffer.as_mut_ptr().cast::<llama_cpp_sys_2::llama_token>(),
                     -size,
                     add_bos,
                     true,
@@ -323,18 +333,16 @@ impl LlamaModel {
         lstrip: Option<NonZeroU16>,
     ) -> Result<Vec<u8>, TokenToStringError> {
         if token == self.token_nl() {
-            return Ok(String::from("\n").into_bytes());
+            return Ok(b"\n".to_vec());
         }
 
         // unsure what to do with this in the face of the 'special' arg + attr changes
         let attrs = self.token_attr(token);
-        if attrs.contains(LlamaTokenAttr::Control)
-            && (token == self.token_bos() || token == self.token_eos())
-        {
-            return Ok(Vec::new());
-        } else if attrs.is_empty()
+        if attrs.is_empty()
             || attrs
                 .intersects(LlamaTokenAttr::Unknown | LlamaTokenAttr::Byte | LlamaTokenAttr::Unused)
+            || attrs.contains(LlamaTokenAttr::Control)
+                && (token == self.token_bos() || token == self.token_eos())
         {
             return Ok(Vec::new());
         }
@@ -558,12 +566,12 @@ impl LlamaModel {
                 chat.len(),
                 add_ass,
                 buff.as_mut_ptr().cast::<i8>(),
-                buff.len() as i32,
+                buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
             )
         };
 
-        if res > buff.len() as i32 {
-            buff.resize(res as usize, 0);
+        if res > buff.len().try_into().expect("Buffer size exceeds i32::MAX") {
+            buff.resize(res.try_into().expect("res is negative"), 0);
 
             let res = unsafe {
                 llama_cpp_sys_2::llama_chat_apply_template(
@@ -572,12 +580,12 @@ impl LlamaModel {
                     chat.len(),
                     add_ass,
                     buff.as_mut_ptr().cast::<i8>(),
-                    buff.len() as i32,
+                    buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
                 )
             };
-            assert_eq!(res, buff.len() as i32);
+            assert_eq!(Ok(res), buff.len().try_into());
         }
-        buff.truncate(res as usize);
+        buff.truncate(res.try_into().expect("res is negative"));
         Ok(String::from_utf8(buff)?)
     }
 }
