@@ -31,7 +31,7 @@ pub struct LlamaModel {
 #[repr(transparent)]
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaLoraAdapter {
-    pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_lora_adapter>,
+    pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_adapter_lora>,
 }
 
 /// A Safe wrapper around `llama_chat_message`
@@ -74,6 +74,10 @@ unsafe impl Send for LlamaModel {}
 unsafe impl Sync for LlamaModel {}
 
 impl LlamaModel {
+    pub(crate) fn vocab_ptr(&self) -> *const llama_cpp_sys_2::llama_vocab {
+        unsafe { llama_cpp_sys_2::llama_model_get_vocab(self.model.as_ptr()) }
+    }
+
     /// get the number of tokens the model was trained on
     ///
     /// # Panics
@@ -99,28 +103,28 @@ impl LlamaModel {
     /// Get the beginning of stream token.
     #[must_use]
     pub fn token_bos(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys_2::llama_token_bos(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_bos(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
     /// Get the end of stream token.
     #[must_use]
     pub fn token_eos(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys_2::llama_token_eos(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_eos(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
     /// Get the newline token.
     #[must_use]
     pub fn token_nl(&self) -> LlamaToken {
-        let token = unsafe { llama_cpp_sys_2::llama_token_nl(self.model.as_ptr()) };
+        let token = unsafe { llama_cpp_sys_2::llama_token_nl(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
     /// Check if a token represents the end of generation (end of turn, end of sequence, etc.)
     #[must_use]
     pub fn is_eog_token(&self, token: LlamaToken) -> bool {
-        unsafe { llama_cpp_sys_2::llama_token_is_eog(self.model.as_ptr(), token.0) }
+        unsafe { llama_cpp_sys_2::llama_token_is_eog(self.vocab_ptr(), token.0) }
     }
 
     /// Get the decoder start token.
@@ -225,7 +229,7 @@ impl LlamaModel {
 
         let size = unsafe {
             llama_cpp_sys_2::llama_tokenize(
-                self.model.as_ptr(),
+                self.vocab_ptr(),
                 c_string.as_ptr(),
                 c_int::try_from(c_string.as_bytes().len())?,
                 buffer.as_mut_ptr() as *mut llama_cpp_sys_2::llama_token,
@@ -241,7 +245,7 @@ impl LlamaModel {
             buffer.reserve_exact(usize::try_from(-size).expect("usize's are larger "));
             unsafe {
                 llama_cpp_sys_2::llama_tokenize(
-                    self.model.as_ptr(),
+                    self.vocab_ptr(),
                     c_string.as_ptr(),
                     c_int::try_from(c_string.as_bytes().len())?,
                     buffer.as_mut_ptr() as *mut llama_cpp_sys_2::llama_token,
@@ -268,7 +272,7 @@ impl LlamaModel {
     /// If the token type is not known to this library.
     #[must_use]
     pub fn token_attr(&self, LlamaToken(id): LlamaToken) -> LlamaTokenAttrs {
-        let token_type = unsafe { llama_cpp_sys_2::llama_token_get_attr(self.model.as_ptr(), id) };
+        let token_type = unsafe { llama_cpp_sys_2::llama_token_get_attr(self.vocab_ptr(), id) };
         LlamaTokenAttrs::try_from(token_type).expect("token type is valid")
     }
 
@@ -347,7 +351,7 @@ impl LlamaModel {
         let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
         let size = unsafe {
             llama_cpp_sys_2::llama_token_to_piece(
-                self.model.as_ptr(),
+                self.vocab_ptr(),
                 token.0,
                 buf,
                 len,
@@ -374,7 +378,7 @@ impl LlamaModel {
     /// without issue.
     #[must_use]
     pub fn n_vocab(&self) -> i32 {
-        unsafe { llama_cpp_sys_2::llama_n_vocab(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_n_vocab(self.vocab_ptr()) }
     }
 
     /// The type of vocab the model was trained on.
@@ -384,7 +388,8 @@ impl LlamaModel {
     /// If llama-cpp emits a vocab type that is not known to this library.
     #[must_use]
     pub fn vocab_type(&self) -> VocabType {
-        let vocab_type = unsafe { llama_cpp_sys_2::llama_vocab_type(self.model.as_ptr()) };
+        // llama_cpp_sys_2::llama_model_get_vocab
+        let vocab_type = unsafe { llama_cpp_sys_2::llama_vocab_type(self.vocab_ptr()) };
         VocabType::try_from(vocab_type).expect("invalid vocab type")
     }
 
@@ -479,7 +484,7 @@ impl LlamaModel {
 
         let cstr = CString::new(path)?;
         let adapter =
-            unsafe { llama_cpp_sys_2::llama_lora_adapter_init(self.model.as_ptr(), cstr.as_ptr()) };
+            unsafe { llama_cpp_sys_2::llama_adapter_lora_init(self.model.as_ptr(), cstr.as_ptr()) };
 
         let adapter = NonNull::new(adapter).ok_or(LlamaLoraAdapterInitError::NullResult)?;
 
@@ -548,7 +553,6 @@ impl LlamaModel {
 
         let res = unsafe {
             llama_cpp_sys_2::llama_chat_apply_template(
-                self.model.as_ptr(),
                 tmpl_ptr,
                 chat.as_ptr(),
                 chat.len(),
@@ -563,7 +567,6 @@ impl LlamaModel {
 
             let res = unsafe {
                 llama_cpp_sys_2::llama_chat_apply_template(
-                    self.model.as_ptr(),
                     tmpl_ptr,
                     chat.as_ptr(),
                     chat.len(),

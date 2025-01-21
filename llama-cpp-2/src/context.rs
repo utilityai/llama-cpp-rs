@@ -318,7 +318,7 @@ impl<'model> LlamaContext<'model> {
         scale: f32,
     ) -> Result<(), LlamaLoraAdapterSetError> {
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_lora_adapter_set(
+            llama_cpp_sys_2::llama_set_adapter_lora(
                 self.context.as_ptr(),
                 adapter.lora_adapter.as_ptr(),
                 scale,
@@ -342,7 +342,7 @@ impl<'model> LlamaContext<'model> {
         adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_lora_adapter_remove(
+            llama_cpp_sys_2::llama_rm_adapter_lora(
                 self.context.as_ptr(),
                 adapter.lora_adapter.as_ptr(),
             )
