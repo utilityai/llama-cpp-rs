@@ -52,13 +52,13 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to n_ubatch.
+    /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to [`Self::n_ubatch`].
     #[must_use]
     pub fn n_batch(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_n_batch(self.context.as_ptr()) }
     }
 
-    /// Gets the max number of physical tokens (hardware level) to decode in batch. Must be less than or equal to n_batch.
+    /// Gets the max number of physical tokens (hardware level) to decode in batch. Must be less than or equal to [`Self::n_batch`].
     #[must_use]
     pub fn n_ubatch(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_n_ubatch(self.context.as_ptr()) }
@@ -318,7 +318,7 @@ impl<'model> LlamaContext<'model> {
         scale: f32,
     ) -> Result<(), LlamaLoraAdapterSetError> {
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_lora_adapter_set(
+            llama_cpp_sys_2::llama_set_adapter_lora(
                 self.context.as_ptr(),
                 adapter.lora_adapter.as_ptr(),
                 scale,
@@ -342,7 +342,7 @@ impl<'model> LlamaContext<'model> {
         adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_lora_adapter_remove(
+            llama_cpp_sys_2::llama_rm_adapter_lora(
                 self.context.as_ptr(),
                 adapter.lora_adapter.as_ptr(),
             )

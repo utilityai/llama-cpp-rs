@@ -21,13 +21,12 @@ impl Debug for LlamaSampler {
 }
 
 // this is needed for the dry sampler to typecheck on android
-// ...because what is normally an i8, is an u8 
+// ...because what is normally an i8, is an u8
 #[cfg(target_os = "android")]
 type CChar = u8;
 
 #[cfg(not(target_os = "android"))]
 type CChar = i8;
-
 
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
@@ -129,6 +128,7 @@ impl LlamaSampler {
         Self::chain(samplers, false)
     }
 
+    #[allow(clippy::doc_markdown)]
     /// Updates the logits l_i' = l_i/t. When t <= 0.0f, the maximum logit is kept at it's original
     /// value, the rest are set to -inf
     ///
@@ -238,7 +238,7 @@ impl LlamaSampler {
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_grammar(
-                model.model.as_ptr(),
+                model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
             )
@@ -264,14 +264,18 @@ impl LlamaSampler {
     ) -> Self {
         let seq_breakers: Vec<CString> = seq_breakers
             .into_iter()
-            .map(|s| CString::new(s.as_ref()).unwrap())
+            .map(|s| CString::new(s.as_ref()).expect("A sequence breaker contains null bytes"))
             .collect();
         let mut seq_breaker_pointers: Vec<*const CChar> =
             seq_breakers.iter().map(|s| s.as_ptr()).collect();
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_dry(
-                model.model.as_ptr(),
+                model.vocab_ptr(),
+                model
+                    .n_ctx_train()
+                    .try_into()
+                    .expect("n_ctx_train exceeds i32::MAX"),
                 multiplier,
                 base,
                 allowed_length,
@@ -286,72 +290,27 @@ impl LlamaSampler {
     /// Penalizes tokens for being present in the context.
     ///
     /// Parameters:  
-    /// - ``n_vocab``: [`LlamaModel::n_vocab`]
-    /// - ``special_eos)id``: [`LlamaModel::token_eos`]
-    /// - ``linefeed_id``: [`LlamaModel::token_nl`]
     /// - ``penalty_last_n``: last n tokens to penalize (0 = disable penalty, -1 = context size)
     /// - ``penalty_repeat``: 1.0 = disabled
     /// - ``penalty_freq``: 0.0 = disabled
     /// - ``penalty_present``: 0.0 = disabled
-    /// - ``penalize_nl``: consider newlines as a repeatable token
-    /// - ``ignore_eos``: ignore the end-of-sequence token
     #[allow(clippy::too_many_arguments)]
     #[must_use]
     pub fn penalties(
-        n_vocab: i32,
-        special_eos_id: i32,
-        linefeed_id: i32,
         penalty_last_n: i32,
         penalty_repeat: f32,
         penalty_freq: f32,
         penalty_present: f32,
-        penalize_nl: bool,
-        ignore_eos: bool,
     ) -> Self {
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_penalties(
-                n_vocab,
-                special_eos_id,
-                linefeed_id,
                 penalty_last_n,
                 penalty_repeat,
                 penalty_freq,
                 penalty_present,
-                penalize_nl,
-                ignore_eos,
             )
         };
         Self { sampler }
-    }
-
-    /// Same as [`Self::penalties`], but with `n_vocab`, `special_eos_id`, and `linefeed_id`
-    /// initialized from `model`, `penalize_nl = false`, and `ignore_eos = true`.
-    ///
-    /// Parameters:  
-    /// - ``model``: The model's tokenizer to use to initialize the sampler.
-    /// - ``penalty_last_n``: last n tokens to penalize (0 = disable penalty, -1 = context size)
-    /// - ``penalty_repeat``: 1.0 = disabled
-    /// - ``penalty_freq``: 0.0 = disabled
-    /// - ``penalty_present``: 0.0 = disabled
-    #[must_use]
-    pub fn penalties_simple(
-        model: &LlamaModel,
-        penalty_last_n: i32,
-        penalty_repeat: f32,
-        penalty_freq: f32,
-        penalty_present: f32,
-    ) -> Self {
-        Self::penalties(
-            model.n_vocab(),
-            model.token_eos().0,
-            model.token_nl().0,
-            penalty_last_n,
-            penalty_repeat,
-            penalty_freq,
-            penalty_present,
-            false,
-            true,
-        )
     }
 
     /// Mirostat 1.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.

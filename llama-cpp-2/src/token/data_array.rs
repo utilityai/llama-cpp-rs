@@ -141,7 +141,7 @@ impl LlamaTokenDataArray {
     /// # Panics
     /// If the internal llama.cpp sampler fails to select a token.
     pub fn sample_token(&mut self, seed: u32) -> LlamaToken {
-        self.apply_sampler(&mut LlamaSampler::dist(seed));
+        self.apply_sampler(&LlamaSampler::dist(seed));
         self.selected_token()
             .expect("Dist sampler failed to select a token!")
     }
@@ -151,7 +151,7 @@ impl LlamaTokenDataArray {
     /// # Panics
     /// If the internal llama.cpp sampler fails to select a token.
     pub fn sample_token_greedy(&mut self) -> LlamaToken {
-        self.apply_sampler(&mut LlamaSampler::greedy());
+        self.apply_sampler(&LlamaSampler::greedy());
         self.selected_token()
             .expect("Greedy sampler failed to select a token!")
     }

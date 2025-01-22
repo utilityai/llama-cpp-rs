@@ -58,12 +58,10 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
         } else {
             "*.a"
         }
+    } else if build_shared_libs {
+        "*.so"
     } else {
-        if build_shared_libs {
-            "*.so"
-        } else {
-            "*.a"
-        }
+        "*.a"
     };
     let libs_dir = out_dir.join("lib*");
     let pattern = libs_dir.join(lib_pattern);
@@ -294,21 +292,14 @@ fn main() {
     assert_ne!(llama_libs.len(), 0);
 
     for lib in llama_libs {
-        debug_log!(
-            "LINK {}",
-            format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib)
-        );
-        println!(
-            "{}",
-            format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib)
-        );
+        let link = format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib);
+        debug_log!("LINK {link}",);
+        println!("{link}",);
     }
 
     // OpenMP
-    if cfg!(feature = "openmp") {
-        if target.contains("gnu") {
-            println!("cargo:rustc-link-lib=gomp");
-        }
+    if cfg!(feature = "openmp") && target.contains("gnu") {
+        println!("cargo:rustc-link-lib=gomp");
     }
 
     // Windows debug
