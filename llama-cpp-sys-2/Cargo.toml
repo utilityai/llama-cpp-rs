@@ -59,10 +59,9 @@ include = [
 [dependencies]
 
 [build-dependencies]
-bindgen = { workspace = true }
-cc = { workspace = true, features = ["parallel"] }
+bindgen = { version = "0.69", features = ["runtime", "default"] }  # Changed - ensure default features are enabled
 cmake = "0.1"
-glob = "0.3.2"
+glob = "0.3"
 
 [features]
 cuda = []

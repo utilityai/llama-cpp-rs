@@ -5,6 +5,19 @@ use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
 
+// this is needed for the dry sampler to typecheck on android and aarch64-linux
+#[cfg(any(
+    target_os = "android",
+    all(target_arch = "aarch64", target_os = "linux")
+))]
+type CChar = u8;
+
+#[cfg(not(any(
+    target_os = "android",
+    all(target_arch = "aarch64", target_os = "linux")
+)))]
+type CChar = i8;
+
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
@@ -565,7 +578,7 @@ impl LlamaModel {
                 chat.as_ptr(),
                 chat.len(),
                 add_ass,
-                buff.as_mut_ptr().cast::<i8>(),
+                buff.as_mut_ptr().cast::<CChar>(),
                 buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
             )
         };
@@ -579,7 +592,7 @@ impl LlamaModel {
                     chat.as_ptr(),
                     chat.len(),
                     add_ass,
-                    buff.as_mut_ptr().cast::<i8>(),
+                    buff.as_mut_ptr().cast::<CChar>(),
                     buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
                 )
             };

@@ -180,7 +180,7 @@ fn main() {
     );
 
     // Bindings
-    let bindings = bindgen::Builder::default()
+    let builder = bindgen::Builder::default()  // Removed 'mut' as it's not needed
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_dst.join("include").display()))
         .clang_arg(format!("-I{}", llama_dst.join("ggml/include").display()))
@@ -190,8 +190,10 @@ fn main() {
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
-        .prepend_enum_name(false)
-        .generate()
+        .prepend_enum_name(false);
+
+    // The bindgen handler won't be needed since we'll handle the type conversion in the Rust code
+    let bindings = builder.generate()
         .expect("Failed to generate bindings");
 
     // Write the generated bindings to an output file

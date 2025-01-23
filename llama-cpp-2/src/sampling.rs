@@ -20,12 +20,17 @@ impl Debug for LlamaSampler {
     }
 }
 
-// this is needed for the dry sampler to typecheck on android
-// ...because what is normally an i8, is an u8
-#[cfg(target_os = "android")]
+// this is needed for the dry sampler to typecheck on android and aarch64-linux
+#[cfg(any(
+    target_os = "android",
+    all(target_arch = "aarch64", target_os = "linux")
+))]
 type CChar = u8;
 
-#[cfg(not(target_os = "android"))]
+#[cfg(not(any(
+    target_os = "android",
+    all(target_arch = "aarch64", target_os = "linux")
+)))]
 type CChar = i8;
 
 impl LlamaSampler {
