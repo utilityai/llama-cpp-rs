@@ -1,22 +1,16 @@
 //! A safe wrapper around `llama_model`.
 use std::ffi::CString;
 use std::num::NonZeroU16;
-use std::os::raw::c_int;
+use std::os::raw::c_int;  // Only keep c_int since c_char isn't used directly
 use std::path::Path;
 use std::ptr::NonNull;
 
-// this is needed for the dry sampler to typecheck on android and aarch64-linux
-#[cfg(any(
-    target_os = "android",
-    all(target_arch = "aarch64", target_os = "linux")
-))]
+// Only use u8 for aarch64-linux
+#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
 type CChar = u8;
 
-#[cfg(not(any(
-    target_os = "android",
-    all(target_arch = "aarch64", target_os = "linux")
-)))]
-type CChar = i8;
+#[cfg(not(all(target_arch = "aarch64", target_os = "linux")))]
+type CChar = std::os::raw::c_char;  // Use full path instead of import
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;

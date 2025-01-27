@@ -9,6 +9,13 @@ use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
 
+// Only use u8 for aarch64-linux
+#[cfg(all(target_arch = "aarch64", target_os = "linux"))]
+type CChar = u8;
+
+#[cfg(not(all(target_arch = "aarch64", target_os = "linux")))]
+type CChar = std::os::raw::c_char;
+
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
     pub(crate) sampler: *mut llama_cpp_sys_2::llama_sampler,
@@ -19,19 +26,6 @@ impl Debug for LlamaSampler {
         f.debug_struct("LlamaSamplerChain").finish()
     }
 }
-
-// this is needed for the dry sampler to typecheck on android and aarch64-linux
-#[cfg(any(
-    target_os = "android",
-    all(target_arch = "aarch64", target_os = "linux")
-))]
-type CChar = u8;
-
-#[cfg(not(any(
-    target_os = "android",
-    all(target_arch = "aarch64", target_os = "linux")
-)))]
-type CChar = i8;
 
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation

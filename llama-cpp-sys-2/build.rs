@@ -180,7 +180,7 @@ fn main() {
     );
 
     // Bindings
-    let builder = bindgen::Builder::default()  // Removed 'mut' as it's not needed
+    let mut builder = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_dst.join("include").display()))
         .clang_arg(format!("-I{}", llama_dst.join("ggml/include").display()))
@@ -192,7 +192,12 @@ fn main() {
         .allowlist_type("llama_.*")
         .prepend_enum_name(false);
 
-    // The bindgen handler won't be needed since we'll handle the type conversion in the Rust code
+    // Only modify char type for aarch64-linux using newer bindgen API
+    if target == "aarch64-unknown-linux-gnu" {
+        // Add clang arg to force unsigned char
+        builder = builder.clang_arg("-funsigned-char");
+    }
+
     let bindings = builder.generate()
         .expect("Failed to generate bindings");
 

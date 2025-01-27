@@ -323,3 +323,29 @@ pub fn ggml_time_us() -> i64 {
 pub fn llama_supports_mlock() -> bool {
     unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
+
+/// Log callback function type
+pub type LogCallback = Option<unsafe extern "C" fn(level: u32, text: *const i8, user_data: *mut std::os::raw::c_void)>;
+
+/// Set up a simple logging callback that writes to stderr based on verbosity
+pub unsafe extern "C" fn default_log_callback(level: u32, text: *const i8, _user_data: *mut std::os::raw::c_void) {
+    if let Ok(text) = std::ffi::CStr::from_ptr(text).to_str() {
+        eprintln!("[{}] {}", level, text);
+    }
+}
+
+/// Silent logging callback that discards all messages
+pub unsafe extern "C" fn silent_log_callback(_level: u32, _text: *const i8, _user_data: *mut std::os::raw::c_void) {
+    // Discard all messages
+}
+
+/// Set the logging callback for llama.cpp
+pub fn set_log_callback(verbose: bool) {
+    unsafe {
+        if (verbose) {
+            llama_cpp_sys_2::llama_log_set(Some(default_log_callback), std::ptr::null_mut());
+        } else {
+            llama_cpp_sys_2::llama_log_set(Some(silent_log_callback), std::ptr::null_mut());
+        }
+    }
+}

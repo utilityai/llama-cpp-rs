@@ -21,16 +21,20 @@ encoding_rs = { workspace = true }
 default = ["openmp"]
 cuda = ["llama-cpp-sys-2/cuda"]
 metal = ["llama-cpp-sys-2/metal"]
-dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
+dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 native = ["llama-cpp-sys-2/native"]
 openmp = ["llama-cpp-sys-2/openmp"]
 sampler = []
 
-
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.69", features = [
     "metal",
+] }
+
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.69", features = [
+    "vulkan",
 ] }
 
 [lints]
