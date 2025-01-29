@@ -263,6 +263,10 @@ fn main() {
             panic!("Unsupported Android target {target}");
         }
         config.define("GGML_LLAMAFILE", "OFF");
+        if cfg!(feature = "shared-stdcxx") {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+            println!("cargo:rustc-link-lib=c++_shared");
+        }
     }
 
     if cfg!(feature = "vulkan") {
