@@ -266,8 +266,13 @@ fn main() {
         config.define("GGML_CUDA", "ON");
     }
 
-    if cfg!(feature = "openmp") {
+    // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
+    // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
+    // and tries to build for Android anyway.
+    if cfg!(feature = "openmp") && !target.contains("android") {
         config.define("GGML_OPENMP", "ON");
+    } else {
+        config.define("GGML_OPENMP", "OFF");
     }
 
     // General
