@@ -229,22 +229,44 @@ fn main() {
         config.static_crt(static_crt);
     }
 
-    if target.contains("android") && target.contains("aarch64") {
+    if target.contains("android") {
         // build flags for android taken from this doc
         // https://github.com/ggerganov/llama.cpp/blob/master/docs/android.md
         let android_ndk = env::var("ANDROID_NDK")
             .expect("Please install Android NDK and ensure that ANDROID_NDK env variable is set");
+
+        println!("cargo::rerun-if-env-changed=ANDROID_NDK");
+
         config.define(
             "CMAKE_TOOLCHAIN_FILE",
             format!("{android_ndk}/build/cmake/android.toolchain.cmake"),
         );
-        config.define("ANDROID_ABI", "arm64-v8a");
-        config.define("ANDROID_PLATFORM", "android-28");
-        config.define("CMAKE_SYSTEM_PROCESSOR", "arm64");
-        config.define("CMAKE_C_FLAGS", "-march=armv8.7a");
-        config.define("CMAKE_CXX_FLAGS", "-march=armv8.7a");
-        config.define("GGML_OPENMP", "OFF");
+        if env::var("ANDROID_PLATFORM").is_ok() {
+            println!("cargo::rerun-if-env-changed=ANDROID_PLATFORM");
+        } else {
+            config.define("ANDROID_PLATFORM", "android-28");
+        }
+        if target.contains("aarch64") {
+            config.cflag("-march=armv8.7a");
+            config.cxxflag("-march=armv8.7a");
+        } else if target.contains("armv7") {
+            config.cflag("-march=armv8.7a");
+            config.cxxflag("-march=armv8.7a");
+        } else if target.contains("x86_64") {
+            config.cflag("-march=x86-64");
+            config.cxxflag("-march=x86-64");
+        } else if target.contains("i686") {
+            config.cflag("-march=i686");
+            config.cxxflag("-march=i686");
+        } else {
+            // Rather than guessing just fail.
+            panic!("Unsupported Android target {target}");
+        }
         config.define("GGML_LLAMAFILE", "OFF");
+        if cfg!(feature = "shared-stdcxx") {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+            println!("cargo:rustc-link-lib=c++_shared");
+        }
     }
 
     if cfg!(feature = "vulkan") {
@@ -266,8 +288,13 @@ fn main() {
         config.define("GGML_CUDA", "ON");
     }
 
-    if cfg!(feature = "openmp") {
+    // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
+    // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
+    // and tries to build for Android anyway.
+    if cfg!(feature = "openmp") && !target.contains("android") {
         config.define("GGML_OPENMP", "ON");
+    } else {
+        config.define("GGML_OPENMP", "OFF");
     }
 
     // General

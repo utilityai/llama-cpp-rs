@@ -1,5 +1,5 @@
 //! A safe wrapper around `llama_model`.
-use std::ffi::CString;
+use std::ffi::{c_char, CString};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
@@ -565,7 +565,7 @@ impl LlamaModel {
                 chat.as_ptr(),
                 chat.len(),
                 add_ass,
-                buff.as_mut_ptr().cast::<i8>(),
+                buff.as_mut_ptr().cast::<c_char>(),
                 buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
             )
         };
@@ -579,7 +579,7 @@ impl LlamaModel {
                     chat.as_ptr(),
                     chat.len(),
                     add_ass,
-                    buff.as_mut_ptr().cast::<i8>(),
+                    buff.as_mut_ptr().cast::<c_char>(),
                     buff.len().try_into().expect("Buffer size exceeds i32::MAX"),
                 )
             };

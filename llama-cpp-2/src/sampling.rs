@@ -1,7 +1,7 @@
 //! Safe wrapper around `llama_sampler`.
 
 use std::borrow::Borrow;
-use std::ffi::CString;
+use std::ffi::{c_char, CString};
 use std::fmt::{Debug, Formatter};
 
 use crate::context::LlamaContext;
@@ -19,14 +19,6 @@ impl Debug for LlamaSampler {
         f.debug_struct("LlamaSamplerChain").finish()
     }
 }
-
-// this is needed for the dry sampler to typecheck on android
-// ...because what is normally an i8, is an u8
-#[cfg(target_os = "android")]
-type CChar = u8;
-
-#[cfg(not(target_os = "android"))]
-type CChar = i8;
 
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
@@ -266,7 +258,7 @@ impl LlamaSampler {
             .into_iter()
             .map(|s| CString::new(s.as_ref()).expect("A sequence breaker contains null bytes"))
             .collect();
-        let mut seq_breaker_pointers: Vec<*const CChar> =
+        let mut seq_breaker_pointers: Vec<*const c_char> =
             seq_breakers.iter().map(|s| s.as_ptr()).collect();
 
         let sampler = unsafe {
