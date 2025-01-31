@@ -80,6 +80,13 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
                 let lib_name = if stem_str.starts_with("lib") {
                     stem_str.strip_prefix("lib").unwrap_or(stem_str)
                 } else {
+                    if path.extension() == Some(std::ffi::OsStr::new("a")) {
+                        // panic!("renaming {:?} to {:?}", &path, path.join(format!("lib{}.a", stem_str)));
+                        let target = path.parent().unwrap().join(format!("lib{}.a", stem_str));
+                        std::fs::rename(&path, &target).unwrap_or_else(|e| {
+                            panic!("Failed to rename {path:?} to {target:?}: {e:?}");
+                        })
+                    }
                     stem_str
                 };
                 lib_names.push(lib_name.to_string());
