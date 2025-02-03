@@ -16,7 +16,7 @@
 
 [readme]: https://github.com/utilityai/llama-cpp-rs/tree/main/llama-cpp-2
 
-This is the home for [llama-cpp-2][crates.io]. It also contains the [llama-cpp-sys] bindings which are updated regularly
+This is the home for [llama-cpp-2][crates.io]. It also contains the [llama-cpp-sys] bindings which are updated semi-regularly
 and in sync with [llama-cpp-2][crates.io].
 
 This project was created with the explict goal of staying as up to date as possible with llama.cpp, as a result it is
