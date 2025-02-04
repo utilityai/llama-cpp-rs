@@ -166,6 +166,10 @@ fn main() {
         .map(|v| v == "1")
         .unwrap_or(false);
 
+    println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
+    println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
+    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+
     debug_log!("TARGET: {}", target);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
     debug_log!("TARGET_DIR: {}", target_dir.display());
