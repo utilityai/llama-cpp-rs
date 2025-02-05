@@ -1,5 +1,6 @@
 use cmake::Config;
 use glob::glob;
+use walkdir::DirEntry;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -26,27 +27,6 @@ fn get_cargo_target_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Erro
     }
     let target_dir = target_dir.ok_or("not found")?;
     Ok(target_dir.to_path_buf())
-}
-
-fn copy_folder(src: &Path, dst: &Path) {
-    std::fs::create_dir_all(dst).expect("Failed to create dst directory");
-    if cfg!(unix) {
-        std::process::Command::new("cp")
-            .arg("-rf")
-            .arg(src)
-            .arg(dst.parent().unwrap())
-            .status()
-            .expect("Failed to execute cp command");
-    }
-
-    if cfg!(windows) {
-        std::process::Command::new("robocopy.exe")
-            .arg("/e")
-            .arg(src)
-            .arg(dst)
-            .status()
-            .expect("Failed to execute robocopy command");
-    }
 }
 
 fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
@@ -148,12 +128,17 @@ fn macos_link_search_path() -> Option<String> {
     None
 }
 
+fn is_hidden(e: &DirEntry) -> bool {
+    e.file_name().to_str().map(|s| s.starts_with('.')).unwrap_or_default()
+}
+
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
     let target = env::var("TARGET").unwrap();
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let target_dir = get_cargo_target_dir().unwrap();
-    let llama_dst = out_dir.join("llama.cpp");
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
     let llama_src = Path::new(&manifest_dir).join("llama.cpp");
     let build_shared_libs = cfg!(feature = "cuda") || cfg!(feature = "dynamic-link");
@@ -166,17 +151,30 @@ fn main() {
         .map(|v| v == "1")
         .unwrap_or(false);
 
+    println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
+    println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
+    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+
     debug_log!("TARGET: {}", target);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
     debug_log!("TARGET_DIR: {}", target_dir.display());
     debug_log!("OUT_DIR: {}", out_dir.display());
     debug_log!("BUILD_SHARED: {}", build_shared_libs);
 
-    // Prepare sherpa-onnx source
-    if !llama_dst.exists() {
-        debug_log!("Copy {} to {}", llama_src.display(), llama_dst.display());
-        copy_folder(&llama_src, &llama_dst);
+    // Make sure that changes to the llama.cpp project trigger a rebuild.
+    let rebuild_on_children_of = [
+        llama_src.join("src"),
+        llama_src.join("ggml/src"),
+        llama_src.join("common"),
+    ];
+    for entry in walkdir::WalkDir::new(&llama_src).into_iter().filter_entry(|e| !is_hidden(e)) {
+        let entry = entry.expect("Failed to obtain entry");
+        let rebuild = entry.file_name().to_str().map(|f| f.starts_with("CMake")).unwrap_or_default() || rebuild_on_children_of.iter().any(|src_folder| entry.path().starts_with(src_folder));
+        if rebuild {
+            println!("cargo:rerun-if-changed={}", entry.path().display());
+        }
     }
+
     // Speed up build
     env::set_var(
         "CMAKE_BUILD_PARALLEL_LEVEL",
@@ -189,8 +187,8 @@ fn main() {
     // Bindings
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
-        .clang_arg(format!("-I{}", llama_dst.join("include").display()))
-        .clang_arg(format!("-I{}", llama_dst.join("ggml/include").display()))
+        .clang_arg(format!("-I{}", llama_src.join("include").display()))
+        .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
@@ -208,13 +206,12 @@ fn main() {
         .expect("Failed to write bindings");
 
     println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rerun-if-changed=./sherpa-onnx");
 
     debug_log!("Bindings Created");
 
     // Build with Cmake
 
-    let mut config = Config::new(&llama_dst);
+    let mut config = Config::new(&llama_src);
 
     // Would require extra source files to pointlessly
     // be included in what's uploaded to and downloaded from

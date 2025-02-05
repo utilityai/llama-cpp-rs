@@ -10,7 +10,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
-use llama_cpp_2::ggml_time_us;
+use llama_cpp_2::{ggml_time_us, send_logs_to_tracing, LogOptions};
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
@@ -67,6 +67,12 @@ struct Args {
         help = "size of the prompt context (default: loaded from themodel)"
     )]
     ctx_size: Option<NonZeroU32>,
+    #[arg(
+        short = 'v',
+        long,
+        help = "enable verbose llama.cpp logs",
+    )]
+    verbose: bool,
 }
 
 /// Parse a single key-value pair
@@ -132,7 +138,13 @@ fn main() -> Result<()> {
         threads,
         threads_batch,
         ctx_size,
+        verbose,
     } = Args::parse();
+
+    if verbose {
+        tracing_subscriber::fmt().init();
+    }
+    send_logs_to_tracing(LogOptions::default().with_logs_enabled(verbose));
 
     // init LLM
     let backend = LlamaBackend::init()?;
