@@ -4,7 +4,7 @@ members = [
     "llama-cpp-sys-2",
     "llama-cpp-2",
     "examples/embeddings",
-    "examples/simple",
+    "examples/simple", "examples/reranker",
 ]
 
 [workspace.dependencies]

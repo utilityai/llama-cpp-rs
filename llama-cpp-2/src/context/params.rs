@@ -55,6 +55,8 @@ pub enum LlamaPoolingType {
     Cls = 2,
     /// Last pooling
     Last = 3,
+    /// Rank pooling
+    Rank = 4,
 }
 
 /// Create a `LlamaPoolingType` from a `c_int` - returns `LlamaPoolingType::Unspecified` if
@@ -66,6 +68,7 @@ impl From<i32> for LlamaPoolingType {
             1 => Self::Mean,
             2 => Self::Cls,
             3 => Self::Last,
+            4 => Self::Rank,
             _ => Self::Unspecified,
         }
     }
@@ -79,6 +82,7 @@ impl From<LlamaPoolingType> for i32 {
             LlamaPoolingType::Mean => 1,
             LlamaPoolingType::Cls => 2,
             LlamaPoolingType::Last => 3,
+            LlamaPoolingType::Rank => 4,
             LlamaPoolingType::Unspecified => -1,
         }
     }
