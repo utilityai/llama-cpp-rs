@@ -1,9 +1,9 @@
 use cmake::Config;
 use glob::glob;
-use walkdir::DirEntry;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use walkdir::DirEntry;
 
 macro_rules! debug_log {
     ($($arg:tt)*) => {
@@ -13,19 +13,13 @@ macro_rules! debug_log {
     };
 }
 
-fn get_cargo_target_dir() -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
-    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR")?);
-    let profile = std::env::var("PROFILE")?;
-    let mut target_dir = None;
-    let mut sub_path = out_dir.as_path();
-    while let Some(parent) = sub_path.parent() {
-        if parent.ends_with(&profile) {
-            target_dir = Some(parent);
-            break;
-        }
-        sub_path = parent;
-    }
-    let target_dir = target_dir.ok_or("not found")?;
+fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let out_dir = env::var("OUT_DIR")?;
+    let path = PathBuf::from(out_dir);
+    let target_dir = path
+        .ancestors()
+        .nth(3)
+        .ok_or("OUT_DIR is not deep enough")?;
     Ok(target_dir.to_path_buf())
 }
 
@@ -129,7 +123,10 @@ fn macos_link_search_path() -> Option<String> {
 }
 
 fn is_hidden(e: &DirEntry) -> bool {
-    e.file_name().to_str().map(|s| s.starts_with('.')).unwrap_or_default()
+    e.file_name()
+        .to_str()
+        .map(|s| s.starts_with('.'))
+        .unwrap_or_default()
 }
 
 fn main() {
@@ -167,9 +164,19 @@ fn main() {
         llama_src.join("ggml/src"),
         llama_src.join("common"),
     ];
-    for entry in walkdir::WalkDir::new(&llama_src).into_iter().filter_entry(|e| !is_hidden(e)) {
+    for entry in walkdir::WalkDir::new(&llama_src)
+        .into_iter()
+        .filter_entry(|e| !is_hidden(e))
+    {
         let entry = entry.expect("Failed to obtain entry");
-        let rebuild = entry.file_name().to_str().map(|f| f.starts_with("CMake")).unwrap_or_default() || rebuild_on_children_of.iter().any(|src_folder| entry.path().starts_with(src_folder));
+        let rebuild = entry
+            .file_name()
+            .to_str()
+            .map(|f| f.starts_with("CMake"))
+            .unwrap_or_default()
+            || rebuild_on_children_of
+                .iter()
+                .any(|src_folder| entry.path().starts_with(src_folder));
         if rebuild {
             println!("cargo:rerun-if-changed={}", entry.path().display());
         }
