@@ -24,6 +24,7 @@ include = [
 
     "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
 
+    "!/llama.cpp/common/build-info.cpp",
     "/llama.cpp/common/build-info.cpp.in",
 
     "/llama.cpp/ggml/src/ggml-cuda.cu",
