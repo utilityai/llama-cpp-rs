@@ -315,6 +315,11 @@ fn main() {
         .always_configure(false);
 
     let build_dir = config.build();
+    std::fs::rename(
+        llama_src.join("common/build-info.cpp"),
+        build_dir.join("build-info.cpp"),
+    )
+    .unwrap();
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
