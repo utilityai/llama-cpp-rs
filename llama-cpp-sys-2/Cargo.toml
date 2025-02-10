@@ -24,6 +24,17 @@ include = [
 
     "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
 
+    # Erroneously the llama.cpp code currently generates the build-info.cpp
+    # into the source directory of the build instead of into the target directory
+    # as it should. Will try submitting something upstream to clean this up as
+    # well but for now explictly exclude this from the build. Previously this was
+    # implicitly excluded because the llama.cpp code was copied wholesale into the
+    # target directory for building which is why this problem wasn't visible before
+    # (i.e. we'd package the llama.cpp source from the submodule & thus this build-info.cpp
+    # generated file would still be ignored because it would only exist in the separate
+    # copy within the target directory. An alternative, if we do want to capture build-info.cpp
+    # within the package would be to change the CI task to add `--allow-dirty` to the package
+    # command.
     "!/llama.cpp/common/build-info.cpp",
     "/llama.cpp/common/build-info.cpp.in",
 
