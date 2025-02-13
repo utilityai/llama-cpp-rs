@@ -278,6 +278,22 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
+    if (cfg!(debug_assertions)
+        || std::env::var("PROFILE").as_ref().map(String::as_str) == Ok("debug"))
+        && matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
+        && profile == "Release"
+    {
+        // Debug Rust builds under MSVC turn off optimization even though we're ideally building the release profile of llama.cpp.
+        // Looks like an upstream bug:
+        // https://github.com/rust-lang/cmake-rs/issues/240
+        // For now explicitly reinject the optimization flags that a CMake Release build is expected to have on in this scenario.
+        // This fixes CPU inference performance when part of a Rust debug build.
+        for flag in &["/O2", "/DNDEBUG", "/Ob2"] {
+            config.cflag(flag);
+            config.cxxflag(flag);
+        }
+    }
+
     config.static_crt(static_crt);
 
     if matches!(target_os, TargetOs::Android) {
