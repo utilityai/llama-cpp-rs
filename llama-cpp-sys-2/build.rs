@@ -5,12 +5,53 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::DirEntry;
 
+enum WindowsVariant {
+    Msvc,
+    Other,
+}
+
+enum AppleVariant {
+    MacOS,
+    Other,
+}
+
+enum TargetOs {
+    Windows(WindowsVariant),
+    Apple(AppleVariant),
+    Linux,
+    Android,
+}
+
 macro_rules! debug_log {
     ($($arg:tt)*) => {
         if std::env::var("BUILD_DEBUG").is_ok() {
             println!("cargo:warning=[DEBUG] {}", format!($($arg)*));
         }
     };
+}
+
+fn parse_target_os() -> Result<(TargetOs, String), String> {
+    let target = env::var("TARGET").unwrap();
+
+    if target.contains("windows") {
+        if target.ends_with("-windows-msvc") {
+            Ok((TargetOs::Windows(WindowsVariant::Msvc), target))
+        } else {
+            Ok((TargetOs::Windows(WindowsVariant::Other), target))
+        }
+    } else if target.contains("linux") {
+        Ok((TargetOs::Linux, target))
+    } else if target.contains("apple") {
+        if target.ends_with("-apple-darwin") {
+            Ok((TargetOs::Apple(AppleVariant::MacOS), target))
+        } else {
+            Ok((TargetOs::Apple(AppleVariant::Other), target))
+        }
+    } else if target.contains("android") {
+        Ok((TargetOs::Android, target))
+    } else {
+        Err(target)
+    }
 }
 
 fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -132,7 +173,8 @@ fn is_hidden(e: &DirEntry) -> bool {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    let target = env::var("TARGET").unwrap();
+    let (target_os, target_triple) =
+        parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     let target_dir = get_cargo_target_dir().unwrap();
@@ -152,7 +194,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
 
-    debug_log!("TARGET: {}", target);
+    debug_log!("TARGET: {}", target_triple);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
     debug_log!("TARGET_DIR: {}", target_dir.display());
     debug_log!("OUT_DIR: {}", out_dir.display());
@@ -232,15 +274,13 @@ fn main() {
         if build_shared_libs { "ON" } else { "OFF" },
     );
 
-    if cfg!(target_os = "macos") {
+    if matches!(target_os, TargetOs::Apple(_)) {
         config.define("GGML_BLAS", "OFF");
     }
 
-    if cfg!(windows) {
-        config.static_crt(static_crt);
-    }
+    config.static_crt(static_crt);
 
-    if target.contains("android") {
+    if matches!(target_os, TargetOs::Android) {
         // build flags for android taken from this doc
         // https://github.com/ggerganov/llama.cpp/blob/master/docs/android.md
         let android_ndk = env::var("ANDROID_NDK")
@@ -257,21 +297,21 @@ fn main() {
         } else {
             config.define("ANDROID_PLATFORM", "android-28");
         }
-        if target.contains("aarch64") {
+        if target_triple.contains("aarch64") {
             config.cflag("-march=armv8.7a");
             config.cxxflag("-march=armv8.7a");
-        } else if target.contains("armv7") {
+        } else if target_triple.contains("armv7") {
             config.cflag("-march=armv8.7a");
             config.cxxflag("-march=armv8.7a");
-        } else if target.contains("x86_64") {
+        } else if target_triple.contains("x86_64") {
             config.cflag("-march=x86-64");
             config.cxxflag("-march=x86-64");
-        } else if target.contains("i686") {
+        } else if target_triple.contains("i686") {
             config.cflag("-march=i686");
             config.cxxflag("-march=i686");
         } else {
             // Rather than guessing just fail.
-            panic!("Unsupported Android target {target}");
+            panic!("Unsupported Android target {target_triple}");
         }
         config.define("GGML_LLAMAFILE", "OFF");
         if cfg!(feature = "shared-stdcxx") {
@@ -282,16 +322,19 @@ fn main() {
 
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
-        if cfg!(windows) {
-            let vulkan_path = env::var("VULKAN_SDK")
-                .expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
-            let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
-            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-            println!("cargo:rustc-link-lib=vulkan-1");
-        }
-
-        if cfg!(target_os = "linux") {
-            println!("cargo:rustc-link-lib=vulkan");
+        match target_os {
+            TargetOs::Windows(_) => {
+                let vulkan_path = env::var("VULKAN_SDK").expect(
+                    "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set",
+                );
+                let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
+                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                println!("cargo:rustc-link-lib=vulkan-1");
+            }
+            TargetOs::Linux => {
+                println!("cargo:rustc-link-lib=vulkan");
+            }
+            _ => (),
         }
     }
 
@@ -302,7 +345,7 @@ fn main() {
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !target.contains("android") {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
@@ -341,38 +384,41 @@ fn main() {
     }
 
     // OpenMP
-    if cfg!(feature = "openmp") && target.contains("gnu") {
+    if cfg!(feature = "openmp") && target_triple.contains("gnu") {
         println!("cargo:rustc-link-lib=gomp");
     }
 
-    // Windows debug
-    if cfg!(all(debug_assertions, windows)) {
-        println!("cargo:rustc-link-lib=dylib=msvcrtd");
-    }
-
-    // // macOS
-    if cfg!(target_os = "macos") {
-        println!("cargo:rustc-link-lib=framework=Foundation");
-        println!("cargo:rustc-link-lib=framework=Metal");
-        println!("cargo:rustc-link-lib=framework=MetalKit");
-        println!("cargo:rustc-link-lib=framework=Accelerate");
-        println!("cargo:rustc-link-lib=c++");
-    }
-
-    // Linux
-    if cfg!(target_os = "linux") {
-        println!("cargo:rustc-link-lib=dylib=stdc++");
-    }
-
-    if target.contains("apple") {
-        // On (older) OSX we need to link against the clang runtime,
-        // which is hidden in some non-default path.
-        //
-        // More details at https://github.com/alexcrichton/curl-rust/issues/279.
-        if let Some(path) = macos_link_search_path() {
-            println!("cargo:rustc-link-lib=clang_rt.osx");
-            println!("cargo:rustc-link-search={}", path);
+    match target_os {
+        TargetOs::Windows(WindowsVariant::Msvc) => {
+            if cfg!(debug_assertions) {
+                println!("cargo:rustc-link-lib=dylib=msvcrtd");
+            }
         }
+        TargetOs::Linux => {
+            println!("cargo:rustc-link-lib=dylib=stdc++");
+        }
+        TargetOs::Apple(variant) => {
+            println!("cargo:rustc-link-lib=framework=Foundation");
+            println!("cargo:rustc-link-lib=framework=Metal");
+            println!("cargo:rustc-link-lib=framework=MetalKit");
+            println!("cargo:rustc-link-lib=framework=Accelerate");
+            println!("cargo:rustc-link-lib=c++");
+
+            match variant {
+                AppleVariant::MacOS => {
+                    // On (older) OSX we need to link against the clang runtime,
+                    // which is hidden in some non-default path.
+                    //
+                    // More details at https://github.com/alexcrichton/curl-rust/issues/279.
+                    if let Some(path) = macos_link_search_path() {
+                        println!("cargo:rustc-link-lib=clang_rt.osx");
+                        println!("cargo:rustc-link-search={}", path);
+                    }
+                }
+                AppleVariant::Other => (),
+            }
+        }
+        _ => (),
     }
 
     // copy DLLs to target
