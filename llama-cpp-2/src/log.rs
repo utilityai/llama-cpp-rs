@@ -171,7 +171,8 @@ impl State {
         } else {
             let level = self
                 .previous_level
-                .load(std::sync::atomic::Ordering::Acquire) as llama_cpp_sys_2::ggml_log_level;
+                .load(std::sync::atomic::Ordering::Acquire)
+                as llama_cpp_sys_2::ggml_log_level;
             tracing::warn!(
                 inferred_level = level,
                 text = text,

@@ -69,15 +69,18 @@ pub enum LLamaCppError {
 /// There was an error while getting the chat template from a model.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ChatTemplateError {
-    /// the buffer was too small.
-    #[error("The buffer was too small. However, a buffer size of {0} would be just large enough.")]
-    BuffSizeError(usize),
     /// gguf has no chat template
     #[error("the model has no meta val - returned code {0}")]
     MissingTemplate(i32),
     /// The chat template was not valid utf8.
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
+}
+
+enum InternalChatTemplateError {
+    Permanent(ChatTemplateError),
+    /// the buffer was too small.
+    RetryWithLargerBuffer(usize),
 }
 
 /// Failed to Load context
