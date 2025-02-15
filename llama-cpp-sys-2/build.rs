@@ -39,8 +39,6 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         } else {
             Ok((TargetOs::Windows(WindowsVariant::Other), target))
         }
-    } else if target.contains("linux") {
-        Ok((TargetOs::Linux, target))
     } else if target.contains("apple") {
         if target.ends_with("-apple-darwin") {
             Ok((TargetOs::Apple(AppleVariant::MacOS), target))
@@ -49,6 +47,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         }
     } else if target.contains("android") {
         Ok((TargetOs::Android, target))
+    } else if target.contains("linux") {
+        Ok((TargetOs::Linux, target))
     } else {
         Err(target)
     }
