@@ -96,7 +96,6 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
                     stem_str.strip_prefix("lib").unwrap_or(stem_str)
                 } else {
                     if path.extension() == Some(std::ffi::OsStr::new("a")) {
-                        // panic!("renaming {:?} to {:?}", &path, path.join(format!("lib{}.a", stem_str)));
                         let target = path.parent().unwrap().join(format!("lib{}.a", stem_str));
                         std::fs::rename(&path, &target).unwrap_or_else(|e| {
                             panic!("Failed to rename {path:?} to {target:?}: {e:?}");
@@ -374,11 +373,18 @@ fn main() {
         .always_configure(false);
 
     let build_dir = config.build();
-    std::fs::rename(
-        llama_src.join("common/build-info.cpp"),
-        build_dir.join("build-info.cpp"),
-    )
-    .unwrap();
+    let build_info_src = llama_src.join("common/build-info.cpp");
+    let build_info_target = build_dir.join("build-info.cpp");
+    std::fs::rename(&build_info_src,&build_info_target).unwrap_or_else(|move_e| {
+        // Rename may fail if the target directory is on a different filesystem/disk from the source.
+        // Fall back to copy + delete to achieve the same effect in this case.
+        std::fs::copy(&build_info_src, &build_info_src).unwrap_or_else(|copy_e| {
+            panic!("Failed to rename {build_info_src:?} to {build_info_target:?}. Move failed with {move_e:?} and copy failed with {copy_e:?}");
+        });
+        std::fs::remove_file(&build_info_src).unwrap_or_else(|e| {
+            panic!("Failed to delete {build_info_src:?} after copying to {build_info_target:?}: {e:?} (move failed because {move_e:?})");
+        });
+    });
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
