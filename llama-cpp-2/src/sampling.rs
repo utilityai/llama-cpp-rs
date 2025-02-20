@@ -7,6 +7,7 @@ use std::fmt::{Debug, Formatter};
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
+use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
 
 /// A safe wrapper around `llama_sampler`.
@@ -376,6 +377,42 @@ impl LlamaSampler {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_greedy() };
         Self { sampler }
     }
+
+    /// Creates a sampler that applies bias values to specific tokens during sampling.
+    ///
+    /// # Parameters
+    /// - ``n_vocab``: [`LlamaModel::n_vocab`]
+    /// - ``biases``: Slice of [`LlamaLogitBias`] values specifying token-bias pairs
+    ///
+    /// # Example
+    /// ```rust
+    /// use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};
+    /// use llama_cpp_2::sampling::LlamaSampler;
+    ///
+    /// let biases = vec![
+    ///     LlamaLogitBias::new(LlamaToken(1), 1.5),  // Increase probability of token 1
+    ///     LlamaLogitBias::new(LlamaToken(2), -1.0), // Decrease probability of token 2
+    /// ];
+    ///
+    /// // Assuming vocab_size of 32000
+    /// let sampler = LlamaSampler::logit_bias(32000, &biases);
+    /// ```
+    #[must_use]
+    pub fn logit_bias(n_vocab: i32, biases: &[LlamaLogitBias]) -> Self {
+
+        let data = biases.as_ptr().cast::<llama_cpp_sys_2::llama_logit_bias>();
+        
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_init_logit_bias(
+                n_vocab,
+                biases.len() as i32,
+                data,
+            )
+        };
+        
+        Self { sampler }
+    }
+
 }
 
 impl Drop for LlamaSampler {
