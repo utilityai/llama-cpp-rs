@@ -5,6 +5,7 @@ use std::fmt::Display;
 
 pub mod data;
 pub mod data_array;
+pub mod logit_bias;
 
 /// A safe wrapper for `llama_token`.
 #[repr(transparent)]
