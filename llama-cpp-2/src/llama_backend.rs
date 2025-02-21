@@ -70,6 +70,21 @@ impl LlamaBackend {
         Ok(LlamaBackend {})
     }
 
+    /// Was the code built for a GPU backend & is a supported one available.
+    pub fn supports_gpu_offload(&self) -> bool {
+        unsafe { llama_cpp_sys_2::llama_supports_gpu_offload() }
+    }
+
+    /// Does this platform support loading the model via mmap.
+    pub fn supports_mmap(&self) -> bool {
+        unsafe { llama_cpp_sys_2::llama_supports_mmap() }
+    }
+
+    /// Does this platform support locking the model in RAM.
+    pub fn supports_mlock(&self) -> bool {
+        unsafe { llama_cpp_sys_2::llama_supports_mlock() }
+    }
+
     /// Change the output of llama.cpp's logging to be voided instead of pushed to `stderr`.
     pub fn void_logs(&mut self) {
         unsafe extern "C" fn void_log(
