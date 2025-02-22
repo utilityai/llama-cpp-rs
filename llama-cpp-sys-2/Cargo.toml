@@ -74,11 +74,14 @@ include = [
 bindgen = { workspace = true }
 cc = { workspace = true, features = ["parallel"] }
 cmake = "0.1"
+find_cuda_helper = "0.2.0"
 glob = "0.3.2"
 walkdir = "2"
 
 [features]
 cuda = []
+# Disables the need to dynamically link against libcuda.so / cuda.dll
+cuda-no-vmm = ["cuda"]
 metal = []
 dynamic-link = []
 vulkan = []
