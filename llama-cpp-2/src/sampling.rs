@@ -191,6 +191,37 @@ impl LlamaSampler {
         Self { sampler }
     }
 
+    /// Top-nσ sampling as described in academic paper "Top-nσ: Not All Logits Are You Need" 
+    /// <https://arxiv.org/pdf/2411.07641>
+    ///
+    /// This method filters logits by selecting only those within *n* standard deviations of the mean.
+    /// 
+    /// # Parameters
+    /// - `n`: Number of standard deviations from the mean to include in sampling
+    ///
+    /// # Example
+    /// ```rust
+    /// use llama_cpp_2::sampling::LlamaSampler;
+    /// use llama_cpp_2::token::{
+    ///     LlamaToken,
+    ///     data::LlamaTokenData,
+    ///     data_array::LlamaTokenDataArray
+    /// };
+    ///
+    /// let mut data_array = LlamaTokenDataArray::new(vec![
+    ///     LlamaTokenData::new(LlamaToken(0), 0.0, 0.0),
+    ///     LlamaTokenData::new(LlamaToken(1), 1.0, 0.0), 
+    ///     LlamaTokenData::new(LlamaToken(2), 2.0, 0.0),
+    /// ], false);
+    ///
+    /// data_array.apply_sampler(&mut LlamaSampler::top_n_sigma(2.0));
+    /// ```
+    #[must_use]
+    pub fn top_n_sigma(n: f32) -> Self {
+        let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_top_n_sigma(n) };
+        Self { sampler }
+    }
+
     /// Locally Typical Sampling implementation described in the paper <https://arxiv.org/abs/2202.00666>.
     #[must_use]
     pub fn typical(p: f32, min_keep: usize) -> Self {
