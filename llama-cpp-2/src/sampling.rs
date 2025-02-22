@@ -239,6 +239,49 @@ impl LlamaSampler {
         Self { sampler }
     }
 
+    /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
+    ///
+    /// This sampler enforces grammar rules only when specific trigger words or tokens are encountered.
+    ///
+    /// # Panics
+    /// - If `grammar_str` or `grammar_root` contain null bytes
+    /// - If any trigger word contains null bytes
+    #[must_use]
+    pub fn grammar_lazy(
+        model: &LlamaModel,
+        grammar_str: &str,
+        grammar_root: &str,
+        trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
+        trigger_tokens: &[LlamaToken],
+    ) -> Self {
+        let grammar_str = CString::new(grammar_str).unwrap();
+        let grammar_root = CString::new(grammar_root).unwrap();
+        
+        let trigger_word_cstrings: Vec<CString> = trigger_words
+            .into_iter()
+            .map(|word| CString::new(word.as_ref()).unwrap())
+            .collect();
+            
+        let mut trigger_word_ptrs: Vec<*const c_char> = trigger_word_cstrings
+            .iter()
+            .map(|cs| cs.as_ptr())
+            .collect();
+    
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_init_grammar_lazy(
+                model.vocab_ptr(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+                trigger_word_ptrs.as_mut_ptr(),
+                trigger_word_ptrs.len(),
+                trigger_tokens.as_ptr().cast(),
+                trigger_tokens.len(),
+            )
+        };
+        
+        Self { sampler }
+    }    
+
     /// DRY sampler, designed by p-e-w, as described in:
     /// <https://github.com/oobabooga/text-generation-webui/pull/5677>, porting Koboldcpp
     /// implementation authored by pi6am: <https://github.com/LostRuins/koboldcpp/pull/982>
