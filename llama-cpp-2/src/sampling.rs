@@ -71,6 +71,17 @@ impl LlamaSampler {
         }
     }
 
+    /// Gets the random seed used by this sampler.
+    /// 
+    /// Returns:
+    /// - For random samplers (dist, mirostat, mirostat_v2): returns their current seed
+    /// - For sampler chains: returns the first non-default seed found in reverse order
+    /// - For all other samplers: returns 0xFFFFFFFF
+    #[must_use]
+    pub fn get_seed(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_sampler_get_seed(self.sampler) }
+    }    
+
     /// Combines a list of samplers into a single sampler that applies each component sampler one
     /// after another.
     ///
