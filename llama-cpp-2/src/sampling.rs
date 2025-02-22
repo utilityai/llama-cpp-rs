@@ -62,6 +62,15 @@ impl LlamaSampler {
         self
     }
 
+    /// Resets the internal state of the sampler.
+    /// 
+    /// This can be useful when you want to start fresh with a sampler without creating a new instance.
+    pub fn reset(&mut self) {
+        unsafe {
+            llama_cpp_sys_2::llama_sampler_reset(self.sampler);
+        }
+    }
+
     /// Combines a list of samplers into a single sampler that applies each component sampler one
     /// after another.
     ///
