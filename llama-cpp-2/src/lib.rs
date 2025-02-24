@@ -331,7 +331,7 @@ pub fn llama_supports_mlock() -> bool {
 /// Options to configure how llama.cpp logs are intercepted.
 #[derive(Default, Debug, Clone)]
 pub struct LogOptions {
-    disabled: bool,
+    pub disabled: bool,
 }
 
 impl LogOptions {
