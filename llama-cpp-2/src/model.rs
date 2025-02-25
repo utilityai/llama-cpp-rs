@@ -4,7 +4,7 @@ use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
 use std::ptr::NonNull;
-use std::str::{FromStr, Utf8Error};
+use std::str::Utf8Error;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
@@ -47,7 +47,7 @@ impl LlamaChatTemplate {
     /// Create a new template from a string. This can either be the name of a llama.cpp [chat template](https://github.com/ggerganov/llama.cpp/blob/8a8c4ceb6050bd9392609114ca56ae6d26f5b8f5/src/llama-chat.cpp#L27-L61)
     /// like "chatml" or "llama3" or an actual Jinja template for llama.cpp to interpret.
     pub fn new(template: &str) -> Result<Self, std::ffi::NulError> {
-        Ok(Self(CString::from_str(template)?))
+        Ok(Self(CString::new(template)?))
     }
 
     /// Accesses the template as a c string reference.
