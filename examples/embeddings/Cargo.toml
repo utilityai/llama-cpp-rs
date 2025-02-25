@@ -1,6 +1,6 @@
 [package]
 name = "embeddings"
-version = "0.1.101"
+version = "0.1.102"
 edition = "2021"
 
 [dependencies]
