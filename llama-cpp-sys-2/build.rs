@@ -379,7 +379,7 @@ fn main() {
     std::fs::rename(&build_info_src,&build_info_target).unwrap_or_else(|move_e| {
         // Rename may fail if the target directory is on a different filesystem/disk from the source.
         // Fall back to copy + delete to achieve the same effect in this case.
-        std::fs::copy(&build_info_src, &build_info_src).unwrap_or_else(|copy_e| {
+        std::fs::copy(&build_info_src, &build_info_target).unwrap_or_else(|copy_e| {
             panic!("Failed to rename {build_info_src:?} to {build_info_target:?}. Move failed with {move_e:?} and copy failed with {copy_e:?}");
         });
         std::fs::remove_file(&build_info_src).unwrap_or_else(|e| {
