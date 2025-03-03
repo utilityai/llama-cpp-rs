@@ -142,16 +142,18 @@ impl State {
         let (meta, fields) = meta_for_level(level);
 
         tracing::dispatcher::get_default(|dispatcher| {
-            dispatcher.event(&tracing::Event::new(
-                meta,
-                &meta.fields().value_set(&[
-                    (&fields.message, Some(&text as &dyn tracing::field::Value)),
-                    (
-                        &fields.target,
-                        module.as_ref().map(|s| s as &dyn tracing::field::Value),
-                    ),
-                ]),
-            ));
+            if dispatcher.enabled(meta) {
+                dispatcher.event(&tracing::Event::new(
+                    meta,
+                    &meta.fields().value_set(&[
+                        (&fields.message, Some(&text as &dyn tracing::field::Value)),
+                        (
+                            &fields.target,
+                            module.as_ref().map(|s| s as &dyn tracing::field::Value),
+                        ),
+                    ]),
+                ));
+            }
         });
     }
 
