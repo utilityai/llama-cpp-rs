@@ -506,20 +506,20 @@ impl LlamaModel {
         }
     }
 
-    /// Get chat template from model by name. If the name is None, the default chat template will be returned.
+    /// Get chat template from model by name. If the name parameter is None, the default chat template will be returned.
     ///
     /// You supply this into [Self::apply_chat_template] to get back a string with the appropriate template
     /// substitution applied to convert a list of messages into a prompt the LLM can use to complete
     /// the chat.
     ///
-    /// You could also use an external jinja parser, like minijinja, to parse jinja templates not
-    /// supported by the llama.cpp template engine..
+    /// You could also use an external jinja parser, like [minijinja](https://github.com/mitsuhiko/minijinja),
+    /// to parse jinja templates not supported by the llama.cpp template engine.
     ///
     /// # Errors
     ///
     /// * If the model has no chat template by that name
     /// * If the chat template is not a valid [`CString`].
-    pub fn get_chat_template(
+    fn chat_template(
         &self,
         name: Option<&str>,
     ) -> Result<LlamaChatTemplate, ChatTemplateError> {
