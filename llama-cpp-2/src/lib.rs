@@ -82,6 +82,21 @@ pub enum ChatTemplateError {
     Utf8Error(#[from] std::str::Utf8Error),
 }
 
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum MetaValError {
+    #[error("model does not have metadata key: {0}")]
+    MissingKey(String),
+
+    #[error("null byte in string {0}")]
+    NullError(#[from] NulError),
+
+    #[error("FromUtf8Error {0}")]
+    FromUtf8Error(#[from] FromUtf8Error),
+
+    #[error("Negative return value. Likely due to a missing index or key. Got return value: {0}")]
+    NegativeReturn(i32),
+}
+
 /// Failed to Load context
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum LlamaContextLoadError {
