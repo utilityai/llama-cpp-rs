@@ -82,12 +82,6 @@ pub enum ChatTemplateError {
     Utf8Error(#[from] std::str::Utf8Error),
 }
 
-enum InternalChatTemplateError {
-    Permanent(ChatTemplateError),
-    /// the buffer was too small.
-    RetryWithLargerBuffer(usize),
-}
-
 /// Failed to Load context
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum LlamaContextLoadError {
