@@ -13,9 +13,8 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, InternalChatTemplateError, LlamaContextLoadError,
-    LlamaLoraAdapterInitError, LlamaModelLoadError, NewLlamaChatMessageError, StringToTokenError,
-    TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
+    LlamaModelLoadError, NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
 };
 
 pub mod params;
@@ -36,7 +35,7 @@ pub struct LlamaLoraAdapter {
     pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_adapter_lora>,
 }
 
-/// A performance-friendly wrapper around [LlamaModel::get_chat_template] which is then
+/// A performance-friendly wrapper around [LlamaModel::chat_template] which is then
 /// fed into [LlamaModel::apply_chat_template] to convert a list of messages into an LLM
 /// prompt. Internally the template is stored as a CString to avoid round-trip conversions
 /// within the FFI.
@@ -506,83 +505,38 @@ impl LlamaModel {
         }
     }
 
-    fn get_chat_template_impl(
-        &self,
-        capacity: usize,
-    ) -> Result<LlamaChatTemplate, InternalChatTemplateError> {
-        // longest known template is about 1200 bytes from llama.cpp
-        // TODO: Once MaybeUninit support is better, this can be converted to use that instead of dummy initializing such a large array.
-        let mut chat_temp = vec![b'*' as u8; capacity];
-        let chat_name =
-            CStr::from_bytes_with_nul(b"tokenizer.chat_template\0").expect("should have null byte");
-
-        let ret = unsafe {
-            llama_cpp_sys_2::llama_model_meta_val_str(
-                self.model.as_ptr(),
-                chat_name.as_ptr(),
-                chat_temp.as_mut_ptr() as *mut c_char,
-                chat_temp.len(),
-            )
-        };
-
-        if ret < 0 {
-            return Err(InternalChatTemplateError::Permanent(
-                ChatTemplateError::MissingTemplate(ret),
-            ));
-        }
-
-        let returned_len = ret as usize;
-
-        if ret as usize >= capacity {
-            // >= is important because if the returned length is equal to capacity, it means we're missing a trailing null
-            // since the returned length doesn't count the trailing null.
-            return Err(InternalChatTemplateError::RetryWithLargerBuffer(
-                returned_len,
-            ));
-        }
-
-        assert_eq!(
-            chat_temp.get(returned_len),
-            Some(&0),
-            "should end with null byte"
-        );
-
-        chat_temp.resize(returned_len + 1, 0);
-
-        Ok(LlamaChatTemplate(unsafe {
-            CString::from_vec_with_nul_unchecked(chat_temp)
-        }))
-    }
-
-    /// Get chat template from model. If this fails, you may either want to fail to chat or pick the
-    /// specific shortcode that llama.cpp supports templates it has baked-in directly into its codebase
-    /// as fallbacks when the model doesn't contain. NOTE: If you don't specify a chat template, then
-    /// it uses chatml by default which is unlikely to actually be the correct template for your model
-    /// and you'll get weird results back.
+    /// Get chat template from model by name. If the name parameter is None, the default chat template will be returned.
     ///
     /// You supply this into [Self::apply_chat_template] to get back a string with the appropriate template
     /// substitution applied to convert a list of messages into a prompt the LLM can use to complete
     /// the chat.
     ///
+    /// You could also use an external jinja parser, like [minijinja](https://github.com/mitsuhiko/minijinja),
+    /// to parse jinja templates not supported by the llama.cpp template engine.
+    ///
     /// # Errors
     ///
-    /// * If the model has no chat template
+    /// * If the model has no chat template by that name
     /// * If the chat template is not a valid [`CString`].
-    #[allow(clippy::missing_panics_doc)] // we statically know this will not panic as
-    pub fn get_chat_template(&self) -> Result<LlamaChatTemplate, ChatTemplateError> {
-        // Typical chat templates are quite small. Let's start with a small allocation likely to succeed.
-        // Ideally the performance of this would be negligible but uninitialized arrays in Rust are currently
-        // still not well supported so we end up initializing the chat template buffer twice. One idea might
-        // be to use a very small value here that will likely fail (like 0 or 1) and then use that to initialize.
-        // Not sure which approach is the most optimal but in practice this should work well.
-        match self.get_chat_template_impl(200) {
-            Ok(t) => Ok(t),
-            Err(InternalChatTemplateError::Permanent(e)) => Err(e),
-            Err(InternalChatTemplateError::RetryWithLargerBuffer(actual_len)) => match self.get_chat_template_impl(actual_len + 1) {
-                Ok(t) => Ok(t),
-                Err(InternalChatTemplateError::Permanent(e)) => Err(e),
-                Err(InternalChatTemplateError::RetryWithLargerBuffer(unexpected_len)) => panic!("Was told that the template length was {actual_len} but now it's {unexpected_len}"),
-            }
+    pub fn chat_template(
+        &self,
+        name: Option<&str>,
+    ) -> Result<LlamaChatTemplate, ChatTemplateError> {
+        let name_cstr = name.map(CString::new);
+        let name_ptr = match name_cstr {
+            Some(Ok(name)) => name.as_ptr(),
+            _ => std::ptr::null(),
+        };
+        let result =
+            unsafe { llama_cpp_sys_2::llama_model_chat_template(self.model.as_ptr(), name_ptr) };
+
+        // Convert result to Rust String if not null
+        if result.is_null() {
+            Err(ChatTemplateError::MissingTemplate)
+        } else {
+            let chat_template_cstr = unsafe { CStr::from_ptr(result) };
+            let chat_template = CString::new(chat_template_cstr.to_bytes())?;
+            Ok(LlamaChatTemplate(chat_template))
         }
     }
 
@@ -672,7 +626,7 @@ impl LlamaModel {
     /// use "chatml", then just do `LlamaChatTemplate::new("chatml")` or any other model name or template
     /// string.
     ///
-    /// Use [Self::get_chat_template] to retrieve the template baked into the model (this is the preferred
+    /// Use [Self::chat_template] to retrieve the template baked into the model (this is the preferred
     /// mechanism as using the wrong chat template can result in really unexpected responses from the LLM).
     ///
     /// You probably want to set `add_ass` to true so that the generated template string ends with a the
