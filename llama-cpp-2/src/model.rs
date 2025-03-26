@@ -519,7 +519,7 @@ impl LlamaModel {
     ///
     /// * If the model has no chat template by that name
     /// * If the chat template is not a valid [`CString`].
-    fn chat_template(
+    pub fn chat_template(
         &self,
         name: Option<&str>,
     ) -> Result<LlamaChatTemplate, ChatTemplateError> {
