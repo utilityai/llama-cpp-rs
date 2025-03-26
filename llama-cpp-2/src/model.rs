@@ -36,7 +36,7 @@ pub struct LlamaLoraAdapter {
     pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_adapter_lora>,
 }
 
-/// A performance-friendly wrapper around [LlamaModel::get_chat_template] which is then
+/// A performance-friendly wrapper around [LlamaModel::chat_template] which is then
 /// fed into [LlamaModel::apply_chat_template] to convert a list of messages into an LLM
 /// prompt. Internally the template is stored as a CString to avoid round-trip conversions
 /// within the FFI.
@@ -627,7 +627,7 @@ impl LlamaModel {
     /// use "chatml", then just do `LlamaChatTemplate::new("chatml")` or any other model name or template
     /// string.
     ///
-    /// Use [Self::get_chat_template] to retrieve the template baked into the model (this is the preferred
+    /// Use [Self::chat_template] to retrieve the template baked into the model (this is the preferred
     /// mechanism as using the wrong chat template can result in really unexpected responses from the LLM).
     ///
     /// You probably want to set `add_ass` to true so that the generated template string ends with a the
