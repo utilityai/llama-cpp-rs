@@ -13,8 +13,9 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, NewLlamaChatMessageError, StringToTokenError, TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError,
+    LlamaLoraAdapterInitError, LlamaModelLoadError, MetaValError, NewLlamaChatMessageError,
+    StringToTokenError, TokenToStringError,
 };
 
 pub mod params;
@@ -490,6 +491,59 @@ impl LlamaModel {
         u32::try_from(unsafe { llama_cpp_sys_2::llama_model_n_head_kv(self.model.as_ptr()) }).unwrap()
     }
 
+    /// Get metadata value as a string by key name
+    pub fn meta_val_str(&self, key: &str) -> Result<String, MetaValError> {
+        let key_cstring = CString::new(key)?;
+        let key_ptr = key_cstring.as_ptr();
+
+        extract_meta_string(
+            |buf_ptr, buf_len| unsafe {
+                llama_cpp_sys_2::llama_model_meta_val_str(
+                    self.model.as_ptr(),
+                    key_ptr,
+                    buf_ptr,
+                    buf_len,
+                )
+            },
+            256,
+        )
+    }
+
+    /// Get the number of metadata key/value pairs
+    pub fn meta_count(&self) -> i32 {
+        unsafe { llama_cpp_sys_2::llama_model_meta_count(self.model.as_ptr()) }
+    }
+
+    /// Get metadata key name by index
+    pub fn meta_key_by_index(&self, index: i32) -> Result<String, MetaValError> {
+        extract_meta_string(
+            |buf_ptr, buf_len| unsafe {
+                llama_cpp_sys_2::llama_model_meta_key_by_index(
+                    self.model.as_ptr(),
+                    index,
+                    buf_ptr,
+                    buf_len,
+                )
+            },
+            256,
+        )
+    }
+
+    /// Get metadata value as a string by index
+    pub fn meta_val_str_by_index(&self, index: i32) -> Result<String, MetaValError> {
+        extract_meta_string(
+            |buf_ptr, buf_len| unsafe {
+                llama_cpp_sys_2::llama_model_meta_val_str_by_index(
+                    self.model.as_ptr(),
+                    index,
+                    buf_ptr,
+                    buf_len,
+                )
+            },
+            256,
+        )
+    }
+
     /// Returns the rope type of the model.
     pub fn rope_type(&self) -> Option<RopeType> {
         match unsafe { llama_cpp_sys_2::llama_model_rope_type(self.model.as_ptr()) } {
@@ -688,6 +742,42 @@ impl LlamaModel {
         buff.truncate(res.try_into().expect("res is negative"));
         Ok(String::from_utf8(buff)?)
     }
+}
+
+/// Generic helper function for extracting string values from the C API
+/// This are specifically useful for the the metadata functions, where we pass in a buffer
+/// to be populated by a string, not yet knowing if the buffer is large enough.
+/// If the buffer was not large enough, we get the correct length back, which can be used to
+/// construct a buffer of appropriate size.
+fn extract_meta_string<F>(c_function: F, capacity: usize) -> Result<String, MetaValError>
+where
+    F: Fn(*mut c_char, usize) -> i32,
+{
+    let mut buffer = vec![0u8; capacity];
+
+    // call the foreign function
+    let result = c_function(buffer.as_mut_ptr() as *mut c_char, buffer.len());
+    if result < 0 {
+        return Err(MetaValError::NegativeReturn(result));
+    }
+
+    // check if the response fit in our buffer
+    let returned_len = result as usize;
+    if returned_len >= capacity {
+        // buffer wasn't large enough, try again with the correct capacity.
+        return extract_meta_string(c_function, returned_len + 1);
+    }
+
+    // verify null termination
+    debug_assert_eq!(
+        buffer.get(returned_len),
+        Some(&0),
+        "should end with null byte"
+    );
+
+    // resize, convert, and return
+    buffer.truncate(returned_len);
+    Ok(String::from_utf8(buffer)?)
 }
 
 impl Drop for LlamaModel {
