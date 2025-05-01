@@ -217,6 +217,8 @@ pub enum LlamaLoraAdapterRemoveError {
 /// get the time (in microseconds) according to llama.cpp
 /// ```
 /// # use llama_cpp_2::llama_time_us;
+/// # use llama_cpp_2::llama_backend::LlamaBackend;
+/// let backend = LlamaBackend::init().unwrap();
 /// let time = llama_time_us();
 /// assert!(time > 0);
 /// ```
@@ -311,6 +313,8 @@ pub enum ApplyChatTemplateError {
 ///
 /// ```
 /// # use std::time::Duration;
+/// # use llama_cpp_2::llama_backend::LlamaBackend;
+/// let backend = LlamaBackend::init().unwrap();
 /// use llama_cpp_2::ggml_time_us;
 ///
 /// let start = ggml_time_us();
