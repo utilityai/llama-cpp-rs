@@ -12,9 +12,9 @@ include = [
     "build.rs",
     "/src",
 
-    "/llama.cpp/common/*.h",
-    "/llama.cpp/common/*.hpp",
-    "/llama.cpp/common/*.cpp",
+    "/llama.cpp/common/**/*.h",
+    "/llama.cpp/common/**/*.hpp",
+    "/llama.cpp/common/**/*.cpp",
     "/llama.cpp/ggml/include/*.h",
     "/llama.cpp/ggml/src/*.h",
     "/llama.cpp/ggml/src/*.c",
