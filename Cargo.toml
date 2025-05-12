@@ -21,7 +21,7 @@ pprof = "0.13.0"
 bindgen = "0.69.5"
 cc = "1.2.22"
 anyhow = "1.0.98"
-clap = "4.5.37"
+clap = "4.5.38"
 encoding_rs = "0.8.35"
 tracing-subscriber = { version = "0.3", features = ["json"] }
 
