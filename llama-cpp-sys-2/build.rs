@@ -232,16 +232,12 @@ fn main() {
             .to_string(),
     );
 
-    let bindgen_target = env::var("TARGET").or_else(|_| {
-        env::var("HOST")
-    }).expect("Failed to get TARGET or HOST environment variable");
-
     // Bindings
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
-        .clang_arg(format!("--target={}", bindgen_target))
+        .clang_arg(format!("--target={}", target_triple))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
@@ -315,10 +311,7 @@ fn main() {
         } else {
             config.define("ANDROID_PLATFORM", "android-28");
         }
-        if target_triple.contains("aarch64") {
-            config.cflag("-march=armv8.7a");
-            config.cxxflag("-march=armv8.7a");
-        } else if target_triple.contains("armv7") {
+        if target_triple.contains("aarch64") || target_triple.contains("armv7") {
             config.cflag("-march=armv8.7a");
             config.cxxflag("-march=armv8.7a");
         } else if target_triple.contains("x86_64") {
