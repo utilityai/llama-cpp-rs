@@ -232,12 +232,16 @@ fn main() {
             .to_string(),
     );
 
+    let bindgen_target = env::var("TARGET").or_else(|_| {
+        env::var("HOST")
+    }).expect("Failed to get TARGET or HOST environment variable");
+
     // Bindings
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
-        .clang_arg(format!("--target={}", env::var("HOST").unwrap()))
+        .clang_arg(format!("--target={}", bindgen_target))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
