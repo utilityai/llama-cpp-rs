@@ -237,6 +237,7 @@ fn main() {
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
+        .clang_arg(format!("--target={}", env::var("HOST").unwrap()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
