@@ -280,7 +280,11 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
-    if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) && matches!(profile.as_str(), "Release" | "RelWithDebInfo" | "MinSizeRel"))
+    if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
+        && matches!(
+            profile.as_str(),
+            "Release" | "RelWithDebInfo" | "MinSizeRel"
+        ))
     {
         // Debug Rust builds under MSVC turn off optimization even though we're ideally building the release profile of llama.cpp.
         // Looks like an upstream bug:
