@@ -336,6 +336,16 @@ fn main() {
         }
     }
 
+    if matches!(target_os, TargetOs::Linux)
+        && target_triple.contains("aarch64")
+        && !env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_ok()
+    {
+        // If the native feature is not enabled, we take off the native ARM64 support.
+        // It is useful in docker environments where the native feature is not enabled.
+        config.define("GGML_NATIVE", "OFF");
+        config.define("GGML_CPU_ARM_ARCH", "armv8-a");
+    }
+
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
         match target_os {
