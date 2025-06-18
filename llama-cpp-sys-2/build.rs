@@ -440,6 +440,7 @@ fn main() {
 
     match target_os {
         TargetOs::Windows(WindowsVariant::Msvc) => {
+            println!("cargo:rustc-link-lib=advapi32");
             if cfg!(debug_assertions) {
                 println!("cargo:rustc-link-lib=dylib=msvcrtd");
             }
