@@ -278,7 +278,7 @@ impl LlamaSampler {
     /// # Panics
     /// If either of ``grammar_str`` or ``grammar_root`` contain null bytes.
     #[must_use]
-    pub fn grammar(model: &LlamaModel, grammar_str: &str, grammar_root: &str) -> Self {
+    pub fn grammar(model: &LlamaModel, grammar_str: &str, grammar_root: &str) -> Option<Self> {
         let grammar_str = CString::new(grammar_str).unwrap();
         let grammar_root = CString::new(grammar_root).unwrap();
 
@@ -289,7 +289,12 @@ impl LlamaSampler {
                 grammar_root.as_ptr(),
             )
         };
-        Self { sampler }
+
+        if sampler.is_null() {
+            None
+        } else {
+            Some(Self { sampler })
+        }
     }
 
     /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
@@ -306,7 +311,7 @@ impl LlamaSampler {
         grammar_root: &str,
         trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
         trigger_tokens: &[LlamaToken],
-    ) -> Self {
+    ) -> Option<Self> {
         let grammar_str = CString::new(grammar_str).unwrap();
         let grammar_root = CString::new(grammar_root).unwrap();
         
@@ -331,9 +336,13 @@ impl LlamaSampler {
                 trigger_tokens.len(),
             )
         };
-        
-        Self { sampler }
-    }    
+
+        if sampler.is_null() {
+            None
+        } else {
+            Some(Self { sampler })
+        }
+    }
 
     /// DRY sampler, designed by p-e-w, as described in:
     /// <https://github.com/oobabooga/text-generation-webui/pull/5677>, porting Koboldcpp
