@@ -398,28 +398,44 @@ fn main() {
     println!("cargo:rustc-link-search={}", build_dir.display());
 
     if cfg!(feature = "cuda") && !build_shared_libs {
+        // Re-run build script if CUDA_PATH environment variable changes
         println!("cargo:rerun-if-env-changed=CUDA_PATH");
 
+        // Add CUDA library directories to the linker search path
         for lib_dir in find_cuda_helper::find_cuda_lib_dirs() {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
         }
 
-        // Logic from ggml-cuda/CMakeLists.txt
-        println!("cargo:rustc-link-lib=static=cudart_static");
-        if matches!(target_os, TargetOs::Windows(_)) {
-            println!("cargo:rustc-link-lib=static=cublas");
-            println!("cargo:rustc-link-lib=static=cublasLt");
+        // Platform-specific linking
+        if cfg!(target_os = "windows") {
+            // ✅ On Windows, use dynamic linking.
+            // Static linking is problematic because NVIDIA does not provide culibos.lib,
+            // and static CUDA libraries (like cublas_static.lib) are usually not shipped.
+
+            println!("cargo:rustc-link-lib=cudart");       // Links to cudart64_*.dll
+            println!("cargo:rustc-link-lib=cublas");       // Links to cublas64_*.dll
+            println!("cargo:rustc-link-lib=cublasLt");     // Links to cublasLt64_*.dll
+
+            // Link to CUDA driver API (nvcuda.dll via cuda.lib)
+            if !cfg!(feature = "cuda-no-vmm") {
+                println!("cargo:rustc-link-lib=cuda");
+            }
         } else {
+            // ✅ On non-Windows platforms (e.g., Linux), static linking is preferred and supported.
+            // Static libraries like cudart_static and cublas_static depend on culibos.
+
+            println!("cargo:rustc-link-lib=static=cudart_static");
             println!("cargo:rustc-link-lib=static=cublas_static");
             println!("cargo:rustc-link-lib=static=cublasLt_static");
-        }
 
-        // Need to link against libcuda.so unless GGML_CUDA_NO_VMM is defined.
-        if !cfg!(feature = "cuda-no-vmm") {
-            println!("cargo:rustc-link-lib=cuda");
-        }
+            // Link to CUDA driver API (libcuda.so)
+            if !cfg!(feature = "cuda-no-vmm") {
+                println!("cargo:rustc-link-lib=cuda");
+            }
 
-        println!("cargo:rustc-link-lib=static=culibos");
+            // culibos is required when statically linking cudart_static
+            println!("cargo:rustc-link-lib=static=culibos");
+        }
     }
 
     // Link libraries
