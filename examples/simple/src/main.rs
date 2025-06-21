@@ -138,7 +138,8 @@ fn main() -> Result<()> {
     } = Args::parse();
 
     if verbose {
-        tracing_subscriber::fmt().init();
+        // tracing_subscriber::fmt().init();
+        tracing_subscriber::fmt::init();
     }
     send_logs_to_tracing(LogOptions::default().with_logs_enabled(verbose));
 

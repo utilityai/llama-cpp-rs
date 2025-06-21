@@ -142,18 +142,16 @@ impl State {
         let (meta, fields) = meta_for_level(level);
 
         tracing::dispatcher::get_default(|dispatcher| {
-            if dispatcher.enabled(meta) {
-                dispatcher.event(&tracing::Event::new(
-                    meta,
-                    &meta.fields().value_set(&[
-                        (&fields.message, Some(&text as &dyn tracing::field::Value)),
-                        (
-                            &fields.target,
-                            module.as_ref().map(|s| s as &dyn tracing::field::Value),
-                        ),
-                    ]),
-                ));
-            }
+            dispatcher.event(&tracing::Event::new(
+                meta,
+                &meta.fields().value_set(&[
+                    (&fields.message, Some(&text as &dyn tracing::field::Value)),
+                    (
+                        &fields.target,
+                        module.as_ref().map(|s| s as &dyn tracing::field::Value),
+                    ),
+                ]),
+            ));
         });
     }
 
@@ -252,6 +250,16 @@ impl State {
                 )
             }
         }
+    }
+
+    /// Checks whether the given log level is enabled by the current tracing subscriber.
+    pub(super) fn is_enabled_for_level(&self, level: llama_cpp_sys_2::ggml_log_level) -> bool {
+        // CONT logs do not need to check if they are enabled.
+        if level == llama_cpp_sys_2::GGML_LOG_LEVEL_CONT {
+            return true;
+        }
+        let (meta, _) = meta_for_level(level);
+        tracing::dispatcher::get_default(|dispatcher| dispatcher.enabled(meta))
     }
 }
 
