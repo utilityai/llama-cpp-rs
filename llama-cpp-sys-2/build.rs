@@ -356,6 +356,17 @@ fn main() {
                 let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
                 println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
                 println!("cargo:rustc-link-lib=vulkan-1");
+
+                // workaround for this error: "FileTracker : error FTK1011: could not create the new file tracking log file"
+                // it has to do with MSBuild FileTracker not respecting the path
+                // limit configuration set in the windows registry.
+                // I'm not sure why that's a thing, but this makes my builds work.
+                // (crates that depend on llama-cpp-rs w/ vulkan easily exceed the default PATH_MAX on windows)
+                env::set_var("TrackFileAccess", "false");
+                // since we disabled TrackFileAccess, we can now run into problems with parallel
+                // access to pdb files. /FS solves this.
+                config.cflag("/FS");
+                config.cxxflag("/FS");
             }
             TargetOs::Linux => {
                 println!("cargo:rustc-link-lib=vulkan");
