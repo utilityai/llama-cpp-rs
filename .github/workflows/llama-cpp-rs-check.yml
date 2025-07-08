@@ -32,7 +32,7 @@ jobs:
       - name: Clippy
         run: cargo clippy
       - name: Fmt
-        run: cargo fmt
+        run: cargo fmt --check
       - name: Test
         run: cargo test --features sampler
       - name: Dry-Run Publishing llama-cpp-sys-2 Crate
