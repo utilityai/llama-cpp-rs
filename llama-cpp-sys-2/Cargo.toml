@@ -42,6 +42,7 @@ include = [
     "/llama.cpp/ggml/src/llamafile/sgemm.cpp",
 
     "/llama.cpp/pocs",
+    "/llama.cpp/vendor",
 
     "/llama.cpp/CMakeLists.txt",
     "/llama.cpp/common/CMakeLists.txt",

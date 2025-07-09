@@ -17,7 +17,7 @@ pub struct LlamaLogitBias {
 
 impl LlamaLogitBias {
     /// Creates a new logit bias for a specific token with the given bias value.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};
@@ -27,15 +27,12 @@ impl LlamaLogitBias {
     #[must_use]
     pub fn new(LlamaToken(token): LlamaToken, bias: f32) -> Self {
         Self {
-            logit_bias: llama_cpp_sys_2::llama_logit_bias {
-                token,
-                bias,
-            },
+            logit_bias: llama_cpp_sys_2::llama_logit_bias { token, bias },
         }
     }
 
     /// Gets the token this bias applies to.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};
@@ -49,7 +46,7 @@ impl LlamaLogitBias {
     }
 
     /// Gets the bias value.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};
@@ -63,7 +60,7 @@ impl LlamaLogitBias {
     }
 
     /// Sets the token this bias applies to.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};
@@ -78,7 +75,7 @@ impl LlamaLogitBias {
     }
 
     /// Sets the bias value.
-    /// 
+    ///
     /// # Examples
     /// ```
     /// # use llama_cpp_2::token::{LlamaToken, logit_bias::LlamaLogitBias};

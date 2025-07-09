@@ -412,9 +412,9 @@ fn main() {
             // Static linking is problematic because NVIDIA does not provide culibos.lib,
             // and static CUDA libraries (like cublas_static.lib) are usually not shipped.
 
-            println!("cargo:rustc-link-lib=cudart");       // Links to cudart64_*.dll
-            println!("cargo:rustc-link-lib=cublas");       // Links to cublas64_*.dll
-            println!("cargo:rustc-link-lib=cublasLt");     // Links to cublasLt64_*.dll
+            println!("cargo:rustc-link-lib=cudart"); // Links to cudart64_*.dll
+            println!("cargo:rustc-link-lib=cublas"); // Links to cublas64_*.dll
+            println!("cargo:rustc-link-lib=cublasLt"); // Links to cublasLt64_*.dll
 
             // Link to CUDA driver API (nvcuda.dll via cuda.lib)
             if !cfg!(feature = "cuda-no-vmm") {
