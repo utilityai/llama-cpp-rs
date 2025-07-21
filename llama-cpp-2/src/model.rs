@@ -13,9 +13,9 @@ use crate::model::params::LlamaModelParams;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError,
-    LlamaLoraAdapterInitError, LlamaModelLoadError, MetaValError, NewLlamaChatMessageError,
-    StringToTokenError, TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
+    LlamaModelLoadError, MetaValError, NewLlamaChatMessageError, StringToTokenError,
+    TokenToStringError,
 };
 
 pub mod params;
@@ -488,7 +488,8 @@ impl LlamaModel {
     pub fn n_head_kv(&self) -> u32 {
         // It's never possible for this to panic because while the API interface is defined as an int32_t,
         // the field it's accessing is a uint32_t.
-        u32::try_from(unsafe { llama_cpp_sys_2::llama_model_n_head_kv(self.model.as_ptr()) }).unwrap()
+        u32::try_from(unsafe { llama_cpp_sys_2::llama_model_n_head_kv(self.model.as_ptr()) })
+            .unwrap()
     }
 
     /// Get metadata value as a string by key name

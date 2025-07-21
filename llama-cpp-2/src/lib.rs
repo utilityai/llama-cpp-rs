@@ -27,6 +27,7 @@ pub mod llama_backend;
 pub mod llama_batch;
 mod log;
 pub mod model;
+pub mod mtmd;
 pub mod sampling;
 pub mod timing;
 pub mod token;

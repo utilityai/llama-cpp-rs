@@ -26,6 +26,7 @@ impl LlamaTimings {
         t_eval_ms: f64,
         n_p_eval: i32,
         n_eval: i32,
+        n_reused: i32,
     ) -> Self {
         Self {
             timings: llama_cpp_sys_2::llama_perf_context_data {
@@ -35,6 +36,7 @@ impl LlamaTimings {
                 t_eval_ms,
                 n_p_eval,
                 n_eval,
+                n_reused,
             },
         }
     }
