@@ -392,6 +392,11 @@ fn main() {
         config.define("GGML_OPENMP", "OFF");
     }
 
+    // LLGuidance support for constrained decoding
+    if cfg!(feature = "llguidance") {
+        config.define("LLAMA_LLGUIDANCE", "ON");
+    }
+
     // General
     config
         .profile(&profile)

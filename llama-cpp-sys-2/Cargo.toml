@@ -78,3 +78,4 @@ native = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []
+llguidance = []
