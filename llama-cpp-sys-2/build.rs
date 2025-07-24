@@ -378,6 +378,8 @@ fn main() {
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
 
+        config.define("CMAKE_CUDA_ARCHITECTURES", "75;89");
+
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");
         }
