@@ -271,6 +271,13 @@ fn main() {
     config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define("LLAMA_CURL", "OFF");
 
+    // Pass CMAKE_ environment variables down to CMake
+    for (key, value) in env::vars() {
+        if key.starts_with("CMAKE_") {
+            config.define(&key, &value);
+        }
+    }
+
     config.define(
         "BUILD_SHARED_LIBS",
         if build_shared_libs { "ON" } else { "OFF" },
