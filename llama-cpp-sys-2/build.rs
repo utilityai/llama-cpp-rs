@@ -268,6 +268,12 @@ fn main() {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
 
+    for (key, value) in env::vars() {
+        if key.starts_with("CMAKE_") {
+            config.define(&key, &value);
+        }
+    }
+
     config.define(
         "BUILD_SHARED_LIBS",
         if build_shared_libs { "ON" } else { "OFF" },
@@ -277,7 +283,11 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
-    if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) && matches!(profile.as_str(), "Release" | "RelWithDebInfo" | "MinSizeRel"))
+    if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
+        && matches!(
+            profile.as_str(),
+            "Release" | "RelWithDebInfo" | "MinSizeRel"
+        ))
     {
         // Debug Rust builds under MSVC turn off optimization even though we're ideally building the release profile of llama.cpp.
         // Looks like an upstream bug:
