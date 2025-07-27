@@ -517,11 +517,26 @@ fn main() {
         println!("cargo:rustc-link-lib=hipblas");
         
         // Add ROCm library path
+        // First try ROCM_PATH environment variable
         if let Ok(rocm_path) = env::var("ROCM_PATH") {
             println!("cargo:rustc-link-search=native={}/lib", rocm_path);
         } else {
+            // Try common ROCm installation paths
             println!("cargo:rustc-link-search=native=/opt/rocm/lib");
-            println!("cargo:rustc-link-search=native=/opt/rocm-6.4.1/lib");
+            
+            // Also check for versioned installations by looking for directories
+            if let Ok(entries) = std::fs::read_dir("/opt") {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(name) = path.file_name() {
+                        if name.to_string_lossy().starts_with("rocm-") {
+                            if path.join("lib").exists() {
+                                println!("cargo:rustc-link-search=native={}/lib", path.display());
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
