@@ -10,7 +10,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::context::LlamaContext;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::mtmd::*;
+use llama_cpp_2::mtmd::{MtmdBitmap, MtmdBitmapError, MtmdContext, MtmdContextParams, MtmdInputText};
 
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::model::{LlamaChatMessage, LlamaChatTemplate, LlamaModel, Special};
@@ -83,6 +83,8 @@ pub struct MtmdCliContext {
 
 impl MtmdCliContext {
     /// Creates a new MTMD CLI context
+    ///
+    /// # Errors
     pub fn new(
         params: &MtmdCliParams,
         model: &LlamaModel,
@@ -101,11 +103,11 @@ impl MtmdCliContext {
             )?,
         };
 
-        let mtmd_ctx = MtmdContext::init_from_file(&params.mmproj_path, model, mtmd_params)?;
+        let mtmd_ctx = MtmdContext::init_from_file(&params.mmproj_path, model, &mtmd_params)?;
 
         let chat_template = model
             .chat_template(params.chat_template.as_deref())
-            .map_err(|e| format!("Failed to get chat template: {}", e))?;
+            .map_err(|e| format!("Failed to get chat template: {e}"))?;
 
         let batch = LlamaBatch::new(params.n_tokens, 1);
 
@@ -120,6 +122,7 @@ impl MtmdCliContext {
     }
 
     /// Loads media (image or audio) from the specified file path
+    /// # Errors
     pub fn load_media(&mut self, path: &str) -> Result<(), MtmdBitmapError> {
         let bitmap = MtmdBitmap::from_file(&self.mtmd_ctx, path)?;
         self.bitmaps.push(bitmap);
@@ -127,6 +130,7 @@ impl MtmdCliContext {
     }
 
     /// Evaluates a chat message, tokenizing and processing it through the model
+    /// # Errors
     pub fn eval_message(
         &mut self,
         model: &LlamaModel,
@@ -161,11 +165,12 @@ impl MtmdCliContext {
         // Clear bitmaps after tokenization
         self.bitmaps.clear();
 
-        self.n_past = chunks.eval_chunks(&self.mtmd_ctx, &context, 0, 0, 1, true)?;
+        self.n_past = chunks.eval_chunks(&self.mtmd_ctx, context, 0, 0, 1, true)?;
         Ok(())
     }
 
     /// Generates a response by sampling tokens from the model
+    /// # Errors
     pub fn generate_response(
         &mut self,
         model: &LlamaModel,
@@ -190,7 +195,7 @@ impl MtmdCliContext {
 
             // Print token
             let piece = model.token_to_str(token, Special::Tokenize)?;
-            print!("{}", piece);
+            print!("{piece}");
             io::stdout().flush()?;
 
             // Prepare next batch
@@ -223,7 +228,7 @@ fn run_single_turn(
 
     // Load media files
     for image_path in &params.images {
-        println!("Loading image: {}", image_path);
+        println!("Loading image: {image_path}");
         ctx.load_media(image_path)?;
     }
     for audio_path in &params.audio {
@@ -233,7 +238,7 @@ fn run_single_turn(
     // Create user message
     let msg = LlamaChatMessage::new("user".to_string(), prompt)?;
 
-    println!("Evaluating message: {:?}", msg);
+    println!("Evaluating message: {msg:?}");
 
     // Evaluate the message (prefill)
     ctx.eval_message(model, context, msg, true)?;
@@ -269,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Setup model parameters
     let mut model_params = LlamaModelParams::default();
     if !params.no_gpu {
-        model_params = model_params.with_n_gpu_layers(1000000); // Use all layers on GPU
+        model_params = model_params.with_n_gpu_layers(1_000_000); // Use all layers on GPU
     }
 
     // Load model
