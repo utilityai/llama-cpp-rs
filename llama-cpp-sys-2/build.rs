@@ -397,6 +397,52 @@ fn main() {
         }
     }
 
+    if cfg!(feature = "hip") {
+        config.define("GGML_HIP", "ON");
+        
+        // Get HIP paths using hipconfig
+        let hip_path = Command::new("hipconfig")
+            .arg("-R")
+            .output()
+            .ok()
+            .and_then(|output| {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() { Some(path) } else { None }
+            })
+            .unwrap_or_else(|| "/opt/rocm".to_string());
+        
+        let hip_clang_path = Command::new("hipconfig")
+            .arg("-l")
+            .output()
+            .ok()
+            .and_then(|output| {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() { Some(path) } else { None }
+            })
+            .unwrap_or_else(|| format!("{}/lib/llvm/bin", hip_path));
+        
+        // Set environment variables as per llama.cpp documentation
+        env::set_var("HIPCXX", format!("{}/clang++", hip_clang_path));
+        env::set_var("HIP_PATH", &hip_path);
+        
+        // Allow user to specify GPU architecture via environment variable
+        if let Ok(targets) = env::var("AMDGPU_TARGETS") {
+            config.define("AMDGPU_TARGETS", targets);
+        } else {
+            // Default to common AMD GPU architectures if not specified
+            // Including gfx942 for MI300X
+            config.define("AMDGPU_TARGETS", "gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100");
+        }
+        
+        // Help CMake find the HIP compiler by setting CMAKE_HIP_COMPILER
+        config.define("CMAKE_HIP_COMPILER", format!("{}/clang++", hip_clang_path));
+        
+        // Add position-independent code flags for HIP compilation
+        config.define("CMAKE_HIP_FLAGS", "-fPIC");
+        config.cflag("-fPIC");
+        config.cxxflag("-fPIC");
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
@@ -460,6 +506,22 @@ fn main() {
 
             // culibos is required when statically linking cudart_static
             println!("cargo:rustc-link-lib=static=culibos");
+        }
+    }
+
+    // HIP (ROCm)
+    if cfg!(feature = "hip") {
+        // Link HIP runtime libraries
+        println!("cargo:rustc-link-lib=amdhip64");
+        println!("cargo:rustc-link-lib=rocblas");
+        println!("cargo:rustc-link-lib=hipblas");
+        
+        // Add ROCm library path
+        if let Ok(rocm_path) = env::var("ROCM_PATH") {
+            println!("cargo:rustc-link-search=native={}/lib", rocm_path);
+        } else {
+            println!("cargo:rustc-link-search=native=/opt/rocm/lib");
+            println!("cargo:rustc-link-search=native=/opt/rocm-6.4.1/lib");
         }
     }
 
