@@ -20,6 +20,7 @@ enum TargetOs {
     Apple(AppleVariant),
     Linux,
     Android,
+    OpenBSD,
 }
 
 macro_rules! debug_log {
@@ -49,6 +50,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         Ok((TargetOs::Android, target))
     } else if target.contains("linux") {
         Ok((TargetOs::Linux, target))
+    } else if target.contains("openbsd") {
+        Ok((TargetOs::OpenBSD, target))
     } else {
         Err(target)
     }
@@ -343,7 +346,7 @@ fn main() {
         }
     }
 
-    if matches!(target_os, TargetOs::Linux)
+    if (matches!(target_os, TargetOs::Linux) || matches!(target_os, TargetOs::OpenBSD))
         && target_triple.contains("aarch64")
         && !env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_ok()
     {
@@ -378,6 +381,10 @@ fn main() {
             TargetOs::Linux => {
                 println!("cargo:rustc-link-lib=vulkan");
             }
+            TargetOs::OpenBSD => {
+                println!("cargo:rustc-link-search=/usr/local/lib");
+                println!("cargo:rustc-link-lib=vulkan");
+            }
             _ => (),
         }
     }
@@ -393,7 +400,7 @@ fn main() {
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) && !matches!(target_os, TargetOs::OpenBSD) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
@@ -481,6 +488,9 @@ fn main() {
         }
         TargetOs::Linux => {
             println!("cargo:rustc-link-lib=dylib=stdc++");
+        }
+        TargetOs::OpenBSD => {
+            println!("cargo:rustc-link-lib=dylib=c++");
         }
         TargetOs::Apple(variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
