@@ -409,7 +409,8 @@ fn main() {
                 let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path.is_empty() { Some(path) } else { None }
             })
-            .unwrap_or_else(|| "/opt/rocm".to_string());
+            .or_else(|| env::var("ROCM_PATH").ok())
+            .expect("Failed to find ROCm installation. Please ensure hipconfig is in PATH or set ROCM_PATH environment variable.");
         
         let hip_clang_path = Command::new("hipconfig")
             .arg("-l")
@@ -441,6 +442,12 @@ fn main() {
         config.define("CMAKE_HIP_FLAGS", "-fPIC");
         config.cflag("-fPIC");
         config.cxxflag("-fPIC");
+        
+        // Link HIP runtime libraries and add library path
+        println!("cargo:rustc-link-lib=amdhip64");
+        println!("cargo:rustc-link-lib=rocblas");
+        println!("cargo:rustc-link-lib=hipblas");
+        println!("cargo:rustc-link-search=native={}/lib", hip_path);
     }
 
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
@@ -509,36 +516,6 @@ fn main() {
         }
     }
 
-    // HIP (ROCm)
-    if cfg!(feature = "hip") {
-        // Link HIP runtime libraries
-        println!("cargo:rustc-link-lib=amdhip64");
-        println!("cargo:rustc-link-lib=rocblas");
-        println!("cargo:rustc-link-lib=hipblas");
-        
-        // Add ROCm library path
-        // First try ROCM_PATH environment variable
-        if let Ok(rocm_path) = env::var("ROCM_PATH") {
-            println!("cargo:rustc-link-search=native={}/lib", rocm_path);
-        } else {
-            // Try common ROCm installation paths
-            println!("cargo:rustc-link-search=native=/opt/rocm/lib");
-            
-            // Also check for versioned installations by looking for directories
-            if let Ok(entries) = std::fs::read_dir("/opt") {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if let Some(name) = path.file_name() {
-                        if name.to_string_lossy().starts_with("rocm-") {
-                            if path.join("lib").exists() {
-                                println!("cargo:rustc-link-search=native={}/lib", path.display());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     // Link libraries
     let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
