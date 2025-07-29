@@ -20,6 +20,7 @@ enum TargetOs {
     Apple(AppleVariant),
     Linux,
     Android,
+    OpenBSD,
 }
 
 macro_rules! debug_log {
@@ -55,6 +56,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         Ok((TargetOs::Android, target))
     } else if target.contains("linux") {
         Ok((TargetOs::Linux, target))
+    } else if target.contains("openbsd") {
+        Ok((TargetOs::OpenBSD, target))
     } else {
         Err(target)
     }
@@ -565,7 +568,7 @@ fn main() {
         println!("cargo:rustc-link-lib=android");
     }
 
-    if matches!(target_os, TargetOs::Linux)
+    if (matches!(target_os, TargetOs::Linux) || matches!(target_os, TargetOs::OpenBSD))
         && target_triple.contains("aarch64")
         && !env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_ok()
     {
@@ -600,6 +603,10 @@ fn main() {
             TargetOs::Linux => {
                 println!("cargo:rustc-link-lib=vulkan");
             }
+            TargetOs::OpenBSD => {
+                println!("cargo:rustc-link-search=/usr/local/lib");
+                println!("cargo:rustc-link-lib=vulkan");
+            }
             _ => (),
         }
     }
@@ -612,10 +619,63 @@ fn main() {
         }
     }
 
+    if cfg!(feature = "hip") {
+        config.define("GGML_HIP", "ON");
+        
+        // Get HIP paths using hipconfig
+        let hip_path = Command::new("hipconfig")
+            .arg("-R")
+            .output()
+            .ok()
+            .and_then(|output| {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() { Some(path) } else { None }
+            })
+            .or_else(|| env::var("ROCM_PATH").ok())
+            .expect("Failed to find ROCm installation. Please ensure hipconfig is in PATH or set ROCM_PATH environment variable.");
+        
+        let hip_clang_path = Command::new("hipconfig")
+            .arg("-l")
+            .output()
+            .ok()
+            .and_then(|output| {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() { Some(path) } else { None }
+            })
+            .unwrap_or_else(|| format!("{}/lib/llvm/bin", hip_path));
+        
+        // Set environment variables as per llama.cpp documentation
+        env::set_var("HIPCXX", format!("{}/clang++", hip_clang_path));
+        env::set_var("HIP_PATH", &hip_path);
+        
+        // Allow user to specify GPU architecture via environment variable
+        if let Ok(targets) = env::var("AMDGPU_TARGETS") {
+            config.define("AMDGPU_TARGETS", targets);
+        } else {
+            // Default to common AMD GPU architectures if not specified
+            // Including gfx942 for MI300X
+            config.define("AMDGPU_TARGETS", "gfx906;gfx908;gfx90a;gfx942;gfx1030;gfx1100");
+        }
+        
+        // Help CMake find the HIP compiler by setting CMAKE_HIP_COMPILER
+        config.define("CMAKE_HIP_COMPILER", format!("{}/clang++", hip_clang_path));
+        
+        // Add position-independent code flags for HIP compilation
+        config.define("CMAKE_HIP_FLAGS", "-fPIC");
+        config.cflag("-fPIC");
+        config.cxxflag("-fPIC");
+        
+        // Link HIP runtime libraries and add library path
+        println!("cargo:rustc-link-lib=amdhip64");
+        println!("cargo:rustc-link-lib=rocblas");
+        println!("cargo:rustc-link-lib=hipblas");
+        println!("cargo:rustc-link-search=native={}/lib", hip_path);
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) && !matches!(target_os, TargetOs::OpenBSD) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
@@ -678,6 +738,7 @@ fn main() {
         }
     }
 
+
     // Link libraries
     let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
     let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
@@ -703,6 +764,9 @@ fn main() {
         }
         TargetOs::Linux => {
             println!("cargo:rustc-link-lib=dylib=stdc++");
+        }
+        TargetOs::OpenBSD => {
+            println!("cargo:rustc-link-lib=dylib=c++");
         }
         TargetOs::Apple(variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
