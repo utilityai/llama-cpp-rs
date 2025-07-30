@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-2"
 description = "llama.cpp bindings for Rust"
-version = "0.1.107"
+version = "0.1.113"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
@@ -9,8 +9,8 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-enumflags2 = "0.7.11"
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.69" }
+enumflags2 = "0.7.12"
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.113" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
@@ -33,7 +33,7 @@ android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.69", features = [
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.113", features = [
     "metal",
 ] }
 

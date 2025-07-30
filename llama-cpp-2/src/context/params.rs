@@ -514,6 +514,36 @@ impl LlamaContextParams {
     pub fn pooling_type(&self) -> LlamaPoolingType {
         LlamaPoolingType::from(self.context_params.pooling_type)
     }
+
+    /// Set whether to use full sliding window attention
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_swa_full(false);
+    /// assert_eq!(params.swa_full(), false);
+    /// ```
+    #[must_use]
+    pub fn with_swa_full(mut self, enabled: bool) -> Self {
+        self.context_params.swa_full = enabled;
+        self
+    }
+
+    /// Get whether full sliding window attention is enabled
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.swa_full(), true);
+    /// ```
+    #[must_use]
+    pub fn swa_full(&self) -> bool {
+        self.context_params.swa_full
+    }
 }
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)

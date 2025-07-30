@@ -209,11 +209,4 @@ impl LlamaContext<'_> {
     pub fn kv_cache_update(&mut self) {
         unsafe { llama_cpp_sys_2::llama_kv_self_update(self.context.as_ptr()) }
     }
-
-    /// Returns the number of tokens in the KV cache (slow, use only for debug)
-    /// If a KV cell has multiple sequences assigned to it, it will be counted multiple times
-    #[must_use]
-    pub fn get_kv_cache_token_count(&self) -> i32 {
-        unsafe { llama_cpp_sys_2::llama_kv_self_n_tokens(self.context.as_ptr()) }
-    }
 }

@@ -7,7 +7,7 @@
 //!
 //! # Examples
 //!
-//! - [simple](https://github.com/utilityai/llama-cpp-rs/tree/main/simple)
+//! - [simple](https://github.com/utilityai/llama-cpp-rs/tree/main/examples/simple)
 //!
 //! # Feature Flags
 //!
@@ -375,6 +375,11 @@ extern "C" fn logs_to_trace(
     use std::borrow::Borrow;
 
     let log_state = unsafe { &*(data as *const log::State) };
+
+    // If the log level is disabled, we can just return early
+    if !log_state.is_enabled_for_level(level) {
+        return;
+    }
 
     let text = unsafe { std::ffi::CStr::from_ptr(text) };
     let text = text.to_string_lossy();
