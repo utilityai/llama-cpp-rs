@@ -670,6 +670,7 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-core",
+ "tracing-subscriber",
 ]
 
 [[package]]
