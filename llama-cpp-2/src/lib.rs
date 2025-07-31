@@ -375,18 +375,19 @@ extern "C" fn logs_to_trace(
 
     let log_state = unsafe { &*(data as *const log::State) };
 
+    if log_state.options.disabled {
+        return;
+    }
+
     // If the log level is disabled, we can just return early
     if !log_state.is_enabled_for_level(level) {
+        log_state.update_previous_level_for_disabled_log(level);
         return;
     }
 
     let text = unsafe { std::ffi::CStr::from_ptr(text) };
     let text = text.to_string_lossy();
     let text: &str = text.borrow();
-
-    if log_state.options.disabled {
-        return;
-    }
 
     // As best I can tell llama.cpp / ggml require all log format strings at call sites to have the '\n'.
     // If it's missing, it means that you expect more logs via CONT (or there's a typo in the codebase). To
