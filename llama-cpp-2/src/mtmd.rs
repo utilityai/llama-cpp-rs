@@ -14,6 +14,19 @@ use crate::model::LlamaModel;
 use crate::token::LlamaToken;
 
 /// Input chunk types for multimodal data
+///
+/// # Examples
+///
+/// ```
+/// use llama_cpp_2::mtmd::MtmdInputChunkType;
+///
+/// let text_chunk = MtmdInputChunkType::Text;
+/// let image_chunk = MtmdInputChunkType::Image;
+/// let audio_chunk = MtmdInputChunkType::Audio;
+///
+/// assert_eq!(text_chunk, MtmdInputChunkType::Text);
+/// assert_ne!(text_chunk, image_chunk);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MtmdInputChunkType {
     /// Text input chunk
@@ -36,6 +49,20 @@ impl From<llama_cpp_sys_2::mtmd_input_chunk_type> for MtmdInputChunkType {
 }
 
 /// Configuration parameters for MTMD context
+///
+/// # Examples
+///
+/// ```
+/// use llama_cpp_2::mtmd::{MtmdContextParams, mtmd_default_marker};
+/// use std::ffi::CString;
+///
+/// let params = MtmdContextParams {
+///     use_gpu: false,
+///     print_timings: true,
+///     n_threads: 4,
+///     media_marker: CString::new(mtmd_default_marker()).unwrap(),
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct MtmdContextParams {
     /// Whether to use GPU acceleration
@@ -73,6 +100,18 @@ impl From<&MtmdContextParams> for llama_cpp_sys_2::mtmd_context_params {
 }
 
 /// Text input configuration
+///
+/// # Examples
+///
+/// ```
+/// use llama_cpp_2::mtmd::MtmdInputText;
+///
+/// let input = MtmdInputText {
+///     text: "Describe this image.".to_string(),
+///     add_special: true,
+///     parse_special: true,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct MtmdInputText {
     /// The input text string
@@ -301,6 +340,19 @@ impl MtmdBitmap {
     ///
     /// * `InvalidDataSize` - Data length doesn't match `nx * ny * 3`
     /// * `NullResult` - Underlying C function returned null
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use llama_cpp_2::mtmd::MtmdBitmap;
+    ///
+    /// // Create a 2x2 red image
+    /// let red_pixel = [255, 0, 0]; // RGB values for red
+    /// let image_data = red_pixel.repeat(4); // 2x2 = 4 pixels
+    ///
+    /// let bitmap = MtmdBitmap::from_image_data(2, 2, &image_data);
+    /// assert!(bitmap.is_ok());
+    /// ```
     pub fn from_image_data(nx: u32, ny: u32, data: &[u8]) -> Result<Self, MtmdBitmapError> {
         if data.len() != (nx * ny * 3) as usize {
             return Err(MtmdBitmapError::InvalidDataSize);
@@ -325,6 +377,20 @@ impl MtmdBitmap {
     /// # Errors
     ///
     /// * `NullResult` - Underlying C function returned null
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use llama_cpp_2::mtmd::MtmdBitmap;
+    ///
+    /// // Create a simple sine wave audio sample
+    /// let audio_data: Vec<f32> = (0..100)
+    ///     .map(|i| (i as f32 * 0.1).sin())
+    ///     .collect();
+    ///
+    /// let bitmap = MtmdBitmap::from_audio_data(&audio_data);
+    /// // Note: This will likely fail without proper MTMD context setup
+    /// ```
     pub fn from_audio_data(data: &[f32]) -> Result<Self, MtmdBitmapError> {
         let bitmap =
             unsafe { llama_cpp_sys_2::mtmd_bitmap_init_from_audio(data.len(), data.as_ptr()) };
@@ -457,6 +523,17 @@ impl MtmdBitmap {
     /// # Errors
     ///
     /// Returns an error if the ID string contains null bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use llama_cpp_2::mtmd::MtmdBitmap;
+    /// # fn example(bitmap: &MtmdBitmap) -> Result<(), Box<dyn std::error::Error>> {
+    /// bitmap.set_id("image_001")?;
+    /// assert_eq!(bitmap.id(), Some("image_001".to_string()));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn set_id(&self, id: &str) -> Result<(), std::ffi::NulError> {
         let id_cstr = CString::new(id)?;
         unsafe {
@@ -493,6 +570,16 @@ impl MtmdInputChunks {
     /// # Panics
     /// This function will panic if the underlying llama.cpp function returns null,
     /// which should not happen.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use llama_cpp_2::mtmd::MtmdInputChunks;
+    ///
+    /// let chunks = MtmdInputChunks::new();
+    /// assert_eq!(chunks.len(), 0);
+    /// assert!(chunks.is_empty());
+    /// ```
     #[must_use] pub fn new() -> Self {
         let chunks = unsafe { llama_cpp_sys_2::mtmd_input_chunks_init() };
         let chunks = NonNull::new(chunks).unwrap();
@@ -721,12 +808,16 @@ impl Drop for MtmdInputChunk {
 ///
 /// Returns the default media marker as a string slice.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
-/// # use llama_cpp_2::mtmd::mtmd_default_marker;
+/// use llama_cpp_2::mtmd::mtmd_default_marker;
+///
 /// let marker = mtmd_default_marker();
+/// assert!(!marker.is_empty());
+///
 /// let text = format!("Describe this image: {}", marker);
+/// assert!(text.contains(marker));
 /// ```
 #[must_use] pub fn mtmd_default_marker() -> &'static str {
     unsafe {
