@@ -712,6 +712,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mtmd"
+version = "0.1.86"
+dependencies = [
+ "clap",
+ "llama-cpp-2",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
