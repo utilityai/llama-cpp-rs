@@ -271,6 +271,7 @@ fn main() {
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
+        .allowlist_type("llama_.*")
         .allowlist_function("mtmd_.*")
         .allowlist_type("mtmd_.*")
         .prepend_enum_name(false);
