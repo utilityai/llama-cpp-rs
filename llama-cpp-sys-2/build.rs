@@ -272,9 +272,14 @@ fn main() {
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
-        .allowlist_function("mtmd_.*")
-        .allowlist_type("mtmd_.*")
         .prepend_enum_name(false);
+
+    // Configure mtmd feature if enabled
+    if cfg!(feature = "mtmd") {
+        bindings_builder = bindings_builder
+        .allowlist_function("mtmd_.*")
+        .allowlist_type("mtmd_.*");
+    }
 
     // Configure Android-specific bindgen settings
     if matches!(target_os, TargetOs::Android) {
@@ -440,11 +445,14 @@ fn main() {
     config.define("LLAMA_BUILD_TESTS", "OFF");
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
+    config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define("LLAMA_CURL", "OFF");
 
-    // Required for mtmd.rs
-    config.define("LLAMA_BUILD_COMMON", "ON");
-    config.define("LLAMA_BUILD_TOOLS", "ON");
+    if cfg!(feature = "mtmd") {
+        config.define("LLAMA_BUILD_COMMON", "ON");
+        // mtmd support in llama-cpp is within the tools directory
+        config.define("LLAMA_BUILD_TOOLS", "ON");
+    }
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
@@ -633,63 +641,6 @@ fn main() {
         .always_configure(false);
 
     let build_dir = config.build();
-
-    let lib_dir = out_dir.join("lib");
-    debug_log!("Lib directory: {}", lib_dir.display());
-
-    // Copy common library
-    let common_lib_src = build_dir.join("build/common/libcommon.a");
-    debug_log!(
-        "Looking for common library at: {}",
-        common_lib_src.display()
-    );
-    if common_lib_src.exists() {
-        let common_lib_dst = lib_dir.join("libcommon.a");
-        std::fs::copy(&common_lib_src, &common_lib_dst).unwrap_or_else(|e| {
-            panic!("Failed to copy {common_lib_src:?} to {common_lib_dst:?}: {e:?}");
-        });
-        debug_log!("Copied common library: {}", common_lib_dst.display());
-    } else {
-        debug_log!("Common library not found at: {}", common_lib_src.display());
-    }
-
-    // Copy mtmd static library
-    let mtmd_static_src = build_dir.join("build/tools/mtmd/libmtmd_static.a");
-    debug_log!(
-        "Looking for mtmd static library at: {}",
-        mtmd_static_src.display()
-    );
-    if mtmd_static_src.exists() {
-        let mtmd_static_dst = lib_dir.join("libmtmd_static.a");
-        std::fs::copy(&mtmd_static_src, &mtmd_static_dst).unwrap_or_else(|e| {
-            panic!("Failed to copy {mtmd_static_src:?} to {mtmd_static_dst:?}: {e:?}");
-        });
-        debug_log!("Copied mtmd static library: {}", mtmd_static_dst.display());
-    } else {
-        debug_log!(
-            "Mtmd static library not found at: {}",
-            mtmd_static_src.display()
-        );
-    }
-
-    // Copy mtmd audio library
-    let mtmd_audio_src = build_dir.join("build/tools/mtmd/libmtmd_audio.a");
-    debug_log!(
-        "Looking for mtmd audio library at: {}",
-        mtmd_audio_src.display()
-    );
-    if mtmd_audio_src.exists() {
-        let mtmd_audio_dst = lib_dir.join("libmtmd_audio.a");
-        std::fs::copy(&mtmd_audio_src, &mtmd_audio_dst).unwrap_or_else(|e| {
-            panic!("Failed to copy {mtmd_audio_src:?} to {mtmd_audio_dst:?}: {e:?}");
-        });
-        debug_log!("Copied mtmd audio library: {}", mtmd_audio_dst.display());
-    } else {
-        debug_log!(
-            "Mtmd audio library not found at: {}",
-            mtmd_audio_src.display()
-        );
-    }
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());

@@ -30,6 +30,7 @@ openmp = ["llama-cpp-sys-2/openmp"]
 sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
+mtmd = ["llama-cpp-sys-2/mtmd"]
 
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
