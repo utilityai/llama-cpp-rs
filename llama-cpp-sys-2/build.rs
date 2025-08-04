@@ -265,7 +265,6 @@ fn main() {
         .header("wrapper.h")
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
-        .clang_arg(format!("--target={}", target_triple))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
@@ -383,7 +382,6 @@ fn main() {
 
         // Configure bindgen for Android
         bindings_builder = bindings_builder
-            .clang_arg(format!("--target={}", target_triple))
             .clang_arg(format!("--sysroot={}", sysroot))
             .clang_arg(format!("-D__ANDROID_API__={}", android_api))
             .clang_arg("-D__ANDROID__");
