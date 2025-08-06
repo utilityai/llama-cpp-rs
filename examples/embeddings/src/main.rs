@@ -55,6 +55,14 @@ impl EmbeddingArchitecture {
             Self::JINA
         } else if path_str.contains("nomic") {
             Self::Nomic
+        } else if path_str.contains("minilm") || path_str.contains("mini-lm") {
+            Self::Unknown  // MiniLM uses mean pooling like Unknown
+        } else if path_str.contains("e5") {
+            Self::Unknown  // E5 uses mean pooling like Unknown
+        } else if path_str.contains("mxbai") {
+            Self::BGE  // MxBAI uses CLS pooling like BGE
+        } else if path_str.contains("arctic") || path_str.contains("snowflake") {
+            Self::BGE  // Arctic uses CLS pooling like BGE
         } else {
             Self::Unknown
         }
@@ -67,10 +75,10 @@ impl EmbeddingArchitecture {
         match self {
             Self::BGE => LlamaPoolingType::Cls,
             Self::GTE => LlamaPoolingType::Mean,
-            Self::Qwen3 => LlamaPoolingType::Last,
+            Self::Qwen3 => LlamaPoolingType::Mean,  // Qwen3 actually uses mean pooling
             Self::JINA => LlamaPoolingType::Mean,
             Self::Nomic => LlamaPoolingType::Mean,
-            Self::Unknown => LlamaPoolingType::None, // Let model decide
+            Self::Unknown => LlamaPoolingType::Mean, // Default to mean pooling for unknown models
         }
     }
     
@@ -288,6 +296,7 @@ fn main() -> Result<()> {
                 max_seq_id_batch,
                 &mut output,
                 should_normalize,
+                expected_pooling,
             )?;
             max_seq_id_batch = 0;
         }
@@ -302,6 +311,7 @@ fn main() -> Result<()> {
         max_seq_id_batch,
         &mut output,
         should_normalize,
+        expected_pooling,
     )?;
 
     let t_main_end = ggml_time_us();
@@ -355,13 +365,13 @@ fn batch_decode(
     s_batch: i32,
     output: &mut Vec<Vec<f32>>,
     normalise: bool,
+    pooling_type: llama_cpp_2::context::params::LlamaPoolingType,
 ) -> Result<()> {
     use llama_cpp_2::context::params::LlamaPoolingType;
     
     ctx.clear_kv_cache();
     ctx.decode(batch).with_context(|| "llama_decode() failed")?;
 
-    let pooling_type = ctx.pooling_type();
     eprintln!("Pooling type: {:?}", pooling_type);
 
     for i in 0..s_batch {
