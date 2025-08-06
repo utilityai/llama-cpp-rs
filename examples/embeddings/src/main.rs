@@ -7,7 +7,7 @@
 )]
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
@@ -23,17 +23,89 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 
+/// Supported embedding model architectures
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum EmbeddingArchitecture {
+    /// BAAI General Embedding - uses CLS token pooling
+    BGE,
+    /// General Text Embeddings - uses mean pooling
+    GTE,
+    /// Qwen3 Embedding - uses last token pooling
+    Qwen3,
+    /// JINA Embeddings - uses mean pooling
+    JINA,
+    /// Nomic Embed - uses mean pooling with task prefixes
+    Nomic,
+    /// Unknown architecture - will use default pooling based on model metadata
+    Unknown,
+}
+
+impl EmbeddingArchitecture {
+    /// Detect architecture from model path
+    fn detect(model_path: &Path) -> Self {
+        let path_str = model_path.to_string_lossy().to_lowercase();
+        
+        if path_str.contains("bge") {
+            Self::BGE
+        } else if path_str.contains("gte") {
+            Self::GTE
+        } else if path_str.contains("qwen3") {
+            Self::Qwen3
+        } else if path_str.contains("jina") {
+            Self::JINA
+        } else if path_str.contains("nomic") {
+            Self::Nomic
+        } else {
+            Self::Unknown
+        }
+    }
+    
+    /// Get the expected pooling type for this architecture
+    fn pooling_type(&self) -> llama_cpp_2::context::params::LlamaPoolingType {
+        use llama_cpp_2::context::params::LlamaPoolingType;
+        
+        match self {
+            Self::BGE => LlamaPoolingType::Cls,
+            Self::GTE => LlamaPoolingType::Mean,
+            Self::Qwen3 => LlamaPoolingType::Last,
+            Self::JINA => LlamaPoolingType::Mean,
+            Self::Nomic => LlamaPoolingType::Mean,
+            Self::Unknown => LlamaPoolingType::None, // Let model decide
+        }
+    }
+    
+    /// Whether this architecture requires L2 normalization
+    fn requires_normalization(&self) -> bool {
+        match self {
+            Self::BGE | Self::GTE | Self::Qwen3 | Self::JINA | Self::Nomic => true,
+            Self::Unknown => false,
+        }
+    }
+}
+
 #[derive(clap::Parser, Debug, Clone)]
 struct Args {
-    /// The path to the model
-    #[command(subcommand)]
-    model: Model,
     /// The prompt
     #[clap(default_value = "Hello my name is")]
     prompt: String,
-    /// Whether to normalise the produced embeddings
+    /// The path to the model
+    #[command(subcommand)]
+    model: Model,
+    /// Read prompts from stdin (one per line)
+    #[clap(long)]
+    stdin: bool,
+    /// Whether to normalise the produced embeddings (overrides architecture default)
     #[clap(short)]
     normalise: bool,
+    /// Force normalization off (useful for architectures that default to normalizing)
+    #[clap(long)]
+    no_normalise: bool,
+    /// Output embeddings as JSON
+    #[clap(long)]
+    json: bool,
+    /// Task type for Nomic models (query or document)
+    #[clap(long, default_value = "document")]
+    task_type: String,
     /// Disable offloading layers to the gpu
     #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[clap(long)]
@@ -75,15 +147,20 @@ impl Model {
 
 fn main() -> Result<()> {
     let Args {
-        model,
         prompt,
+        model,
+        stdin,
         normalise,
+        no_normalise,
+        json,
+        task_type,
         #[cfg(any(feature = "cuda", feature = "vulkan"))]
         disable_gpu,
     } = Args::parse();
 
     // init LLM
-    let backend = LlamaBackend::init()?;
+    let mut backend = LlamaBackend::init()?;
+    backend.void_logs();  // Suppress llama.cpp logs for cleaner output
 
     // offload all layers to the gpu
     let model_params = {
@@ -101,26 +178,68 @@ fn main() -> Result<()> {
         .get_or_load()
         .with_context(|| "failed to get model from args")?;
 
-    let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
+    let model = LlamaModel::load_from_file(&backend, &model_path, &model_params)
         .with_context(|| "unable to load model")?;
 
+    // Detect architecture
+    let architecture = EmbeddingArchitecture::detect(&model_path);
+    eprintln!("Detected architecture: {:?}", architecture);
+
     // initialize the context
-    let ctx_params = LlamaContextParams::default()
+    let mut ctx_params = LlamaContextParams::default()
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_embeddings(true);
+
+    // Set pooling type based on architecture
+    let expected_pooling = architecture.pooling_type();
+    if !matches!(expected_pooling, llama_cpp_2::context::params::LlamaPoolingType::None) {
+        eprintln!("Setting pooling type to {:?} for {:?}", expected_pooling, architecture);
+        ctx_params = ctx_params.with_pooling_type(expected_pooling);
+    }
 
     let mut ctx = model
         .new_context(&backend, ctx_params)
         .with_context(|| "unable to create the llama_context")?;
+    
+    // Determine if we should normalize based on architecture and flags
+    let should_normalize = if no_normalise {
+        false
+    } else if normalise {
+        true
+    } else {
+        architecture.requires_normalization()
+    };
+    eprintln!("Normalization: {}", if should_normalize { "enabled" } else { "disabled" });
 
-    // Split the prompt to display the batching functionality
-    let prompt_lines = prompt.lines();
+    // Get prompts either from stdin or command line
+    let prompts: Vec<String> = if stdin {
+        use std::io::BufRead;
+        let stdin = std::io::stdin();
+        stdin.lock().lines().collect::<Result<Vec<_>, _>>()?
+    } else {
+        prompt.lines().map(|s| s.to_string()).collect()
+    };
 
-    // tokenize the prompt
-    let tokens_lines_list = prompt_lines
-        .map(|line| model.str_to_token(line, AddBos::Always))
+    // tokenize the prompts
+    let tokens_lines_list = prompts
+        .iter()
+        .map(|line| {
+            // Add task prefix for Nomic models
+            let text_to_encode = if matches!(architecture, EmbeddingArchitecture::Nomic) {
+                let prefix = if task_type == "query" {
+                    "search_query: "
+                } else {
+                    "search_document: "
+                };
+                format!("{}{}", prefix, line)
+            } else {
+                line.to_string()
+            };
+            
+            model.str_to_token(&text_to_encode, AddBos::Always)
+        })
         .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("failed to tokenize {prompt}"))?;
+        .with_context(|| "failed to tokenize prompts")?;
 
     let n_ctx = ctx.n_ctx() as usize;
     let n_ctx_train = model.n_ctx_train();
@@ -168,12 +287,12 @@ fn main() -> Result<()> {
                 &mut batch,
                 max_seq_id_batch,
                 &mut output,
-                normalise,
+                should_normalize,
             )?;
             max_seq_id_batch = 0;
         }
 
-        batch.add_sequence(tokens, max_seq_id_batch, false)?;
+        batch.add_sequence(tokens, max_seq_id_batch, true)?;
         max_seq_id_batch += 1;
     }
     // Handle final batch
@@ -182,14 +301,36 @@ fn main() -> Result<()> {
         &mut batch,
         max_seq_id_batch,
         &mut output,
-        normalise,
+        should_normalize,
     )?;
 
     let t_main_end = ggml_time_us();
 
-    for (i, embeddings) in output.iter().enumerate() {
-        eprintln!("Embeddings {i}: {embeddings:?}");
-        eprintln!();
+    if json {
+        // Output as JSON array
+        println!("[");
+        for (i, embeddings) in output.iter().enumerate() {
+            print!("  [");
+            for (j, val) in embeddings.iter().enumerate() {
+                if j > 0 { print!(", "); }
+                print!("{}", val);
+            }
+            print!("]");
+            if i < output.len() - 1 { println!(","); } else { println!(); }
+        }
+        println!("]");
+    } else {
+        for (i, embeddings) in output.iter().enumerate() {
+            eprintln!("Embeddings {i}: {:?}", embeddings);
+            eprintln!("First 10 values: {:?}", &embeddings[..embeddings.len().min(10)]);
+            
+            // Calculate L2 norm
+            let norm = embeddings.iter()
+                .fold(0.0, |acc, &val| acc + val * val)
+                .sqrt();
+            eprintln!("L2 norm: {}", norm);
+            eprintln!();
+        }
     }
 
     let duration = Duration::from_micros((t_main_end - t_main_start) as u64);
@@ -201,7 +342,9 @@ fn main() -> Result<()> {
         total_tokens as f32 / duration.as_secs_f32()
     );
 
-    println!("{}", ctx.timings());
+    if !json {
+        println!("{}", ctx.timings());
+    }
 
     Ok(())
 }
@@ -213,13 +356,28 @@ fn batch_decode(
     output: &mut Vec<Vec<f32>>,
     normalise: bool,
 ) -> Result<()> {
+    use llama_cpp_2::context::params::LlamaPoolingType;
+    
     ctx.clear_kv_cache();
     ctx.decode(batch).with_context(|| "llama_decode() failed")?;
 
+    let pooling_type = ctx.pooling_type();
+    eprintln!("Pooling type: {:?}", pooling_type);
+
     for i in 0..s_batch {
-        let embedding = ctx
-            .embeddings_seq_ith(i)
-            .with_context(|| "Failed to get embeddings")?;
+        let embedding = match pooling_type {
+            LlamaPoolingType::None => {
+                // For models with no pooling, use token embeddings
+                ctx.embeddings_ith(i)
+                    .with_context(|| "Failed to get token embeddings")?
+            }
+            _ => {
+                // For models with pooling (Mean, CLS, Last, etc.), use sequence embeddings
+                ctx.embeddings_seq_ith(i)
+                    .with_context(|| "Failed to get sequence embeddings")?
+            }
+        };
+        
         let output_embeddings = if normalise {
             normalize(embedding)
         } else {
@@ -235,10 +393,17 @@ fn batch_decode(
 }
 
 fn normalize(input: &[f32]) -> Vec<f32> {
+    // Calculate L2 norm (magnitude)
     let magnitude = input
         .iter()
         .fold(0.0, |acc, &val| val.mul_add(val, acc))
         .sqrt();
 
+    // Avoid division by zero
+    if magnitude == 0.0 {
+        return input.to_vec();
+    }
+
+    // L2 normalization
     input.iter().map(|&val| val / magnitude).collect()
 }

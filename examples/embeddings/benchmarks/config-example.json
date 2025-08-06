@@ -1,0 +1,77 @@
+{
+  "_comment": "Example configuration file - copy to config.json and update paths",
+  "models": {
+    "BGE": {
+      "gguf": "~/models/bge-small-en-v1.5-q8_0.gguf",
+      "hf": "BAAI/bge-small-en-v1.5",
+      "normalize": true,
+      "cli_pooling": "cls"
+    },
+    "GTE": {
+      "gguf": "~/models/gte-base.Q8_0.gguf",
+      "hf": "thenlper/gte-base",
+      "normalize": true,
+      "cli_pooling": "mean"
+    },
+    "JINA": {
+      "gguf": "~/models/jina-embeddings-v2-base-en-q8_0.gguf",
+      "hf": "jinaai/jina-embeddings-v2-base-en",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "trust_remote_code": true
+    },
+    "QWEN3": {
+      "gguf": "~/models/Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "hf": "Qwen/Qwen3-Embedding-0.6B",
+      "normalize": true,
+      "cli_pooling": "last",
+      "trust_remote_code": true
+    },
+    "NOMIC": {
+      "gguf": "~/models/nomic-embed-text-v1.5-Q4_K_M.gguf",
+      "hf": "nomic-ai/nomic-embed-text-v1.5",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "trust_remote_code": true
+    }
+  },
+  "benchmark_settings": {
+    "max_csv_texts": 5,
+    "max_csv_dimensions": 50,
+    "llama_threads": 6,
+    "enable_metal": true,
+    "ort_execution_providers": "CoreMLExecutionProvider,CPUExecutionProvider",
+    "onnx_batch_size": 32
+  },
+  "platform_configs": {
+    "macOS": {
+      "enable_metal": true,
+      "ort_execution_providers": "CoreMLExecutionProvider,CPUExecutionProvider"
+    },
+    "linux_nvidia": {
+      "enable_metal": false,
+      "ort_execution_providers": "CUDAExecutionProvider,CPUExecutionProvider"
+    },
+    "windows_nvidia": {
+      "enable_metal": false,
+      "ort_execution_providers": "DmlExecutionProvider,CUDAExecutionProvider,CPUExecutionProvider"
+    },
+    "cpu_only": {
+      "enable_metal": false,
+      "ort_execution_providers": "CPUExecutionProvider"
+    }
+  },
+  "notes": {
+    "gguf_paths": "Update these paths to point to your downloaded GGUF models. Use ~ for home directory.",
+    "quantization": "Q8_0 and Q4_K_M quantizations are recommended for best accuracy/performance balance",
+    "onnx_batch_size": "Batch size for ONNX EmbedAnything processing. Higher values may improve throughput but use more memory.",
+    "download_links": {
+      "BGE": "https://huggingface.co/BAAI/bge-small-en-v1.5-GGUF",
+      "GTE": "https://huggingface.co/thenlper/gte-base-GGUF",
+      "JINA": "https://huggingface.co/jinaai/jina-embeddings-v2-base-en-GGUF",
+      "QWEN3": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF",
+      "NOMIC": "https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF"
+    },
+    "setup": "1. Copy this file to config.json, 2. Update model paths, 3. Run benchmark"
+  }
+}
