@@ -1,0 +1,72 @@
+{
+  "models": {
+    "E5-Base": {
+      "gguf": "/Users/sarav/Downloads/Embedding/e5-base-v2.Q8_0.gguf",
+      "hf": "intfloat/e5-base-v2",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "architecture": "BERT",
+      "note": "Microsoft E5 base model (Q8_0)"
+    },
+    "GTE-Base": {
+      "gguf": "/Users/sarav/Downloads/Embedding/gte-base.Q8_0.gguf",
+      "hf": "thenlper/gte-base",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "architecture": "BERT",
+      "note": "Alibaba's GTE base model (Q8_0)"
+    },
+    "JINA-v2-Base": {
+      "gguf": "/Users/sarav/Downloads/Embedding/jina-embeddings-v2-base-en-q8_0.gguf",
+      "hf": "jinaai/jina-embeddings-v2-base-en",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "trust_remote_code": true,
+      "architecture": "JinaBERT",
+      "note": "JinaBERT with 8192 context (Q8_0)"
+    },
+    "Qwen3": {
+      "gguf": "/Users/sarav/Downloads/Embedding/Qwen3-Embedding-0.6B-Q8_0.gguf",
+      "hf": "Qwen/Qwen3-Embedding-0.6B",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "architecture": "Qwen",
+      "note": "Qwen3 600M params (Q8_0)"
+    },
+    "Nomic-v1.5": {
+      "gguf": "/Users/sarav/Downloads/Embedding/nomic-embed-text-v1.5-Q8_0.gguf",
+      "hf": "nomic-ai/nomic-embed-text-v1.5",
+      "normalize": true,
+      "cli_pooling": "mean",
+      "trust_remote_code": true,
+      "architecture": "NomicBERT",
+      "note": "Nomic with prefix instructions (Q8_0)"
+    },
+    "MxBAI-Large": {
+      "gguf": "/Users/sarav/Downloads/Embedding/mxbai-embed-large-v1.Q8_0.gguf",
+      "hf": "mixedbread-ai/mxbai-embed-large-v1",
+      "normalize": true,
+      "cli_pooling": "cls",
+      "architecture": "BERT",
+      "note": "MixedBread AnglE-optimized (Q8_0)"
+    }
+  },
+  "benchmark_settings": {
+    "max_csv_texts": 5,
+    "max_csv_dimensions": 50,
+    "llama_threads": 6,
+    "enable_metal": true
+  },
+  "architecture_coverage": {
+    "BERT": ["E5-Base", "GTE-Base", "MxBAI-Large"],
+    "JinaBERT": ["JINA-v2-Base"],
+    "Qwen": ["Qwen3"],
+    "NomicBERT": ["Nomic-v1.5"]
+  },
+  "notes": {
+    "selection": "Using Q8_0 quantization for best accuracy",
+    "models": "6 models covering 4 architecture types",
+    "expected_similarity": ">0.99 for Q8_0 models",
+    "dataset": "50 Wikipedia articles for comprehensive testing"
+  }
+}
