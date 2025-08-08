@@ -273,6 +273,13 @@ fn main() {
         .allowlist_type("llama_.*")
         .prepend_enum_name(false);
 
+    // Configure mtmd feature if enabled
+    if cfg!(feature = "mtmd") {
+        bindings_builder = bindings_builder
+        .allowlist_function("mtmd_.*")
+        .allowlist_type("mtmd_.*");
+    }
+
     // Configure Android-specific bindgen settings
     if matches!(target_os, TargetOs::Android) {
         // Detect Android NDK from environment variables
@@ -438,6 +445,12 @@ fn main() {
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define("LLAMA_CURL", "OFF");
+
+    if cfg!(feature = "mtmd") {
+        config.define("LLAMA_BUILD_COMMON", "ON");
+        // mtmd support in llama-cpp is within the tools directory
+        config.define("LLAMA_BUILD_TOOLS", "ON");
+    }
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
