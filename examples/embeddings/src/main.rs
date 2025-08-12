@@ -150,40 +150,22 @@ fn main() -> Result<()> {
     }
 
     std::io::stderr().flush()?;
-
-    // create a llama_batch with the size of the context
-    // we use this object to submit token data for decoding
-    let mut batch = LlamaBatch::new(n_ctx, 1);
-
-    let mut max_seq_id_batch = 0;
     let mut output = Vec::with_capacity(tokens_lines_list.len());
 
     let t_main_start = ggml_time_us();
 
     for tokens in &tokens_lines_list {
-        // Flush the batch if the next prompt would exceed our batch size
-        if (batch.n_tokens() as usize + tokens.len()) > n_ctx {
-            batch_decode(
-                &mut ctx,
-                &mut batch,
-                max_seq_id_batch,
-                &mut output,
-                normalise,
-            )?;
-            max_seq_id_batch = 0;
-        }
-
-        batch.add_sequence(tokens, max_seq_id_batch, false)?;
-        max_seq_id_batch += 1;
+        // Create a fresh batch for each sequence
+        let mut batch = LlamaBatch::new(n_ctx, 1);
+        batch.add_sequence(tokens, 0, false)?;
+        batch_decode(
+            &mut ctx,
+            &mut batch,
+            1, // Only one sequence in this batch
+            &mut output,
+            normalise,
+        )?;
     }
-    // Handle final batch
-    batch_decode(
-        &mut ctx,
-        &mut batch,
-        max_seq_id_batch,
-        &mut output,
-        normalise,
-    )?;
 
     let t_main_end = ggml_time_us();
 
