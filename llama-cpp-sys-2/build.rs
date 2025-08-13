@@ -277,8 +277,8 @@ fn main() {
     // Configure mtmd feature if enabled
     if cfg!(feature = "mtmd") {
         bindings_builder = bindings_builder
-        .allowlist_function("mtmd_.*")
-        .allowlist_type("mtmd_.*");
+            .allowlist_function("mtmd_.*")
+            .allowlist_type("mtmd_.*");
     }
 
     // Configure Android-specific bindgen settings

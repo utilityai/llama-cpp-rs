@@ -77,25 +77,39 @@ pub struct MtmdContextParams {
 
 impl Default for MtmdContextParams {
     fn default() -> Self {
-        Self {
-            use_gpu: false,
-            print_timings: true,
-            n_threads: 4,
-            media_marker: CString::new(mtmd_default_marker()).unwrap_or_default(),
-        }
+        unsafe { llama_cpp_sys_2::mtmd_context_params_default() }.into()
     }
 }
 
 impl From<&MtmdContextParams> for llama_cpp_sys_2::mtmd_context_params {
     fn from(params: &MtmdContextParams) -> Self {
         let mut context = unsafe { llama_cpp_sys_2::mtmd_context_params_default() };
+        let MtmdContextParams {
+            use_gpu,
+            print_timings,
+            n_threads,
+            media_marker,
+        } = params;
 
-        context.use_gpu = params.use_gpu;
-        context.print_timings = params.print_timings;
-        context.n_threads = params.n_threads;
-        context.media_marker = params.media_marker.as_ptr();
+        context.use_gpu = *use_gpu;
+        context.print_timings = *print_timings;
+        context.n_threads = *n_threads;
+        context.media_marker = media_marker.as_ptr();
 
         context
+    }
+}
+
+impl From<llama_cpp_sys_2::mtmd_context_params> for MtmdContextParams {
+    fn from(params: llama_cpp_sys_2::mtmd_context_params) -> Self {
+        Self {
+            use_gpu: params.use_gpu,
+            print_timings: params.print_timings,
+            n_threads: params.n_threads,
+            media_marker: unsafe { CStr::from_ptr(params.media_marker) }
+                .to_owned()
+                .into(),
+        }
     }
 }
 
@@ -165,16 +179,13 @@ impl MtmdContext {
             )
         };
 
-        if context.is_null() {
-            return Err(MtmdInitError::NullResult);
-        }
-
         let context = NonNull::new(context).ok_or(MtmdInitError::NullResult)?;
         Ok(Self { context })
     }
 
     /// Check whether non-causal attention mask is needed before `llama_decode`.
-    #[must_use] pub fn decode_use_non_causal(&self) -> bool {
+    #[must_use]
+    pub fn decode_use_non_causal(&self) -> bool {
         unsafe { llama_cpp_sys_2::mtmd_decode_use_non_causal(self.context.as_ptr()) }
     }
 
@@ -182,23 +193,27 @@ impl MtmdContext {
     ///
     /// M-RoPE (Multimodal Rotary Position Embedding) affects how positions
     /// are calculated for multimodal inputs.
-    #[must_use] pub fn decode_use_mrope(&self) -> bool {
+    #[must_use]
+    pub fn decode_use_mrope(&self) -> bool {
         unsafe { llama_cpp_sys_2::mtmd_decode_use_mrope(self.context.as_ptr()) }
     }
 
     /// Check whether the current model supports vision input.
-    #[must_use] pub fn support_vision(&self) -> bool {
+    #[must_use]
+    pub fn support_vision(&self) -> bool {
         unsafe { llama_cpp_sys_2::mtmd_support_vision(self.context.as_ptr()) }
     }
 
     /// Check whether the current model supports audio input.
-    #[must_use] pub fn support_audio(&self) -> bool {
+    #[must_use]
+    pub fn support_audio(&self) -> bool {
         unsafe { llama_cpp_sys_2::mtmd_support_audio(self.context.as_ptr()) }
     }
 
     /// Get audio bitrate in Hz (e.g., 16000 for Whisper).
     /// Returns -1 if audio is not supported.
-    #[must_use] pub fn get_audio_bitrate(&self) -> i32 {
+    #[must_use]
+    pub fn get_audio_bitrate(&self) -> i32 {
         unsafe { llama_cpp_sys_2::mtmd_get_audio_bitrate(self.context.as_ptr()) }
     }
 
@@ -243,7 +258,7 @@ impl MtmdContext {
         bitmaps: &[&MtmdBitmap],
     ) -> Result<MtmdInputChunks, MtmdTokenizeError> {
         let chunks = MtmdInputChunks::new();
-        let text_cstring = CString::new(text.text).unwrap_or_default();
+        let text_cstring = CString::new(text.text)?;
         let input_text = llama_cpp_sys_2::mtmd_input_text {
             text: text_cstring.as_ptr(),
             add_special: text.add_special,
@@ -303,9 +318,6 @@ impl MtmdContext {
         }
     }
 }
-
-unsafe impl Send for MtmdContext {}
-unsafe impl Sync for MtmdContext {}
 
 impl Drop for MtmdContext {
     fn drop(&mut self) {
@@ -471,12 +483,14 @@ impl MtmdBitmap {
     }
 
     /// Get bitmap width in pixels.
-    #[must_use] pub fn nx(&self) -> u32 {
+    #[must_use]
+    pub fn nx(&self) -> u32 {
         unsafe { llama_cpp_sys_2::mtmd_bitmap_get_nx(self.bitmap.as_ptr()) }
     }
 
     /// Get bitmap height in pixels.
-    #[must_use] pub fn ny(&self) -> u32 {
+    #[must_use]
+    pub fn ny(&self) -> u32 {
         unsafe { llama_cpp_sys_2::mtmd_bitmap_get_ny(self.bitmap.as_ptr()) }
     }
 
@@ -484,14 +498,16 @@ impl MtmdBitmap {
     ///
     /// For images: RGB format with length `nx * ny * 3`
     /// For audio: PCM F32 format with length `n_samples * 4`
-    #[must_use] pub fn data(&self) -> &[u8] {
+    #[must_use]
+    pub fn data(&self) -> &[u8] {
         let ptr = unsafe { llama_cpp_sys_2::mtmd_bitmap_get_data(self.bitmap.as_ptr()) };
         let len = unsafe { llama_cpp_sys_2::mtmd_bitmap_get_n_bytes(self.bitmap.as_ptr()) };
         unsafe { slice::from_raw_parts(ptr, len) }
     }
 
     /// Check if this bitmap contains audio data (vs image data).
-    #[must_use] pub fn is_audio(&self) -> bool {
+    #[must_use]
+    pub fn is_audio(&self) -> bool {
         unsafe { llama_cpp_sys_2::mtmd_bitmap_is_audio(self.bitmap.as_ptr()) }
     }
 
@@ -499,15 +515,16 @@ impl MtmdBitmap {
     ///
     /// Bitmap ID is useful for KV cache tracking and can e.g. be calculated
     /// based on a hash of the bitmap data.
-    #[must_use] pub fn id(&self) -> Option<String> {
+    #[must_use]
+    pub fn id(&self) -> Option<String> {
         let ptr = unsafe { llama_cpp_sys_2::mtmd_bitmap_get_id(self.bitmap.as_ptr()) };
         if ptr.is_null() {
             None
         } else {
-            unsafe { CStr::from_ptr(ptr) }
+            let id = unsafe { CStr::from_ptr(ptr) }
                 .to_string_lossy()
-                .into_owned()
-                .into()
+                .into_owned();
+            Some(id)
         }
     }
 
@@ -580,24 +597,28 @@ impl MtmdInputChunks {
     /// assert_eq!(chunks.len(), 0);
     /// assert!(chunks.is_empty());
     /// ```
-    #[must_use] pub fn new() -> Self {
+    #[must_use]
+    pub fn new() -> Self {
         let chunks = unsafe { llama_cpp_sys_2::mtmd_input_chunks_init() };
         let chunks = NonNull::new(chunks).unwrap();
         Self { chunks }
     }
 
     /// Get the number of chunks
-    #[must_use] pub fn len(&self) -> usize {
+    #[must_use]
+    pub fn len(&self) -> usize {
         unsafe { llama_cpp_sys_2::mtmd_input_chunks_size(self.chunks.as_ptr()) }
     }
 
     /// Check if chunks collection is empty
-    #[must_use] pub fn is_empty(&self) -> bool {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Get a chunk by index
-    #[must_use] pub fn get(&self, index: usize) -> Option<MtmdInputChunk> {
+    #[must_use]
+    pub fn get(&self, index: usize) -> Option<MtmdInputChunk> {
         if index >= self.len() {
             return None;
         }
@@ -619,7 +640,8 @@ impl MtmdInputChunks {
     /// Get total number of tokens across all chunks.
     ///
     /// This is useful for keeping track of KV cache size.
-    #[must_use] pub fn total_tokens(&self) -> usize {
+    #[must_use]
+    pub fn total_tokens(&self) -> usize {
         unsafe { llama_cpp_sys_2::mtmd_helper_get_n_tokens(self.chunks.as_ptr()) }
     }
 
@@ -627,7 +649,8 @@ impl MtmdInputChunks {
     ///
     /// This is useful to keep track of `n_past`. Normally `n_pos` equals `n_tokens`,
     /// but for M-RoPE it is different.
-    #[must_use] pub fn total_positions(&self) -> i32 {
+    #[must_use]
+    pub fn total_positions(&self) -> i32 {
         unsafe { llama_cpp_sys_2::mtmd_helper_get_n_pos(self.chunks.as_ptr()) }
     }
 
@@ -709,7 +732,8 @@ pub struct MtmdInputChunk {
 
 impl MtmdInputChunk {
     /// Get the type of this chunk
-    #[must_use] pub fn chunk_type(&self) -> MtmdInputChunkType {
+    #[must_use]
+    pub fn chunk_type(&self) -> MtmdInputChunkType {
         let chunk_type = unsafe { llama_cpp_sys_2::mtmd_input_chunk_get_type(self.chunk.as_ptr()) };
         MtmdInputChunkType::from(chunk_type)
     }
@@ -721,7 +745,8 @@ impl MtmdInputChunk {
     /// # Returns
     ///
     /// Returns `Some(&[LlamaToken])` for text chunks, `None` otherwise.
-    #[must_use] pub fn text_tokens(&self) -> Option<&[LlamaToken]> {
+    #[must_use]
+    pub fn text_tokens(&self) -> Option<&[LlamaToken]> {
         if self.chunk_type() != MtmdInputChunkType::Text {
             return None;
         }
@@ -744,21 +769,24 @@ impl MtmdInputChunk {
     }
 
     /// Get the number of tokens in this chunk
-    #[must_use] pub fn n_tokens(&self) -> usize {
+    #[must_use]
+    pub fn n_tokens(&self) -> usize {
         unsafe { llama_cpp_sys_2::mtmd_input_chunk_get_n_tokens(self.chunk.as_ptr()) }
     }
 
     /// Get the number of positions in this chunk.
     ///
     /// Returns the number of temporal positions (always 1 for M-RoPE, `n_tokens` otherwise).
-    #[must_use] pub fn n_positions(&self) -> i32 {
+    #[must_use]
+    pub fn n_positions(&self) -> i32 {
         unsafe { llama_cpp_sys_2::mtmd_input_chunk_get_n_pos(self.chunk.as_ptr()) }
     }
 
     /// Get chunk ID if available.
     ///
     /// Returns `None` for text chunks, may return an ID for image/audio chunks.
-    #[must_use] pub fn id(&self) -> Option<String> {
+    #[must_use]
+    pub fn id(&self) -> Option<String> {
         let ptr = unsafe { llama_cpp_sys_2::mtmd_input_chunk_get_id(self.chunk.as_ptr()) };
         if ptr.is_null() {
             None
@@ -819,7 +847,8 @@ impl Drop for MtmdInputChunk {
 /// let text = format!("Describe this image: {}", marker);
 /// assert!(text.contains(marker));
 /// ```
-#[must_use] pub fn mtmd_default_marker() -> &'static str {
+#[must_use]
+pub fn mtmd_default_marker() -> &'static str {
     unsafe {
         let c_str = llama_cpp_sys_2::mtmd_default_marker();
         CStr::from_ptr(c_str).to_str().unwrap_or("<__media__>")
@@ -877,6 +906,9 @@ pub enum MtmdTokenizeError {
     /// Image preprocessing error occurred
     #[error("Image preprocessing error")]
     ImagePreprocessingError,
+    /// Text contains characters that cannot be converted to C string
+    #[error("Failed to create CString from text: {0}")]
+    CStringError(#[from] std::ffi::NulError),
     /// Unknown error occurred during tokenization
     #[error("Unknown error: {0}")]
     UnknownError(i32),
