@@ -2,6 +2,7 @@
 
 use std::ffi::CString;
 use std::io::{self, Write};
+use std::num::NonZeroU32;
 use std::path::Path;
 
 use clap::Parser;
@@ -50,8 +51,8 @@ pub struct MtmdCliParams {
     #[arg(short = 't', long = "threads", value_name = "N", default_value = "4")]
     pub n_threads: i32,
     /// Maximum number of tokens in context
-    #[arg(long = "n-tokens", value_name = "N", default_value = "2048")]
-    pub n_tokens: usize,
+    #[arg(long = "n-tokens", value_name = "N", default_value = "4096")]
+    pub n_tokens: NonZeroU32,
     /// Chat template to use, default template if not provided
     #[arg(long = "chat-template", value_name = "TEMPLATE")]
     pub chat_template: Option<String>,
@@ -111,7 +112,7 @@ impl MtmdCliContext {
             .chat_template(params.chat_template.as_deref())
             .map_err(|e| format!("Failed to get chat template: {e}"))?;
 
-        let batch = LlamaBatch::new(params.n_tokens, 1);
+        let batch = LlamaBatch::new(params.n_tokens.get() as usize, 1);
 
         Ok(Self {
             mtmd_ctx,
@@ -285,7 +286,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create context
     let context_params = LlamaContextParams::default()
         .with_n_threads(params.n_threads)
-        .with_n_batch(1);
+        .with_n_batch(1)
+        .with_n_ctx(Some(params.n_tokens));
     let mut context = model.new_context(&backend, context_params)?;
 
     // Create sampler
