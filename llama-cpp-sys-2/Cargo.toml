@@ -9,6 +9,7 @@ links = "llama"
 
 include = [
     "wrapper.h",
+    "wrapper_mtmd.h",
     "build.rs",
     "/src",
 
@@ -21,9 +22,10 @@ include = [
     "/llama.cpp/ggml/src/*.cpp",
     "/llama.cpp/src/*.h",
     "/llama.cpp/src/*.cpp",
+    "/llama.cpp/tools/mtmd/*.h",
+    "/llama.cpp/tools/mtmd/*.cpp",
 
     "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
-
     "/llama.cpp/common/build-info.cpp.in",
 
     "/llama.cpp/ggml/src/ggml-cuda.cu",
@@ -78,3 +80,4 @@ native = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []
+mtmd = []
