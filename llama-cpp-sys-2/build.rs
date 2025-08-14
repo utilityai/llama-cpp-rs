@@ -277,6 +277,7 @@ fn main() {
     // Configure mtmd feature if enabled
     if cfg!(feature = "mtmd") {
         bindings_builder = bindings_builder
+            .header("wrapper_mtmd.h")
             .allowlist_function("mtmd_.*")
             .allowlist_type("mtmd_.*");
     }
@@ -432,6 +433,7 @@ fn main() {
         .expect("Failed to write bindings");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper_mtmd.h");
 
     debug_log!("Bindings Created");
 
