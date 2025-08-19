@@ -52,6 +52,7 @@ include = [
     "/llama.cpp/ggml/src/CMakeLists.txt",
     "/llama.cpp/src/CMakeLists.txt",
     "/llama.cpp/tools/CMakeLists.txt",
+    "/llama.cpp/tools/mtmd/CMakeLists.txt",
 
     "/llama.cpp/cmake",
     "/llama.cpp/ggml/cmake",
