@@ -1,4 +1,4 @@
-//! This is a translation of embedding.cpp in llama.cpp using llama-cpp-2.
+//! This is an example of reranking documents for a query using llama-cpp-2.
 #![allow(
     clippy::cast_possible_wrap,
     clippy::cast_possible_truncation,
@@ -45,6 +45,11 @@ struct Args {
     /// Whether to normalise the produced embeddings
     #[clap(long, default_value_t = true)]
     normalise: bool,
+
+    /// Disable offloading layers to the gpu
+    #[cfg(any(feature = "cuda", feature = "vulkan"))]
+    #[clap(long)]
+    disable_gpu: bool,
 }
 
 fn main() -> Result<()> {
@@ -54,6 +59,8 @@ fn main() -> Result<()> {
         documents,
         pooling,
         normalise,
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
+        disable_gpu,
     } = Args::parse();
 
     // init LLM
