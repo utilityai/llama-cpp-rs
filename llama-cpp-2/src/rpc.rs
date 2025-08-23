@@ -313,8 +313,9 @@ impl RpcServer {
     ///
     /// * `backend` - The backend to use for serving requests
     /// * `endpoint` - The endpoint to listen on (e.g., "0.0.0.0:50052")
-    /// * `n_threads` - Number of threads for the server (-1 for default)
-    /// * `use_memory_pool` - Whether to use a memory pool
+    /// * `cache_dir` - Optional cache directory for the server
+    /// * `free_mem` - Amount of free memory to advertise (in bytes)
+    /// * `total_mem` - Total memory to advertise (in bytes)
     ///
     /// # Errors
     ///
@@ -329,24 +330,39 @@ impl RpcServer {
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let backend = LlamaBackend::init()?;
     /// // Note: This would need an actual GGML backend instance
-    /// // let server = RpcServer::start(backend, "0.0.0.0:50052", -1, true)?;
+    /// // let server = RpcServer::start(
+    /// //     backend_ptr,
+    /// //     "0.0.0.0:50052",
+    /// //     Some("/tmp/cache"),
+    /// //     8_000_000_000,  // 8GB free
+    /// //     16_000_000_000, // 16GB total
+    /// // )?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn start(
         backend: NonNull<llama_cpp_sys_2::ggml_backend>,
         endpoint: &str,
-        n_threads: i32,
-        use_memory_pool: bool,
+        cache_dir: Option<&str>,
+        free_mem: usize,
+        total_mem: usize,
     ) -> Result<Self, RpcError> {
         let c_endpoint = CString::new(endpoint)?;
+        
+        let c_cache_dir = cache_dir
+            .map(|dir| CString::new(dir))
+            .transpose()?;
         
         unsafe {
             llama_cpp_sys_2::ggml_backend_rpc_start_server(
                 backend.as_ptr(),
                 c_endpoint.as_ptr(),
-                n_threads,
-                use_memory_pool,
+                c_cache_dir
+                    .as_ref()
+                    .map(|s| s.as_ptr())
+                    .unwrap_or(std::ptr::null()),
+                free_mem,
+                total_mem,
             );
         }
         
