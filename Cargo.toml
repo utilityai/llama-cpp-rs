@@ -8,7 +8,6 @@ members = [
   "examples/reranker",
   "examples/mtmd",
   "examples/split_model",
-  "examples/rpc",
 ]
 
 [workspace.dependencies]

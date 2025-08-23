@@ -16,7 +16,7 @@ use llama_cpp_2::{
 };
 use std::io::{self, Write};
 use std::num::NonZeroU32;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Command line arguments for the split model example
 #[derive(Parser, Debug)]
