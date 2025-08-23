@@ -189,8 +189,7 @@ fn run_client(
     ctx.decode(&mut batch)?;
 
     // Set up sampling
-    let mut sampler = LlamaSampler::chain(&[
-        LlamaSampler::dist(1234),
+    let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::temp(temperature),
         LlamaSampler::top_p(0.95, 1),
     ]);
@@ -204,8 +203,8 @@ fn run_client(
 
     while n_decode < n_predict {
         // Sample the next token
-        sampler.sample(&ctx, 0);
-        let new_token = sampler.last();
+        let new_token = sampler.sample(&ctx, batch.n_tokens() - 1);
+        sampler.accept(new_token);
 
         // Check for EOS
         if model.is_eog_token(new_token) {
@@ -214,7 +213,7 @@ fn run_client(
         }
 
         // Print the token
-        let piece = model.token_to_piece(new_token, llama_cpp_2::model::Special::Tokenize)?;
+        let piece = model.token_to_str(new_token, llama_cpp_2::model::Special::Tokenize)?;
         print!("{}", piece);
         io::stdout().flush()?;
 
