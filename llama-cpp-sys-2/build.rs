@@ -281,6 +281,16 @@ fn main() {
             .allowlist_type("mtmd_.*");
     }
 
+    // Configure RPC feature if enabled
+    if cfg!(feature = "rpc") {
+        bindings_builder = bindings_builder
+            .clang_arg("-DGGML_RPC")
+            .allowlist_function("ggml_backend_rpc_.*")
+            .allowlist_function("ggml_backend_is_rpc")
+            .allowlist_function("ggml_backend_dev_.*")
+            .allowlist_function("ggml_backend_free");
+    }
+
     // Configure Android-specific bindgen settings
     if matches!(target_os, TargetOs::Android) {
         // Detect Android NDK from environment variables
@@ -623,6 +633,10 @@ fn main() {
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");
         }
+    }
+
+    if cfg!(feature = "rpc") {
+        config.define("GGML_RPC", "ON");
     }
 
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here

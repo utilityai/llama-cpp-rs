@@ -29,6 +29,8 @@ mod log;
 pub mod model;
 #[cfg(feature = "mtmd")]
 pub mod mtmd;
+#[cfg(feature = "rpc")]
+pub mod rpc;
 pub mod sampling;
 pub mod timing;
 pub mod token;

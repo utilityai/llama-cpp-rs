@@ -8,6 +8,30 @@ use std::ptr::null;
 
 pub mod kv_overrides;
 
+/// Model split mode for multi-GPU setups
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum LlamaSplitMode {
+    /// Single GPU mode
+    None = llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i32,
+    /// Split layers and KV across GPUs
+    Layer = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i32,
+    /// Split layers and KV across GPUs, use tensor parallelism if supported
+    Row = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i32,
+}
+
+impl Default for LlamaSplitMode {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl From<LlamaSplitMode> for llama_cpp_sys_2::llama_split_mode {
+    fn from(mode: LlamaSplitMode) -> Self {
+        mode as llama_cpp_sys_2::llama_split_mode
+    }
+}
+
 /// A safe wrapper around `llama_model_params`.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModelParams {
@@ -158,6 +182,18 @@ impl LlamaModelParams {
     #[must_use]
     pub fn with_main_gpu(mut self, main_gpu: i32) -> Self {
         self.params.main_gpu = main_gpu;
+        self
+    }
+
+    /// sets the split mode for multi-GPU setups
+    /// ```
+    /// # use llama_cpp_2::model::params::{LlamaModelParams, LlamaSplitMode};
+    /// let params = LlamaModelParams::default();
+    /// let params = params.with_split_mode(LlamaSplitMode::Row);
+    /// ```
+    #[must_use]
+    pub fn with_split_mode(mut self, split_mode: LlamaSplitMode) -> Self {
+        self.params.split_mode = split_mode.into();
         self
     }
 
