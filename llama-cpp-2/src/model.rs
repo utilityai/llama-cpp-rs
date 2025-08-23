@@ -622,6 +622,174 @@ impl LlamaModel {
         Ok(LlamaModel { model })
     }
 
+    /// Load a model from multiple split files.
+    ///
+    /// This function loads a model that has been split across multiple files. This is useful for
+    /// very large models that exceed filesystem limitations or need to be distributed across
+    /// multiple storage devices.
+    ///
+    /// # Arguments
+    ///
+    /// * `paths` - A slice of paths to the split model files
+    /// * `params` - The model parameters
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - Any of the paths cannot be converted to a C string
+    /// - The model fails to load from the splits
+    /// - Any path doesn't exist or isn't accessible
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use llama_cpp_2::model::{LlamaModel, params::LlamaModelParams};
+    /// use llama_cpp_2::llama_backend::LlamaBackend;
+    /// use std::path::Path;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let backend = LlamaBackend::init()?;
+    /// let params = LlamaModelParams::default();
+    /// 
+    /// let paths = vec![
+    ///     Path::new("model-00001-of-00003.gguf"),
+    ///     Path::new("model-00002-of-00003.gguf"),
+    ///     Path::new("model-00003-of-00003.gguf"),
+    /// ];
+    /// 
+    /// let model = LlamaModel::load_from_splits(&backend, &paths, &params)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    #[tracing::instrument(skip_all)]
+    pub fn load_from_splits(
+        _: &LlamaBackend,
+        paths: &[impl AsRef<Path>],
+        params: &LlamaModelParams,
+    ) -> Result<Self, LlamaModelLoadError> {
+        // Convert paths to C strings
+        let c_strings: Vec<CString> = paths
+            .iter()
+            .map(|p| {
+                let path = p.as_ref();
+                debug_assert!(path.exists(), "{path:?} does not exist");
+                let path_str = path
+                    .to_str()
+                    .ok_or(LlamaModelLoadError::PathToStrError(path.to_path_buf()))?;
+                CString::new(path_str).map_err(LlamaModelLoadError::from)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Create array of pointers to C strings
+        let c_ptrs: Vec<*const c_char> = c_strings.iter().map(|s| s.as_ptr()).collect();
+
+        // Load the model from splits
+        let llama_model = unsafe {
+            llama_cpp_sys_2::llama_model_load_from_splits(
+                c_ptrs.as_ptr() as *mut *const c_char,
+                c_ptrs.len(),
+                params.params,
+            )
+        };
+
+        let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
+
+        tracing::debug!("Loaded model from {} splits", paths.len());
+        Ok(LlamaModel { model })
+    }
+
+    /// Build a split GGUF file path for a specific chunk.
+    ///
+    /// This utility function creates the standardized filename for a split model chunk
+    /// following the pattern: `{prefix}-{split_no:05d}-of-{split_count:05d}.gguf`
+    ///
+    /// # Arguments
+    ///
+    /// * `path_prefix` - The base path and filename prefix
+    /// * `split_no` - The split number (1-indexed)
+    /// * `split_count` - The total number of splits
+    ///
+    /// # Returns
+    ///
+    /// Returns the formatted split path as a String
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use llama_cpp_2::model::LlamaModel;
+    ///
+    /// let path = LlamaModel::split_path("/models/llama", 2, 4);
+    /// assert_eq!(path, "/models/llama-00002-of-00004.gguf");
+    /// ```
+    pub fn split_path(path_prefix: &str, split_no: i32, split_count: i32) -> String {
+        let mut buffer = vec![0u8; 1024];
+        let path_prefix_cstr = CString::new(path_prefix).unwrap_or_else(|_| CString::new("").unwrap());
+        let len = unsafe {
+            llama_cpp_sys_2::llama_split_path(
+                buffer.as_mut_ptr() as *mut c_char,
+                buffer.len(),
+                path_prefix_cstr.as_ptr(),
+                split_no,
+                split_count,
+            )
+        };
+        
+        if len > 0 && len < buffer.len() as i32 {
+            buffer.truncate(len as usize);
+            String::from_utf8(buffer).unwrap_or_else(|_| String::new())
+        } else {
+            String::new()
+        }
+    }
+
+    /// Extract the path prefix from a split filename.
+    ///
+    /// This function extracts the base path prefix from a split model filename,
+    /// but only if the split_no and split_count match the pattern in the filename.
+    ///
+    /// # Arguments
+    ///
+    /// * `split_path` - The full path to a split file
+    /// * `split_no` - The expected split number
+    /// * `split_count` - The expected total number of splits
+    ///
+    /// # Returns
+    ///
+    /// Returns `Some(prefix)` if the split pattern matches, `None` otherwise
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use llama_cpp_2::model::LlamaModel;
+    ///
+    /// let prefix = LlamaModel::split_prefix("/models/llama-00002-of-00004.gguf", 2, 4);
+    /// assert_eq!(prefix, Some("/models/llama".to_string()));
+    ///
+    /// // Returns None if the pattern doesn't match
+    /// let prefix = LlamaModel::split_prefix("/models/llama-00002-of-00004.gguf", 3, 4);
+    /// assert_eq!(prefix, None);
+    /// ```
+    pub fn split_prefix(split_path: &str, split_no: i32, split_count: i32) -> Option<String> {
+        let mut buffer = vec![0u8; 1024];
+        let split_path_cstr = CString::new(split_path).ok()?;
+        let len = unsafe {
+            llama_cpp_sys_2::llama_split_prefix(
+                buffer.as_mut_ptr() as *mut c_char,
+                buffer.len(),
+                split_path_cstr.as_ptr(),
+                split_no,
+                split_count,
+            )
+        };
+        
+        if len > 0 && len < buffer.len() as i32 {
+            buffer.truncate(len as usize);
+            String::from_utf8(buffer).ok()
+        } else {
+            None
+        }
+    }
+
     /// Initializes a lora adapter from a file.
     ///
     /// # Errors
