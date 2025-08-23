@@ -201,7 +201,7 @@ unsafe impl Sync for RpcBackend {}
 /// This represents a remote device that can be used for distributed inference.
 #[derive(Debug)]
 pub struct RpcDevice {
-    device: NonNull<llama_cpp_sys_2::ggml_backend_dev>,
+    device: NonNull<llama_cpp_sys_2::ggml_backend_device>,
     endpoint: String,
 }
 

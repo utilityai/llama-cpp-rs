@@ -288,7 +288,8 @@ fn main() {
             .allowlist_function("ggml_backend_rpc_.*")
             .allowlist_function("ggml_backend_is_rpc")
             .allowlist_function("ggml_backend_dev_.*")
-            .allowlist_function("ggml_backend_free");
+            .allowlist_function("ggml_backend_free")
+            .allowlist_type("ggml_backend_device");
     }
 
     // Configure Android-specific bindgen settings
