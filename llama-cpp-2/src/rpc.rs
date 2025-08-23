@@ -38,11 +38,17 @@ pub enum RpcError {
     
     /// Failed to initialize RPC backend
     #[error("Failed to initialize RPC backend for endpoint: {endpoint}")]
-    InitializationFailed { endpoint: String },
+    InitializationFailed {
+        /// The RPC endpoint that failed to initialize
+        endpoint: String 
+    },
     
     /// Failed to add RPC device
     #[error("Failed to add RPC device: {endpoint}")]
-    AddDeviceFailed { endpoint: String },
+    AddDeviceFailed { 
+        /// The RPC endpoint that failed to be added as a device
+        endpoint: String 
+    },
     
     /// Failed to query device memory
     #[error("Failed to query device memory")]
@@ -50,7 +56,10 @@ pub enum RpcError {
     
     /// Failed to start RPC server
     #[error("Failed to start RPC server on endpoint: {endpoint}")]
-    ServerStartFailed { endpoint: String },
+    ServerStartFailed { 
+        /// The RPC endpoint where the server failed to start
+        endpoint: String 
+    },
 }
 
 /// RPC backend for distributed inference across multiple machines
