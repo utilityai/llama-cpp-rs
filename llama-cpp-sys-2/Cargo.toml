@@ -22,6 +22,9 @@ include = [
     "/llama.cpp/ggml/src/*.cpp",
     "/llama.cpp/src/*.h",
     "/llama.cpp/src/*.cpp",
+    "/llama.cpp/tools/mtmd/*.h",
+    "/llama.cpp/tools/mtmd/*.cpp",
+
     "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
     "/llama.cpp/common/build-info.cpp.in",
 
@@ -52,6 +55,10 @@ include = [
     "/llama.cpp/cmake",
     "/llama.cpp/ggml/cmake",
     "/llama.cpp/common/cmake",
+
+    # Tool-specific CMakeLists.txt files (included conditionally based on features)
+    "/llama.cpp/tools/mtmd/CMakeLists.txt",
+    "/llama.cpp/tools/rpc/CMakeLists.txt",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
