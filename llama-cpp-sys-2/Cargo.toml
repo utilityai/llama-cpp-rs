@@ -66,7 +66,7 @@ bindgen = { workspace = true }
 cc = { workspace = true, features = ["parallel"] }
 cmake = "0.1"
 find_cuda_helper = "0.2.0"
-glob = "0.3.2"
+glob = "0.3.3"
 walkdir = "2"
 
 [features]
