@@ -544,6 +544,36 @@ impl LlamaContextParams {
     pub fn swa_full(&self) -> bool {
         self.context_params.swa_full
     }
+
+    /// Set the max number of sequences (i.e. distinct states for recurrent models)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_n_seq_max(64);
+    /// assert_eq!(params.n_seq_max(), 64);
+    /// ```
+    #[must_use]
+    pub fn with_n_seq_max(mut self, n_seq_max: u32) -> Self {
+        self.context_params.n_seq_max = n_seq_max;
+        self
+    }
+
+    /// Get the max number of sequences (i.e. distinct states for recurrent models)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default();
+    /// assert_eq!(params.n_seq_max(), 1);
+    /// ```
+    #[must_use]
+    pub fn n_seq_max(&self) -> u32 {
+        self.context_params.n_seq_max
+    }
 }
 
 /// Default parameters for `LlamaContext`. (as defined in llama.cpp by `llama_context_default_params`)
