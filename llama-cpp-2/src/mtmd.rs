@@ -43,7 +43,7 @@ impl From<llama_cpp_sys_2::mtmd_input_chunk_type> for MtmdInputChunkType {
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT => MtmdInputChunkType::Text,
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_IMAGE => MtmdInputChunkType::Image,
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_AUDIO => MtmdInputChunkType::Audio,
-            _ => panic!("Unknown MTMD input chunk type"),
+            _ => panic!("Unknown MTMD input chunk type: {}", chunk_type),
         }
     }
 }
@@ -211,10 +211,11 @@ impl MtmdContext {
     }
 
     /// Get audio bitrate in Hz (e.g., 16000 for Whisper).
-    /// Returns -1 if audio is not supported.
+    /// Returns None if audio is not supported.
     #[must_use]
-    pub fn get_audio_bitrate(&self) -> i32 {
-        unsafe { llama_cpp_sys_2::mtmd_get_audio_bitrate(self.context.as_ptr()) }
+    pub fn get_audio_bitrate(&self) -> Option<u32> {
+        let rate = unsafe { llama_cpp_sys_2::mtmd_get_audio_bitrate(self.context.as_ptr()) };
+        (rate > 0).then(|| rate as u32)
     }
 
     /// Tokenize input text and bitmaps into chunks.
