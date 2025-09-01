@@ -25,19 +25,18 @@ use crate::token::LlamaToken;
 /// let audio_chunk = MtmdInputChunkType::Audio;
 ///
 /// assert_eq!(text_chunk, MtmdInputChunkType::Text);
+/// assert_eq!(text_chunk as u32, llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT);
 /// assert_ne!(text_chunk, image_chunk);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
 pub enum MtmdInputChunkType {
     /// Text input chunk
-    #[allow(clippy::cast_possible_wrap)]
-    Text = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT as isize,
+    Text = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT,
     /// Image input chunk
-    #[allow(clippy::cast_possible_wrap)]
-    Image = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_IMAGE as isize,
+    Image = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_IMAGE,
     /// Audio input chunk
-    #[allow(clippy::cast_possible_wrap)]
-    Audio = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_AUDIO as isize,
+    Audio = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_AUDIO,
 }
 
 impl From<llama_cpp_sys_2::mtmd_input_chunk_type> for MtmdInputChunkType {
