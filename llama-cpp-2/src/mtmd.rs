@@ -30,10 +30,13 @@ use crate::token::LlamaToken;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MtmdInputChunkType {
     /// Text input chunk
+    #[allow(clippy::cast_possible_wrap)]
     Text = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT as isize,
     /// Image input chunk
+    #[allow(clippy::cast_possible_wrap)]
     Image = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_IMAGE as isize,
     /// Audio input chunk
+    #[allow(clippy::cast_possible_wrap)]
     Audio = llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_AUDIO as isize,
 }
 
@@ -43,7 +46,7 @@ impl From<llama_cpp_sys_2::mtmd_input_chunk_type> for MtmdInputChunkType {
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_TEXT => MtmdInputChunkType::Text,
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_IMAGE => MtmdInputChunkType::Image,
             llama_cpp_sys_2::MTMD_INPUT_CHUNK_TYPE_AUDIO => MtmdInputChunkType::Audio,
-            _ => panic!("Unknown MTMD input chunk type: {}", chunk_type),
+            _ => panic!("Unknown MTMD input chunk type: {chunk_type}"),
         }
     }
 }
@@ -106,9 +109,7 @@ impl From<llama_cpp_sys_2::mtmd_context_params> for MtmdContextParams {
             use_gpu: params.use_gpu,
             print_timings: params.print_timings,
             n_threads: params.n_threads,
-            media_marker: unsafe { CStr::from_ptr(params.media_marker) }
-                .to_owned()
-                .into(),
+            media_marker: unsafe { CStr::from_ptr(params.media_marker) }.to_owned(),
         }
     }
 }
@@ -215,7 +216,7 @@ impl MtmdContext {
     #[must_use]
     pub fn get_audio_bitrate(&self) -> Option<u32> {
         let rate = unsafe { llama_cpp_sys_2::mtmd_get_audio_bitrate(self.context.as_ptr()) };
-        (rate > 0).then(|| rate as u32)
+        (rate > 0).then_some(rate.unsigned_abs())
     }
 
     /// Tokenize input text and bitmaps into chunks.
@@ -276,7 +277,7 @@ impl MtmdContext {
             llama_cpp_sys_2::mtmd_tokenize(
                 self.context.as_ptr(),
                 chunks.chunks.as_ptr(),
-                &input_text,
+                &raw const input_text,
                 bitmap_ptrs.as_ptr().cast_mut(),
                 bitmaps.len(),
             )
@@ -627,15 +628,10 @@ impl MtmdInputChunks {
         let chunk_ptr =
             unsafe { llama_cpp_sys_2::mtmd_input_chunks_get(self.chunks.as_ptr(), index) };
 
-        if chunk_ptr.is_null() {
-            None
-        } else {
-            // Note: We don't own this chunk, it's owned by the chunks collection
-            Some(MtmdInputChunk {
-                chunk: NonNull::new(chunk_ptr.cast_mut()).unwrap(),
-                owned: false,
-            })
-        }
+        NonNull::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
+            chunk: ptr,
+            owned: false,
+        })
     }
 
     /// Get total number of tokens across all chunks.
@@ -702,7 +698,7 @@ impl MtmdInputChunks {
                 seq_id,
                 n_batch,
                 logits_last,
-                &mut new_n_past,
+                &raw mut new_n_past,
             )
         };
 
@@ -754,7 +750,10 @@ impl MtmdInputChunk {
 
         let mut n_tokens = 0usize;
         let tokens_ptr = unsafe {
-            llama_cpp_sys_2::mtmd_input_chunk_get_tokens_text(self.chunk.as_ptr(), &mut n_tokens)
+            llama_cpp_sys_2::mtmd_input_chunk_get_tokens_text(
+                self.chunk.as_ptr(),
+                &raw mut n_tokens,
+            )
         };
 
         if tokens_ptr.is_null() || n_tokens == 0 {
