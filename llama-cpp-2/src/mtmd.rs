@@ -627,6 +627,7 @@ impl MtmdInputChunks {
         let chunk_ptr =
             unsafe { llama_cpp_sys_2::mtmd_input_chunks_get(self.chunks.as_ptr(), index) };
 
+        // Note: We don't own this chunk, it's owned by the chunks collection
         NonNull::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
             chunk: ptr,
             owned: false,
