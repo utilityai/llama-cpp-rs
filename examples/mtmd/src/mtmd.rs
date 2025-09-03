@@ -51,7 +51,7 @@ pub struct MtmdCliParams {
     #[arg(short = 't', long = "threads", value_name = "N", default_value = "4")]
     pub n_threads: i32,
     /// Number of tokens to process in a batch during eval chunks
-    #[arg(long = "batch-size", value_name = "b", default_value = "64")]
+    #[arg(long = "batch-size", value_name = "b", default_value = "1")]
     pub batch_size: i32,
     /// Maximum number of tokens in context
     #[arg(long = "n-tokens", value_name = "N", default_value = "4096")]
