@@ -50,6 +50,9 @@ pub struct MtmdCliParams {
     /// Number of threads
     #[arg(short = 't', long = "threads", value_name = "N", default_value = "4")]
     pub n_threads: i32,
+    /// Number of tokens to process in a batch during eval chunks
+    #[arg(long = "batch-size", value_name = "b", default_value = "1")]
+    pub batch_size: i32,
     /// Maximum number of tokens in context
     #[arg(long = "n-tokens", value_name = "N", default_value = "4096")]
     pub n_tokens: NonZeroU32,
@@ -140,6 +143,7 @@ impl MtmdCliContext {
         context: &mut LlamaContext,
         msg: LlamaChatMessage,
         add_bos: bool,
+        batch_size: i32,
     ) -> Result<(), Box<dyn std::error::Error>> {
         self.chat.push(msg);
 
@@ -168,7 +172,7 @@ impl MtmdCliContext {
         // Clear bitmaps after tokenization
         self.bitmaps.clear();
 
-        self.n_past = chunks.eval_chunks(&self.mtmd_ctx, context, 0, 0, 1, true)?;
+        self.n_past = chunks.eval_chunks(&self.mtmd_ctx, context, 0, 0, batch_size, true)?;
         Ok(())
     }
 
@@ -186,7 +190,7 @@ impl MtmdCliContext {
 
         for _i in 0..max_predict {
             // Sample next token
-            let token = sampler.sample(context, 0);
+            let token = sampler.sample(context, -1);
             generated_tokens.push(token);
             sampler.accept(token);
 
@@ -244,7 +248,7 @@ fn run_single_turn(
     println!("Evaluating message: {msg:?}");
 
     // Evaluate the message (prefill)
-    ctx.eval_message(model, context, msg, true)?;
+    ctx.eval_message(model, context, msg, true, params.batch_size)?;
 
     // Generate response (decode)
     ctx.generate_response(model, context, sampler, params.n_predict)?;
@@ -286,7 +290,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create context
     let context_params = LlamaContextParams::default()
         .with_n_threads(params.n_threads)
-        .with_n_batch(1)
+        .with_n_batch(params.batch_size.try_into()?)
         .with_n_ctx(Some(params.n_tokens));
     let mut context = model.new_context(&backend, context_params)?;
 
