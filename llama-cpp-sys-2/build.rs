@@ -625,6 +625,27 @@ fn main() {
         }
     }
 
+    // OpenCL backend
+    if cfg!(feature = "opencl") {
+        config.define("GGML_OPENCL", "ON");
+        // Explicit for clarity; upstream defaults are ON
+        config.define("GGML_OPENCL_USE_ADRENO_KERNELS", "ON");
+        config.define("GGML_OPENCL_EMBED_KERNELS", "ON");
+
+        match target_os {
+            TargetOs::Apple(_) => {
+                println!("cargo:rustc-link-lib=framework=OpenCL");
+            }
+            TargetOs::Windows(_) => {
+                println!("cargo:rustc-link-lib=OpenCL");
+            }
+            TargetOs::Linux | TargetOs::Android => {
+                println!("cargo:rustc-link-lib=OpenCL");
+            }
+            _ => (),
+        }
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
