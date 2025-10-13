@@ -2,6 +2,7 @@
 name = "reranker"
 version = "0.1.86"
 edition = "2021"
+publish = false
 
 [dependencies]
 llama-cpp-2 = { path = "../../llama-cpp-2", version = "0.1.86" }
