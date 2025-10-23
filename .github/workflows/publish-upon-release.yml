@@ -18,10 +18,7 @@ jobs:
         with:
           submodules: recursive
       - name: Publish crates for llama-cpp-sys-2
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-sys-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose 
-      - name: Publish crates for llama-cpp-2
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose 
-        
+        run: RUST_BACKTRACE=1 cargo publish --workspace --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --verbose
       # Trigger the 'update-toml-version' workflow
       - name: Dispatch Update TOML Version Event
         if: success()  # Ensure this runs only if the previous steps were successful

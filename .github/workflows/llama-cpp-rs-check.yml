@@ -35,10 +35,8 @@ jobs:
         run: cargo fmt --check
       - name: Test
         run: cargo test --features sampler
-      - name: Dry-Run Publishing llama-cpp-sys-2 Crate
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-sys-2 --verbose --dry-run
-      - name: Dry-Run Publishing llama-cpp-2 Crate
-        run: RUST_BACKTRACE=1 cargo publish --package llama-cpp-2 --verbose --dry-run
+      - name: Dry-Run Publishing
+        run: RUST_BACKTRACE=1 cargo publish --workspace --verbose --dry-run
   arm64:
     name: Check that it builds on various targets
     runs-on: ubuntu-latest
