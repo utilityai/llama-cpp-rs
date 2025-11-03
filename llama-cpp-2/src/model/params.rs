@@ -13,6 +13,7 @@ pub mod kv_overrides;
 pub struct LlamaModelParams {
     pub(crate) params: llama_cpp_sys_2::llama_model_params,
     kv_overrides: Vec<llama_cpp_sys_2::llama_model_kv_override>,
+    buft_overrides: Vec<llama_cpp_sys_2::llama_model_tensor_buft_override>,
 }
 
 impl Debug for LlamaModelParams {
@@ -108,6 +109,51 @@ impl LlamaModelParams {
 }
 
 impl LlamaModelParams {
+
+    /// Adds buffer type overides to move all mixture-of-experts layers to CPU.
+    pub fn add_cpu_moe_override(self: Pin<&mut Self>) {
+        self.add_cpu_buft_override(c"\\.ffn_(up|down|gate)_(ch|)exps");
+    }
+
+    /// Appends a buffer type override to the model parameters, to move layers matching pattern to CPU.
+    /// It must be pinned as this creates a self-referential struct.
+    pub fn add_cpu_buft_override(
+        mut self: Pin<&mut Self>,
+        key: &CStr,
+    ) {
+        let buft_override = self
+            .buft_overrides
+            .get_mut(0)
+            .expect("buft_overrides did not have a next allocated");
+
+        assert!(buft_override.pattern.is_null(), "last buft_override was not empty");
+
+        // There should be some way to do this without iterating over everything.
+        for (_i, &c) in key.to_bytes_with_nul().iter().enumerate() {
+            c_char::try_from(c).expect("invalid character in key");
+        }
+
+        buft_override.pattern = key.as_ptr();
+        buft_override.buft = unsafe { llama_cpp_sys_2::ggml_backend_cpu_buffer_type() };
+
+        // set to null pointer for panic safety (as push may move the vector, invalidating the pointer)
+        self.params.kv_overrides = null();
+
+        // push the next one to ensure we maintain the iterator invariant of ending with a 0
+        self.buft_overrides
+            .push(llama_cpp_sys_2::llama_model_tensor_buft_override {
+                pattern: std::ptr::null(),
+                buft: std::ptr::null_mut(),
+            });
+
+        // set the pointer to the (potentially) new vector
+        self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
+
+        eprintln!("saved ptr: {:?}", self.params.tensor_buft_overrides);
+    }
+}
+
+impl LlamaModelParams {
     /// Get the number of layers to offload to the GPU.
     #[must_use]
     pub fn n_gpu_layers(&self) -> i32 {
@@ -198,6 +244,10 @@ impl Default for LlamaModelParams {
                 __bindgen_anon_1: llama_cpp_sys_2::llama_model_kv_override__bindgen_ty_1 {
                     val_i64: 0,
                 },
+            }],
+            buft_overrides: vec![llama_cpp_sys_2::llama_model_tensor_buft_override {
+                pattern: std::ptr::null(),
+                buft: std::ptr::null_mut(),
             }],
         }
     }
