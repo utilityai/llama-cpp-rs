@@ -395,8 +395,11 @@ impl LlamaModel {
         if attrs.is_empty()
             || attrs
                 .intersects(LlamaTokenAttr::Unknown | LlamaTokenAttr::Byte | LlamaTokenAttr::Unused)
+            // the following exclusion of control characters stems from a requirement of the original purpose of this project see
+            // https://github.com/utilityai/llama-cpp-rs/issues/826#issuecomment-3478624072. But it should not be the default behavior
+            // so this feature is now gated through the `LLAMA_RS_FORBID_CTRL_TOKEN_DECODE` environment variable
             || attrs.contains(LlamaTokenAttr::Control)
-                && (token == self.token_bos() || token == self.token_eos())
+                && (token == self.token_bos() || token == self.token_eos()) && std::env::var("LLAMA_RS_FORBID_CTRL_TOKEN_DECODE").is_ok_and(|v| v.parse::<bool>().is_ok_and(|v| v))
         {
             return Ok(Vec::new());
         }
