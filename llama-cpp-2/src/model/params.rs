@@ -137,7 +137,7 @@ impl LlamaModelParams {
         buft_override.buft = unsafe { llama_cpp_sys_2::ggml_backend_cpu_buffer_type() };
 
         // set to null pointer for panic safety (as push may move the vector, invalidating the pointer)
-        self.params.kv_overrides = null();
+        self.params.tensor_buft_overrides = null();
 
         // push the next one to ensure we maintain the iterator invariant of ending with a 0
         self.buft_overrides
