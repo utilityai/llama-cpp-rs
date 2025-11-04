@@ -115,6 +115,10 @@ pub enum AddBos {
 pub enum Special {
     /// Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
     Tokenize,
+    /// Allow tokenizing special and/or control tokens but excludes `bos` and `eos` tokens from the output
+    ///
+    /// This variant was introduced as a compatiblity flag to address: https://github.com/utilityai/llama-cpp-rs/issues/826
+    ExcludeBosAndEos,
     /// Treat special and/or control tokens as plaintext.
     Plaintext,
 }
@@ -400,13 +404,14 @@ impl LlamaModel {
             // given that llama.cpp [documentation](https://llama-cpp-python.readthedocs.io/en/latest/api-reference/#llama_cpp.llama_cpp.llama_token_to_piece)
             // states that `special` controls where specital tokens are rendered we can use it as a gate to this feature as well.
             || attrs.contains(LlamaTokenAttr::Control)
-                && (token == self.token_bos() || token == self.token_eos()) && special == Special::Plaintext
+                && (token == self.token_bos() || token == self.token_eos()) && special == Special::ExcludeBosAndEos
         {
             return Ok(Vec::new());
         }
 
         let special = match special {
             Special::Tokenize => true,
+            Special::ExcludeBosAndEos => true,
             Special::Plaintext => false,
         };
 
