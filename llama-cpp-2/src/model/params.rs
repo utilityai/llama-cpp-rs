@@ -148,8 +148,6 @@ impl LlamaModelParams {
 
         // set the pointer to the (potentially) new vector
         self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
-
-        eprintln!("saved ptr: {:?}", self.params.tensor_buft_overrides);
     }
 }
 
