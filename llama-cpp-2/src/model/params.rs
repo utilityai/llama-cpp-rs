@@ -109,7 +109,6 @@ impl LlamaModelParams {
 }
 
 impl LlamaModelParams {
-
     /// Adds buffer type overides to move all mixture-of-experts layers to CPU.
     pub fn add_cpu_moe_override(self: Pin<&mut Self>) {
         self.add_cpu_buft_override(c"\\.ffn_(up|down|gate)_(ch|)exps");
@@ -117,16 +116,16 @@ impl LlamaModelParams {
 
     /// Appends a buffer type override to the model parameters, to move layers matching pattern to CPU.
     /// It must be pinned as this creates a self-referential struct.
-    pub fn add_cpu_buft_override(
-        mut self: Pin<&mut Self>,
-        key: &CStr,
-    ) {
+    pub fn add_cpu_buft_override(mut self: Pin<&mut Self>, key: &CStr) {
         let buft_override = self
             .buft_overrides
             .get_mut(0)
             .expect("buft_overrides did not have a next allocated");
 
-        assert!(buft_override.pattern.is_null(), "last buft_override was not empty");
+        assert!(
+            buft_override.pattern.is_null(),
+            "last buft_override was not empty"
+        );
 
         // There should be some way to do this without iterating over everything.
         for (_i, &c) in key.to_bytes_with_nul().iter().enumerate() {
