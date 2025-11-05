@@ -48,6 +48,9 @@ struct Args {
     #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[clap(long)]
     disable_gpu: bool,
+    #[cfg(any(feature = "cuda", feature = "vulkan"))]
+    #[arg(long, help = "Keep MoE layers on CPU")]
+    cmoe: bool,
     #[arg(short = 's', long, help = "RNG seed (default: 1234)")]
     seed: Option<u32>,
     #[arg(
@@ -129,6 +132,8 @@ fn main() -> Result<()> {
         file,
         #[cfg(any(feature = "cuda", feature = "vulkan"))]
         disable_gpu,
+        #[cfg(any(feature = "cuda", feature = "vulkan"))]
+        cmoe,
         key_value_overrides,
         seed,
         threads,
@@ -174,6 +179,13 @@ fn main() -> Result<()> {
     for (k, v) in &key_value_overrides {
         let k = CString::new(k.as_bytes()).with_context(|| format!("invalid key: {k}"))?;
         model_params.as_mut().append_kv_override(k.as_c_str(), *v);
+    }
+
+    #[cfg(any(feature = "cuda", feature = "vulkan"))]
+    {
+        if !disable_gpu && cmoe {
+            model_params.as_mut().add_cpu_moe_override();
+        }
     }
 
     let model_path = model
