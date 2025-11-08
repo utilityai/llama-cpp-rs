@@ -658,6 +658,11 @@ fn main() {
                 config.cxxflag("/FS");
             }
             TargetOs::Linux => {
+                // If we are not using system provided vulkan SDK, add vulkan libs for linking
+                if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
+                    let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
+                    println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                }
                 println!("cargo:rustc-link-lib=vulkan");
             }
             _ => (),
