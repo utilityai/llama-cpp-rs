@@ -55,6 +55,9 @@ include = [
     "/llama.cpp/cmake",
     "/llama.cpp/ggml/cmake",
     "/llama.cpp/common/cmake",
+
+    # Required for MTMD feature (specific tool only)
+    "/llama.cpp/tools/mtmd/CMakeLists.txt",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
