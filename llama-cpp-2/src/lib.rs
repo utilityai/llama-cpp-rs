@@ -359,15 +359,15 @@ pub fn llama_supports_mlock() -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlamaBackendDeviceType {
     /// CPU device
-    CPU,
+    Cpu,
     /// ACCEL device
-    ACCEL,
+    Accelerator,
     /// GPU device
-    GPU,
+    Gpu,
     /// iGPU device
-    IGPU,
+    IntegratedGpu,
     /// Unknown device type
-    UNKNOWN,
+    Unknown,
 }
 
 /// A ggml backend device
@@ -428,11 +428,15 @@ pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
             let memory_total = props.memory_total;
             let memory_free = props.memory_free;
             let device_type = match props.type_ {
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::CPU,
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_ACCEL => LlamaBackendDeviceType::ACCEL,
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::GPU,
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_IGPU => LlamaBackendDeviceType::IGPU,
-                _ => LlamaBackendDeviceType::UNKNOWN,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::Gpu,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_ACCEL => {
+                    LlamaBackendDeviceType::Accelerator
+                }
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::Gpu,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_IGPU => {
+                    LlamaBackendDeviceType::IntegratedGpu
+                }
+                _ => LlamaBackendDeviceType::Unknown,
             };
             devices.push(LlamaBackendDevice {
                 index: i,
