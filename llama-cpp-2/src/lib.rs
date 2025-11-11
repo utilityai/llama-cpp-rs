@@ -355,6 +355,21 @@ pub fn llama_supports_mlock() -> bool {
     unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
 
+/// Backend device type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlamaBackendDeviceType {
+    /// CPU device
+    CPU,
+    /// ACCEL device
+    ACCEL,
+    /// GPU device
+    GPU,
+    /// iGPU device
+    IGPU,
+    /// Unknown device type
+    UNKNOWN,
+}
+
 /// A ggml backend device
 ///
 /// The index is can be used from `LlamaModelParams::with_devices` to select specific devices.
@@ -374,6 +389,8 @@ pub struct LlamaBackendDevice {
     pub memory_total: usize,
     /// Free memory of the device in bytes
     pub memory_free: usize,
+    /// Device type
+    pub device_type: LlamaBackendDeviceType,
 }
 
 /// List ggml backend devices
@@ -410,6 +427,13 @@ pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
             };
             let memory_total = props.memory_total;
             let memory_free = props.memory_free;
+            let device_type = match props.type_ {
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::CPU,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_ACCEL => LlamaBackendDeviceType::ACCEL,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::GPU,
+                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_IGPU => LlamaBackendDeviceType::IGPU,
+                _ => LlamaBackendDeviceType::UNKNOWN,
+            };
             devices.push(LlamaBackendDevice {
                 index: i,
                 name,
@@ -417,6 +441,7 @@ pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
                 backend,
                 memory_total,
                 memory_free,
+                device_type,
             });
         }
     }

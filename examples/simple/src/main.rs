@@ -178,6 +178,7 @@ fn main() -> Result<()> {
         for (i, dev) in devices.iter().enumerate() {
             println!("Device {i:>2}: {}", dev.name);
             println!("           Description: {}", dev.description);
+            println!("           Device Type: {:?}", dev.device_type);
             println!("           Backend: {}", dev.backend);
             println!(
                 "           Memory total: {:?} MiB",
