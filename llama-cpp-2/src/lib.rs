@@ -66,6 +66,12 @@ pub enum LLamaCppError {
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
     // See [`LlamaSamplerError`]
+    /// Backend device not found
+    #[error("Backend device {0} not found")]
+    BackendDeviceNotFound(usize),
+    /// Max devices exceeded
+    #[error("Max devices exceeded. Max devices is {0}")]
+    MaxDevicesExceeded(usize),
 }
 
 /// There was an error while getting the chat template from a model.
@@ -347,6 +353,74 @@ pub fn ggml_time_us() -> i64 {
 #[must_use]
 pub fn llama_supports_mlock() -> bool {
     unsafe { llama_cpp_sys_2::llama_supports_mlock() }
+}
+
+/// A ggml backend device
+///
+/// The index is can be used from `LlamaModelParams::with_devices` to select specific devices.
+#[derive(Debug, Clone)]
+pub struct LlamaBackendDevice {
+    /// The index of the device
+    ///
+    /// The index is can be used from `LlamaModelParams::with_devices` to select specific devices.
+    pub index: usize,
+    /// The name of the device (e.g. "Vulkan0")
+    pub name: String,
+    /// A description of the device (e.g. "NVIDIA GeForce RTX 3080")
+    pub description: String,
+    /// The backend of the device (e.g. "Vulkan", "CUDA", "CPU")
+    pub backend: String,
+    /// Total memory of the device in bytes
+    pub memory_total: usize,
+    /// Free memory of the device in bytes
+    pub memory_free: usize,
+}
+
+/// List ggml backend devices
+#[must_use]
+pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
+    let mut devices = Vec::new();
+    for i in 0..unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
+        unsafe {
+            let dev = llama_cpp_sys_2::ggml_backend_dev_get(i);
+            let mut props = std::mem::zeroed();
+            llama_cpp_sys_2::ggml_backend_dev_get_props(dev, &raw mut props);
+            let name = props.name;
+            let name = if name.is_null() {
+                String::new()
+            } else {
+                std::ffi::CStr::from_ptr(name).to_string_lossy().to_string()
+            };
+            let description = props.description;
+            let description = if description.is_null() {
+                String::new()
+            } else {
+                std::ffi::CStr::from_ptr(description)
+                    .to_string_lossy()
+                    .to_string()
+            };
+            let backend = llama_cpp_sys_2::ggml_backend_dev_backend_reg(dev);
+            let backend_name = llama_cpp_sys_2::ggml_backend_reg_name(backend);
+            let backend = if backend_name.is_null() {
+                String::new()
+            } else {
+                std::ffi::CStr::from_ptr(backend_name)
+                    .to_string_lossy()
+                    .to_string()
+            };
+            let memory_total = props.memory_total;
+            let memory_free = props.memory_free;
+            devices.push(LlamaBackendDevice {
+                index: i,
+                name,
+                description,
+                backend,
+                memory_total,
+                memory_free,
+            });
+        }
+    }
+    devices
 }
 
 /// Options to configure how llama.cpp logs are intercepted.

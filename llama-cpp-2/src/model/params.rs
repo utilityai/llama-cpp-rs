@@ -1,6 +1,7 @@
 //! A safe wrapper around `llama_model_params`.
 
 use crate::model::params::kv_overrides::KvOverrides;
+use crate::LLamaCppError;
 use std::ffi::{c_char, CStr};
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
@@ -8,12 +9,56 @@ use std::ptr::null;
 
 pub mod kv_overrides;
 
+/// A rusty wrapper around `llama_split_mode`.
+#[repr(i8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::cast_possible_truncation)]
+pub enum LlamaSplitMode {
+    /// Single GPU
+    None = llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i8,
+    /// Split layers and KV across GPUs
+    Layer = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8,
+    /// Split layers and KV across GPUs, use tensor parallelism if supported
+    Row = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8,
+}
+
+/// Create a `LlamaSplitMode` from a `c_int` - returns `LlamaSplitMode::LAYER` if
+/// the value is not recognized.
+impl From<i32> for LlamaSplitMode {
+    fn from(value: i32) -> Self {
+        match value {
+            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE => Self::None,
+            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER => Self::Layer,
+            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW => Self::Row,
+            _ => Self::Layer,
+        }
+    }
+}
+
+/// Create a `c_int` from a `LlamaSplitMode`.
+impl From<LlamaSplitMode> for i32 {
+    fn from(value: LlamaSplitMode) -> Self {
+        match value {
+            LlamaSplitMode::None => 0,
+            LlamaSplitMode::Layer => 1,
+            LlamaSplitMode::Row => 2,
+        }
+    }
+}
+
+/// The maximum number of devices supported.
+///
+/// The real maximum number of devices is the lesser one of this value and the value returned by
+/// `llama_cpp_2::max_devices()`.
+pub const LLAMA_CPP_MAX_DEVICES: usize = 16;
+
 /// A safe wrapper around `llama_model_params`.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModelParams {
     pub(crate) params: llama_cpp_sys_2::llama_model_params,
     kv_overrides: Vec<llama_cpp_sys_2::llama_model_kv_override>,
     buft_overrides: Vec<llama_cpp_sys_2::llama_model_tensor_buft_override>,
+    devices: Pin<Box<[llama_cpp_sys_2::ggml_backend_dev_t; LLAMA_CPP_MAX_DEVICES]>>,
 }
 
 impl Debug for LlamaModelParams {
@@ -24,6 +69,8 @@ impl Debug for LlamaModelParams {
             .field("vocab_only", &self.params.vocab_only)
             .field("use_mmap", &self.params.use_mmap)
             .field("use_mlock", &self.params.use_mlock)
+            .field("split_mode", &self.split_mode())
+            .field("devices", &self.devices)
             .field("kv_overrides", &"vec of kv_overrides")
             .finish()
     }
@@ -181,6 +228,36 @@ impl LlamaModelParams {
         self.params.use_mlock
     }
 
+    /// get the split mode
+    #[must_use]
+    pub fn split_mode(&self) -> LlamaSplitMode {
+        LlamaSplitMode::from(self.params.split_mode)
+    }
+
+    /// get the devices
+    #[must_use]
+    pub fn devices(&self) -> Vec<usize> {
+        let mut backend_devices = Vec::new();
+        for i in 0..unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
+            let dev = unsafe { llama_cpp_sys_2::ggml_backend_dev_get(i) };
+            backend_devices.push(dev);
+        }
+        let mut devices = Vec::new();
+        for &dev in self.devices.iter() {
+            if dev.is_null() {
+                break;
+            }
+            if let Some((index, _)) = backend_devices
+                .iter()
+                .enumerate()
+                .find(|&(_i, &d)| d == dev)
+            {
+                devices.push(index);
+            }
+        }
+        devices
+    }
+
     /// sets the number of gpu layers to offload to the GPU.
     /// ```
     /// # use llama_cpp_2::model::params::LlamaModelParams;
@@ -198,6 +275,8 @@ impl LlamaModelParams {
     }
 
     /// sets the main GPU
+    ///
+    /// To enable this option, you must set `split_mode` to `LlamaSplitMode::None` to enable single GPU mode.
     #[must_use]
     pub fn with_main_gpu(mut self, main_gpu: i32) -> Self {
         self.params.main_gpu = main_gpu;
@@ -217,6 +296,47 @@ impl LlamaModelParams {
         self.params.use_mlock = use_mlock;
         self
     }
+
+    /// sets `split_mode`
+    #[must_use]
+    pub fn with_split_mode(mut self, split_mode: LlamaSplitMode) -> Self {
+        self.params.split_mode = split_mode.into();
+        self
+    }
+
+    /// sets `devices`
+    ///
+    /// The devices are specified as indices that correspond to the ggml backend device indices.
+    ///
+    /// The maximum number of devices is 16.
+    ///
+    /// You don't need to specify CPU or ACCEL devices.
+    ///
+    /// # Errors
+    /// Returns `LLamaCppError::BackendDeviceNotFound` if any device index is invalid.
+    pub fn with_devices(mut self, devices: &[usize]) -> Result<Self, LLamaCppError> {
+        for dev in self.devices.iter_mut() {
+            *dev = std::ptr::null_mut();
+        }
+        // Check device count
+        let max_devices = crate::max_devices().min(LLAMA_CPP_MAX_DEVICES);
+        if devices.len() > max_devices {
+            return Err(LLamaCppError::MaxDevicesExceeded(max_devices));
+        }
+        for (i, &dev) in devices.iter().enumerate() {
+            if dev >= unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
+                return Err(LLamaCppError::BackendDeviceNotFound(dev));
+            }
+            let backend_dev = unsafe { llama_cpp_sys_2::ggml_backend_dev_get(dev) };
+            self.devices[i] = backend_dev;
+        }
+        if self.devices.is_empty() {
+            self.params.devices = std::ptr::null_mut();
+        } else {
+            self.params.devices = self.devices.as_mut_ptr();
+        }
+        Ok(self)
+    }
 }
 
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
@@ -228,6 +348,8 @@ impl LlamaModelParams {
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
+/// assert_eq!(params.split_mode(), LlamaSplitMode::Layer, "split_mode should be LAYER");
+/// assert_eq!(params.devices().len(), 0, "devices should be empty");
 /// ```
 impl Default for LlamaModelParams {
     fn default() -> Self {
@@ -246,6 +368,7 @@ impl Default for LlamaModelParams {
                 pattern: std::ptr::null(),
                 buft: std::ptr::null_mut(),
             }],
+            devices: Box::pin([std::ptr::null_mut(); 16]),
         }
     }
 }
