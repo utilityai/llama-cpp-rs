@@ -398,56 +398,44 @@ pub struct LlamaBackendDevice {
 pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
     let mut devices = Vec::new();
     for i in 0..unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
-        unsafe {
-            let dev = llama_cpp_sys_2::ggml_backend_dev_get(i);
+        fn cstr_to_string(ptr: *const i8) -> String {
+            if ptr.is_null() {
+                String::new()
+            } else {
+                unsafe { std::ffi::CStr::from_ptr(ptr) }
+                    .to_string_lossy()
+                    .to_string()
+            }
+        }
+        let dev = unsafe { llama_cpp_sys_2::ggml_backend_dev_get(i) };
+        let props = unsafe {
             let mut props = std::mem::zeroed();
             llama_cpp_sys_2::ggml_backend_dev_get_props(dev, &raw mut props);
-            let name = props.name;
-            let name = if name.is_null() {
-                String::new()
-            } else {
-                std::ffi::CStr::from_ptr(name).to_string_lossy().to_string()
-            };
-            let description = props.description;
-            let description = if description.is_null() {
-                String::new()
-            } else {
-                std::ffi::CStr::from_ptr(description)
-                    .to_string_lossy()
-                    .to_string()
-            };
-            let backend = llama_cpp_sys_2::ggml_backend_dev_backend_reg(dev);
-            let backend_name = llama_cpp_sys_2::ggml_backend_reg_name(backend);
-            let backend = if backend_name.is_null() {
-                String::new()
-            } else {
-                std::ffi::CStr::from_ptr(backend_name)
-                    .to_string_lossy()
-                    .to_string()
-            };
-            let memory_total = props.memory_total;
-            let memory_free = props.memory_free;
-            let device_type = match props.type_ {
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::Cpu,
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_ACCEL => {
-                    LlamaBackendDeviceType::Accelerator
-                }
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::Gpu,
-                llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_IGPU => {
-                    LlamaBackendDeviceType::IntegratedGpu
-                }
-                _ => LlamaBackendDeviceType::Unknown,
-            };
-            devices.push(LlamaBackendDevice {
-                index: i,
-                name,
-                description,
-                backend,
-                memory_total,
-                memory_free,
-                device_type,
-            });
-        }
+            props
+        };
+        let name = cstr_to_string(props.name);
+        let description = cstr_to_string(props.description);
+        let backend = unsafe { llama_cpp_sys_2::ggml_backend_dev_backend_reg(dev) };
+        let backend_name = unsafe { llama_cpp_sys_2::ggml_backend_reg_name(backend) };
+        let backend = cstr_to_string(backend_name);
+        let memory_total = props.memory_total;
+        let memory_free = props.memory_free;
+        let device_type = match props.type_ {
+            llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::Cpu,
+            llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_ACCEL => LlamaBackendDeviceType::Accelerator,
+            llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::Gpu,
+            llama_cpp_sys_2::GGML_BACKEND_DEVICE_TYPE_IGPU => LlamaBackendDeviceType::IntegratedGpu,
+            _ => LlamaBackendDeviceType::Unknown,
+        };
+        devices.push(LlamaBackendDevice {
+            index: i,
+            name,
+            description,
+            backend,
+            memory_total,
+            memory_free,
+            device_type,
+        });
     }
     devices
 }
