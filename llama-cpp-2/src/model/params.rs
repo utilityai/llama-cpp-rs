@@ -54,6 +54,13 @@ impl From<LlamaSplitMode> for i32 {
     }
 }
 
+/// The default split mode is `Layer` in llama.cpp.
+impl Default for LlamaSplitMode {
+    fn default() -> Self {
+        LlamaSplitMode::Layer
+    }
+}
+
 /// The maximum number of devices supported.
 ///
 /// The real maximum number of devices is the lesser one of this value and the value returned by
