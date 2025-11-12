@@ -22,15 +22,23 @@ pub enum LlamaSplitMode {
     Row = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8,
 }
 
-/// Create a `LlamaSplitMode` from a `c_int` - returns `LlamaSplitMode::LAYER` if
-/// the value is not recognized.
-impl From<i32> for LlamaSplitMode {
-    fn from(value: i32) -> Self {
+/// An error that occurs when unknown split mode is encountered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LlamaSplitModeParseError(i32);
+
+/// Create a `LlamaSplitMode` from a `c_int`.
+///
+/// # Errors
+/// Returns `()` if the value does not correspond to a valid `LlamaSplitMode`.
+impl TryFrom<i32> for LlamaSplitMode {
+    type Error = LlamaSplitModeParseError;
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE => Self::None,
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER => Self::Layer,
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW => Self::Row,
-            _ => Self::Layer,
+            llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE => Ok(Self::None),
+            llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER => Ok(Self::Layer),
+            llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
+            _ => Err(LlamaSplitModeParseError(value)),
         }
     }
 }
@@ -229,9 +237,11 @@ impl LlamaModelParams {
     }
 
     /// get the split mode
-    #[must_use]
-    pub fn split_mode(&self) -> LlamaSplitMode {
-        LlamaSplitMode::from(self.params.split_mode)
+    ///
+    /// # Errors
+    /// Returns `LlamaSplitModeParseError` if the unknown split mode is encountered.
+    pub fn split_mode(&self) -> Result<LlamaSplitMode, LlamaSplitModeParseError> {
+        LlamaSplitMode::try_from(self.params.split_mode)
     }
 
     /// get the devices
