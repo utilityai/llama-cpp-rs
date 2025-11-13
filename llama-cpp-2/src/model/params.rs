@@ -15,30 +15,51 @@ pub mod kv_overrides;
 #[allow(clippy::cast_possible_truncation)]
 pub enum LlamaSplitMode {
     /// Single GPU
-    None = llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i8,
+    None = 0,
     /// Split layers and KV across GPUs
-    Layer = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8,
+    Layer = 1,
     /// Split layers and KV across GPUs, use tensor parallelism if supported
-    Row = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8,
+    Row = 2,
 }
 
 /// An error that occurs when unknown split mode is encountered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaSplitModeParseError(i32);
 
-/// Create a `LlamaSplitMode` from a `c_int`.
+/// Create a `LlamaSplitMode` from a `i32`.
 ///
 /// # Errors
-/// Returns `()` if the value does not correspond to a valid `LlamaSplitMode`.
+/// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
 impl TryFrom<i32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
         match value {
-            llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE => Ok(Self::None),
-            llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER => Ok(Self::Layer),
-            llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
+            0 => Ok(Self::None),
+            1 => Ok(Self::Layer),
+            2 => Ok(Self::Row),
             _ => Err(LlamaSplitModeParseError(value)),
+        }
+    }
+}
+
+/// Create a `LlamaSplitMode` from a `u32`.
+///
+/// # Errors
+/// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
+impl TryFrom<u32> for LlamaSplitMode {
+    type Error = LlamaSplitModeParseError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::None),
+            1 => Ok(Self::Layer),
+            2 => Ok(Self::Row),
+            _ => {
+                // Convert u32 to i32 without allowing a wrap; if it overflows, use i32::MAX.
+                let v = i32::try_from(value).unwrap_or(i32::MAX);
+                Err(LlamaSplitModeParseError(v))
+            }
         }
     }
 }
@@ -359,6 +380,7 @@ impl LlamaModelParams {
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
 /// ```
 /// # use llama_cpp_2::model::params::LlamaModelParams;
+/// use llama_cpp_2::model::params::LlamaSplitMode;
 /// let params = LlamaModelParams::default();
 /// assert_eq!(params.n_gpu_layers(), 999, "n_gpu_layers should be 999");
 /// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
