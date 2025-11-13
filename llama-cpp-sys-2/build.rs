@@ -1,6 +1,7 @@
 use cmake::Config;
 use glob::glob;
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::DirEntry;
@@ -195,6 +196,52 @@ fn is_hidden(e: &DirEntry) -> bool {
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or_default()
+}
+
+/// Generate a dynamic tools CMakeLists.txt based on enabled features
+/// This approach allows each feature branch to add their own tool without conflicts
+fn generate_tools_cmake() {
+    let mut cmake_content = String::from(
+r#"# Auto-generated tools CMakeLists.txt based on enabled features
+# This file is created dynamically to only build tools for enabled features
+
+# dependencies
+find_package(Threads REQUIRED)
+
+# third-party
+# ...
+
+# flags
+llama_add_compile_flags()
+
+# tools - only build what's needed based on enabled features
+if (NOT EMSCRIPTEN)
+"#);
+
+    // Add tools based on enabled features
+    if cfg!(feature = "mtmd") {
+        cmake_content.push_str("    add_subdirectory(mtmd)\n");
+    }
+    
+    // Future feature branches can add their tools here:
+    // if cfg!(feature = "rpc") {
+    //     cmake_content.push_str("    add_subdirectory(rpc)\n");
+    // }
+    // if cfg!(feature = "server") {
+    //     cmake_content.push_str("    add_subdirectory(server)\n");
+    // }
+    // if cfg!(feature = "quantize") {
+    //     cmake_content.push_str("    add_subdirectory(quantize)\n");
+    // }
+    
+    // Split model loading doesn't need any tools - it's just a library feature
+
+    cmake_content.push_str("endif()\n");
+    
+    // Write the generated CMakeLists.txt
+    let tools_cmake_path = Path::new("llama.cpp/tools/CMakeLists.txt");
+    fs::write(tools_cmake_path, cmake_content)
+        .expect("Failed to write generated tools CMakeLists.txt");
 }
 
 fn main() {
@@ -495,10 +542,20 @@ fn main() {
     config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define("LLAMA_CURL", "OFF");
 
-    if cfg!(feature = "mtmd") {
+    // Generate dynamic tools CMakeLists.txt based on enabled tool features
+    let any_tool_features = cfg!(feature = "mtmd")
+        // Future tool features can be added here by other branches:
+        // || cfg!(feature = "rpc")
+        // || cfg!(feature = "server")
+        // || cfg!(feature = "quantize")
+        ;
+    
+    if any_tool_features {
         config.define("LLAMA_BUILD_COMMON", "ON");
-        // mtmd support in llama-cpp is within the tools directory
         config.define("LLAMA_BUILD_TOOLS", "ON");
+        
+        // Generate the tools CMakeLists.txt with only enabled features
+        generate_tools_cmake();
     }
 
     // Pass CMAKE_ environment variables down to CMake

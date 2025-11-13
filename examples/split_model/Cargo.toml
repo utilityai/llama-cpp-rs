@@ -1,0 +1,9 @@
+[package]
+name = "split_model"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+llama-cpp-2 = { path = "../../llama-cpp-2" }
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
