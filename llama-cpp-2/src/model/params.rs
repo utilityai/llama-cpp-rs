@@ -9,22 +9,32 @@ use std::ptr::null;
 
 pub mod kv_overrides;
 
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+const LLAMA_SPLIT_MODE_NONE: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i8;
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+const LLAMA_SPLIT_MODE_LAYER: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8;
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8;
+
 /// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::cast_possible_truncation)]
 pub enum LlamaSplitMode {
     /// Single GPU
-    None = llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i8,
+    None = LLAMA_SPLIT_MODE_NONE,
     /// Split layers and KV across GPUs
-    Layer = llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i8,
+    Layer = LLAMA_SPLIT_MODE_LAYER,
     /// Split layers and KV across GPUs, use tensor parallelism if supported
-    Row = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8,
+    Row = LLAMA_SPLIT_MODE_ROW,
 }
 
 /// An error that occurs when unknown split mode is encountered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LlamaSplitModeParseError(i32);
+pub struct LlamaSplitModeParseError(pub i32);
 
 /// Create a `LlamaSplitMode` from a `i32`.
 ///
@@ -35,10 +45,13 @@ impl TryFrom<i32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
     fn try_from(value: i32) -> Result<Self, Self::Error> {
-        match value {
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as i32 => Ok(Self::None),
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as i32 => Ok(Self::Layer),
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i32 => Ok(Self::Row),
+        let i8_value = value
+            .try_into()
+            .map_err(|_| LlamaSplitModeParseError(value))?;
+        match i8_value {
+            LLAMA_SPLIT_MODE_NONE => Ok(Self::None),
+            LLAMA_SPLIT_MODE_LAYER => Ok(Self::Layer),
+            LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
             _ => Err(LlamaSplitModeParseError(value)),
         }
     }
@@ -54,15 +67,16 @@ impl TryFrom<u32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        match value {
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as u32 => Ok(Self::None),
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as u32 => Ok(Self::Layer),
-            x if x == llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as u32 => Ok(Self::Row),
-            _ => {
-                // Convert u32 to i32 without allowing a wrap; if it overflows, use i32::MAX.
-                let v = i32::try_from(value).unwrap_or(i32::MAX);
-                Err(LlamaSplitModeParseError(v))
-            }
+        let i8_value = value
+            .try_into()
+            .map_err(|_| LlamaSplitModeParseError(value.try_into().unwrap_or(i32::MAX)))?;
+        match i8_value {
+            LLAMA_SPLIT_MODE_NONE => Ok(Self::None),
+            LLAMA_SPLIT_MODE_LAYER => Ok(Self::Layer),
+            LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
+            _ => Err(LlamaSplitModeParseError(
+                value.try_into().unwrap_or(i32::MAX),
+            )),
         }
     }
 }
