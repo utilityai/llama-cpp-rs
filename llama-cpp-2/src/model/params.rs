@@ -22,7 +22,6 @@ const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as i8;
 /// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[allow(clippy::cast_possible_truncation)]
 pub enum LlamaSplitMode {
     /// Single GPU
     None = LLAMA_SPLIT_MODE_NONE,
@@ -40,7 +39,6 @@ pub struct LlamaSplitModeParseError(pub i32);
 ///
 /// # Errors
 /// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
-#[allow(clippy::unnecessary_cast)]
 impl TryFrom<i32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
@@ -61,8 +59,6 @@ impl TryFrom<i32> for LlamaSplitMode {
 ///
 /// # Errors
 /// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
-#[allow(clippy::cast_possible_wrap)]
-#[allow(clippy::unnecessary_cast)]
 impl TryFrom<u32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
@@ -82,25 +78,23 @@ impl TryFrom<u32> for LlamaSplitMode {
 }
 
 /// Create a `i32` from a `LlamaSplitMode`.
-#[allow(clippy::cast_possible_wrap)]
 impl From<LlamaSplitMode> for i32 {
     fn from(value: LlamaSplitMode) -> Self {
         match value {
-            LlamaSplitMode::None => llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as _,
-            LlamaSplitMode::Layer => llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as _,
-            LlamaSplitMode::Row => llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as _,
+            LlamaSplitMode::None => LLAMA_SPLIT_MODE_NONE.into(),
+            LlamaSplitMode::Layer => LLAMA_SPLIT_MODE_LAYER.into(),
+            LlamaSplitMode::Row => LLAMA_SPLIT_MODE_ROW.into(),
         }
     }
 }
 
 /// Create a `u32` from a `LlamaSplitMode`.
-#[allow(clippy::cast_possible_wrap)]
 impl From<LlamaSplitMode> for u32 {
     fn from(value: LlamaSplitMode) -> Self {
         match value {
-            LlamaSplitMode::None => llama_cpp_sys_2::LLAMA_SPLIT_MODE_NONE as _,
-            LlamaSplitMode::Layer => llama_cpp_sys_2::LLAMA_SPLIT_MODE_LAYER as _,
-            LlamaSplitMode::Row => llama_cpp_sys_2::LLAMA_SPLIT_MODE_ROW as _,
+            LlamaSplitMode::None => LLAMA_SPLIT_MODE_NONE as u32,
+            LlamaSplitMode::Layer => LLAMA_SPLIT_MODE_LAYER as u32,
+            LlamaSplitMode::Row => LLAMA_SPLIT_MODE_ROW as u32,
         }
     }
 }
