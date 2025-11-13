@@ -411,7 +411,7 @@ impl LlamaModelParams {
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
-/// assert_eq!(params.split_mode(), LlamaSplitMode::Layer, "split_mode should be LAYER");
+/// assert_eq!(params.split_mode(), Ok(LlamaSplitMode::Layer), "split_mode should be LAYER");
 /// assert_eq!(params.devices().len(), 0, "devices should be empty");
 /// ```
 impl Default for LlamaModelParams {
