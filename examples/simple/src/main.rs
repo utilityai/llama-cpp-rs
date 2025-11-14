@@ -13,7 +13,7 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
-use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::params::{LlamaModelParams, LlamaSplitMode};
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::sampling::LlamaSampler;
@@ -48,6 +48,23 @@ struct Args {
     #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[clap(long)]
     disable_gpu: bool,
+    /// Set main GPU device index (default: 0)
+    ///
+    /// By setting this option, multiple GPU is disabled.
+    #[arg(
+        long,
+        help = "Set main GPU device id (default: 0). Disables multi-GPU."
+    )]
+    main_gpu: Option<i32>,
+    /// Set devices to use by index
+    ///
+    /// This option overrides `main-gpu` and enables multi-GPU.
+    #[arg(
+        long,
+        value_delimiter = ',',
+        help = "Set devices to use by index, separated by commas (e.g. --devices 0,1,2). Overrides main-gpu and enables multi-GPU."
+    )]
+    devices: Option<Vec<usize>>,
     #[cfg(any(feature = "cuda", feature = "vulkan"))]
     #[arg(long, help = "Keep MoE layers on CPU")]
     cmoe: bool,
@@ -72,6 +89,8 @@ struct Args {
     ctx_size: Option<NonZeroU32>,
     #[arg(short = 'v', long, help = "enable verbose llama.cpp logs")]
     verbose: bool,
+    #[arg(long, help = "list backend devices")]
+    list_devices: bool,
 }
 
 /// Parse a single key-value pair
@@ -132,6 +151,8 @@ fn main() -> Result<()> {
         file,
         #[cfg(any(feature = "cuda", feature = "vulkan"))]
         disable_gpu,
+        main_gpu,
+        devices,
         #[cfg(any(feature = "cuda", feature = "vulkan"))]
         cmoe,
         key_value_overrides,
@@ -140,6 +161,7 @@ fn main() -> Result<()> {
         threads_batch,
         ctx_size,
         verbose,
+        list_devices,
     } = Args::parse();
 
     if verbose {
@@ -151,8 +173,26 @@ fn main() -> Result<()> {
     // init LLM
     let backend = LlamaBackend::init()?;
 
+    if list_devices {
+        let devices = llama_cpp_2::list_llama_ggml_backend_devices();
+        for (i, dev) in devices.iter().enumerate() {
+            println!("Device {i:>2}: {}", dev.name);
+            println!("           Description: {}", dev.description);
+            println!("           Device Type: {:?}", dev.device_type);
+            println!("           Backend: {}", dev.backend);
+            println!(
+                "           Memory total: {:?} MiB",
+                dev.memory_total / 1024 / 1024
+            );
+            println!(
+                "           Memory free:  {:?} MiB",
+                dev.memory_free / 1024 / 1024
+            );
+        }
+    }
+
     // offload all layers to the gpu
-    let model_params = {
+    let mut model_params = {
         #[cfg(any(feature = "cuda", feature = "vulkan"))]
         if !disable_gpu {
             LlamaModelParams::default().with_n_gpu_layers(1000)
@@ -162,6 +202,19 @@ fn main() -> Result<()> {
         #[cfg(not(any(feature = "cuda", feature = "vulkan")))]
         LlamaModelParams::default()
     };
+
+    if let Some(devices) = devices {
+        model_params = model_params
+            .with_devices(&devices)
+            .with_context(|| "invalid device index in --devices")?;
+        if main_gpu.is_some() {
+            eprintln!("warning: --devices overrides --main-gpu");
+        }
+    } else if let Some(main_gpu) = main_gpu {
+        model_params = model_params.with_main_gpu(main_gpu);
+        // Enable single GPU mode
+        model_params = model_params.with_split_mode(LlamaSplitMode::None);
+    }
 
     let prompt = if let Some(str) = prompt {
         if file.is_some() {
