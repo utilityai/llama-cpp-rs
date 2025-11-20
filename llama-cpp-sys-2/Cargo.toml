@@ -22,6 +22,8 @@ include = [
     "/llama.cpp/ggml/src/*.cpp",
     "/llama.cpp/src/*.h",
     "/llama.cpp/src/*.cpp",
+    "/llama.cpp/src/models/*.h",
+    "/llama.cpp/src/models/*.cpp",
     "/llama.cpp/tools/mtmd/*.h",
     "/llama.cpp/tools/mtmd/*.cpp",
 
