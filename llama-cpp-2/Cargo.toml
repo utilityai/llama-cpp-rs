@@ -32,7 +32,7 @@ sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
-
+close_ggml_native = ["llama-cpp-sys-2/close_ggml_native"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.126", features = [

@@ -635,6 +635,10 @@ fn main() {
         config.define("GGML_CPU_ARM_ARCH", "armv8-a");
     }
 
+    if cfg!(feature = "close_ggml_native") {
+        config.define("GGML_NATIVE", "OFF");
+    }
+
     if cfg!(feature = "vulkan") {
         config.define("GGML_VULKAN", "ON");
         match target_os {
