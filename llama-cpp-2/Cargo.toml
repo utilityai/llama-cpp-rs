@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-2"
 description = "llama.cpp bindings for Rust"
-version = "0.1.126"
+version = "0.1.127"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
@@ -10,7 +10,7 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 
 [dependencies]
 enumflags2 = "0.7.12"
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.126" }
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.127" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
@@ -35,7 +35,7 @@ mtmd = ["llama-cpp-sys-2/mtmd"]
 close_ggml_native = ["llama-cpp-sys-2/close_ggml_native"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
-llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.126", features = [
+llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.127", features = [
     "metal",
 ] }
 
