@@ -156,6 +156,23 @@ pub enum EmbeddingsError {
     NonePoolType,
 }
 
+/// Errors that can occur when initializing a grammar sampler
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum GrammarError {
+    /// The grammar root was not found in the grammar string
+    #[error("Grammar root not found in grammar string")]
+    RootNotFound,
+    /// The trigger word contains null bytes
+    #[error("Trigger word contains null bytes")]
+    TriggerWordNullBytes,
+    /// The grammar string or root contains null bytes
+    #[error("Grammar string or root contains null bytes")]
+    GrammarNullBytes,
+    /// The grammar call returned null
+    #[error("Grammar call returned null")]
+    NullGrammar,
+}
+
 /// Decode a error from llama.cpp into a [`DecodeError`].
 impl From<NonZeroI32> for DecodeError {
     fn from(value: NonZeroI32) -> Self {
