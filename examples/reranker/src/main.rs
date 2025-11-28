@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use hf_hub::api::sync::ApiBuilder;
 
 use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::context::LlamaContext;
@@ -156,7 +155,6 @@ fn main() -> Result<()> {
     // } else {
     //     tokens_lines_list.len()
     // };
-    let mut embeddings_stored = 0;
     let mut max_seq_id_batch = 0;
     let mut output = Vec::with_capacity(tokens_lines_list.len());
 
@@ -169,16 +167,10 @@ fn main() -> Result<()> {
                 &mut ctx,
                 &mut batch,
                 max_seq_id_batch,
-                n_embd,
                 &mut output,
                 normalise,
                 pooling.clone(),
             )?;
-            embeddings_stored += if pooling == "none" {
-                batch.n_tokens()
-            } else {
-                max_seq_id_batch
-            };
             max_seq_id_batch = 0;
             batch.clear();
         }
@@ -191,7 +183,6 @@ fn main() -> Result<()> {
         &mut ctx,
         &mut batch,
         max_seq_id_batch,
-        n_embd,
         &mut output,
         normalise,
         pooling.clone(),
@@ -243,7 +234,6 @@ fn batch_decode(
     ctx: &mut LlamaContext,
     batch: &mut LlamaBatch,
     s_batch: i32,
-    n_embd: i32,
     output: &mut Vec<Vec<f32>>,
     normalise: bool,
     pooling: String,

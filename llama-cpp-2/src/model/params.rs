@@ -149,7 +149,7 @@ impl LlamaModelParams {
     /// assert_eq!(count, 0);
     /// ```
     #[must_use]
-    pub fn kv_overrides(&self) -> KvOverrides {
+    pub fn kv_overrides<'a>(&'a self) -> KvOverrides<'a> {
         KvOverrides::new(self)
     }
 
