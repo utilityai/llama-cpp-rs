@@ -9,6 +9,7 @@ use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
+use crate::GrammarError;
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -274,13 +275,14 @@ impl LlamaSampler {
     }
 
     /// Grammar sampler
-    ///
-    /// # Panics
-    /// If either of ``grammar_str`` or ``grammar_root`` contain null bytes.
     #[must_use]
-    pub fn grammar(model: &LlamaModel, grammar_str: &str, grammar_root: &str) -> Option<Self> {
-        let grammar_str = CString::new(grammar_str).unwrap();
-        let grammar_root = CString::new(grammar_root).unwrap();
+    pub fn grammar(
+        model: &LlamaModel,
+        grammar_str: &str,
+        grammar_root: &str,
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_grammar(
@@ -291,19 +293,15 @@ impl LlamaSampler {
         };
 
         if sampler.is_null() {
-            None
+            Err(GrammarError::NullGrammar)
         } else {
-            Some(Self { sampler })
+            Ok(Self { sampler })
         }
     }
 
     /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
     ///
     /// This sampler enforces grammar rules only when specific trigger words or tokens are encountered.
-    ///
-    /// # Panics
-    /// - If `grammar_str` or `grammar_root` contain null bytes
-    /// - If any trigger word contains null bytes
     #[must_use]
     pub fn grammar_lazy(
         model: &LlamaModel,
@@ -311,17 +309,13 @@ impl LlamaSampler {
         grammar_root: &str,
         trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
         trigger_tokens: &[LlamaToken],
-    ) -> Option<Self> {
-        let grammar_str = CString::new(grammar_str).unwrap();
-        let grammar_root = CString::new(grammar_root).unwrap();
-
-        let trigger_word_cstrings: Vec<CString> = trigger_words
-            .into_iter()
-            .map(|word| CString::new(word.as_ref()).unwrap())
-            .collect();
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
+        let trigger_words = Self::sanitize_trigger_words(trigger_words)?;
 
         let mut trigger_word_ptrs: Vec<*const c_char> =
-            trigger_word_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+            trigger_words.iter().map(|cs| cs.as_ptr()).collect();
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_grammar_lazy(
@@ -336,10 +330,44 @@ impl LlamaSampler {
         };
 
         if sampler.is_null() {
-            None
+            Err(GrammarError::NullGrammar)
         } else {
-            Some(Self { sampler })
+            Ok(Self { sampler })
         }
+    }
+
+    fn sanitize_grammar_strings(
+        grammar_str: &str,
+        grammar_root: &str,
+    ) -> Result<(CString, CString), GrammarError> {
+        if !grammar_str.contains(grammar_root) {
+            return Err(GrammarError::RootNotFound);
+        }
+
+        if grammar_str.contains('\0') || grammar_root.contains('\0') {
+            return Err(GrammarError::GrammarNullBytes);
+        }
+
+        Ok((
+            CString::new(grammar_str).unwrap(),
+            CString::new(grammar_root).unwrap(),
+        ))
+    }
+
+    fn sanitize_trigger_words(
+        trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    ) -> Result<Vec<CString>, GrammarError> {
+        let trigger_words: Vec<_> = trigger_words.into_iter().collect();
+        if trigger_words
+            .iter()
+            .any(|word| word.as_ref().contains(&b'\0'))
+        {
+            return Err(GrammarError::TriggerWordNullBytes);
+        }
+        Ok(trigger_words
+            .into_iter()
+            .map(|word| CString::new(word.as_ref()).unwrap())
+            .collect())
     }
 
     /// DRY sampler, designed by p-e-w, as described in:
