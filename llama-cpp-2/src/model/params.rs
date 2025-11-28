@@ -235,7 +235,7 @@ impl LlamaModelParams {
         );
 
         // There should be some way to do this without iterating over everything.
-        for (_i, &c) in key.to_bytes_with_nul().iter().enumerate() {
+        for &c in key.to_bytes_with_nul().iter() {
             c_char::try_from(c).expect("invalid character in key");
         }
 

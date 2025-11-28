@@ -627,7 +627,7 @@ fn main() {
 
     if matches!(target_os, TargetOs::Linux)
         && target_triple.contains("aarch64")
-        && !env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_ok()
+        && env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_err()
     {
         // If the native feature is not enabled, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
