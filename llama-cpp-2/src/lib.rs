@@ -13,7 +13,7 @@
 //!
 //! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
-use std::ffi::NulError;
+use std::ffi::{c_char, NulError};
 use std::fmt::Debug;
 use std::num::NonZeroI32;
 
@@ -398,7 +398,7 @@ pub struct LlamaBackendDevice {
 pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
     let mut devices = Vec::new();
     for i in 0..unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
-        fn cstr_to_string(ptr: *const i8) -> String {
+        fn cstr_to_string(ptr: *const c_char) -> String {
             if ptr.is_null() {
                 String::new()
             } else {
