@@ -449,6 +449,7 @@ pub struct LogOptions {
 impl LogOptions {
     /// If enabled, logs are sent to tracing. If disabled, all logs are suppressed. Default is for
     /// logs to be sent to tracing.
+    #[must_use]
     pub fn with_logs_enabled(mut self, enabled: bool) -> Self {
         self.disabled = !enabled;
         self

@@ -97,7 +97,7 @@ struct Args {
 fn parse_key_val(s: &str) -> Result<(String, ParamOverrideValue)> {
     let pos = s
         .find('=')
-        .ok_or_else(|| anyhow!("invalid KEY=value: no `=` found in `{}`", s))?;
+        .ok_or_else(|| anyhow!("invalid KEY=value: no `=` found in `{s}`"))?;
     let key = s[..pos].parse()?;
     let value: String = s[pos + 1..].parse()?;
     let value = i64::from_str(&value)

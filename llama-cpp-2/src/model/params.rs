@@ -149,7 +149,7 @@ impl LlamaModelParams {
     /// assert_eq!(count, 0);
     /// ```
     #[must_use]
-    pub fn kv_overrides(&self) -> KvOverrides {
+    pub fn kv_overrides<'a>(&'a self) -> KvOverrides<'a> {
         KvOverrides::new(self)
     }
 
@@ -235,7 +235,7 @@ impl LlamaModelParams {
         );
 
         // There should be some way to do this without iterating over everything.
-        for (_i, &c) in key.to_bytes_with_nul().iter().enumerate() {
+        for &c in key.to_bytes_with_nul().iter() {
             c_char::try_from(c).expect("invalid character in key");
         }
 
