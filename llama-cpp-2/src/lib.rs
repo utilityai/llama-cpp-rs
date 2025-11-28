@@ -35,11 +35,11 @@ pub mod token;
 pub mod token_type;
 
 /// A failable result from a llama.cpp function.
-pub type Result<T> = std::result::Result<T, LLamaCppError>;
+pub type Result<T> = std::result::Result<T, LlamaCppError>;
 
 /// All errors that can occur in the llama-cpp crate.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum LLamaCppError {
+pub enum LlamaCppError {
     /// The backend was already initialized. This can generally be ignored as initializing the backend
     /// is idempotent.
     #[error("BackendAlreadyInitialized")]
