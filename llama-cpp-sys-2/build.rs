@@ -508,6 +508,70 @@ fn main() {
         }
     }
 
+    // in this next bit, we select which cpu-specific features to compile for
+    // first check for target-cpu=native
+    let has_native_target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .map(|rustflags| {
+            rustflags
+                .split('\x1f')
+                .any(|f| f.contains("target-cpu=native"))
+        })
+        .unwrap_or(false);
+    if has_native_target_cpu {
+        debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
+        config.define("GGML_NATIVE", "ON");
+    }
+    // if native isn't specified, enable specific features for ggml
+    // Get the target features as a comma-separated string
+    else if let Ok(features) = std::env::var("CARGO_CFG_TARGET_FEATURE") {
+        debug_log!("Compiling with target features: {}", features);
+        // list of rust target_features here:
+        //   https://doc.rust-lang.org/reference/attributes/codegen.html#the-target_feature-attribute
+        // GGML config flags have been found by looking at:
+        //   llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt
+        for feature in features.split(',') {
+            match feature {
+                "avx" => {
+                    config.define("GGML_AVX", "ON");
+                }
+                "avx2" => {
+                    config.define("GGML_AVX2", "ON");
+                }
+                "avx512bf16" => {
+                    config.define("GGML_AVX512_BF16", "ON");
+                }
+                "avx512vbmi" => {
+                    config.define("GGML_AVX512_VBMI", "ON");
+                }
+                "avx512vnni" => {
+                    config.define("GGML_AVX512_VNNI", "ON");
+                }
+                "avxvnni" => {
+                    config.define("GGML_AVX_VNNI", "ON");
+                }
+                "bmi2" => {
+                    config.define("GGML_BMI2", "ON");
+                }
+                "f16c" => {
+                    config.define("GGML_F16C", "ON");
+                }
+                "fma" => {
+                    config.define("GGML_FMA", "ON");
+                }
+                "sse4.2" => {
+                    config.define("GGML_SSE42", "ON");
+                }
+                _ => {
+                    debug_log!(
+                        "Unrecognized cpu feature: '{}' - skipping GGML config for it.",
+                        feature
+                    );
+                    continue;
+                }
+            };
+        }
+    }
+
     config.define(
         "BUILD_SHARED_LIBS",
         if build_shared_libs { "ON" } else { "OFF" },
@@ -627,9 +691,9 @@ fn main() {
 
     if matches!(target_os, TargetOs::Linux)
         && target_triple.contains("aarch64")
-        && env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_err()
+        && has_native_target_cpu
     {
-        // If the native feature is not enabled, we take off the native ARM64 support.
+        // If the target-cpu is not specified as native, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
         config.define("GGML_NATIVE", "OFF");
         config.define("GGML_CPU_ARM_ARCH", "armv8-a");
