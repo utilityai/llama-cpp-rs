@@ -514,7 +514,7 @@ fn main() {
         .and_then(|rustflags| {
             rustflags
                 .split('\x1f')
-                .find(|f| f.contains("target-cpu=") && !f.contains("target-cpu=native"))
+                .find(|f| f.contains("target-cpu="))
                 .and_then(|f| f.split("target-cpu=").nth(1))
                 .map(|s| s.to_string())
         });
