@@ -508,17 +508,7 @@ fn main() {
         }
     }
 
-    // in this next bit, we select which cpu-specific features to compile for
-    // first check for target-cpu=native
-    let has_native_target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
-        .map(|rustflags| {
-            rustflags
-                .split('\x1f')
-                .any(|f| f.contains("target-cpu=native"))
-        })
-        .unwrap_or(false);
-
-    // Also extract the target-cpu value if specified (e.g., x86-64, x86-64-v2, etc.)
+    // extract the target-cpu config value, if specified
     let target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
         .ok()
         .and_then(|rustflags| {
@@ -529,24 +519,26 @@ fn main() {
                 .map(|s| s.to_string())
         });
 
-    if has_native_target_cpu {
+    if target_cpu == Some("native".into()) {
         debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
         config.define("GGML_NATIVE", "ON");
     }
-    // if native isn't specified, enable specific features for ggml
-    // Get the target features as a comma-separated string
-    else if let Ok(features) = std::env::var("CARGO_CFG_TARGET_FEATURE") {
-        debug_log!("Compiling with target features: {}", features);
+    // if native isn't specified, enable specific features for ggml instead
+    else {
+        // rust code isn't using `target-cpu=native`, so llama.cpp shouldn't use GGML_NATIVE either
         config.define("GGML_NATIVE", "OFF");
 
-        // Set baseline architecture from target-cpu if specified
-        // This is critical to prevent the compiler from auto-vectorizing to the build host's capabilities
+        // if `target-cpu` is set set, also set -march for llama.cpp to the same value
         if let Some(ref cpu) = target_cpu {
             debug_log!("Setting baseline architecture: -march={}", cpu);
-            // Pass the baseline architecture to CMake's C and CXX compilers
             config.cflag(&format!("-march={}", cpu));
             config.cxxflag(&format!("-march={}", cpu));
         }
+
+        // I expect this env var to always be present
+        let features = std::env::var("CARGO_CFG_TARGET_FEATURE")
+            .expect("Env var CARGO_CFG_TARGET_FEATURE not found.");
+        debug_log!("Compiling with target features: {}", features);
 
         // list of rust target_features here:
         //   https://doc.rust-lang.org/reference/attributes/codegen.html#the-target_feature-attribute
@@ -714,7 +706,7 @@ fn main() {
 
     if matches!(target_os, TargetOs::Linux)
         && target_triple.contains("aarch64")
-        && has_native_target_cpu
+        && target_cpu != Some("native".into())
     {
         // If the target-cpu is not specified as native, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
