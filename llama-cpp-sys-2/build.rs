@@ -517,6 +517,18 @@ fn main() {
                 .any(|f| f.contains("target-cpu=native"))
         })
         .unwrap_or(false);
+
+    // Also extract the target-cpu value if specified (e.g., x86-64, x86-64-v2, etc.)
+    let target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .ok()
+        .and_then(|rustflags| {
+            rustflags
+                .split('\x1f')
+                .find(|f| f.contains("target-cpu=") && !f.contains("target-cpu=native"))
+                .and_then(|f| f.split("target-cpu=").nth(1))
+                .map(|s| s.to_string())
+        });
+
     if has_native_target_cpu {
         debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
         config.define("GGML_NATIVE", "ON");
@@ -525,6 +537,17 @@ fn main() {
     // Get the target features as a comma-separated string
     else if let Ok(features) = std::env::var("CARGO_CFG_TARGET_FEATURE") {
         debug_log!("Compiling with target features: {}", features);
+        config.define("GGML_NATIVE", "OFF");
+
+        // Set baseline architecture from target-cpu if specified
+        // This is critical to prevent the compiler from auto-vectorizing to the build host's capabilities
+        if let Some(ref cpu) = target_cpu {
+            debug_log!("Setting baseline architecture: -march={}", cpu);
+            // Pass the baseline architecture to CMake's C and CXX compilers
+            config.cflag(&format!("-march={}", cpu));
+            config.cxxflag(&format!("-march={}", cpu));
+        }
+
         // list of rust target_features here:
         //   https://doc.rust-lang.org/reference/attributes/codegen.html#the-target_feature-attribute
         // GGML config flags have been found by looking at:
