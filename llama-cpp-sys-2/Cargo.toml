@@ -78,7 +78,6 @@ cuda-no-vmm = ["cuda"]
 metal = []
 dynamic-link = []
 vulkan = []
-native = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []

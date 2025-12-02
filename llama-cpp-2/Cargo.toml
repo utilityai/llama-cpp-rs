@@ -26,7 +26,6 @@ cuda-no-vmm = ["cuda", "llama-cpp-sys-2/cuda-no-vmm"]
 metal = ["llama-cpp-sys-2/metal"]
 dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
-native = ["llama-cpp-sys-2/native"]
 openmp = ["llama-cpp-sys-2/openmp"]
 sampler = []
 # Only has an impact on Android.
