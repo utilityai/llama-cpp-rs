@@ -686,6 +686,10 @@ fn main() {
         config.define("GGML_OPENMP", "OFF");
     }
 
+    if cfg!(feature = "shared-ggml") {
+        config.define("LLAMA_USE_SYSTEM_GGML", "ON");
+    }
+
     // General
     config
         .profile(&profile)
