@@ -765,6 +765,10 @@ fn main() {
         config.define("GGML_OPENMP", "OFF");
     }
 
+    if cfg!(feature = "system-ggml") {
+        config.define("LLAMA_USE_SYSTEM_GGML", "ON");
+    }
+
     // General
     config
         .profile(&profile)
@@ -780,6 +784,34 @@ fn main() {
         out_dir.join("lib64").display()
     );
     println!("cargo:rustc-link-search={}", build_dir.display());
+
+    if cfg!(feature = "system-ggml") {
+        // Extract library directory from CMake's found GGML package
+        let cmake_cache = build_dir.join("build").join("CMakeCache.txt");
+        if let Ok(cache_contents) = std::fs::read_to_string(&cmake_cache) {
+            let mut ggml_lib_dirs = std::collections::HashSet::new();
+
+            // Parse CMakeCache.txt to find where GGML libraries were found
+            for line in cache_contents.lines() {
+                if line.starts_with("GGML_LIBRARY:")
+                    || line.starts_with("GGML_BASE_LIBRARY:")
+                    || line.starts_with("GGML_CPU_LIBRARY:")
+                {
+                    if let Some(lib_path) = line.split('=').nth(1) {
+                        if let Some(parent) = Path::new(lib_path).parent() {
+                            ggml_lib_dirs.insert(parent.to_path_buf());
+                        }
+                    }
+                }
+            }
+
+            // Add each unique library directory to the search path
+            for lib_dir in ggml_lib_dirs {
+                println!("cargo:rustc-link-search=native={}", lib_dir.display());
+                debug_log!("Added system GGML library path: {}", lib_dir.display());
+            }
+        }
+    }
 
     if cfg!(feature = "cuda") && !build_shared_libs {
         // Re-run build script if CUDA_PATH environment variable changes
@@ -823,10 +855,19 @@ fn main() {
     }
 
     // Link libraries
-    let llama_libs_kind = if build_shared_libs { "dylib" } else { "static" };
+    let llama_libs_kind = if build_shared_libs || cfg!(feature = "system-ggml") {
+        "dylib"
+    } else {
+        "static"
+    };
     let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
     assert_ne!(llama_libs.len(), 0);
 
+    if cfg!(feature = "system-ggml") {
+        println!("cargo:rustc-link-lib={llama_libs_kind}=ggml");
+        println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-base");
+        println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
+    }
     for lib in llama_libs {
         let link = format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib);
         debug_log!("LINK {link}",);
