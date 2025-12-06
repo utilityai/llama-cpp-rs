@@ -72,11 +72,11 @@ pub struct MtmdCliParams {
 
 /// State of the MTMD CLI application.
 #[allow(missing_debug_implementations)]
-pub struct MtmdCliContext {
+pub struct MtmdCliContext<'a> {
     /// The MTMD context for multimodal processing.
     pub mtmd_ctx: MtmdContext,
     /// The batch used for processing tokens.
-    pub batch: LlamaBatch,
+    pub batch: LlamaBatch<'a>,
     /// The list of loaded bitmaps (images/audio).
     pub bitmaps: Vec<MtmdBitmap>,
     /// The number of past tokens processed.
@@ -87,7 +87,7 @@ pub struct MtmdCliContext {
     pub chat: Vec<LlamaChatMessage>,
 }
 
-impl MtmdCliContext {
+impl<'a> MtmdCliContext<'a> {
     /// Creates a new MTMD CLI context
     ///
     /// # Errors

@@ -36,9 +36,9 @@ pub struct LlamaLoraAdapter {
     pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_adapter_lora>,
 }
 
-/// A performance-friendly wrapper around [LlamaModel::chat_template] which is then
-/// fed into [LlamaModel::apply_chat_template] to convert a list of messages into an LLM
-/// prompt. Internally the template is stored as a CString to avoid round-trip conversions
+/// A performance-friendly wrapper around [`LlamaModel::chat_template`] which is then
+/// fed into [`LlamaModel::apply_chat_template`] to convert a list of messages into an LLM
+/// prompt. Internally the template is stored as a `CString` to avoid round-trip conversions
 /// within the FFI.
 #[derive(Eq, PartialEq, Clone, PartialOrd, Ord, Hash)]
 pub struct LlamaChatTemplate(CString);
@@ -55,7 +55,7 @@ impl LlamaChatTemplate {
         &self.0
     }
 
-    /// Attempts to convert the CString into a Rust str reference.
+    /// Attempts to convert the `CString` into a Rust str reference.
     pub fn to_str(&self) -> Result<&str, Utf8Error> {
         self.0.to_str()
     }
@@ -569,7 +569,7 @@ impl LlamaModel {
 
     /// Get chat template from model by name. If the name parameter is None, the default chat template will be returned.
     ///
-    /// You supply this into [Self::apply_chat_template] to get back a string with the appropriate template
+    /// You supply this into [`Self::apply_chat_template`] to get back a string with the appropriate template
     /// substitution applied to convert a list of messages into a prompt the LLM can use to complete
     /// the chat.
     ///
@@ -666,11 +666,11 @@ impl LlamaModel {
     /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
     // we intentionally do not derive Copy on `LlamaContextParams` to allow llama.cpp to change the type to be non-trivially copyable.
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new_context(
-        &self,
+    pub fn new_context<'a>(
+        &'a self,
         _: &LlamaBackend,
         params: LlamaContextParams,
-    ) -> Result<LlamaContext, LlamaContextLoadError> {
+    ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let context_params = params.context_params;
         let context = unsafe {
             llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
@@ -681,14 +681,14 @@ impl LlamaModel {
     }
 
     /// Apply the models chat template to some messages.
-    /// See https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template
+    /// See <https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template>
     ///
-    /// Unlike the llama.cpp apply_chat_template which just randomly uses the ChatML template when given
+    /// Unlike the llama.cpp `apply_chat_template` which just randomly uses the ChatML template when given
     /// a null pointer for the template, this requires an explicit template to be specified. If you want to
     /// use "chatml", then just do `LlamaChatTemplate::new("chatml")` or any other model name or template
     /// string.
     ///
-    /// Use [Self::chat_template] to retrieve the template baked into the model (this is the preferred
+    /// Use [`Self::chat_template`] to retrieve the template baked into the model (this is the preferred
     /// mechanism as using the wrong chat template can result in really unexpected responses from the LLM).
     ///
     /// You probably want to set `add_ass` to true so that the generated template string ends with a the
@@ -764,7 +764,7 @@ where
     let mut buffer = vec![0u8; capacity];
 
     // call the foreign function
-    let result = c_function(buffer.as_mut_ptr() as *mut c_char, buffer.len());
+    let result = c_function(buffer.as_mut_ptr().cast::<c_char>(), buffer.len());
     if result < 0 {
         return Err(MetaValError::NegativeReturn(result));
     }

@@ -1,7 +1,7 @@
 //! A safe wrapper around `llama_model_params`.
 
 use crate::model::params::kv_overrides::KvOverrides;
-use crate::LLamaCppError;
+use crate::LlamaCppError;
 use std::ffi::{c_char, CStr};
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
@@ -149,7 +149,7 @@ impl LlamaModelParams {
     /// assert_eq!(count, 0);
     /// ```
     #[must_use]
-    pub fn kv_overrides(&self) -> KvOverrides {
+    pub fn kv_overrides<'a>(&'a self) -> KvOverrides<'a> {
         KvOverrides::new(self)
     }
 
@@ -235,7 +235,7 @@ impl LlamaModelParams {
         );
 
         // There should be some way to do this without iterating over everything.
-        for (_i, &c) in key.to_bytes_with_nul().iter().enumerate() {
+        for &c in key.to_bytes_with_nul().iter() {
             c_char::try_from(c).expect("invalid character in key");
         }
 
@@ -375,19 +375,19 @@ impl LlamaModelParams {
     /// You don't need to specify CPU or ACCEL devices.
     ///
     /// # Errors
-    /// Returns `LLamaCppError::BackendDeviceNotFound` if any device index is invalid.
-    pub fn with_devices(mut self, devices: &[usize]) -> Result<Self, LLamaCppError> {
+    /// Returns `LlamaCppError::BackendDeviceNotFound` if any device index is invalid.
+    pub fn with_devices(mut self, devices: &[usize]) -> Result<Self, LlamaCppError> {
         for dev in self.devices.iter_mut() {
             *dev = std::ptr::null_mut();
         }
         // Check device count
         let max_devices = crate::max_devices().min(LLAMA_CPP_MAX_DEVICES);
         if devices.len() > max_devices {
-            return Err(LLamaCppError::MaxDevicesExceeded(max_devices));
+            return Err(LlamaCppError::MaxDevicesExceeded(max_devices));
         }
         for (i, &dev) in devices.iter().enumerate() {
             if dev >= unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
-                return Err(LLamaCppError::BackendDeviceNotFound(dev));
+                return Err(LlamaCppError::BackendDeviceNotFound(dev));
             }
             let backend_dev = unsafe { llama_cpp_sys_2::ggml_backend_dev_get(dev) };
             self.devices[i] = backend_dev;

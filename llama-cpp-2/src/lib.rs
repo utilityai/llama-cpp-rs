@@ -13,7 +13,7 @@
 //!
 //! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
-use std::ffi::NulError;
+use std::ffi::{c_char, NulError};
 use std::fmt::Debug;
 use std::num::NonZeroI32;
 
@@ -35,11 +35,11 @@ pub mod token;
 pub mod token_type;
 
 /// A failable result from a llama.cpp function.
-pub type Result<T> = std::result::Result<T, LLamaCppError>;
+pub type Result<T> = std::result::Result<T, LlamaCppError>;
 
 /// All errors that can occur in the llama-cpp crate.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum LLamaCppError {
+pub enum LlamaCppError {
     /// The backend was already initialized. This can generally be ignored as initializing the backend
     /// is idempotent.
     #[error("BackendAlreadyInitialized")]
@@ -154,6 +154,23 @@ pub enum EmbeddingsError {
     /// The given sequence index exceeds the max sequence id
     #[error("Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE")]
     NonePoolType,
+}
+
+/// Errors that can occur when initializing a grammar sampler
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum GrammarError {
+    /// The grammar root was not found in the grammar string
+    #[error("Grammar root not found in grammar string")]
+    RootNotFound,
+    /// The trigger word contains null bytes
+    #[error("Trigger word contains null bytes")]
+    TriggerWordNullBytes,
+    /// The grammar string or root contains null bytes
+    #[error("Grammar string or root contains null bytes")]
+    GrammarNullBytes,
+    /// The grammar call returned null
+    #[error("Grammar call returned null")]
+    NullGrammar,
 }
 
 /// Decode a error from llama.cpp into a [`DecodeError`].
@@ -398,7 +415,7 @@ pub struct LlamaBackendDevice {
 pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
     let mut devices = Vec::new();
     for i in 0..unsafe { llama_cpp_sys_2::ggml_backend_dev_count() } {
-        fn cstr_to_string(ptr: *const i8) -> String {
+        fn cstr_to_string(ptr: *const c_char) -> String {
             if ptr.is_null() {
                 String::new()
             } else {
@@ -449,6 +466,7 @@ pub struct LogOptions {
 impl LogOptions {
     /// If enabled, logs are sent to tracing. If disabled, all logs are suppressed. Default is for
     /// logs to be sent to tracing.
+    #[must_use]
     pub fn with_logs_enabled(mut self, enabled: bool) -> Self {
         self.disabled = !enabled;
         self

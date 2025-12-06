@@ -508,6 +508,85 @@ fn main() {
         }
     }
 
+    // extract the target-cpu config value, if specified
+    let target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .ok()
+        .and_then(|rustflags| {
+            rustflags
+                .split('\x1f')
+                .find(|f| f.contains("target-cpu="))
+                .and_then(|f| f.split("target-cpu=").nth(1))
+                .map(|s| s.to_string())
+        });
+
+    if target_cpu == Some("native".into()) {
+        debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
+        config.define("GGML_NATIVE", "ON");
+    }
+    // if native isn't specified, enable specific features for ggml instead
+    else {
+        // rust code isn't using `target-cpu=native`, so llama.cpp shouldn't use GGML_NATIVE either
+        config.define("GGML_NATIVE", "OFF");
+
+        // if `target-cpu` is set set, also set -march for llama.cpp to the same value
+        if let Some(ref cpu) = target_cpu {
+            debug_log!("Setting baseline architecture: -march={}", cpu);
+            config.cflag(&format!("-march={}", cpu));
+            config.cxxflag(&format!("-march={}", cpu));
+        }
+
+        // I expect this env var to always be present
+        let features = std::env::var("CARGO_CFG_TARGET_FEATURE")
+            .expect("Env var CARGO_CFG_TARGET_FEATURE not found.");
+        debug_log!("Compiling with target features: {}", features);
+
+        // list of rust target_features here:
+        //   https://doc.rust-lang.org/reference/attributes/codegen.html#the-target_feature-attribute
+        // GGML config flags have been found by looking at:
+        //   llama.cpp/ggml/src/ggml-cpu/CMakeLists.txt
+        for feature in features.split(',') {
+            match feature {
+                "avx" => {
+                    config.define("GGML_AVX", "ON");
+                }
+                "avx2" => {
+                    config.define("GGML_AVX2", "ON");
+                }
+                "avx512bf16" => {
+                    config.define("GGML_AVX512_BF16", "ON");
+                }
+                "avx512vbmi" => {
+                    config.define("GGML_AVX512_VBMI", "ON");
+                }
+                "avx512vnni" => {
+                    config.define("GGML_AVX512_VNNI", "ON");
+                }
+                "avxvnni" => {
+                    config.define("GGML_AVX_VNNI", "ON");
+                }
+                "bmi2" => {
+                    config.define("GGML_BMI2", "ON");
+                }
+                "f16c" => {
+                    config.define("GGML_F16C", "ON");
+                }
+                "fma" => {
+                    config.define("GGML_FMA", "ON");
+                }
+                "sse4.2" => {
+                    config.define("GGML_SSE42", "ON");
+                }
+                _ => {
+                    debug_log!(
+                        "Unrecognized cpu feature: '{}' - skipping GGML config for it.",
+                        feature
+                    );
+                    continue;
+                }
+            };
+        }
+    }
+
     config.define(
         "BUILD_SHARED_LIBS",
         if build_shared_libs { "ON" } else { "OFF" },
@@ -627,9 +706,9 @@ fn main() {
 
     if matches!(target_os, TargetOs::Linux)
         && target_triple.contains("aarch64")
-        && !env::var(format!("CARGO_FEATURE_{}", "native".to_uppercase())).is_ok()
+        && target_cpu != Some("native".into())
     {
-        // If the native feature is not enabled, we take off the native ARM64 support.
+        // If the target-cpu is not specified as native, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
         config.define("GGML_NATIVE", "OFF");
         config.define("GGML_CPU_ARM_ARCH", "armv8-a");

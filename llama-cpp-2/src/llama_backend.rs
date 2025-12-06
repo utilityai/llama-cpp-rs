@@ -1,6 +1,6 @@
 //! Representation of an initialized llama backend
 
-use crate::LLamaCppError;
+use crate::LlamaCppError;
 use llama_cpp_sys_2::ggml_log_level;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
@@ -18,7 +18,7 @@ impl LlamaBackend {
     fn mark_init() -> crate::Result<()> {
         match LLAMA_BACKEND_INITIALIZED.compare_exchange(false, true, SeqCst, SeqCst) {
             Ok(_) => Ok(()),
-            Err(_) => Err(LLamaCppError::BackendAlreadyInitialized),
+            Err(_) => Err(LlamaCppError::BackendAlreadyInitialized),
         }
     }
 
@@ -28,7 +28,7 @@ impl LlamaBackend {
     ///
     /// ```
     ///# use llama_cpp_2::llama_backend::LlamaBackend;
-    ///# use llama_cpp_2::LLamaCppError;
+    ///# use llama_cpp_2::LlamaCppError;
     ///# use std::error::Error;
     ///
     ///# fn main() -> Result<(), Box<dyn Error>> {
@@ -36,7 +36,7 @@ impl LlamaBackend {
     ///
     /// let backend = LlamaBackend::init()?;
     /// // the llama backend can only be initialized once
-    /// assert_eq!(Err(LLamaCppError::BackendAlreadyInitialized), LlamaBackend::init());
+    /// assert_eq!(Err(LlamaCppError::BackendAlreadyInitialized), LlamaBackend::init());
     ///
     ///# Ok(())
     ///# }
