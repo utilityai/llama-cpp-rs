@@ -1021,6 +1021,7 @@ dependencies = [
  "cmake",
  "find_cuda_helper",
  "glob",
+ "pkg-config",
  "walkdir",
 ]
 

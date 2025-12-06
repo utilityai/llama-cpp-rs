@@ -68,6 +68,7 @@ cmake = "0.1"
 find_cuda_helper = "0.2.0"
 glob = "0.3.3"
 walkdir = "2"
+pkg-config = "0.3"
 
 [features]
 cuda = []
@@ -80,5 +81,5 @@ native = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []
-shared-ggml = []
+system-ggml = []
 mtmd = []
