@@ -81,4 +81,5 @@ vulkan = []
 openmp = []
 # Only has an impact on Android.
 shared-stdcxx = []
+system-ggml = []
 mtmd = []
