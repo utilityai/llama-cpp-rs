@@ -281,6 +281,15 @@ fn main() {
             .allowlist_type("mtmd_.*");
     }
 
+    // Configure server feature if enabled
+    if cfg!(feature = "server") {
+        bindings_builder = bindings_builder
+            .header("wrapper_server.h")
+            .clang_arg(format!("-I{}", llama_src.join("common").display()))
+            .clang_arg(format!("-I{}", llama_src.join("tools/server").display()))
+            .clang_arg(format!("-I{}", llama_src.join("tools/mtmd").display()));
+    }
+
     // Configure Android-specific bindgen settings
     if matches!(target_os, TargetOs::Android) {
         // Detect Android NDK from environment variables
@@ -479,12 +488,21 @@ fn main() {
 
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
+    println!("cargo:rerun-if-changed=wrapper_server.h");
+    println!("cargo:rerun-if-changed=wrapper_server.cpp");
 
     debug_log!("Bindings Created");
 
     // Build with Cmake
 
     let mut config = Config::new(&llama_src);
+
+    // Ensure mtmd headers are on the include path when tools are enabled (cached CMake runs on
+    // Windows can otherwise miss tools/mtmd and fail to find mtmd.h).
+    let mtmd_include_dir = llama_src.join("tools").join("mtmd");
+    let mtmd_include = format!("-I{}", mtmd_include_dir.display());
+    config.cflag(&mtmd_include);
+    config.cxxflag(&mtmd_include);
 
     // Would require extra source files to pointlessly
     // be included in what's uploaded to and downloaded from
@@ -499,6 +517,19 @@ fn main() {
         config.define("LLAMA_BUILD_COMMON", "ON");
         // mtmd support in llama-cpp is within the tools directory
         config.define("LLAMA_BUILD_TOOLS", "ON");
+    }
+
+    // Server feature requires building the server tools and common
+    if cfg!(feature = "server") {
+        config.define("LLAMA_BUILD_COMMON", "ON");
+        config.define("LLAMA_BUILD_TOOLS", "ON");
+        // We set LLAMA_BUILD_SERVER to ON so that server sources are compiled
+        config.define("LLAMA_BUILD_SERVER", "ON");
+        // Add server include paths
+        let server_include_dir = llama_src.join("tools").join("server");
+        let server_include = format!("-I{}", server_include_dir.display());
+        config.cflag(&server_include);
+        config.cxxflag(&server_include);
     }
 
     // Pass CMAKE_ environment variables down to CMake
@@ -776,6 +807,56 @@ fn main() {
         .always_configure(false);
 
     let build_dir = config.build();
+
+    // Build wrapper_server.cpp separately using cc crate if server feature is enabled
+    if cfg!(feature = "server") {
+        let mut cc_build = cc::Build::new();
+        cc_build
+            .cpp(true)
+            .file("wrapper_server.cpp")
+            .include(&llama_src.join("include"))
+            .include(&llama_src.join("ggml/include"))
+            .include(&llama_src.join("common"))
+            .include(&llama_src.join("tools/server"))
+            .include(&llama_src.join("tools/mtmd"))
+            .include(&llama_src.join("vendor"))
+            // Include the CMake build output for generated headers
+            .include(&build_dir.join("build"))
+            .include(&out_dir);
+        
+        // Do NOT define LLAMA_BUILD_NUMBER and LLAMA_COMMIT as preprocessor macros
+        // because common.h declares them as extern variables. They will be provided
+        // by linking against the common library.
+
+        // Platform-specific settings
+        match target_os {
+            TargetOs::Windows(WindowsVariant::Msvc) => {
+                cc_build
+                    .flag("/std:c++17")
+                    .flag("/EHsc")
+                    .flag("/utf-8");
+                if profile == "Release" || profile == "RelWithDebInfo" {
+                    cc_build.flag("/O2");
+                }
+            }
+            _ => {
+                cc_build
+                    .flag("-std=c++17")
+                    .flag("-fPIC");
+            }
+        }
+
+        cc_build.compile("wrapper_server");
+        debug_log!("Compiled wrapper_server.cpp");
+
+        // Link against server-context library (and common which it depends on)
+        println!("cargo:rustc-link-search={}", build_dir.join("build").join("tools").join("server").display());
+        println!("cargo:rustc-link-search={}", build_dir.join("build").join("common").display());
+        println!("cargo:rustc-link-search={}", build_dir.join("build").join("vendor").join("cpp-httplib").display());
+        println!("cargo:rustc-link-lib=static=server-context");
+        println!("cargo:rustc-link-lib=static=common");
+        println!("cargo:rustc-link-lib=static=cpp-httplib");
+    }
 
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
