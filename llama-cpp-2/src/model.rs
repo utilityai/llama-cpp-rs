@@ -340,8 +340,93 @@ impl LlamaModel {
         LlamaTokenAttrs::try_from(token_type).expect("token type is valid")
     }
 
-    /// Convert a token to a string with a specified buffer size.
+    /// Convert a token to a string using the underlying llama.cpp `llama_token_to_piece` function.
     ///
+    /// This is the new default function for token decoding and provides direct access to
+    /// the llama.cpp token decoding functionality without any special logic or filtering.
+    ///
+    /// # Errors
+    ///
+    /// - if the token type is unknown
+    /// - the string returned by llama-cpp is not valid utf8.
+    ///
+    /// # Panics
+    ///
+    /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
+    pub fn token_to_piece(
+        &self,
+        token: LlamaToken,
+        buffer_size: usize,
+        special: bool,
+        lstrip: Option<NonZeroU16>,
+    ) -> Result<String, TokenToStringError> {
+        let bytes = match self.token_to_piece_bytes(token, 8, special, lstrip) {
+            // when there is insufficient space `token_to_piece` will return a negative number with the size that would have been returned
+            // https://github.com/abetlen/llama-cpp-python/blob/c37132bac860fcc333255c36313f89c4f49d4c8d/llama_cpp/llama_cpp.py#L3461
+            Err(TokenToStringError::InsufficientBufferSpace(i)) => self.token_to_piece_bytes(
+                token,
+                (-i).try_into().expect("Error buffer size is positive"),
+                special,
+                lstrip,
+            ),
+            x => x,
+        }?;
+        Ok(String::from_utf8(bytes)?)
+    }
+
+    /// Raw token decoding to bytes, use if you want to handle the decoding model output yourself
+    /// 
+    /// Convert a token to bytes using the underlying llama.cpp `llama_token_to_piece` function. This is mostly
+    /// a thin wrapper around `llama_token_to_piece` function, that handles rust <-> c type conversions while
+    /// letting the caller handle errors. For a safer inteface returing rust strings directly use `token_to_piece` instead!
+    /// 
+    /// # Errors
+    ///
+    /// - if the token type is unknown
+    /// - the resultant token is larger than `buffer_size`.
+    ///
+    /// # Panics
+    ///
+    /// - if `buffer_size` does not fit into a [`c_int`].
+    /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
+    pub fn token_to_piece_bytes(
+        &self,
+        token: LlamaToken,
+        buffer_size: usize,
+        special: bool,
+        lstrip: Option<NonZeroU16>,
+    ) -> Result<Vec<u8>, TokenToStringError> {
+        let string = CString::new(vec![b'*'; buffer_size]).expect("no null");
+        let len = string.as_bytes().len();
+        let len = c_int::try_from(len).expect("length fits into c_int");
+        let buf = string.into_raw();
+        let lstrip = lstrip.map_or(0, |it| i32::from(it.get()));
+        let size = unsafe {
+            llama_cpp_sys_2::llama_token_to_piece(
+                self.vocab_ptr(),
+                token.0,
+                buf,
+                len,
+                lstrip,
+                special,
+            )
+        };
+
+        match size {
+            0 => Err(TokenToStringError::UnknownTokenType),
+            i if i.is_negative() => Err(TokenToStringError::InsufficientBufferSpace(i)),
+            size => {
+                let string = unsafe { CString::from_raw(buf) };
+                let mut bytes = string.into_bytes();
+                let len = usize::try_from(size).expect("size is positive and fits into usize");
+                bytes.truncate(len);
+                Ok(bytes)
+            }
+        }
+    }
+
+    /// Convert a token to a string with a specified buffer size.
+    /// 
     /// Generally you should use [`LlamaModel::token_to_str`] as it is able to decode tokens with
     /// any length.
     ///
