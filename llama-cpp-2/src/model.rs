@@ -111,6 +111,10 @@ pub enum AddBos {
 }
 
 /// How to determine if we should tokenize special tokens
+#[deprecated(
+    since = "0.1.0",
+    note = "This enum is a mixture of options for llama cpp providing less flexibility it only used with deprecated methods and will be removed in the future."
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Special {
     /// Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext. Does not insert a leading space.
@@ -147,7 +151,12 @@ impl LlamaModel {
     ) -> impl Iterator<Item = (LlamaToken, Result<String, TokenToStringError>)> + '_ {
         (0..self.n_vocab())
             .map(LlamaToken::new)
-            .map(move |llama_token| (llama_token, self.token_to_str(llama_token, special)))
+            .map(move |llama_token| {
+                (
+                    llama_token,
+                    self.token_to_piece(llama_token, matches!(special, Special::Tokenize), None),
+                )
+            })
     }
 
     /// Get the beginning of stream token.
@@ -197,13 +206,14 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`TokenToStringError`] for more information.
+    #[deprecated(since = "0.1.0", note = "Use `token_to_piece` instead")]
     pub fn token_to_str(
         &self,
         token: LlamaToken,
         special: Special,
     ) -> Result<String, TokenToStringError> {
-        let bytes = self.token_to_bytes(token, special)?;
-        Ok(String::from_utf8(bytes)?)
+        // TODO lsptrip None is acutally not quite the origignal behavior of this function,
+        Ok(self.token_to_piece(token, matches!(special, Special::Tokenize), None)?)
     }
 
     /// Convert single token to bytes.
@@ -215,16 +225,18 @@ impl LlamaModel {
     /// If a [`TokenToStringError::InsufficientBufferSpace`] error returned by
     /// [`Self::token_to_bytes_with_size`] contains a positive nonzero value. This should never
     /// happen.
+    #[deprecated(since = "0.1.0", note = "Use `token_to_piece_bytes` instead")]
     pub fn token_to_bytes(
         &self,
         token: LlamaToken,
         special: Special,
     ) -> Result<Vec<u8>, TokenToStringError> {
-        match self.token_to_bytes_with_size(token, 8, special, None) {
-            Err(TokenToStringError::InsufficientBufferSpace(i)) => self.token_to_bytes_with_size(
+        // TODO lsptrip None is acutally not quite the origignal behavior of this function,
+        match self.token_to_piece_bytes(token, 8, matches!(special, Special::Tokenize), None) {
+            Err(TokenToStringError::InsufficientBufferSpace(i)) => self.token_to_piece_bytes(
                 token,
                 (-i).try_into().expect("Error buffer size is positive"),
-                special,
+                matches!(special, Special::Tokenize),
                 None,
             ),
             x => x,
@@ -236,6 +248,10 @@ impl LlamaModel {
     /// # Errors
     ///
     /// See [`TokenToStringError`] for more information.
+    #[deprecated(
+        since = "0.1.0",
+        note = "Use `token_to_piece` for each token individually instead"
+    )]
     pub fn tokens_to_str(
         &self,
         tokens: &[LlamaToken],
@@ -245,7 +261,7 @@ impl LlamaModel {
         for piece in tokens
             .iter()
             .copied()
-            .map(|t| self.token_to_bytes(t, special))
+            .map(|t| self.token_to_piece_bytes(t, 8, matches!(special, Special::Tokenize), None))
         {
             builder.extend_from_slice(&piece?);
         }
@@ -356,7 +372,6 @@ impl LlamaModel {
     pub fn token_to_piece(
         &self,
         token: LlamaToken,
-        buffer_size: usize,
         special: bool,
         lstrip: Option<NonZeroU16>,
     ) -> Result<String, TokenToStringError> {
@@ -426,7 +441,7 @@ impl LlamaModel {
     }
 
     /// Convert a token to a string with a specified buffer size.
-    /// 
+    ///
     /// Generally you should use [`LlamaModel::token_to_str`] as it is able to decode tokens with
     /// any length.
     ///
@@ -440,13 +455,19 @@ impl LlamaModel {
     ///
     /// - if `buffer_size` does not fit into a [`c_int`].
     /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
+    #[deprecated(since = "0.1.0", note = "Use `token_to_piece` instead")]
     pub fn token_to_str_with_size(
         &self,
         token: LlamaToken,
         buffer_size: usize,
         special: Special,
     ) -> Result<String, TokenToStringError> {
-        let bytes = self.token_to_bytes_with_size(token, buffer_size, special, None)?;
+        let bytes = self.token_to_piece_bytes(
+            token,
+            buffer_size,
+            matches!(special, Special::Tokenize),
+            None,
+        )?;
         Ok(String::from_utf8(bytes)?)
     }
 
@@ -464,6 +485,7 @@ impl LlamaModel {
     ///
     /// - if `buffer_size` does not fit into a [`c_int`].
     /// - if the returned size from llama-cpp does not fit into a [`usize`]. (this should never happen)
+    #[deprecated(since = "0.1.0", note = "Use `token_to_piece_bytes` instead")]
     pub fn token_to_bytes_with_size(
         &self,
         token: LlamaToken,
