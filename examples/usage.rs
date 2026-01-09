@@ -35,7 +35,7 @@ fn main() {
     let tokens_list = model
         .str_to_token(&prompt, AddBos::Always)
         .unwrap_or_else(|_| panic!("failed to tokenize {prompt}"));
-    let n_len = 64;
+    let n_len = 1024;
 
     // create a llama_batch with size 512
     // we use this object to submit token data for decoding
@@ -68,10 +68,8 @@ fn main() {
                 break;
             }
 
-            let output_bytes = model.token_to_bytes(token, Special::Tokenize).unwrap();
+            let output_string = model.token_to_piece(token, 1024, true, None).unwrap();
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-            let mut output_string = String::with_capacity(32);
-            let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);
             print!("{output_string}");
             std::io::stdout().flush().unwrap();
 

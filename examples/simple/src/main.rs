@@ -15,7 +15,7 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::{LlamaModelParams, LlamaSplitMode};
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos, Special};
+use llama_cpp_2::model::{AddBos};
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::{ggml_time_us, send_logs_to_tracing, LogOptions};
 
@@ -290,7 +290,7 @@ either reduce n_len or increase n_ctx"
     eprintln!();
 
     for token in &tokens_list {
-        eprint!("{}", model.token_to_str(*token, Special::Tokenize)?);
+        eprint!("{}", model.token_to_piece(*token, true, None)?);
     }
 
     std::io::stderr().flush()?;
@@ -316,9 +316,6 @@ either reduce n_len or increase n_ctx"
 
     let t_main_start = ggml_time_us();
 
-    // The `Decoder`
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::dist(seed.unwrap_or(1234)),
         LlamaSampler::greedy(),
@@ -337,10 +334,8 @@ either reduce n_len or increase n_ctx"
                 break;
             }
 
-            let output_bytes = model.token_to_bytes(token, Special::Tokenize)?;
+            let output_string = model.token_to_piece(token, true, None)?;
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-            let mut output_string = String::with_capacity(32);
-            let _decode_result = decoder.decode_to_string(&output_bytes, &mut output_string, false);
             print!("{output_string}");
             std::io::stdout().flush()?;
 
