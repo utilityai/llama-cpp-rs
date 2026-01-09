@@ -32,6 +32,7 @@ sampler = []
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
+server = ["llama-cpp-sys-2/server", "mtmd"]
 
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]

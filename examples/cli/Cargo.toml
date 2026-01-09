@@ -1,0 +1,23 @@
+[package]
+name = "cli"
+version = "0.1.131"
+edition = "2021"
+publish = false
+
+[dependencies]
+llama-cpp-2 = { path = "../../llama-cpp-2", version = "0.1.131", features = ["server"] }
+llama-cpp-sys-2 = { path = "../../llama-cpp-sys-2", version = "0.1.131", features = ["server"] }
+hf-hub = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+anyhow = { workspace = true }
+tracing-subscriber = { workspace = true }
+ctrlc = "3.4"
+
+[features]
+default = []
+cuda = ["llama-cpp-2/cuda"]
+metal = ["llama-cpp-2/metal"]
+vulkan = ["llama-cpp-2/vulkan"]
+
+[lints]
+workspace = true

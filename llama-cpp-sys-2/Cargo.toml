@@ -10,6 +10,8 @@ links = "llama"
 include = [
     "wrapper.h",
     "wrapper_mtmd.h",
+    "wrapper_server.h",
+    "wrapper_server.cpp",
     "build.rs",
     "/src",
 
@@ -26,6 +28,8 @@ include = [
     "/llama.cpp/src/models/*.cpp",
     "/llama.cpp/tools/mtmd/*.h",
     "/llama.cpp/tools/mtmd/*.cpp",
+    "/llama.cpp/tools/server/*.h",
+    "/llama.cpp/tools/server/*.cpp",
 
     "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
     "/llama.cpp/common/build-info.cpp.in",
@@ -83,3 +87,4 @@ openmp = []
 shared-stdcxx = []
 system-ggml = []
 mtmd = []
+server = ["mtmd"]
