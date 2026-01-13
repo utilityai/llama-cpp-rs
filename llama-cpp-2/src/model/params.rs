@@ -406,7 +406,7 @@ impl LlamaModelParams {
 /// # use llama_cpp_2::model::params::LlamaModelParams;
 /// use llama_cpp_2::model::params::LlamaSplitMode;
 /// let params = LlamaModelParams::default();
-/// assert_eq!(params.n_gpu_layers(), 999, "n_gpu_layers should be 999");
+/// assert_eq!(params.n_gpu_layers(), -1, "n_gpu_layers should be -1");
 /// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
 /// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
 /// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
