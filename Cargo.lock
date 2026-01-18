@@ -327,6 +327,7 @@ version = "0.1.132"
 dependencies = [
  "anyhow",
  "clap",
+ "encoding_rs",
  "hf-hub",
  "llama-cpp-2",
 ]
