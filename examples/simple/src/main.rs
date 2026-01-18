@@ -289,8 +289,10 @@ either reduce n_len or increase n_ctx"
     // print the prompt token-by-token
     eprintln!();
 
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+
     for token in &tokens_list {
-        eprint!("{}", model.token_to_piece(*token, true, None)?);
+        eprint!("{}", model.token_to_piece(*token, &mut decoder, true, None)?);
     }
 
     std::io::stderr().flush()?;
@@ -321,6 +323,7 @@ either reduce n_len or increase n_ctx"
         LlamaSampler::greedy(),
     ]);
 
+
     while n_cur <= n_len {
         // sample the next token
         {
@@ -334,7 +337,7 @@ either reduce n_len or increase n_ctx"
                 break;
             }
 
-            let output_string = model.token_to_piece(token, true, None)?;
+            let output_string = model.token_to_piece(token, &mut decoder, true, None)?;
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
             print!("{output_string}");
             std::io::stdout().flush()?;

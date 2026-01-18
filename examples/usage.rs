@@ -68,7 +68,7 @@ fn main() {
                 break;
             }
 
-            let output_string = model.token_to_piece(token, 1024, true, None).unwrap();
+            let output_string = model.token_to_piece(token, &mut decoder, true, None).unwrap();
             // use `Decoder.decode_to_string()` to avoid the intermediate buffer
             print!("{output_string}");
             std::io::stdout().flush().unwrap();
