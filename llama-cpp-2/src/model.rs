@@ -147,14 +147,15 @@ impl LlamaModel {
     /// Get all tokens in the model.
     pub fn tokens(
         &self,
-        special: Special,
+        decode_special: bool,
     ) -> impl Iterator<Item = (LlamaToken, Result<String, TokenToStringError>)> + '_ {
         (0..self.n_vocab())
             .map(LlamaToken::new)
             .map(move |llama_token| {
+                let mut decoder = encoding_rs::UTF_8.new_decoder();
                 (
                     llama_token,
-                    self.token_to_piece(llama_token, matches!(special, Special::Tokenize), None),
+                    self.token_to_piece(llama_token, &mut decoder, decode_special, None),
                 )
             })
     }
@@ -213,7 +214,8 @@ impl LlamaModel {
         special: Special,
     ) -> Result<String, TokenToStringError> {
         // TODO lsptrip None is acutally not quite the origignal behavior of this function,
-        Ok(self.token_to_piece(token, matches!(special, Special::Tokenize), None)?)
+        let mut decoder = encoding_rs::UTF_8.new_decoder();
+        Ok(self.token_to_piece(token, &mut decoder ,matches!(special, Special::Tokenize), None)?)
     }
 
     /// Convert single token to bytes.
@@ -361,10 +363,14 @@ impl LlamaModel {
     /// This is the new default function for token decoding and provides direct access to
     /// the llama.cpp token decoding functionality without any special logic or filtering.
     ///
+    /// Decoding raw string requires using an decoder, tokens from language models may not always map
+    /// to full charakters depending on the encoding so stateful decoding is required, otherwise partial strings may be lost!
+    /// Invalid characters are mapped to REPLACEMENT CHARACTER making the method safe to use even if the model inherently produces
+    /// garbage.
+    ///
     /// # Errors
     ///
     /// - if the token type is unknown
-    /// - the string returned by llama-cpp is not valid utf8.
     ///
     /// # Panics
     ///
@@ -372,6 +378,7 @@ impl LlamaModel {
     pub fn token_to_piece(
         &self,
         token: LlamaToken,
+        decoder: &mut encoding_rs::Decoder,
         special: bool,
         lstrip: Option<NonZeroU16>,
     ) -> Result<String, TokenToStringError> {
@@ -386,7 +393,12 @@ impl LlamaModel {
             ),
             x => x,
         }?;
-        Ok(String::from_utf8(bytes)?)
+        // here the assumption is that each byte from the output may map to at most one output charakter
+        let mut output_piece = String::with_capacity(bytes.len());
+        // _result only tells if there is nothing more in the input, or if the output was full
+        // but further decoding will happen on the next interation anyway
+        let (_result, _somesize, _truthy) = decoder.decode_to_string(&bytes, &mut output_piece, false);
+        Ok(output_piece)
     }
 
     /// Raw token decoding to bytes, use if you want to handle the decoding model output yourself
