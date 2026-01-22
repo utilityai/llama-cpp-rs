@@ -3,19 +3,23 @@ use std::ffi::{c_char, CStr, CString};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
+use std::slice;
 use std::str::Utf8Error;
+
+use serde_json::Value;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
+use crate::openai::{OpenAIChatMessage, OpenAIChatStreamParser};
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, MetaValError, NewLlamaChatMessageError, StringToTokenError,
-    TokenToStringError,
+    ApplyChatTemplateError, ChatParseError, ChatTemplateError, LlamaContextLoadError,
+    LlamaLoraAdapterInitError, LlamaModelLoadError, MetaValError, NewLlamaChatMessageError,
+    StringToTokenError, TokenToStringError,
 };
 
 pub mod params;
@@ -90,6 +94,91 @@ impl LlamaChatMessage {
             content: CString::new(content)?,
         })
     }
+}
+
+/// OpenAI-compatible tool definition for chat templates.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ToolDefinition {
+    /// Tool name.
+    pub name: String,
+    /// Tool description for the model.
+    pub description: Option<String>,
+    /// JSON schema for the tool arguments.
+    pub parameters: Value,
+}
+
+impl ToolDefinition {
+    /// Create a new tool definition.
+    pub fn new(name: String, description: Option<String>, parameters: Value) -> Self {
+        Self {
+            name,
+            description,
+            parameters,
+        }
+    }
+
+    fn to_oaicompat_value(&self) -> Value {
+        let mut function = serde_json::Map::new();
+        function.insert("name".to_string(), Value::String(self.name.clone()));
+        if let Some(description) = &self.description {
+            function.insert("description".to_string(), Value::String(description.clone()));
+        }
+        function.insert("parameters".to_string(), self.parameters.clone());
+
+        let mut tool = serde_json::Map::new();
+        tool.insert("type".to_string(), Value::String("function".to_string()));
+        tool.insert("function".to_string(), Value::Object(function));
+        Value::Object(tool)
+    }
+}
+
+/// Grammar trigger kinds used for lazy grammar sampling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrammarTriggerType {
+    /// Trigger on a specific token.
+    Token = 0,
+    /// Trigger on a literal word.
+    Word = 1,
+    /// Trigger on a regex pattern.
+    Pattern = 2,
+    /// Trigger on a fully anchored regex pattern.
+    PatternFull = 3,
+}
+
+/// Lazy grammar trigger from chat template generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GrammarTrigger {
+    /// Trigger kind.
+    pub trigger_type: GrammarTriggerType,
+    /// Trigger text or pattern.
+    pub value: String,
+    /// Token id for token triggers.
+    pub token: Option<LlamaToken>,
+}
+
+/// Result of applying a chat template with tool grammar support.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatTemplateResult {
+    /// Rendered chat prompt.
+    pub prompt: String,
+    /// Optional grammar generated from tool definitions.
+    pub grammar: Option<String>,
+    /// Whether to use lazy grammar sampling.
+    pub grammar_lazy: bool,
+    /// Lazy grammar triggers derived from the template.
+    pub grammar_triggers: Vec<GrammarTrigger>,
+    /// Tokens that should be preserved for sampling.
+    pub preserved_tokens: Vec<String>,
+    /// Additional stop sequences added by the template.
+    pub additional_stops: Vec<String>,
+    /// Chat format used for parsing responses.
+    pub chat_format: i32,
+    /// Optional serialized PEG parser for tool-call parsing.
+    pub parser: Option<String>,
+    /// Whether the parser expects a forced-open thinking block.
+    pub thinking_forced_open: bool,
+    /// Whether tool calls should be parsed from the response.
+    pub parse_tool_calls: bool,
 }
 
 /// The Rope type that's used within the model.
@@ -749,6 +838,228 @@ impl LlamaModel {
         }
         buff.truncate(res.try_into().expect("res is negative"));
         Ok(String::from_utf8(buff)?)
+    }
+
+    /// Apply the models chat template to some messages and return an optional tool grammar.
+    #[tracing::instrument(skip_all)]
+    pub fn apply_chat_template_with_tools(
+        &self,
+        tmpl: &LlamaChatTemplate,
+        messages: &[LlamaChatMessage],
+        tools: Option<&[ToolDefinition]>,
+        add_generation_prompt: bool,
+    ) -> Result<ChatTemplateResult, ApplyChatTemplateError> {
+        let chat: Vec<llama_cpp_sys_2::llama_chat_message> = messages
+            .iter()
+            .map(|c| llama_cpp_sys_2::llama_chat_message {
+                role: c.role.as_ptr(),
+                content: c.content.as_ptr(),
+            })
+            .collect();
+
+        let tools_json = tools
+            .filter(|tools| !tools.is_empty())
+            .map(|tools| {
+                let values: Vec<Value> =
+                    tools.iter().map(ToolDefinition::to_oaicompat_value).collect();
+                Value::Array(values).to_string()
+            });
+        let tools_cstr = tools_json
+            .as_ref()
+            .map(|json| CString::new(json.as_str()))
+            .transpose()?;
+
+        let mut raw_result = llama_cpp_sys_2::llama_rs_chat_template_result {
+            prompt: ptr::null_mut(),
+            grammar: ptr::null_mut(),
+            parser: ptr::null_mut(),
+            chat_format: 0,
+            thinking_forced_open: false,
+            grammar_lazy: false,
+            grammar_triggers: ptr::null_mut(),
+            grammar_triggers_count: 0,
+            preserved_tokens: ptr::null_mut(),
+            preserved_tokens_count: 0,
+            additional_stops: ptr::null_mut(),
+            additional_stops_count: 0,
+        };
+
+        let rc = unsafe {
+            llama_cpp_sys_2::llama_rs_apply_chat_template_with_tools(
+                self.model.as_ptr(),
+                tmpl.0.as_ptr(),
+                chat.as_ptr(),
+                chat.len(),
+                tools_cstr
+                    .as_ref()
+                    .map_or(ptr::null(), |cstr| cstr.as_ptr()),
+                add_generation_prompt,
+                &mut raw_result,
+            )
+        };
+
+        let result = (|| {
+            if rc != 0 {
+                return Err(ApplyChatTemplateError::FfiError(rc));
+            }
+            if raw_result.prompt.is_null() {
+                return Err(ApplyChatTemplateError::NullResult);
+            }
+            let prompt_bytes = unsafe { CStr::from_ptr(raw_result.prompt) }.to_bytes().to_vec();
+            let prompt = String::from_utf8(prompt_bytes)?;
+            let grammar_lazy = raw_result.grammar_lazy;
+            let grammar = if raw_result.grammar.is_null() {
+                None
+            } else {
+                let grammar_bytes =
+                    unsafe { CStr::from_ptr(raw_result.grammar) }.to_bytes().to_vec();
+                Some(String::from_utf8(grammar_bytes)?)
+            };
+            let parser = if raw_result.parser.is_null() {
+                None
+            } else {
+                let parser_bytes =
+                    unsafe { CStr::from_ptr(raw_result.parser) }.to_bytes().to_vec();
+                Some(String::from_utf8(parser_bytes)?)
+            };
+            let grammar_triggers = if raw_result.grammar_triggers_count == 0 {
+                Vec::new()
+            } else if raw_result.grammar_triggers.is_null() {
+                return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+            } else {
+                let triggers = unsafe {
+                    slice::from_raw_parts(
+                        raw_result.grammar_triggers,
+                        raw_result.grammar_triggers_count,
+                    )
+                };
+                let mut parsed = Vec::with_capacity(triggers.len());
+                for trigger in triggers {
+                    let trigger_type = match trigger.type_ {
+                        0 => GrammarTriggerType::Token,
+                        1 => GrammarTriggerType::Word,
+                        2 => GrammarTriggerType::Pattern,
+                        3 => GrammarTriggerType::PatternFull,
+                        _ => return Err(ApplyChatTemplateError::InvalidGrammarTriggerType),
+                    };
+                    let value = if trigger.value.is_null() {
+                        return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+                    } else {
+                        let bytes = unsafe { CStr::from_ptr(trigger.value) }
+                            .to_bytes()
+                            .to_vec();
+                        String::from_utf8(bytes)?
+                    };
+                    let token = if trigger_type == GrammarTriggerType::Token {
+                        Some(LlamaToken(trigger.token))
+                    } else {
+                        None
+                    };
+                    parsed.push(GrammarTrigger {
+                        trigger_type,
+                        value,
+                        token,
+                    });
+                }
+                parsed
+            };
+            let preserved_tokens = if raw_result.preserved_tokens_count == 0 {
+                Vec::new()
+            } else if raw_result.preserved_tokens.is_null() {
+                return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+            } else {
+                let tokens = unsafe {
+                    slice::from_raw_parts(
+                        raw_result.preserved_tokens,
+                        raw_result.preserved_tokens_count,
+                    )
+                };
+                let mut parsed = Vec::with_capacity(tokens.len());
+                for token in tokens {
+                    if token.is_null() {
+                        return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+                    }
+                    let bytes = unsafe { CStr::from_ptr(*token) }.to_bytes().to_vec();
+                    parsed.push(String::from_utf8(bytes)?);
+                }
+                parsed
+            };
+            let additional_stops = if raw_result.additional_stops_count == 0 {
+                Vec::new()
+            } else if raw_result.additional_stops.is_null() {
+                return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+            } else {
+                let stops = unsafe {
+                    slice::from_raw_parts(
+                        raw_result.additional_stops,
+                        raw_result.additional_stops_count,
+                    )
+                };
+                let mut parsed = Vec::with_capacity(stops.len());
+                for stop in stops {
+                    if stop.is_null() {
+                        return Err(ApplyChatTemplateError::InvalidGrammarTriggerType);
+                    }
+                    let bytes = unsafe { CStr::from_ptr(*stop) }.to_bytes().to_vec();
+                    parsed.push(String::from_utf8(bytes)?);
+                }
+                parsed
+            };
+            let parse_tool_calls = tools.map_or(false, |tools| !tools.is_empty());
+            Ok(ChatTemplateResult {
+                prompt,
+                grammar,
+                grammar_lazy,
+                grammar_triggers,
+                preserved_tokens,
+                additional_stops,
+                chat_format: raw_result.chat_format,
+                parser,
+                thinking_forced_open: raw_result.thinking_forced_open,
+                parse_tool_calls,
+            })
+        })();
+
+        unsafe { llama_cpp_sys_2::llama_rs_chat_template_result_free(&mut raw_result) };
+        result
+    }
+}
+
+impl ChatTemplateResult {
+    /// Create a streaming parser configured for this chat template.
+    pub fn streaming_parser(&self) -> Result<OpenAIChatStreamParser, ChatParseError> {
+        OpenAIChatStreamParser::new(
+            self.chat_format,
+            self.parse_tool_calls,
+            self.parser.as_deref(),
+            self.thinking_forced_open,
+        )
+    }
+
+    /// Parse a generated response into a structured chat message.
+    pub fn parse_response(
+        &self,
+        text: &str,
+        is_partial: bool,
+    ) -> Result<OpenAIChatMessage, ChatParseError> {
+        OpenAIChatMessage::parse_from_llama(
+            text,
+            is_partial,
+            self.chat_format,
+            self.parse_tool_calls,
+            self.parser.as_deref(),
+            self.thinking_forced_open,
+        )
+    }
+
+    /// Parse a generated response into an OpenAI-compatible message JSON object.
+    pub fn parse_response_oaicompat(
+        &self,
+        text: &str,
+        is_partial: bool,
+    ) -> Result<serde_json::Value, ChatParseError> {
+        let parsed = self.parse_response(text, is_partial)?;
+        Ok(parsed.to_oaicompat_value())
     }
 }
 

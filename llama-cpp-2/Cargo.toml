@@ -11,12 +11,14 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 [dependencies]
 enumflags2 = "0.7.12"
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.133" }
+serde_json = "1.0"
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
 
 [dev-dependencies]
 encoding_rs = { workspace = true }
+hf-hub = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [features]
@@ -48,3 +50,11 @@ features = ["sampler"]
 [[example]]
 name = "usage"
 path = "../examples/usage.rs"
+
+[[example]]
+name = "tools"
+path = "../examples/tools.rs"
+
+[[example]]
+name = "openai_stream"
+path = "../examples/openai_stream.rs"

@@ -271,6 +271,8 @@ fn main() {
         .allowlist_type("ggml_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
+        .allowlist_function("llama_rs_.*")
+        .allowlist_type("llama_rs_.*")
         .prepend_enum_name(false);
 
     // Configure mtmd feature if enabled
@@ -478,9 +480,30 @@ fn main() {
         .expect("Failed to write bindings");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper_common.h");
+    println!("cargo:rerun-if-changed=wrapper_common.cpp");
+    println!("cargo:rerun-if-changed=wrapper_parse.cpp");
+    println!("cargo:rerun-if-changed=wrapper_utils.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
 
     debug_log!("Bindings Created");
+
+    let mut common_wrapper_build = cc::Build::new();
+    common_wrapper_build
+        .cpp(true)
+        .file("wrapper_common.cpp")
+        .file("wrapper_parse.cpp")
+        .include(&llama_src)
+        .include(llama_src.join("common"))
+        .include(llama_src.join("include"))
+        .include(llama_src.join("ggml/include"))
+        .include(llama_src.join("vendor"))
+        .flag_if_supported("-std=c++17")
+        .pic(true);
+    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+        common_wrapper_build.flag("/std:c++17");
+    }
+    common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
 
     // Build with Cmake
 
@@ -493,10 +516,10 @@ fn main() {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
+    config.define("LLAMA_BUILD_COMMON", "ON");
     config.define("LLAMA_CURL", "OFF");
 
     if cfg!(feature = "mtmd") {
-        config.define("LLAMA_BUILD_COMMON", "ON");
         // mtmd support in llama-cpp is within the tools directory
         config.define("LLAMA_BUILD_TOOLS", "ON");
     }
@@ -862,6 +885,12 @@ fn main() {
     };
     let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
     assert_ne!(llama_libs.len(), 0);
+
+    let common_lib_dir = out_dir.join("build").join("common");
+    if common_lib_dir.is_dir() {
+        println!("cargo:rustc-link-search=native={}", common_lib_dir.display());
+        println!("cargo:rustc-link-lib=static=common");
+    }
 
     if cfg!(feature = "system-ggml") {
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml");

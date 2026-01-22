@@ -1005,7 +1005,9 @@ version = "0.1.133"
 dependencies = [
  "encoding_rs",
  "enumflags2",
+ "hf-hub",
  "llama-cpp-sys-2",
+ "serde_json",
  "thiserror 1.0.69",
  "tracing",
  "tracing-core",

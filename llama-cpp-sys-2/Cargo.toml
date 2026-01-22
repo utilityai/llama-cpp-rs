@@ -9,6 +9,8 @@ links = "llama"
 
 include = [
     "wrapper.h",
+    "wrapper_common.h",
+    "wrapper_common.cpp",
     "wrapper_mtmd.h",
     "build.rs",
     "/src",
