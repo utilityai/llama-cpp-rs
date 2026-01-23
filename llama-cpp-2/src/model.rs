@@ -847,6 +847,7 @@ impl LlamaModel {
         tmpl: &LlamaChatTemplate,
         messages: &[LlamaChatMessage],
         tools: Option<&[ToolDefinition]>,
+        json_schema: Option<&Value>,
         add_generation_prompt: bool,
     ) -> Result<ChatTemplateResult, ApplyChatTemplateError> {
         let chat: Vec<llama_cpp_sys_2::llama_chat_message> = messages
@@ -867,6 +868,11 @@ impl LlamaModel {
         let tools_cstr = tools_json
             .as_ref()
             .map(|json| CString::new(json.as_str()))
+            .transpose()?;
+        let json_schema = json_schema.map(serde_json::to_string).transpose()?;
+        let json_schema_cstr = json_schema
+            .as_ref()
+            .map(|schema| CString::new(schema.as_str()))
             .transpose()?;
 
         let mut raw_result = llama_cpp_sys_2::llama_rs_chat_template_result {
@@ -891,6 +897,9 @@ impl LlamaModel {
                 chat.as_ptr(),
                 chat.len(),
                 tools_cstr
+                    .as_ref()
+                    .map_or(ptr::null(), |cstr| cstr.as_ptr()),
+                json_schema_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
                 add_generation_prompt,

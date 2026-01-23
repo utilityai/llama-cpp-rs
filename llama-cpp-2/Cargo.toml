@@ -58,3 +58,7 @@ path = "../examples/tools.rs"
 [[example]]
 name = "openai_stream"
 path = "../examples/openai_stream.rs"
+
+[[example]]
+name = "openai_stream_json_schema"
+path = "../examples/openai_stream_json_schema.rs"

@@ -106,6 +106,7 @@ extern "C" int llama_rs_apply_chat_template_with_tools(
     const struct llama_chat_message * messages,
     size_t message_count,
     const char * tools_json,
+    const char * json_schema,
     bool add_generation_prompt,
     struct llama_rs_chat_template_result * out_result) {
     if (!chat_template || !out_result) {
@@ -141,6 +142,9 @@ extern "C" int llama_rs_apply_chat_template_with_tools(
 
         if (tools_json && std::strlen(tools_json) > 0) {
             inputs.tools = common_chat_tools_parse_oaicompat<std::string>(tools_json);
+        }
+        if (json_schema && std::strlen(json_schema) > 0) {
+            inputs.json_schema = json_schema;
         }
 
         auto params = common_chat_templates_apply(tmpls.get(), inputs);

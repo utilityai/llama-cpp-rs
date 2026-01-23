@@ -1,7 +1,7 @@
-//! Demonstrates streaming OpenAI-compatible deltas from a chat prompt.
+//! Demonstrates streaming OpenAI-compatible deltas from a chat prompt with tools and JSON schema.
 //!
 //! Usage:
-//!   cargo run --example openai -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+//!   cargo run --example openai_stream_tools_json_schema -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -19,7 +19,9 @@ use std::path::PathBuf;
 
 fn resolve_model_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut args = std::env::args();
-    let exe = args.next().unwrap_or_else(|| "openai".to_string());
+    let exe = args
+        .next()
+        .unwrap_or_else(|| "openai_stream_tools_json_schema".to_string());
     let first = args
         .next()
         .ok_or_else(|| format!("Usage: {exe} <model_path> | {exe} hf-model <repo> <model>"))?;
@@ -83,27 +85,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let messages = vec![
         LlamaChatMessage::new("system".to_string(), "You are a tool caller.".to_string())?,
-        LlamaChatMessage::new(
-            "user".to_string(),
-            "Get the weather in Paris and summarize it.".to_string(),
-        )?,
+        LlamaChatMessage::new("user".to_string(), "Guess the weather in SF.".to_string())?,
     ];
 
-    let tools = vec![ToolDefinition::new(
-        "get_weather".to_string(),
-        Some("Fetch current weather by city.".to_string()),
-        json!({
-            "type": "object",
-            "properties": {
-                "city": { "type": "string", "description": "City name." },
-                "unit": { "type": "string", "enum": ["c", "f"] }
-            },
-            "required": ["city"]
-        }),
-    )];
+    let response_schema = json!({
+        "type": "object",
+        "properties": {
+            "city": { "type": "string" },
+            "summary": { "type": "string" },
+            "unit": { "type": "string", "enum": ["c", "f"] }
+        },
+        "required": ["city", "summary"]
+    });
 
-    let result =
-        model.apply_chat_template_with_tools(&template, &messages, Some(&tools), None, true)?;
+    let result = model.apply_chat_template_with_tools(
+        &template,
+        &messages,
+        None,
+        Some(&response_schema),
+        true,
+    )?;
 
     println!("Prompt:\n{}", result.prompt);
     match result.grammar.as_deref() {

@@ -74,6 +74,7 @@ int llama_rs_apply_chat_template_with_tools(
     const struct llama_chat_message * messages,
     size_t message_count,
     const char * tools_json,
+    const char * json_schema,
     bool add_generation_prompt,
     struct llama_rs_chat_template_result * out_result);
 

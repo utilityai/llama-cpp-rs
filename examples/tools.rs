@@ -107,7 +107,7 @@ fn main() {
     )];
 
     let result = model
-        .apply_chat_template_with_tools(&template, &messages, Some(&tools), true)
+        .apply_chat_template_with_tools(&template, &messages, Some(&tools), None, true)
         .expect("Failed to apply chat template");
 
     println!("Prompt:\n{}", result.prompt);
