@@ -20,7 +20,7 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos, Special};
+use llama_cpp_2::model::{AddBos};
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -125,12 +125,14 @@ fn main() -> Result<()> {
     // print the prompt token-by-token
     eprintln!();
 
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+
     for (i, token_line) in tokens_lines_list.iter().enumerate() {
         eprintln!("Prompt {i} --> {}", prompt_lines[i]);
         eprintln!("Number of tokens: {}", token_line.len());
         for token in token_line {
             // Attempt to convert token to string and print it; if it fails, print the token instead
-            match model.token_to_str(*token, Special::Tokenize) {
+            match model.token_to_piece(*token, &mut decoder, true, None) {
                 Ok(token_str) => eprintln!("{token} --> {token_str}"),
                 Err(e) => {
                     eprintln!("Failed to convert token to string, error: {e}");

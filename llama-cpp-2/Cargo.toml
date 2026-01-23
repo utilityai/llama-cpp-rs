@@ -14,9 +14,9 @@ llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.133" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
+encoding_rs = { workspace = true }
 
 [dev-dependencies]
-encoding_rs = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [features]
