@@ -17,6 +17,9 @@ tracing-core = { workspace = true }
 encoding_rs = { workspace = true }
 
 [dev-dependencies]
+encoding_rs = { workspace = true }
+hf-hub = { workspace = true }
+serde_json = "1.0"
 tracing-subscriber = { workspace = true }
 
 [features]
@@ -48,3 +51,12 @@ features = ["sampler"]
 [[example]]
 name = "usage"
 path = "../examples/usage.rs"
+
+[[example]]
+name = "tools"
+path = "../examples/tools.rs"
+
+
+[[example]]
+name = "openai_stream"
+path = "../examples/openai_stream.rs"
