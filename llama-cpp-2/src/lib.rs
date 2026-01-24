@@ -27,13 +27,21 @@ pub mod llama_backend;
 pub mod llama_batch;
 mod log;
 pub mod model;
-pub mod openai;
 #[cfg(feature = "mtmd")]
 pub mod mtmd;
+pub mod openai;
 pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+
+pub(crate) fn status_is_ok(status: llama_cpp_sys_2::llama_rs_status) -> bool {
+    status == llama_cpp_sys_2::LLAMA_RS_STATUS_OK
+}
+
+pub(crate) fn status_to_i32(status: llama_cpp_sys_2::llama_rs_status) -> i32 {
+    status as i32
+}
 
 /// A failable result from a llama.cpp function.
 pub type Result<T> = std::result::Result<T, LlamaCppError>;
@@ -293,9 +301,8 @@ pub fn mlock_supported() -> bool {
     unsafe { llama_cpp_sys_2::llama_supports_mlock() }
 }
 
-/// Convert a JSON schema into a llama.cpp grammar string.
-pub fn json_schema_to_grammar(schema: &serde_json::Value) -> Result<String> {
-    let schema_json = schema.to_string();
+/// Convert a JSON schema string into a llama.cpp grammar string.
+pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
     let schema_cstr = CString::new(schema_json)
         .map_err(|err| LlamaCppError::JsonSchemaToGrammarError(err.to_string()))?;
     let mut out = std::ptr::null_mut();
@@ -304,9 +311,10 @@ pub fn json_schema_to_grammar(schema: &serde_json::Value) -> Result<String> {
     };
 
     let result = (|| {
-        if rc != 0 || out.is_null() {
+        if !status_is_ok(rc) || out.is_null() {
             return Err(LlamaCppError::JsonSchemaToGrammarError(format!(
-                "ffi error {rc}"
+                "ffi error {}",
+                status_to_i32(rc)
             )));
         }
         let grammar_bytes = unsafe { CStr::from_ptr(out) }.to_bytes().to_vec();
@@ -362,9 +370,6 @@ pub enum ApplyChatTemplateError {
     /// the string could not be converted to utf8.
     #[error("{0}")]
     FromUtf8Error(#[from] FromUtf8Error),
-    /// failed to parse JSON returned by llama.cpp.
-    #[error("{0}")]
-    JsonError(#[from] serde_json::Error),
     /// llama.cpp returned a null pointer for the template result.
     #[error("null result from llama.cpp")]
     NullResult,
@@ -385,9 +390,6 @@ pub enum ChatParseError {
     /// the string could not be converted to utf8.
     #[error("{0}")]
     Utf8Error(#[from] FromUtf8Error),
-    /// failed to parse OpenAI-compatible JSON.
-    #[error("{0}")]
-    JsonError(#[from] serde_json::Error),
     /// llama.cpp returned a null pointer for the parse result.
     #[error("null result from llama.cpp")]
     NullResult,

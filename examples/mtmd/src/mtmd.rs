@@ -192,6 +192,7 @@ impl<'a> MtmdCliContext<'a> {
             // Sample next token
             let token = sampler.sample(context, -1);
             generated_tokens.push(token);
+            sampler.accept(token);
 
             // Check for end of generation
             if model.is_eog_token(token) {

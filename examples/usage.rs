@@ -60,6 +60,8 @@ fn main() {
         {
             let token = sampler.sample(&ctx, batch.n_tokens() - 1);
 
+            sampler.accept(token);
+
             // is it an end of stream?
             if token == model.token_eos() {
                 eprintln!();

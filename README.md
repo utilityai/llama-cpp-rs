@@ -47,10 +47,10 @@ Run the tools example (add `--features cuda` if you have a cuda gpu)
 cargo run --release --example tools -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 ```
 
-Run the OpenAI Style Completions Stream example (add `--features cuda` if you have a cuda gpu)
+Run the OpenAI Style Completions Server (add `--features cuda` if you have a cuda gpu)
 
 ```bash
-cargo run --release --example openai_stream -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+cargo run -p openai-server -- hf-model QuantFactory/Meta-Llama-3-8B-Instruct-GGUF Meta-Llama-3-8B-Instruct.Q8_0.gguf
 ```
 
 <details>

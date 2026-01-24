@@ -329,6 +329,8 @@ either reduce n_len or increase n_ctx"
         {
             let token = sampler.sample(&ctx, batch.n_tokens() - 1);
 
+            sampler.accept(token);
+
             // is it an end of stream?
             if model.is_eog_token(token) {
                 eprintln!();

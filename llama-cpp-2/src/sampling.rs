@@ -9,7 +9,7 @@ use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
-use crate::{GrammarError, SamplerAcceptError};
+use crate::{status_is_ok, status_to_i32, GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -66,10 +66,10 @@ impl LlamaSampler {
     /// Try accepting a token from the sampler. Returns an error if the sampler throws.
     pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
         let rc = unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
-        if rc == 0 {
+        if status_is_ok(rc) {
             Ok(())
         } else {
-            Err(SamplerAcceptError::FfiError(rc))
+            Err(SamplerAcceptError::FfiError(status_to_i32(rc)))
         }
     }
 
