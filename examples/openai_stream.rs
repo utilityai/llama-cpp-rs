@@ -1,7 +1,7 @@
-//! Demonstrates generating a chat prompt and tool-call grammar.
+//! Demonstrates streaming OpenAI-compatible deltas from a chat prompt.
 //!
 //! Usage:
-//!   cargo run --example tools -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+//!   cargo run --example openai_stream -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -14,13 +14,13 @@ use llama_cpp_2::model::{
 use llama_cpp_2::sampling::LlamaSampler;
 use serde_json::json;
 use std::collections::HashSet;
-use std::io::Write;
 use std::num::NonZeroU32;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn resolve_model_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut args = std::env::args();
-    let exe = args.next().unwrap_or_else(|| "tools".to_string());
+    let exe = args.next().unwrap_or_else(|| "openai_stream".to_string());
     let first = args
         .next()
         .ok_or_else(|| format!("Usage: {exe} <model_path> | {exe} hf-model <repo> <model>"))?;
@@ -72,25 +72,22 @@ fn anchor_pattern(pattern: &str) -> String {
     anchored
 }
 
-fn main() {
-    let model_path = resolve_model_path().unwrap_or_else(|err| panic!("{err}"));
-    let backend = LlamaBackend::init().expect("Failed to init backend");
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let model_path = resolve_model_path()?;
+    let backend = LlamaBackend::init()?;
     let params = LlamaModelParams::default();
-    let model =
-        LlamaModel::load_from_file(&backend, model_path, &params).expect("Failed to load model");
+    let model = LlamaModel::load_from_file(&backend, &model_path, &params)?;
 
     let template = model
         .chat_template(None)
         .unwrap_or_else(|_| LlamaChatTemplate::new("chatml").expect("valid chat template"));
 
     let messages = vec![
-        LlamaChatMessage::new("system".to_string(), "You are a tool caller.".to_string())
-            .expect("valid system message"),
+        LlamaChatMessage::new("system".to_string(), "You are a tool caller.".to_string())?,
         LlamaChatMessage::new(
             "user".to_string(),
             "Get the weather in Paris and summarize it.".to_string(),
-        )
-        .expect("valid user message"),
+        )?,
     ];
 
     let tools_json = json!([
@@ -112,15 +109,13 @@ fn main() {
     ])
     .to_string();
 
-    let result = model
-        .apply_chat_template_with_tools_oaicompat(
-            &template,
-            &messages,
-            Some(tools_json.as_str()),
-            None,
-            true,
-        )
-        .expect("Failed to apply chat template");
+    let result = model.apply_chat_template_with_tools_oaicompat(
+        &template,
+        &messages,
+        Some(tools_json.as_str()),
+        None,
+        true,
+    )?;
 
     println!("Prompt:\n{}", result.prompt);
     match result.grammar.as_deref() {
@@ -128,9 +123,7 @@ fn main() {
         None => println!("\nGrammar: <none>"),
     }
 
-    let tokens = model
-        .str_to_token(&result.prompt, AddBos::Always)
-        .expect("Failed to tokenize prompt");
+    let tokens = model.str_to_token(&result.prompt, AddBos::Always)?;
     let n_predict: i32 = 128;
     let n_ctx = model
         .n_ctx_train()
@@ -138,20 +131,16 @@ fn main() {
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(n_ctx))
         .with_n_batch(n_ctx);
-    let mut ctx = model
-        .new_context(&backend, ctx_params)
-        .expect("Failed to create context");
+    let mut ctx = model.new_context(&backend, ctx_params)?;
 
     let mut batch = LlamaBatch::new(n_ctx as usize, 1);
     let last_index = tokens.len().saturating_sub(1) as i32;
     for (i, token) in (0_i32..).zip(tokens.into_iter()) {
         let is_last = i == last_index;
-        batch
-            .add(token, i, &[0], is_last)
-            .expect("Failed to add token");
+        batch.add(token, i, &[0], is_last)?;
     }
 
-    ctx.decode(&mut batch).expect("Initial decode failed");
+    ctx.decode(&mut batch)?;
 
     let mut n_cur = batch.n_tokens();
     let max_tokens = n_cur + n_predict;
@@ -159,13 +148,12 @@ fn main() {
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut preserved = HashSet::new();
     for token_str in &result.preserved_tokens {
-        let tokens = model
-            .str_to_token(token_str, AddBos::Never)
-            .expect("Failed to tokenize preserved token");
+        let tokens = model.str_to_token(token_str, AddBos::Never)?;
         if tokens.len() == 1 {
             preserved.insert(tokens[0]);
         }
     }
+
     let mut sampler = if let Some(grammar) = result.grammar.as_deref() {
         if result.grammar_lazy {
             if result.grammar_triggers.is_empty() {
@@ -181,9 +169,7 @@ fn main() {
                         }
                     }
                     GrammarTriggerType::Word => {
-                        let tokens = model
-                            .str_to_token(&trigger.value, AddBos::Never)
-                            .expect("Failed to tokenize trigger word");
+                        let tokens = model.str_to_token(&trigger.value, AddBos::Never)?;
                         if tokens.len() == 1 {
                             if !preserved.contains(&tokens[0]) {
                                 panic!(
@@ -236,9 +222,18 @@ fn main() {
     } else {
         LlamaSampler::greedy()
     };
+
+    let mut stream_state = result.streaming_state_oaicompat()?;
+    let created = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+    let completion_id = format!("chatcmpl-{created}");
+    let model_name = model_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("example-model");
     let mut generated_text = String::new();
     let additional_stops = result.additional_stops.clone();
 
+    println!("\nStreaming deltas:");
     while n_cur <= max_tokens {
         let token = sampler.sample(&ctx, batch.n_tokens() - 1);
         if model.is_eog_token(token) {
@@ -250,26 +245,37 @@ fn main() {
         } else {
             Special::Plaintext
         };
-        let output_bytes = model
-            .token_to_bytes(token, special)
-            .expect("Failed to decode token");
+        let output_bytes = model.token_to_bytes(token, special)?;
         let mut output_string = String::with_capacity(32);
         let _ = decoder.decode_to_string(&output_bytes, &mut output_string, false);
         generated_text.push_str(&output_string);
-        print!("{output_string}");
-        std::io::stdout().flush().expect("stdout flush failed");
 
         batch.clear();
-        batch
-            .add(token, n_cur, &[0], true)
-            .expect("Failed to add token");
+        batch.add(token, n_cur, &[0], true)?;
         n_cur += 1;
-        ctx.decode(&mut batch).expect("Decode failed");
+        ctx.decode(&mut batch)?;
 
-        if additional_stops
+        let stop_now = additional_stops
             .iter()
-            .any(|stop| !stop.is_empty() && generated_text.ends_with(stop))
-        {
+            .any(|stop| !stop.is_empty() && generated_text.ends_with(stop));
+        let deltas = stream_state.update(&output_string, !stop_now)?;
+        for delta in deltas {
+            let delta_value: serde_json::Value = serde_json::from_str(&delta)?;
+            let chunk = json!({
+                "choices": [{
+                    "delta": delta_value,
+                    "finish_reason": serde_json::Value::Null,
+                    "index": 0
+                }],
+                "created": created,
+                "id": completion_id,
+                "model": model_name,
+                "object": "chat.completion.chunk"
+            });
+            println!("{}", serde_json::to_string(&chunk)?);
+        }
+
+        if stop_now {
             break;
         }
     }
@@ -282,12 +288,35 @@ fn main() {
         }
     }
 
-    let parsed_json = result
-        .parse_response_oaicompat(&generated_text, false)
-        .expect("Failed to parse response");
-    let parsed_value: serde_json::Value =
-        serde_json::from_str(&parsed_json).expect("Failed to decode parsed response");
-    let parsed_pretty =
-        serde_json::to_string_pretty(&parsed_value).expect("Failed to format parsed response");
-    println!("\n\nParsed message:\n{}", parsed_pretty);
+    let parsed_json = result.parse_response_oaicompat(&generated_text, false)?;
+    let parsed_value: serde_json::Value = serde_json::from_str(&parsed_json)?;
+    let finish_reason = if n_cur >= max_tokens {
+        "length"
+    } else if parsed_value
+        .get("tool_calls")
+        .and_then(|value| value.as_array())
+        .map_or(false, |tools| !tools.is_empty())
+    {
+        "tool_calls"
+    } else {
+        "stop"
+    };
+
+    let final_chunk = json!({
+        "choices": [{
+            "delta": {},
+            "finish_reason": finish_reason,
+            "index": 0
+        }],
+        "created": created,
+        "id": completion_id,
+        "model": model_name,
+        "object": "chat.completion.chunk"
+    });
+    println!("{}", serde_json::to_string(&final_chunk)?);
+
+    let parsed_pretty = serde_json::to_string_pretty(&parsed_value)?;
+    println!("\nFinal message:\n{}", parsed_pretty);
+
+    Ok(())
 }

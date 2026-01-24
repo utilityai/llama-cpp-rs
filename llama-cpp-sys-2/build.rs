@@ -889,7 +889,10 @@ fn main() {
 
     let common_lib_dir = out_dir.join("build").join("common");
     if common_lib_dir.is_dir() {
-        println!("cargo:rustc-link-search=native={}", common_lib_dir.display());
+        println!(
+            "cargo:rustc-link-search=native={}",
+            common_lib_dir.display()
+        );
         println!("cargo:rustc-link-lib=static=common");
     }
 

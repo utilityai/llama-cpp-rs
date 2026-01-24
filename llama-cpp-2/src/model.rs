@@ -11,7 +11,7 @@ use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
-use crate::openai::OpenAIChatTemplateParams;
+use crate::openai::{ChatParseStateOaicompat, OpenAIChatTemplateParams};
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
@@ -925,7 +925,7 @@ impl LlamaModel {
     /// `tools_json` should be an OpenAI-compatible tool definition JSON array string.
     /// `json_schema` should be a JSON schema string.
     #[tracing::instrument(skip_all)]
-    pub fn apply_chat_template_with_tools(
+    pub fn apply_chat_template_with_tools_oaicompat(
         &self,
         tmpl: &LlamaChatTemplate,
         messages: &[LlamaChatMessage],
@@ -960,7 +960,7 @@ impl LlamaModel {
         };
 
         let rc = unsafe {
-            llama_cpp_sys_2::llama_rs_apply_chat_template_with_tools(
+            llama_cpp_sys_2::llama_rs_apply_chat_template_with_tools_oaicompat(
                 self.model.as_ptr(),
                 tmpl.0.as_ptr(),
                 chat.as_ptr(),
@@ -1338,6 +1338,23 @@ impl ChatTemplateResult {
 
         unsafe { llama_cpp_sys_2::llama_rs_string_free(out_json) };
         result
+    }
+
+    /// Initialize a streaming parser for OpenAI-compatible chat deltas.
+    pub fn streaming_state_oaicompat(&self) -> Result<ChatParseStateOaicompat, ChatParseError> {
+        let parser_cstr = self.parser.as_deref().map(CString::new).transpose()?;
+        let state = unsafe {
+            llama_cpp_sys_2::llama_rs_chat_parse_state_init_oaicompat(
+                self.chat_format,
+                self.parse_tool_calls,
+                parser_cstr
+                    .as_ref()
+                    .map_or(ptr::null(), |cstr| cstr.as_ptr()),
+                self.thinking_forced_open,
+            )
+        };
+        let state = NonNull::new(state).ok_or(ChatParseError::NullResult)?;
+        Ok(ChatParseStateOaicompat { state })
     }
 }
 
