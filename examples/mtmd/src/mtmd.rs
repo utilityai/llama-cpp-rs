@@ -201,7 +201,7 @@ impl<'a> MtmdCliContext<'a> {
             }
 
             // Print token
-            let piece = model.token_to_str(token, Special::Tokenize)?;
+            let piece = model.token_to_piece(token, true, None)?;
             print!("{piece}");
             io::stdout().flush()?;
 
