@@ -152,7 +152,7 @@ llama_server_context_meta * llama_server_context_get_meta(llama_server_context *
     result->has_inp_audio = meta.has_inp_audio;
     result->slot_n_ctx = meta.slot_n_ctx;
     result->pooling_type = (int32_t)meta.pooling_type;
-    result->chat_template = strdup_safe(meta.chat_template);
+    result->chat_template = strdup_safe("");  // No longer directly available in meta
     result->bos_token_str = strdup_safe(meta.bos_token_str);
     result->eos_token_str = strdup_safe(meta.eos_token_str);
     result->model_vocab_n_tokens = meta.model_vocab_n_tokens;
@@ -262,8 +262,39 @@ bool llama_server_response_reader_post_completion(
             task.params.timings_per_token = true;
         }
         
-        // Parse messages JSON
-        task.cli_input = json::parse(messages_json);
+        // Format chat using the same mechanism as cli.cpp
+        task.cli = true;
+        
+        // Get chat template metadata
+        auto meta = reader->parent->ctx.get_meta();
+        auto & chat_params = meta.chat_params;
+        
+        // Parse messages JSON string into a JSON object first, then parse to chat messages
+        // This matches how cli.cpp works where messages is a json::array()
+        json messages = json::parse(messages_json);
+        
+        // Prepare chat template inputs
+        common_chat_templates_inputs inputs;
+        inputs.messages              = common_chat_msgs_parse_oaicompat(messages);
+        inputs.tools                 = {};
+        inputs.tool_choice           = COMMON_CHAT_TOOL_CHOICE_NONE;
+        inputs.json_schema           = "";
+        inputs.grammar               = "";
+        inputs.use_jinja             = chat_params.use_jinja;
+        inputs.parallel_tool_calls   = false;
+        inputs.add_generation_prompt = true;
+        inputs.enable_thinking       = chat_params.enable_thinking;
+        
+        // Apply chat template to format the messages
+        auto formatted = common_chat_templates_apply(chat_params.tmpls.get(), inputs);
+        task.cli_prompt = formatted.prompt;
+        
+        // Set chat parser params
+        task.params.chat_parser_params = common_chat_parser_params(formatted);
+        task.params.chat_parser_params.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
+        if (!formatted.parser.empty()) {
+            task.params.chat_parser_params.parser.load(formatted.parser);
+        }
         
         // Add files if provided
         if (file_buffers && file_sizes && file_count > 0) {

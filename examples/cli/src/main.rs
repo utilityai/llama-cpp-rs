@@ -14,6 +14,7 @@ use std::thread;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::server::{
@@ -98,7 +99,7 @@ enum ModelSource {
 }
 
 /// Chat message for conversation history
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 struct ChatMessage {
     role: String,
     content: String,
@@ -111,27 +112,11 @@ impl ChatMessage {
             content: content.to_string(),
         }
     }
-
-    fn to_json(&self) -> String {
-        // Simple JSON escaping
-        let escaped_content = self
-            .content
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', "\\n")
-            .replace('\r', "\\r")
-            .replace('\t', "\\t");
-        format!(
-            r#"{{"role": "{}", "content": "{}"}}"#,
-            self.role, escaped_content
-        )
-    }
 }
 
 /// Convert messages to JSON array string
 fn messages_to_json(messages: &[ChatMessage]) -> String {
-    let json_messages: Vec<String> = messages.iter().map(|m| m.to_json()).collect();
-    format!("[{}]", json_messages.join(", "))
+    serde_json::to_string(messages).unwrap_or_else(|_| "[]".to_string())
 }
 
 /// CLI context holding server and conversation state
