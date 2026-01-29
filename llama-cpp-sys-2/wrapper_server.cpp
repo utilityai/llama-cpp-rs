@@ -3,6 +3,7 @@
 // Include llama.cpp server infrastructure headers
 #include "llama.cpp/common/common.h"
 #include "llama.cpp/common/arg.h"
+#include "llama.cpp/common/log.h"
 #include "llama.cpp/tools/server/server-context.h"
 #include "llama.cpp/tools/server/server-task.h"
 #include "llama.cpp/tools/server/server-queue.h"
@@ -292,10 +293,13 @@ bool llama_server_response_reader_post_completion(
         
         // Set chat parser params
         task.params.chat_parser_params = common_chat_parser_params(formatted);
-        task.params.chat_parser_params.reasoning_format = COMMON_REASONING_FORMAT_DEEPSEEK;
+        task.params.chat_parser_params.reasoning_format = COMMON_REASONING_FORMAT_AUTO;
         if (!formatted.parser.empty()) {
             task.params.chat_parser_params.parser.load(formatted.parser);
         }
+
+        // Log the formatted prompt for debugging
+        LOG_INF("Formatted prompt:\n%s\n", task.cli_prompt.c_str());
         
         // Add files if provided
         if (file_buffers && file_sizes && file_count > 0) {
@@ -520,6 +524,10 @@ llama_server_task_params llama_server_task_params_default(void) {
     params.antiprompt_count = 0;
     
     return params;
+}
+
+void llama_server_set_log_verbosity(int32_t verbosity) {
+    common_log_set_verbosity_thold(verbosity);
 }
 
 } // extern "C"

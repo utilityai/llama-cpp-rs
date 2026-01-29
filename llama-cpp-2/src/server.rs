@@ -144,6 +144,44 @@ pub enum FlashAttnType {
     Enabled = 1,
 }
 
+/// Log verbosity level for llama.cpp.
+/// 
+/// Controls how much logging output is produced by the llama.cpp library.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(i32)]
+pub enum LogLevel {
+    /// Output only (no logs)
+    Output = 0,
+    /// Error messages only (default)
+    #[default]
+    Error = 1,
+    /// Warnings and errors
+    Warn = 2,
+    /// Info, warnings, and errors
+    Info = 3,
+    /// Debug level (most verbose)
+    Debug = 4,
+}
+
+/// Set the log verbosity level for llama.cpp.
+/// 
+/// This controls how much logging output is produced by the llama.cpp library.
+/// Call this before loading the model for best effect.
+/// 
+/// # Example
+/// 
+/// ```ignore
+/// use llama_cpp_2::server::{set_log_verbosity, LogLevel};
+/// 
+/// // Enable debug logging
+/// set_log_verbosity(LogLevel::Debug);
+/// ```
+pub fn set_log_verbosity(level: LogLevel) {
+    unsafe {
+        llama_cpp_sys_2::llama_server_set_log_verbosity(level as i32);
+    }
+}
+
 /// Model loading parameters for the server context.
 #[derive(Debug, Clone)]
 pub struct ServerModelParams {

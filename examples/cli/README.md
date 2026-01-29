@@ -168,8 +168,19 @@ cargo run --release -p cli -- \
   --repeat-penalty 1.1 \         # Repetition penalty
   --flash-attn \                 # Enable flash attention
   --show-timings \               # Display performance stats
+  --log-level 3 \                # Log verbosity (0-4)
   --system-prompt "You are a helpful assistant"
 ```
+
+### Log Levels
+
+| Level | Name   | Description |
+|-------|--------|-------------|
+| 0     | Output | No logs, output only |
+| 1     | Error  | Error messages only (default) |
+| 2     | Warn   | Warnings and errors |
+| 3     | Info   | Info, warnings, and errors |
+| 4     | Debug  | Most verbose (debug level) |
 
 ## Available Commands
 
@@ -188,6 +199,7 @@ While in the interactive chat:
 - ✅ **Performance metrics** - Optional timing statistics
 - ✅ **HuggingFace integration** - Automatic model downloads
 - ✅ **Multimodal support** - Detects vision and audio capabilities
+- ✅ **Log level control** - Configurable llama.cpp verbosity (0-4)
 
 ## Code References
 

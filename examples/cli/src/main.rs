@@ -18,7 +18,8 @@ use serde::Serialize;
 
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::server::{
-    ResultTimings, ServerContext, ServerModelParams, ServerTaskParams, TaskResultType,
+    set_log_verbosity, LogLevel, ResultTimings, ServerContext, ServerModelParams, ServerTaskParams,
+    TaskResultType,
 };
 
 const LLAMA_ASCII_LOGO: &str = r#"
@@ -80,6 +81,10 @@ struct Args {
     /// Show timing information after each response
     #[arg(long)]
     show_timings: bool,
+
+    /// Log level for llama.cpp (0=output, 1=error, 2=warn, 3=info, 4=debug)
+    #[arg(long, default_value = "1")]
+    log_level: i32,
 }
 
 #[derive(Subcommand, Debug)]
@@ -281,6 +286,20 @@ fn main() -> Result<()> {
 
     // Initialize llama backend
     let _backend = LlamaBackend::init()?;
+
+    // Set log verbosity level
+    let log_level = match args.log_level {
+        0 => LogLevel::Output,
+        1 => LogLevel::Error,
+        2 => LogLevel::Warn,
+        3 => LogLevel::Info,
+        4 => LogLevel::Debug,
+        _ => {
+            eprintln!("Invalid log level {}. Using Error (1).", args.log_level);
+            LogLevel::Error
+        }
+    };
+    set_log_verbosity(log_level);
 
     // Create server context
     let ctx_server = ServerContext::new().context("Failed to create server context")?;

@@ -258,6 +258,17 @@ void llama_server_string_free(char * str);
 // Get default task params
 llama_server_task_params llama_server_task_params_default(void);
 
+// Set log verbosity level
+// Levels: 0=OUTPUT, 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG
+void llama_server_set_log_verbosity(int32_t verbosity);
+
+// Log level constants
+#define LLAMA_SERVER_LOG_LEVEL_OUTPUT 0
+#define LLAMA_SERVER_LOG_LEVEL_ERROR  1
+#define LLAMA_SERVER_LOG_LEVEL_WARN   2
+#define LLAMA_SERVER_LOG_LEVEL_INFO   3
+#define LLAMA_SERVER_LOG_LEVEL_DEBUG  4
+
 #ifdef __cplusplus
 }
 #endif
