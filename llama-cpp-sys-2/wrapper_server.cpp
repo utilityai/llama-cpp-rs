@@ -106,6 +106,7 @@ bool llama_server_context_load_model(
     ctx->params.use_mmap = use_mmap;
     ctx->params.use_mlock = use_mlock;
     ctx->params.flash_attn_type = static_cast<llama_flash_attn_type>(flash_attn_type);
+    ctx->params.reasoning_format = COMMON_REASONING_FORMAT_AUTO; //// Same as deepseek, using `message.reasoning_content`
     
     if (chat_template && strlen(chat_template) > 0) {
         ctx->params.chat_template = chat_template;
