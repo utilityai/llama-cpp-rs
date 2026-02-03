@@ -23,7 +23,7 @@ pprof = "0.13.0"
 bindgen = "0.72.1"
 cc = "1.2.54"
 anyhow = "1.0.100"
-clap = "4.5.53"
+clap = "4.5.54"
 encoding_rs = "0.8.35"
 tracing-subscriber = { version = "0.3", features = ["json"] }
 
