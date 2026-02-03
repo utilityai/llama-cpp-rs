@@ -14,8 +14,8 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::{LlamaModelParams, LlamaSplitMode};
+use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos};
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::{ggml_time_us, send_logs_to_tracing, LogOptions};
 
@@ -292,7 +292,10 @@ either reduce n_len or increase n_ctx"
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
     for token in &tokens_list {
-        eprint!("{}", model.token_to_piece(*token, &mut decoder, true, None)?);
+        eprint!(
+            "{}",
+            model.token_to_piece(*token, &mut decoder, true, None)?
+        );
     }
 
     std::io::stderr().flush()?;
@@ -322,7 +325,6 @@ either reduce n_len or increase n_ctx"
         LlamaSampler::dist(seed.unwrap_or(1234)),
         LlamaSampler::greedy(),
     ]);
-
 
     while n_cur <= n_len {
         // sample the next token

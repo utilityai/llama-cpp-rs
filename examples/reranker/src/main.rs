@@ -19,8 +19,8 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos};
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]

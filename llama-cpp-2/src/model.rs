@@ -266,7 +266,12 @@ impl LlamaModel {
     ) -> Result<String, TokenToStringError> {
         // TODO lsptrip None is acutally not quite the origignal behavior of this function,
         let mut decoder = encoding_rs::UTF_8.new_decoder();
-        Ok(self.token_to_piece(token, &mut decoder ,matches!(special, Special::Tokenize), None)?)
+        Ok(self.token_to_piece(
+            token,
+            &mut decoder,
+            matches!(special, Special::Tokenize),
+            None,
+        )?)
     }
 
     /// Convert single token to bytes.
@@ -448,16 +453,17 @@ impl LlamaModel {
         let mut output_piece = String::with_capacity(bytes.len());
         // _result only tells if there is nothing more in the input, or if the output was full
         // but further decoding will happen on the next interation anyway
-        let (_result, _somesize, _truthy) = decoder.decode_to_string(&bytes, &mut output_piece, false);
+        let (_result, _somesize, _truthy) =
+            decoder.decode_to_string(&bytes, &mut output_piece, false);
         Ok(output_piece)
     }
 
     /// Raw token decoding to bytes, use if you want to handle the decoding model output yourself
-    /// 
+    ///
     /// Convert a token to bytes using the underlying llama.cpp `llama_token_to_piece` function. This is mostly
     /// a thin wrapper around `llama_token_to_piece` function, that handles rust <-> c type conversions while
     /// letting the caller handle errors. For a safer inteface returing rust strings directly use `token_to_piece` instead!
-    /// 
+    ///
     /// # Errors
     ///
     /// - if the token type is unknown
