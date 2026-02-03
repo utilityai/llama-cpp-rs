@@ -66,7 +66,7 @@ impl ChatParseStateOaicompat {
             )
         };
 
-        let result = (|| {
+        let result = {
             if !status_is_ok(rc) {
                 return Err(ChatParseError::FfiError(status_to_i32(rc)));
             }
@@ -98,7 +98,7 @@ impl ChatParseStateOaicompat {
                 deltas.push(String::from_utf8(bytes)?);
             }
             Ok(deltas)
-        })();
+        };
 
         unsafe { llama_cpp_sys_2::llama_rs_chat_msg_free_oaicompat(&mut out_msg) };
         unsafe {

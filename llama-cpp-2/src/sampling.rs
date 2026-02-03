@@ -65,11 +65,12 @@ impl LlamaSampler {
 
     /// Try accepting a token from the sampler. Returns an error if the sampler throws.
     pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
-        let rc = unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
-        if status_is_ok(rc) {
+        let sampler_result =
+            unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
+        if status_is_ok(sampler_result) {
             Ok(())
         } else {
-            Err(SamplerAcceptError::FfiError(status_to_i32(rc)))
+            Err(SamplerAcceptError::FfiError(status_to_i32(sampler_result)))
         }
     }
 

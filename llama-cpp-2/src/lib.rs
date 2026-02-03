@@ -310,7 +310,7 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
         llama_cpp_sys_2::llama_rs_json_schema_to_grammar(schema_cstr.as_ptr(), false, &mut out)
     };
 
-    let result = (|| {
+    let result = {
         if !status_is_ok(rc) || out.is_null() {
             return Err(LlamaCppError::JsonSchemaToGrammarError(format!(
                 "ffi error {}",
@@ -321,7 +321,7 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
         let grammar = String::from_utf8(grammar_bytes)
             .map_err(|err| LlamaCppError::JsonSchemaToGrammarError(err.to_string()))?;
         Ok(grammar)
-    })();
+    };
 
     unsafe { llama_cpp_sys_2::llama_rs_string_free(out) };
     result
