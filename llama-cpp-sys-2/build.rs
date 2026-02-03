@@ -893,6 +893,13 @@ fn main() {
             "cargo:rustc-link-search=native={}",
             common_lib_dir.display()
         );
+        let common_profile_dir = common_lib_dir.join(&profile);
+        if common_profile_dir.is_dir() {
+            println!(
+                "cargo:rustc-link-search=native={}",
+                common_profile_dir.display()
+            );
+        }
         println!("cargo:rustc-link-lib=static=common");
     }
 

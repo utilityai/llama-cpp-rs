@@ -6,6 +6,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use clap::Parser;
+use encoding_rs::UTF_8;
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::context::LlamaContext;
@@ -187,6 +188,7 @@ impl<'a> MtmdCliContext<'a> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut generated_tokens = Vec::new();
         let max_predict = if n_predict < 0 { i32::MAX } else { n_predict };
+        let mut decoder = UTF_8.new_decoder();
 
         for _i in 0..max_predict {
             // Sample next token
@@ -201,7 +203,7 @@ impl<'a> MtmdCliContext<'a> {
             }
 
             // Print token
-            let piece = model.token_to_piece(token, true, None)?;
+            let piece = model.token_to_piece(token, &mut decoder, true, None)?;
             print!("{piece}");
             io::stdout().flush()?;
 

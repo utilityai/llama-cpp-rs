@@ -1428,6 +1428,7 @@ name = "mtmd"
 version = "0.1.86"
 dependencies = [
  "clap",
+ "encoding_rs",
  "llama-cpp-2",
 ]
 

@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 llama-cpp-2 = { path = "../../llama-cpp-2", version = "0.1.86", features = ["mtmd"] }
 clap = { workspace = true, features = ["derive"] }
+encoding_rs = { workspace = true }
 
 [features]
 cuda = ["llama-cpp-2/cuda"]
