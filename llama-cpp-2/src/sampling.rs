@@ -9,6 +9,7 @@ use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
+use crate::{status_is_ok, status_to_i32, GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -40,14 +41,14 @@ impl LlamaSampler {
     /// Accepts a token from the sampler, possibly updating the internal state of certain samplers
     /// (e.g. grammar, repetition, etc.)
     pub fn accept(&mut self, token: LlamaToken) {
-        unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.0) }
+        let _ = self.try_accept(token);
     }
 
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
     pub fn accept_many(&mut self, tokens: impl IntoIterator<Item = impl Borrow<LlamaToken>>) {
         for token in tokens {
-            unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.borrow().0) }
+            let _ = self.try_accept(*token.borrow());
         }
     }
 
@@ -60,6 +61,17 @@ impl LlamaSampler {
     ) -> Self {
         self.accept_many(tokens);
         self
+    }
+
+    /// Try accepting a token from the sampler. Returns an error if the sampler throws.
+    pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
+        let sampler_result =
+            unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
+        if status_is_ok(sampler_result) {
+            Ok(())
+        } else {
+            Err(SamplerAcceptError::FfiError(status_to_i32(sampler_result)))
+        }
     }
 
     /// Resets the internal state of the sampler.
@@ -274,16 +286,17 @@ impl LlamaSampler {
     }
 
     /// Grammar sampler
-    ///
-    /// # Panics
-    /// If either of ``grammar_str`` or ``grammar_root`` contain null bytes.
     #[must_use]
-    pub fn grammar(model: &LlamaModel, grammar_str: &str, grammar_root: &str) -> Option<Self> {
-        let grammar_str = CString::new(grammar_str).unwrap();
-        let grammar_root = CString::new(grammar_root).unwrap();
+    pub fn grammar(
+        model: &LlamaModel,
+        grammar_str: &str,
+        grammar_root: &str,
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
 
         let sampler = unsafe {
-            llama_cpp_sys_2::llama_sampler_init_grammar(
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
@@ -291,19 +304,15 @@ impl LlamaSampler {
         };
 
         if sampler.is_null() {
-            None
+            Err(GrammarError::NullGrammar)
         } else {
-            Some(Self { sampler })
+            Ok(Self { sampler })
         }
     }
 
     /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
     ///
     /// This sampler enforces grammar rules only when specific trigger words or tokens are encountered.
-    ///
-    /// # Panics
-    /// - If `grammar_str` or `grammar_root` contain null bytes
-    /// - If any trigger word contains null bytes
     #[must_use]
     pub fn grammar_lazy(
         model: &LlamaModel,
@@ -311,20 +320,16 @@ impl LlamaSampler {
         grammar_root: &str,
         trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
         trigger_tokens: &[LlamaToken],
-    ) -> Option<Self> {
-        let grammar_str = CString::new(grammar_str).unwrap();
-        let grammar_root = CString::new(grammar_root).unwrap();
-
-        let trigger_word_cstrings: Vec<CString> = trigger_words
-            .into_iter()
-            .map(|word| CString::new(word.as_ref()).unwrap())
-            .collect();
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
+        let trigger_words = Self::sanitize_trigger_words(trigger_words)?;
 
         let mut trigger_word_ptrs: Vec<*const c_char> =
-            trigger_word_cstrings.iter().map(|cs| cs.as_ptr()).collect();
+            trigger_words.iter().map(|cs| cs.as_ptr()).collect();
 
         let sampler = unsafe {
-            llama_cpp_sys_2::llama_sampler_init_grammar_lazy(
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
@@ -336,10 +341,96 @@ impl LlamaSampler {
         };
 
         if sampler.is_null() {
-            None
+            Err(GrammarError::NullGrammar)
         } else {
-            Some(Self { sampler })
+            Ok(Self { sampler })
         }
+    }
+
+    /// Lazy grammar sampler using regex trigger patterns.
+    ///
+    /// Trigger patterns are regular expressions matched from the start of the
+    /// generation output. The grammar sampler will be fed content starting from
+    /// the first match group.
+    #[must_use]
+    pub fn grammar_lazy_patterns(
+        model: &LlamaModel,
+        grammar_str: &str,
+        grammar_root: &str,
+        trigger_patterns: &[String],
+        trigger_tokens: &[LlamaToken],
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
+        let trigger_patterns = Self::sanitize_trigger_patterns(trigger_patterns)?;
+
+        let mut trigger_pattern_ptrs: Vec<*const c_char> =
+            trigger_patterns.iter().map(|cs| cs.as_ptr()).collect();
+
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy_patterns(
+                model.vocab_ptr(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+                trigger_pattern_ptrs.as_mut_ptr(),
+                trigger_pattern_ptrs.len(),
+                trigger_tokens.as_ptr().cast(),
+                trigger_tokens.len(),
+            )
+        };
+
+        if sampler.is_null() {
+            Err(GrammarError::NullGrammar)
+        } else {
+            Ok(Self { sampler })
+        }
+    }
+
+    fn sanitize_grammar_strings(
+        grammar_str: &str,
+        grammar_root: &str,
+    ) -> Result<(CString, CString), GrammarError> {
+        if !grammar_str.contains(grammar_root) {
+            return Err(GrammarError::RootNotFound);
+        }
+
+        if grammar_str.contains('\0') || grammar_root.contains('\0') {
+            return Err(GrammarError::GrammarNullBytes);
+        }
+
+        Ok((
+            CString::new(grammar_str).unwrap(),
+            CString::new(grammar_root).unwrap(),
+        ))
+    }
+
+    fn sanitize_trigger_words(
+        trigger_words: impl IntoIterator<Item = impl AsRef<[u8]>>,
+    ) -> Result<Vec<CString>, GrammarError> {
+        let trigger_words: Vec<_> = trigger_words.into_iter().collect();
+        if trigger_words
+            .iter()
+            .any(|word| word.as_ref().contains(&b'\0'))
+        {
+            return Err(GrammarError::TriggerWordNullBytes);
+        }
+        Ok(trigger_words
+            .into_iter()
+            .map(|word| CString::new(word.as_ref()).unwrap())
+            .collect())
+    }
+
+    fn sanitize_trigger_patterns(
+        trigger_patterns: &[String],
+    ) -> Result<Vec<CString>, GrammarError> {
+        let mut patterns = Vec::with_capacity(trigger_patterns.len());
+        for pattern in trigger_patterns {
+            if pattern.contains('\0') {
+                return Err(GrammarError::GrammarNullBytes);
+            }
+            patterns.push(CString::new(pattern.as_str()).unwrap());
+        }
+        Ok(patterns)
     }
 
     /// DRY sampler, designed by p-e-w, as described in:
@@ -385,7 +476,7 @@ impl LlamaSampler {
 
     /// Penalizes tokens for being present in the context.
     ///
-    /// Parameters:  
+    /// Parameters:
     /// - ``penalty_last_n``: last n tokens to penalize (0 = disable penalty, -1 = context size)
     /// - ``penalty_repeat``: 1.0 = disabled
     /// - ``penalty_freq``: 0.0 = disabled
@@ -415,15 +506,15 @@ impl LlamaSampler {
     /// - ``n_vocab``: [`LlamaModel::n_vocab`]
     /// - ``seed``: Seed to initialize random generation with.
     /// - ``tau``: The target cross-entropy (or surprise) value you want to achieve for the
-    ///     generated text. A higher value corresponds to more surprising or less predictable text,
-    ///     while a lower value corresponds to less surprising or more predictable text.
+    ///   generated text. A higher value corresponds to more surprising or less predictable text,
+    ///   while a lower value corresponds to less surprising or more predictable text.
     /// - ``eta``: The learning rate used to update `mu` based on the error between the target and
-    ///     observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
-    ///     updated more quickly, while a smaller learning rate will result in slower updates.
+    ///   observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
+    ///   updated more quickly, while a smaller learning rate will result in slower updates.
     /// - ``m``: The number of tokens considered in the estimation of `s_hat`. This is an arbitrary
-    ///     value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`.
-    ///     In the paper, they use `m = 100`, but you can experiment with different values to see how
-    ///     it affects the performance of the algorithm.
+    ///   value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`.
+    ///   In the paper, they use `m = 100`, but you can experiment with different values to see how
+    ///   it affects the performance of the algorithm.
     #[must_use]
     pub fn mirostat(n_vocab: i32, seed: u32, tau: f32, eta: f32, m: i32) -> Self {
         let sampler =
@@ -436,11 +527,11 @@ impl LlamaSampler {
     /// # Parameters:
     /// - ``seed``: Seed to initialize random generation with.
     /// - ``tau``: The target cross-entropy (or surprise) value you want to achieve for the
-    ///     generated text. A higher value corresponds to more surprising or less predictable text,
-    ///     while a lower value corresponds to less surprising or more predictable text.
+    ///   generated text. A higher value corresponds to more surprising or less predictable text,
+    ///   while a lower value corresponds to less surprising or more predictable text.
     /// - ``eta``: The learning rate used to update `mu` based on the error between the target and
-    ///     observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
-    ///     updated more quickly, while a smaller learning rate will result in slower updates.
+    ///   observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
+    ///   updated more quickly, while a smaller learning rate will result in slower updates.
     #[must_use]
     pub fn mirostat_v2(seed: u32, tau: f32, eta: f32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_mirostat_v2(seed, tau, eta) };

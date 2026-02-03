@@ -35,10 +35,22 @@ git clone --recursive https://github.com/utilityai/llama-cpp-rs
 cd llama-cpp-rs
 ```
 
-Run the simple example (add `--featues cuda` if you have a cuda gpu)
+Run the simple example (add `--features cuda` if you have a cuda gpu)
 
 ```bash
 cargo run --release --bin simple -- --prompt "The way to kill a linux process is" hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+```
+
+Run the tools example (add `--features cuda` if you have a cuda gpu)
+
+```bash
+cargo run --release --example tools -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+```
+
+Run the OpenAI Style Completions Server (add `--features cuda` if you have a cuda gpu)
+
+```bash
+cargo run -p openai-server -- hf-model QuantFactory/Meta-Llama-3-8B-Instruct-GGUF Meta-Llama-3-8B-Instruct.Q8_0.gguf
 ```
 
 <details>

@@ -12,7 +12,6 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use hf_hub::api::sync::ApiBuilder;
 
 use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::context::LlamaContext;
@@ -20,8 +19,8 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
+use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos, Special};
 
 #[derive(clap::Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -92,12 +91,10 @@ fn main() -> Result<()> {
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_embeddings(true)
         .with_pooling_type(pooling_type);
-    println!("ctx_params: {:?}", ctx_params);
+    println!("ctx_params: {ctx_params:?}");
     let mut ctx = model
         .new_context(&backend, ctx_params)
         .with_context(|| "unable to create the llama_context")?;
-
-    let n_embd = model.n_embd();
 
     let prompt_lines = {
         let mut lines = Vec::new();
@@ -108,13 +105,13 @@ fn main() -> Result<()> {
         lines
     };
 
-    println!("prompt_lines: {:?}", prompt_lines);
+    println!("prompt_lines: {prompt_lines:?}");
     // tokenize the prompt
     let tokens_lines_list = prompt_lines
         .iter()
         .map(|line| model.str_to_token(line, AddBos::Always))
         .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("failed to tokenize {:?}", prompt_lines))?;
+        .with_context(|| format!("failed to tokenize {prompt_lines:?}"))?;
 
     let n_ctx = ctx.n_ctx() as usize;
     let n_ctx_train = model.n_ctx_train();
@@ -128,12 +125,14 @@ fn main() -> Result<()> {
     // print the prompt token-by-token
     eprintln!();
 
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+
     for (i, token_line) in tokens_lines_list.iter().enumerate() {
         eprintln!("Prompt {i} --> {}", prompt_lines[i]);
         eprintln!("Number of tokens: {}", token_line.len());
         for token in token_line {
             // Attempt to convert token to string and print it; if it fails, print the token instead
-            match model.token_to_str(*token, Special::Tokenize) {
+            match model.token_to_piece(*token, &mut decoder, true, None) {
                 Ok(token_str) => eprintln!("{token} --> {token_str}"),
                 Err(e) => {
                     eprintln!("Failed to convert token to string, error: {e}");
@@ -156,7 +155,6 @@ fn main() -> Result<()> {
     // } else {
     //     tokens_lines_list.len()
     // };
-    let mut embeddings_stored = 0;
     let mut max_seq_id_batch = 0;
     let mut output = Vec::with_capacity(tokens_lines_list.len());
 
@@ -169,16 +167,10 @@ fn main() -> Result<()> {
                 &mut ctx,
                 &mut batch,
                 max_seq_id_batch,
-                n_embd,
                 &mut output,
                 normalise,
-                pooling.clone(),
+                &pooling,
             )?;
-            embeddings_stored += if pooling == "none" {
-                batch.n_tokens()
-            } else {
-                max_seq_id_batch
-            };
             max_seq_id_batch = 0;
             batch.clear();
         }
@@ -191,34 +183,23 @@ fn main() -> Result<()> {
         &mut ctx,
         &mut batch,
         max_seq_id_batch,
-        n_embd,
         &mut output,
         normalise,
-        pooling.clone(),
+        &pooling,
     )?;
 
     let t_main_end = ggml_time_us();
 
     for (j, embeddings) in output.iter().enumerate() {
-        if pooling == "none" {
-            eprintln!("embedding {j}: ");
-            for i in 0..n_embd as usize {
-                if !normalise {
-                    eprint!("{:6.5} ", embeddings[i]);
-                } else {
-                    eprint!("{:9.6} ", embeddings[i]);
-                }
-            }
-            eprintln!();
-        } else if pooling == "rank" {
+        if pooling == "rank" {
             eprintln!("rerank score {j}: {:8.3}", embeddings[0]);
         } else {
             eprintln!("embedding {j}: ");
-            for i in 0..n_embd as usize {
-                if !normalise {
-                    eprint!("{:6.5} ", embeddings[i]);
+            for embedding in embeddings {
+                if normalise {
+                    eprint!("{embedding:9.6} ");
                 } else {
-                    eprint!("{:9.6} ", embeddings[i]);
+                    eprint!("{embedding:6.5} ");
                 }
             }
             eprintln!();
@@ -243,10 +224,9 @@ fn batch_decode(
     ctx: &mut LlamaContext,
     batch: &mut LlamaBatch,
     s_batch: i32,
-    n_embd: i32,
     output: &mut Vec<Vec<f32>>,
     normalise: bool,
-    pooling: String,
+    pooling: &str,
 ) -> Result<()> {
     eprintln!(
         "{}: n_tokens = {}, n_seq = {}",
@@ -266,9 +246,9 @@ fn batch_decode(
             .with_context(|| "Failed to get sequence embeddings")?;
         let normalized = if normalise {
             if pooling == "rank" {
-                normalize_embeddings(&embeddings, -1)
+                normalize_embeddings(embeddings, -1)
             } else {
-                normalize_embeddings(&embeddings, 2)
+                normalize_embeddings(embeddings, 2)
             }
         } else {
             embeddings.to_vec()
@@ -291,27 +271,30 @@ fn normalize_embeddings(input: &[f32], embd_norm: i32) -> Vec<f32> {
         0 => {
             // max absolute
             let max_abs = input.iter().map(|x| x.abs()).fold(0.0f32, f32::max) / 32760.0;
-            max_abs as f64
+            f64::from(max_abs)
         }
         2 => {
             // euclidean norm
             input
                 .iter()
-                .map(|x| (*x as f64).powi(2))
+                .map(|x| f64::from(*x).powi(2))
                 .sum::<f64>()
                 .sqrt()
         }
         p => {
             // p-norm
-            let sum = input.iter().map(|x| (x.abs() as f64).powi(p)).sum::<f64>();
-            sum.powf(1.0 / p as f64)
+            let sum = input
+                .iter()
+                .map(|x| f64::from(x.abs()).powi(p))
+                .sum::<f64>();
+            sum.powf(1.0 / f64::from(p))
         }
     };
 
     let norm = if sum > 0.0 { 1.0 / sum } else { 0.0 };
 
     for i in 0..n {
-        output[i] = (input[i] as f64 * norm) as f32;
+        output[i] = (f64::from(input[i]) * norm) as f32;
     }
 
     output

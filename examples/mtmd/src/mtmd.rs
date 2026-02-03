@@ -6,6 +6,7 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use clap::Parser;
+use encoding_rs::UTF_8;
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::context::LlamaContext;
@@ -72,11 +73,11 @@ pub struct MtmdCliParams {
 
 /// State of the MTMD CLI application.
 #[allow(missing_debug_implementations)]
-pub struct MtmdCliContext {
+pub struct MtmdCliContext<'a> {
     /// The MTMD context for multimodal processing.
     pub mtmd_ctx: MtmdContext,
     /// The batch used for processing tokens.
-    pub batch: LlamaBatch,
+    pub batch: LlamaBatch<'a>,
     /// The list of loaded bitmaps (images/audio).
     pub bitmaps: Vec<MtmdBitmap>,
     /// The number of past tokens processed.
@@ -87,7 +88,7 @@ pub struct MtmdCliContext {
     pub chat: Vec<LlamaChatMessage>,
 }
 
-impl MtmdCliContext {
+impl<'a> MtmdCliContext<'a> {
     /// Creates a new MTMD CLI context
     ///
     /// # Errors
@@ -187,6 +188,7 @@ impl MtmdCliContext {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let mut generated_tokens = Vec::new();
         let max_predict = if n_predict < 0 { i32::MAX } else { n_predict };
+        let mut decoder = UTF_8.new_decoder();
 
         for _i in 0..max_predict {
             // Sample next token
@@ -201,7 +203,7 @@ impl MtmdCliContext {
             }
 
             // Print token
-            let piece = model.token_to_str(token, Special::Tokenize)?;
+            let piece = model.token_to_piece(token, &mut decoder, true, None)?;
             print!("{piece}");
             io::stdout().flush()?;
 
