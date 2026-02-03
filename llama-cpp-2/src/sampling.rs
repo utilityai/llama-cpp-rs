@@ -9,7 +9,7 @@ use crate::model::LlamaModel;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
-use crate::GrammarError;
+use crate::{status_is_ok, status_to_i32, GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -41,14 +41,14 @@ impl LlamaSampler {
     /// Accepts a token from the sampler, possibly updating the internal state of certain samplers
     /// (e.g. grammar, repetition, etc.)
     pub fn accept(&mut self, token: LlamaToken) {
-        unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.0) }
+        let _ = self.try_accept(token);
     }
 
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
     pub fn accept_many(&mut self, tokens: impl IntoIterator<Item = impl Borrow<LlamaToken>>) {
         for token in tokens {
-            unsafe { llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.borrow().0) }
+            let _ = self.try_accept(*token.borrow());
         }
     }
 
@@ -61,6 +61,17 @@ impl LlamaSampler {
     ) -> Self {
         self.accept_many(tokens);
         self
+    }
+
+    /// Try accepting a token from the sampler. Returns an error if the sampler throws.
+    pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
+        let sampler_result =
+            unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
+        if status_is_ok(sampler_result) {
+            Ok(())
+        } else {
+            Err(SamplerAcceptError::FfiError(status_to_i32(sampler_result)))
+        }
     }
 
     /// Resets the internal state of the sampler.
@@ -285,7 +296,7 @@ impl LlamaSampler {
             Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
 
         let sampler = unsafe {
-            llama_cpp_sys_2::llama_sampler_init_grammar(
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
@@ -318,12 +329,51 @@ impl LlamaSampler {
             trigger_words.iter().map(|cs| cs.as_ptr()).collect();
 
         let sampler = unsafe {
-            llama_cpp_sys_2::llama_sampler_init_grammar_lazy(
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
                 trigger_word_ptrs.as_mut_ptr(),
                 trigger_word_ptrs.len(),
+                trigger_tokens.as_ptr().cast(),
+                trigger_tokens.len(),
+            )
+        };
+
+        if sampler.is_null() {
+            Err(GrammarError::NullGrammar)
+        } else {
+            Ok(Self { sampler })
+        }
+    }
+
+    /// Lazy grammar sampler using regex trigger patterns.
+    ///
+    /// Trigger patterns are regular expressions matched from the start of the
+    /// generation output. The grammar sampler will be fed content starting from
+    /// the first match group.
+    #[must_use]
+    pub fn grammar_lazy_patterns(
+        model: &LlamaModel,
+        grammar_str: &str,
+        grammar_root: &str,
+        trigger_patterns: &[String],
+        trigger_tokens: &[LlamaToken],
+    ) -> Result<Self, GrammarError> {
+        let (grammar_str, grammar_root) =
+            Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
+        let trigger_patterns = Self::sanitize_trigger_patterns(trigger_patterns)?;
+
+        let mut trigger_pattern_ptrs: Vec<*const c_char> =
+            trigger_patterns.iter().map(|cs| cs.as_ptr()).collect();
+
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy_patterns(
+                model.vocab_ptr(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+                trigger_pattern_ptrs.as_mut_ptr(),
+                trigger_pattern_ptrs.len(),
                 trigger_tokens.as_ptr().cast(),
                 trigger_tokens.len(),
             )
@@ -368,6 +418,19 @@ impl LlamaSampler {
             .into_iter()
             .map(|word| CString::new(word.as_ref()).unwrap())
             .collect())
+    }
+
+    fn sanitize_trigger_patterns(
+        trigger_patterns: &[String],
+    ) -> Result<Vec<CString>, GrammarError> {
+        let mut patterns = Vec::with_capacity(trigger_patterns.len());
+        for pattern in trigger_patterns {
+            if pattern.contains('\0') {
+                return Err(GrammarError::GrammarNullBytes);
+            }
+            patterns.push(CString::new(pattern.as_str()).unwrap());
+        }
+        Ok(patterns)
     }
 
     /// DRY sampler, designed by p-e-w, as described in:

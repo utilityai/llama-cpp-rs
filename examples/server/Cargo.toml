@@ -1,13 +1,16 @@
 [package]
-name = "mtmd"
-version = "0.1.86"
+name = "openai-server"
+version = "0.1.133"
 edition = "2021"
 publish = false
 
 [dependencies]
-llama-cpp-2 = { path = "../../llama-cpp-2", version = "0.1.86", features = ["mtmd"] }
-clap = { workspace = true, features = ["derive"] }
+llama-cpp-2 = { path = "../../llama-cpp-2", version = "0.1.133" }
+actix-web = "4.9.0"
+serde_json = "1.0"
 encoding_rs = { workspace = true }
+hf-hub = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [features]
 cuda = ["llama-cpp-2/cuda"]
@@ -16,7 +19,3 @@ vulkan = ["llama-cpp-2/vulkan"]
 
 [lints]
 workspace = true
-
-[[example]]
-name = "mtmd"
-path = "src/mtmd.rs"
