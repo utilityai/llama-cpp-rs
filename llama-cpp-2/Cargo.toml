@@ -34,6 +34,7 @@ sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
+opencl = ["llama-cpp-sys-2/opencl"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
 
 
