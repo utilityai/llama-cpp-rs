@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::DirEntry;
 
+#[cfg(feature = "compat")]
+const PREFIX: &str = "llm_";
+
 enum WindowsVariant {
     Msvc,
     Other,
@@ -114,6 +117,21 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
             Err(e) => println!("cargo:warning=error={}", e),
         }
     }
+    // Sort in reverse dependency order for single-pass linkers.
+    // Strip `llm_` prefix so the sort works for both normal and compat builds.
+    lib_names.sort_by_key(|name| {
+        let base = name.strip_prefix("llm_").unwrap_or(name);
+        match base {
+            "common" => 0,
+            "llama" => 1,
+            "ggml" => 2,
+            "ggml-cpu" => 3,
+            "ggml-metal" => 4,
+            "ggml-base" => 5,
+            _ => 3,
+        }
+    });
+
     lib_names
 }
 
@@ -195,6 +213,26 @@ fn is_hidden(e: &DirEntry) -> bool {
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or_default()
+}
+
+#[cfg(feature = "compat")]
+#[derive(Debug)]
+struct GGMLLinkRename;
+
+#[cfg(feature = "compat")]
+impl bindgen::callbacks::ParseCallbacks for GGMLLinkRename {
+    fn generated_link_name_override(
+        &self,
+        item_info: bindgen::callbacks::ItemInfo<'_>,
+    ) -> Option<String> {
+        if matches!(item_info.kind, bindgen::callbacks::ItemKind::Function)
+            && item_info.name.starts_with("ggml_")
+        {
+            Some(format!("{PREFIX}{}", item_info.name))
+        } else {
+            None
+        }
+    }
 }
 
 fn main() {
@@ -469,6 +507,11 @@ fn main() {
             target_triple
         );
     }
+    #[cfg(feature = "compat")]
+    {
+        bindings_builder = bindings_builder.parse_callbacks(Box::new(GGMLLinkRename));
+    }
+
     let bindings = bindings_builder
         .generate()
         .expect("Failed to generate bindings");
@@ -801,6 +844,11 @@ fn main() {
 
     let build_dir = config.build();
 
+    #[cfg(feature = "compat")]
+    {
+        compat::redefine_symbols(&out_dir);
+    }
+
     // Search paths
     println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
     println!(
@@ -981,6 +1029,350 @@ fn main() {
             if !dst.exists() {
                 std::fs::hard_link(asset.clone(), dst).unwrap();
             }
+        }
+    }
+}
+
+/// Prefix ggml/gguf symbols in static libraries to avoid collisions with other
+/// ggml-bundling crates (e.g. whisper-rs-sys). Requires nm + objcopy (or LLVM equivalents).
+#[cfg(feature = "compat")]
+mod compat {
+    use std::collections::HashSet;
+    use std::fmt::{Display, Formatter};
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    use crate::PREFIX;
+
+    const MACHO_UNDERSCORE: bool =
+        cfg!(any(target_os = "macos", target_os = "ios", target_os = "dragonfly"));
+
+    pub fn redefine_symbols(out_dir: &Path) {
+        let (nm, objcopy) = tools();
+
+        let mut libs = Vec::new();
+        for subdir in ["lib", "lib64"] {
+            let dir = out_dir.join(subdir);
+            if let Ok(entries) = std::fs::read_dir(&dir) {
+                for entry in entries.filter_map(|e| e.ok()) {
+                    let path = entry.path();
+                    if is_static_lib(&path) {
+                        libs.push(path);
+                    }
+                }
+            }
+        }
+
+        if libs.is_empty() {
+            println!("cargo:warning=compat: no static libraries found, skipping symbol rewrite");
+            return;
+        }
+
+        let sym_prefix = if MACHO_UNDERSCORE { "_" } else { "" };
+
+        let filters = [
+            Filter { prefix: format!("{sym_prefix}ggml_"), sym_types: &['T', 'U', 'B', 'D', 'S'] },
+            Filter { prefix: format!("{sym_prefix}gguf_"), sym_types: &['T', 'U', 'B', 'D', 'S'] },
+            Filter { prefix: format!("{sym_prefix}quantize_"), sym_types: &['T'] },
+            Filter { prefix: format!("{sym_prefix}dequantize_"), sym_types: &['T'] },
+            Filter { prefix: format!("{sym_prefix}iq2xs_"), sym_types: &['T'] },
+            Filter { prefix: format!("{sym_prefix}iq3xs_"), sym_types: &['T'] },
+        ];
+
+        let cpp_mangled_prefix = format!("{sym_prefix}_Z");
+
+        for lib_path in &libs {
+            let lib_name = lib_path.file_name().unwrap().to_str().unwrap();
+            let lib_dir = lib_path.parent().unwrap();
+
+            let nm_output = nm_symbols(&nm, lib_name, lib_dir);
+            let c_symbols = get_symbols(&nm_output, &filters);
+
+            let cpp_symbols = get_cpp_ggml_symbols(&nm_output, &cpp_mangled_prefix);
+
+            if !c_symbols.is_empty() || !cpp_symbols.is_empty() {
+                println!(
+                    "cargo:warning=compat: rewriting {} C + {} C++ symbols in {}",
+                    c_symbols.len(),
+                    cpp_symbols.len(),
+                    lib_name
+                );
+                objcopy_rewrite(&objcopy, lib_name, PREFIX, &c_symbols, &cpp_symbols, lib_dir);
+            }
+        }
+
+        // Rename libraries (libX.a → libllm_X.a) to avoid ambiguous -l flags.
+        for lib_path in &libs {
+            let file_name = lib_path.file_name().unwrap().to_str().unwrap();
+            let lib_dir = lib_path.parent().unwrap();
+
+            let new_name = if let Some(rest) = file_name.strip_prefix("lib") {
+                format!("libllm_{rest}")
+            } else {
+                format!("llm_{file_name}")
+            };
+
+            let new_path = lib_dir.join(&new_name);
+            std::fs::rename(lib_path, &new_path).unwrap_or_else(|e| {
+                panic!("compat: failed to rename {file_name} → {new_name}: {e}");
+            });
+            println!("cargo:warning=compat: renamed {file_name} → {new_name}");
+        }
+    }
+
+    fn is_static_lib(path: &Path) -> bool {
+        match path.extension().and_then(|e| e.to_str()) {
+            Some("a") => true,
+            Some("lib") if cfg!(target_family = "windows") => true,
+            _ => false,
+        }
+    }
+
+    enum Tool {
+        Name(&'static str),
+        FullPath(PathBuf),
+    }
+
+    impl Display for Tool {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Tool::Name(n) => write!(f, "{n}"),
+                Tool::FullPath(p) => write!(f, "{}", p.display()),
+            }
+        }
+    }
+
+    fn tools() -> (Tool, Tool) {
+        let (nm_names, nm_help): (Vec<&str>, Vec<&str>) = if cfg!(target_os = "linux") {
+            (vec!["nm", "llvm-nm"], vec!["GNU nm", "llvm-nm"])
+        } else {
+            (vec!["nm", "llvm-nm"], vec!["nm (Xcode CLT)", "llvm-nm"])
+        };
+
+        let (objcopy_names, objcopy_help): (Vec<&str>, Vec<&str>) = if cfg!(target_os = "linux") {
+            (
+                vec!["objcopy", "llvm-objcopy"],
+                vec!["GNU objcopy", "llvm-objcopy"],
+            )
+        } else {
+            (vec!["llvm-objcopy"], vec!["llvm-objcopy (brew install llvm)"])
+        };
+
+        println!("cargo:rerun-if-env-changed=NM_PATH");
+        println!("cargo:rerun-if-env-changed=OBJCOPY_PATH");
+
+        let nm = find_tool(&nm_names, "NM_PATH").unwrap_or_else(|| {
+            panic!(
+                "compat: no nm-equivalent found in PATH. Install one of: {:?}\n\
+                 Or set NM_PATH to its full path.",
+                nm_help
+            );
+        });
+
+        let objcopy = find_tool(&objcopy_names, "OBJCOPY_PATH").unwrap_or_else(|| {
+            if cfg!(any(target_os = "macos", target_os = "ios")) {
+                panic!(
+                    "compat: llvm-objcopy not found. Required for the `compat` feature on macOS.\n\
+                     Install via: brew install llvm\n\
+                     Or set OBJCOPY_PATH to its full path (e.g. /opt/homebrew/opt/llvm/bin/llvm-objcopy)."
+                );
+            } else {
+                panic!(
+                    "compat: no objcopy-equivalent found in PATH. Install one of: {:?}\n\
+                     Or set OBJCOPY_PATH to its full path.",
+                    objcopy_help
+                );
+            }
+        });
+
+        (nm, objcopy)
+    }
+
+    fn find_tool(names: &[&'static str], env_var: &str) -> Option<Tool> {
+        if let Ok(path_str) = std::env::var(env_var) {
+            let path_str = path_str.trim_matches([' ', '"', '\''].as_slice());
+            let path = PathBuf::from(path_str);
+            if path.is_file() {
+                return Some(Tool::FullPath(path));
+            }
+            println!("cargo:warning=compat: {env_var}={path_str} is not a valid file, searching PATH");
+        }
+
+        for name in names {
+            if let Ok(output) = Command::new(name).arg("--version").output() {
+                if output.status.success() {
+                    return Some(Tool::Name(name));
+                }
+            }
+        }
+
+        if cfg!(any(target_os = "macos", target_os = "ios")) {
+            for homebrew_path in [
+                "/opt/homebrew/opt/llvm/bin",
+                "/usr/local/opt/llvm/bin",
+            ] {
+                for name in names {
+                    let full_path = PathBuf::from(homebrew_path).join(name);
+                    if full_path.is_file() {
+                        return Some(Tool::FullPath(full_path));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    fn nm_symbols(tool: &Tool, lib_name: &str, lib_dir: &Path) -> String {
+        let output = Command::new(tool.to_string())
+            .current_dir(lib_dir)
+            .arg(lib_name)
+            .args(["-p", "-P"])
+            .output()
+            .unwrap_or_else(|e| panic!("compat: failed to run \"{tool}\" on {lib_name}: {e}"));
+
+        if !output.status.success() {
+            panic!(
+                "compat: nm failed on {lib_name} ({}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        String::from_utf8_lossy(&output.stdout).to_string()
+    }
+
+    struct Filter {
+        prefix: String,
+        sym_types: &'static [char],
+    }
+
+    fn parse_nm_line(line: &str) -> Option<(&str, char)> {
+        let mut stripped = line;
+        while stripped.split(' ').count() > 2 {
+            if let Some(idx) = stripped.rfind(' ') {
+                stripped = &stripped[..idx];
+            } else {
+                break;
+            }
+        }
+        let parts: Vec<&str> = stripped.splitn(2, ' ').collect();
+        if parts.len() != 2 || parts[1].len() != 1 {
+            return None;
+        }
+        Some((parts[0], parts[1].chars().next()?))
+    }
+
+    fn get_symbols<'a>(nm_output: &'a str, filters: &[Filter]) -> HashSet<&'a str> {
+        nm_output
+            .lines()
+            .filter_map(|line| {
+                let (sym_name, sym_type) = parse_nm_line(line)?;
+                for filter in filters {
+                    if sym_name.starts_with(&filter.prefix)
+                        && filter.sym_types.contains(&sym_type)
+                    {
+                        return Some(sym_name);
+                    }
+                }
+                None
+            })
+            .collect()
+    }
+
+    /// Collect C++ mangled ggml symbols (Itanium ABI) for localization.
+    /// Only matches defined symbols (T, S, D, B).
+    fn get_cpp_ggml_symbols<'a>(nm_output: &'a str, cpp_prefix: &str) -> HashSet<&'a str> {
+        nm_output
+            .lines()
+            .filter_map(|line| {
+                let (sym_name, sym_type) = parse_nm_line(line)?;
+                if !['T', 'S', 'D', 'B'].contains(&sym_type) {
+                    return None;
+                }
+                let after = sym_name.strip_prefix(cpp_prefix)?;
+                if is_ggml_mangled(after) {
+                    Some(sym_name)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Match ggml-prefixed C++ symbols but NOT gguf_* (referenced cross-object).
+    fn is_ggml_mangled(after_z: &str) -> bool {
+        let base = if after_z.starts_with("TV")
+            || after_z.starts_with("TI")
+            || after_z.starts_with("TS")
+        {
+            &after_z[2..]
+        } else {
+            after_z
+        };
+
+        if base.starts_with('N') {
+            let rest = &base[1..];
+            let digits_end = rest
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len());
+            if digits_end > 0 {
+                let after_digits = &rest[digits_end..];
+                if after_digits.starts_with("ggml") {
+                    return true;
+                }
+            }
+        }
+
+        let digits_end = base
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(base.len());
+        if digits_end > 0 {
+            let after_digits = &base[digits_end..];
+            if after_digits.starts_with("ggml_") {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn objcopy_rewrite(
+        tool: &Tool,
+        lib_name: &str,
+        prefix: &str,
+        c_symbols: &HashSet<&str>,
+        cpp_symbols: &HashSet<&str>,
+        lib_dir: &Path,
+    ) {
+        let mut cmd = Command::new(tool.to_string());
+        cmd.current_dir(lib_dir);
+
+        for sym in c_symbols {
+            let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                format!("_{prefix}{}", &sym[1..])
+            } else {
+                format!("{prefix}{sym}")
+            };
+            cmd.arg(format!("--redefine-sym={sym}={new_name}"));
+        }
+
+        for sym in cpp_symbols {
+            cmd.arg(format!("--localize-symbol={sym}"));
+        }
+
+        cmd.arg(lib_name);
+
+        let output = cmd
+            .output()
+            .unwrap_or_else(|e| panic!("compat: failed to run \"{tool}\" on {lib_name}: {e}"));
+
+        if !output.status.success() {
+            panic!(
+                "compat: objcopy failed on {lib_name} ({}): {}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
     }
 }

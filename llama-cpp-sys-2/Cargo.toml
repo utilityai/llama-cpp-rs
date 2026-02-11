@@ -88,3 +88,5 @@ openmp = []
 shared-stdcxx = []
 system-ggml = []
 mtmd = []
+# Prefix ggml symbols to avoid conflicts with other ggml-bundling crates (e.g. whisper-rs-sys).
+compat = []
