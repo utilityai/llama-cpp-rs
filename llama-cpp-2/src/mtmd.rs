@@ -145,6 +145,10 @@ pub struct MtmdContext {
     pub(crate) context: NonNull<llama_cpp_sys_2::mtmd_context>,
 }
 
+// MtmdContext is thread safe
+unsafe impl Send for MtmdContext {}
+unsafe impl Sync for MtmdContext {}
+
 impl MtmdContext {
     /// Initialize MTMD context from a multimodal projection file.
     ///
@@ -335,6 +339,10 @@ impl Drop for MtmdContext {
 pub struct MtmdBitmap {
     pub(crate) bitmap: NonNull<llama_cpp_sys_2::mtmd_bitmap>,
 }
+
+// MtmdBitmap is thread safe
+unsafe impl Send for MtmdBitmap {}
+unsafe impl Sync for MtmdBitmap {}
 
 impl MtmdBitmap {
     /// Create a bitmap from image data in RGB format.
