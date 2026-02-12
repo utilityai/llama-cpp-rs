@@ -1373,7 +1373,14 @@ mod compat {
         }
 
         for sym in cpp_symbols {
-            cmd.arg(format!("--localize-symbol={sym}"));
+            // Redefine C++ symbols with prefix (same as C symbols) so that
+            // cross-object references stay consistent.
+            let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                format!("_{prefix}{}", &sym[1..])
+            } else {
+                format!("{prefix}{sym}")
+            };
+            cmd.arg(format!("--redefine-sym={sym}={new_name}"));
         }
 
         cmd.arg(lib_name);
