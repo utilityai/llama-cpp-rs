@@ -1314,7 +1314,7 @@ mod compat {
             .collect()
     }
 
-    /// Match ggml-prefixed C++ symbols but NOT gguf_* (referenced cross-object).
+    /// Match ggml/gguf-prefixed C++ symbols for renaming.
     fn is_ggml_mangled(after_z: &str) -> bool {
         let base = if after_z.starts_with("TV")
             || after_z.starts_with("TI")
@@ -1332,7 +1332,7 @@ mod compat {
                 .unwrap_or(rest.len());
             if digits_end > 0 {
                 let after_digits = &rest[digits_end..];
-                if after_digits.starts_with("ggml") {
+                if after_digits.starts_with("ggml") || after_digits.starts_with("gguf") {
                     return true;
                 }
             }
@@ -1343,7 +1343,7 @@ mod compat {
             .unwrap_or(base.len());
         if digits_end > 0 {
             let after_digits = &base[digits_end..];
-            if after_digits.starts_with("ggml_") {
+            if after_digits.starts_with("ggml_") || after_digits.starts_with("gguf_") {
                 return true;
             }
         }
