@@ -420,7 +420,7 @@ impl LlamaModel {
     /// the llama.cpp token decoding functionality without any special logic or filtering.
     ///
     /// Decoding raw string requires using an decoder, tokens from language models may not always map
-    /// to full charakters depending on the encoding so stateful decoding is required, otherwise partial strings may be lost!
+    /// to full characters depending on the encoding so stateful decoding is required, otherwise partial strings may be lost!
     /// Invalid characters are mapped to REPLACEMENT CHARACTER making the method safe to use even if the model inherently produces
     /// garbage.
     ///
