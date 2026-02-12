@@ -1091,8 +1091,8 @@ mod compat {
             let cpp_symbols = get_cpp_ggml_symbols(&nm_output, &cpp_mangled_prefix);
 
             if !c_symbols.is_empty() || !cpp_symbols.is_empty() {
-                println!(
-                    "cargo:warning=compat: rewriting {} C + {} C++ symbols in {}",
+                eprintln!(
+                    "compat: rewriting {} C + {} C++ symbols in {}",
                     c_symbols.len(),
                     cpp_symbols.len(),
                     lib_name
@@ -1116,7 +1116,7 @@ mod compat {
             std::fs::rename(lib_path, &new_path).unwrap_or_else(|e| {
                 panic!("compat: failed to rename {file_name} → {new_name}: {e}");
             });
-            println!("cargo:warning=compat: renamed {file_name} → {new_name}");
+            eprintln!("compat: renamed {file_name} → {new_name}");
         }
     }
 
@@ -1202,6 +1202,20 @@ mod compat {
             if let Ok(output) = Command::new(name).arg("--version").output() {
                 if output.status.success() {
                     return Some(Tool::Name(name));
+                }
+            }
+        }
+
+        // Try llvm-config --prefix to locate LLVM tools
+        if let Ok(output) = Command::new("llvm-config").arg("--prefix").output() {
+            if output.status.success() {
+                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                let bin_dir = PathBuf::from(&prefix).join("bin");
+                for name in names {
+                    let full_path = bin_dir.join(name);
+                    if full_path.is_file() {
+                        return Some(Tool::FullPath(full_path));
+                    }
                 }
             }
         }
