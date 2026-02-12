@@ -15,6 +15,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
 encoding_rs = { workspace = true }
+llguidance = { version = "0.7.30", optional = true }
+toktrie = { version = "0.7.30", optional = true }
 
 [dev-dependencies]
 encoding_rs = { workspace = true }
@@ -35,6 +37,7 @@ sampler = []
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
+llguidance = ["dep:llguidance", "dep:toktrie"]
 
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
@@ -60,3 +63,7 @@ path = "../examples/tools.rs"
 [[example]]
 name = "openai_stream"
 path = "../examples/openai_stream.rs"
+
+[[example]]
+name = "llguidance"
+path = "../examples/llguidance.rs"
