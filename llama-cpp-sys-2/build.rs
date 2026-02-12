@@ -1294,14 +1294,15 @@ mod compat {
             .collect()
     }
 
-    /// Collect C++ mangled ggml symbols (Itanium ABI) for localization.
-    /// Only matches defined symbols (T, S, D, B).
+    /// Collect C++ mangled ggml/gguf symbols (Itanium ABI) for localization.
+    /// Matches both defined (T, S, D, B) and undefined (U) symbols so that
+    /// cross-object references are rewritten consistently.
     fn get_cpp_ggml_symbols<'a>(nm_output: &'a str, cpp_prefix: &str) -> HashSet<&'a str> {
         nm_output
             .lines()
             .filter_map(|line| {
                 let (sym_name, sym_type) = parse_nm_line(line)?;
-                if !['T', 'S', 'D', 'B'].contains(&sym_type) {
+                if !['T', 'S', 'D', 'B', 'U'].contains(&sym_type) {
                     return None;
                 }
                 let after = sym_name.strip_prefix(cpp_prefix)?;
