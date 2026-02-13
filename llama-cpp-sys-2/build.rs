@@ -1430,41 +1430,109 @@ mod compat {
         cpp_symbols: &HashSet<&str>,
         lib_dir: &Path,
     ) {
-        let mut cmd = Command::new(tool.to_string());
-        cmd.current_dir(lib_dir);
+        #[cfg(target_os = "windows")]
+        {
+            let mut cmd = Command::new(tool.to_string());
+            cmd.current_dir(lib_dir);
 
-        for sym in c_symbols {
-            let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
-                format!("_{prefix}{}", &sym[1..])
-            } else {
-                format!("{prefix}{sym}")
-            };
-            cmd.arg(format!("--redefine-sym={sym}={new_name}"));
-        }
-
-        for sym in cpp_symbols {
-            // Redefine C++ symbols with prefix (same as C symbols) so that
-            // cross-object references stay consistent.
-            let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
-                format!("_{prefix}{}", &sym[1..])
-            } else {
-                format!("{prefix}{sym}")
-            };
-            cmd.arg(format!("--redefine-sym={sym}={new_name}"));
-        }
-
-        cmd.arg(lib_name);
-
-        let output = cmd
-            .output()
-            .unwrap_or_else(|e| panic!("compat: failed to run \"{tool}\" on {lib_name}: {e}"));
-
-        if !output.status.success() {
-            panic!(
-                "compat: objcopy failed on {lib_name} ({}): {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
+            let mapping_file_name = format!(
+                ".compat-redefine-syms-{}-{}.txt",
+                std::process::id(),
+                lib_name
             );
+            let mapping_path = lib_dir.join(&mapping_file_name);
+
+            let mut mappings = String::new();
+
+            for sym in c_symbols {
+                let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                    format!("_{prefix}{}", &sym[1..])
+                } else {
+                    format!("{prefix}{sym}")
+                };
+                mappings.push_str(sym);
+                mappings.push(' ');
+                mappings.push_str(&new_name);
+                mappings.push(char::from(10));
+            }
+
+            for sym in cpp_symbols {
+                let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                    format!("_{prefix}{}", &sym[1..])
+                } else {
+                    format!("{prefix}{sym}")
+                };
+                mappings.push_str(sym);
+                mappings.push(' ');
+                mappings.push_str(&new_name);
+                mappings.push(char::from(10));
+            }
+
+            std::fs::write(&mapping_path, mappings).unwrap_or_else(|e| {
+                panic!(
+                    "compat: failed to write symbol map for {lib_name} at {}: {e}",
+                    mapping_path.display()
+                )
+            });
+
+            cmd.arg(format!("--redefine-syms={mapping_file_name}"));
+            cmd.arg(lib_name);
+
+            let output = cmd
+                .output()
+                .unwrap_or_else(|e| panic!("compat: failed to run \"{tool}\" on {lib_name}: {e}"));
+
+            let _ = std::fs::remove_file(&mapping_path);
+
+            if !output.status.success() {
+                panic!(
+                    "compat: objcopy failed on {lib_name} ({}): {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            return;
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let mut cmd = Command::new(tool.to_string());
+            cmd.current_dir(lib_dir);
+
+            for sym in c_symbols {
+                let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                    format!("_{prefix}{}", &sym[1..])
+                } else {
+                    format!("{prefix}{sym}")
+                };
+                cmd.arg(format!("--redefine-sym={sym}={new_name}"));
+            }
+
+            for sym in cpp_symbols {
+                // Redefine C++ symbols with prefix (same as C symbols) so that
+                // cross-object references stay consistent.
+                let new_name = if MACHO_UNDERSCORE && sym.starts_with('_') {
+                    format!("_{prefix}{}", &sym[1..])
+                } else {
+                    format!("{prefix}{sym}")
+                };
+                cmd.arg(format!("--redefine-sym={sym}={new_name}"));
+            }
+
+            cmd.arg(lib_name);
+
+            let output = cmd
+                .output()
+                .unwrap_or_else(|e| panic!("compat: failed to run \"{tool}\" on {lib_name}: {e}"));
+
+            if !output.status.success() {
+                panic!(
+                    "compat: objcopy failed on {lib_name} ({}): {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
     }
 }
