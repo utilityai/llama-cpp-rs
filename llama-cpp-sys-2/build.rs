@@ -7,6 +7,20 @@ use walkdir::DirEntry;
 
 #[cfg(feature = "compat")]
 const PREFIX: &str = "llm_";
+const CMP0147_OLD_BLOCK: &str = r#"if (POLICY CMP0147)
+    # Parallel build custom build steps
+    cmake_policy(SET CMP0147 NEW)
+endif()"#;
+const CMP0147_PATCHED_BLOCK: &str = r#"if (POLICY CMP0147)
+    # CMake 3.27+ enables parallel custom build steps for Visual Studio via CMP0147.
+    # ggml-vulkan relies on ordered ExternalProject steps; parallelized steps can run
+    # out of order under MSBuild (build/install before configure), causing missing CMakeCache.
+    if (CMAKE_GENERATOR MATCHES "Visual Studio")
+        cmake_policy(SET CMP0147 OLD)
+    else()
+        cmake_policy(SET CMP0147 NEW)
+    endif()
+endif()"#;
 
 enum WindowsVariant {
     Msvc,
@@ -213,6 +227,45 @@ fn is_hidden(e: &DirEntry) -> bool {
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or_default()
+}
+
+fn patch_windows_vulkan_cmp0147(manifest_dir: &str) {
+    let cmake_path = Path::new(manifest_dir)
+        .join("llama.cpp")
+        .join("ggml")
+        .join("src")
+        .join("ggml-vulkan")
+        .join("CMakeLists.txt");
+
+    let original = match std::fs::read_to_string(&cmake_path) {
+        Ok(content) => content,
+        Err(_) => return,
+    };
+
+    let had_crlf = original.contains("\r\n");
+    let mut normalized = original.replace("\r\n", "\n");
+
+    if normalized.contains(CMP0147_PATCHED_BLOCK) {
+        return;
+    }
+    if !normalized.contains(CMP0147_OLD_BLOCK) {
+        return;
+    }
+
+    normalized = normalized.replace(CMP0147_OLD_BLOCK, CMP0147_PATCHED_BLOCK);
+    let updated = if had_crlf {
+        normalized.replace('\n', "\r\n")
+    } else {
+        normalized
+    };
+
+    if let Err(error) = std::fs::write(&cmake_path, updated) {
+        println!(
+            "cargo:warning=Failed to patch ggml-vulkan CMP0147 policy at {}: {}",
+            cmake_path.display(),
+            error
+        );
+    }
 }
 
 #[cfg(feature = "compat")]
@@ -785,6 +838,9 @@ fn main() {
         config.define("GGML_VULKAN", "ON");
         match target_os {
             TargetOs::Windows(_) => {
+                // Keep Visual Studio ExternalProject steps ordered; NEW breaks ggml-vulkan on Windows.
+                patch_windows_vulkan_cmp0147(&manifest_dir);
+
                 let vulkan_path = env::var("VULKAN_SDK").expect(
                     "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set",
                 );
@@ -948,7 +1004,11 @@ fn main() {
                 common_profile_dir.display()
             );
         }
-        println!("cargo:rustc-link-lib=static=common");
+        if cfg!(feature = "compat") && cfg!(target_os = "windows") {
+            println!("cargo:rustc-link-lib=static=llm_common");
+        } else {
+            println!("cargo:rustc-link-lib=static=common");
+        }
     }
 
     if cfg!(feature = "system-ggml") {
@@ -1051,8 +1111,18 @@ mod compat {
         let (nm, objcopy) = tools();
 
         let mut libs = Vec::new();
-        for subdir in ["lib", "lib64"] {
-            let dir = out_dir.join(subdir);
+        let mut scan_dirs = vec![out_dir.join("lib"), out_dir.join("lib64")];
+        if cfg!(target_os = "windows") {
+            scan_dirs.extend([
+                out_dir.join("build").join("common"),
+                out_dir.join("build").join("common").join("Release"),
+                out_dir.join("build").join("common").join("RelWithDebInfo"),
+                out_dir.join("build").join("common").join("MinSizeRel"),
+                out_dir.join("build").join("common").join("Debug"),
+            ]);
+        }
+
+        for dir in scan_dirs {
             if let Ok(entries) = std::fs::read_dir(&dir) {
                 for entry in entries.filter_map(|e| e.ok()) {
                     let path = entry.path();
@@ -1073,10 +1143,10 @@ mod compat {
         let filters = [
             Filter { prefix: format!("{sym_prefix}ggml_"), sym_types: &['T', 'U', 'B', 'D', 'S'] },
             Filter { prefix: format!("{sym_prefix}gguf_"), sym_types: &['T', 'U', 'B', 'D', 'S'] },
-            Filter { prefix: format!("{sym_prefix}quantize_"), sym_types: &['T'] },
-            Filter { prefix: format!("{sym_prefix}dequantize_"), sym_types: &['T'] },
-            Filter { prefix: format!("{sym_prefix}iq2xs_"), sym_types: &['T'] },
-            Filter { prefix: format!("{sym_prefix}iq3xs_"), sym_types: &['T'] },
+            Filter { prefix: format!("{sym_prefix}quantize_"), sym_types: &['T', 'U'] },
+            Filter { prefix: format!("{sym_prefix}dequantize_"), sym_types: &['T', 'U'] },
+            Filter { prefix: format!("{sym_prefix}iq2xs_"), sym_types: &['T', 'U'] },
+            Filter { prefix: format!("{sym_prefix}iq3xs_"), sym_types: &['T', 'U'] },
         ];
 
         let cpp_mangled_prefix = format!("{sym_prefix}_Z");
