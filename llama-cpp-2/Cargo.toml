@@ -30,6 +30,7 @@ metal = ["llama-cpp-sys-2/metal"]
 dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
 openmp = ["llama-cpp-sys-2/openmp"]
+rocm = ["llama-cpp-sys-2/rocm"]
 sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
