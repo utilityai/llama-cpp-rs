@@ -67,3 +67,4 @@ path = "../examples/openai_stream.rs"
 [[example]]
 name = "llguidance"
 path = "../examples/llguidance.rs"
+required-features = ["llguidance"]
