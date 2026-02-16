@@ -1,6 +1,6 @@
-//! # LLGuidance Example
+//! # `LLGuidance` Example
 //!
-//! This example demonstrates how to use the LLGuidance sampler for constrained decoding.
+//! This example demonstrates how to use the `LLGuidance` sampler for constrained decoding.
 //!
 //! ```console
 //! cargo run --example llguidance --features llguidance -- <path_to_model>
@@ -35,7 +35,7 @@ fn main() {
         .expect("failed to tokenize prompt");
 
     let mut batch = LlamaBatch::new(512, 1);
-    let last_index = tokens_list.len() as i32 - 1;
+    let last_index = i32::try_from(tokens_list.len()).expect("prompt too long") - 1;
     for (i, token) in (0_i32..).zip(&tokens_list) {
         batch.add(*token, i, &[0], i == last_index).unwrap();
     }
