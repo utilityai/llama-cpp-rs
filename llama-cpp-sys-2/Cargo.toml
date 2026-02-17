@@ -84,6 +84,7 @@ metal = []
 dynamic-link = []
 vulkan = []
 openmp = []
+rocm = []
 # Only has an impact on Android.
 shared-stdcxx = []
 system-ggml = []

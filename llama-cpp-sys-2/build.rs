@@ -781,6 +781,10 @@ fn main() {
         }
     }
 
+    if cfg!(feature = "rocm") {
+        config.define("GGML_HIP", "ON");
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
@@ -877,6 +881,40 @@ fn main() {
             // culibos is required when statically linking cudart_static
             println!("cargo:rustc-link-lib=static=culibos");
         }
+    }
+
+    if cfg!(feature = "rocm") && !build_shared_libs {
+        // Re-run build script if ROCM_PATH environment variable changes
+        println!("cargo:rerun-if-env-changed=ROCM_PATH");
+        println!("cargo:rerun-if-env-changed=HIP_PATH");
+
+        // Find ROCm installation
+        let rocm_path = env::var("ROCM_PATH")
+            .or_else(|_| env::var("HIP_PATH"))
+            .unwrap_or_else(|_| {
+                if cfg!(target_os = "windows") {
+                    "C:\\Program Files\\AMD\\ROCm".to_string()
+                } else {
+                    "/opt/rocm".to_string()
+                }
+            });
+
+        let rocm_lib = Path::new(&rocm_path).join("lib");
+        if !rocm_lib.exists() {
+            panic!(
+                "ROCm libraries not found at: {}\n\
+                 Please install ROCm or set ROCM_PATH/HIP_PATH environment variable.\n\
+                 Download from: https://rocm.docs.amd.com/",
+                rocm_lib.display()
+            );
+        }
+
+        println!("cargo:rustc-link-search=native={}", rocm_lib.display());
+
+        // Link ROCm libraries
+        println!("cargo:rustc-link-lib=dylib=amdhip64");
+        println!("cargo:rustc-link-lib=dylib=rocblas");
+        println!("cargo:rustc-link-lib=dylib=hipblas");
     }
 
     // Link libraries
