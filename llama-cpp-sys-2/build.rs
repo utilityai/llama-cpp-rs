@@ -501,6 +501,7 @@ fn main() {
         .include(llama_src.join("vendor"))
         .flag_if_supported("-std=c++17")
         .pic(true);
+
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
         common_wrapper_build.flag("/std:c++17");
     }
@@ -884,7 +885,8 @@ fn main() {
     } else {
         "static"
     };
-    let llama_libs = extract_lib_names(&out_dir, build_shared_libs);
+    let mut llama_libs = extract_lib_names(&out_dir, build_shared_libs);
+
     assert_ne!(llama_libs.len(), 0);
 
     let common_lib_dir = out_dir.join("build").join("common");

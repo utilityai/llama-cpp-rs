@@ -25,6 +25,8 @@ use std::string::FromUtf8Error;
 pub mod context;
 pub mod llama_backend;
 pub mod llama_batch;
+#[cfg(feature = "llguidance")]
+pub(crate) mod llguidance_sampler;
 mod log;
 pub mod model;
 #[cfg(feature = "mtmd")]
