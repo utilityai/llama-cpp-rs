@@ -998,8 +998,15 @@ fn main() {
     match target_os {
         TargetOs::Windows(WindowsVariant::Msvc) => {
             println!("cargo:rustc-link-lib=advapi32");
+            let crt_static = env::var("CARGO_CFG_TARGET_FEATURE")
+                .unwrap_or_default()
+                .contains("crt-static");
             if cfg!(debug_assertions) {
-                println!("cargo:rustc-link-lib=dylib=msvcrtd");
+                if crt_static {
+                    println!("cargo:rustc-link-lib=libcmtd");
+                } else {
+                    println!("cargo:rustc-link-lib=dylib=msvcrtd");
+                }
             }
         }
         TargetOs::Linux => {
