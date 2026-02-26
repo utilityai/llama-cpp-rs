@@ -521,7 +521,6 @@ fn main() {
     config.define("LLAMA_BUILD_COMMON", "ON");
     config.define("LLAMA_CURL", "OFF");
 
-
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
         if key.starts_with("CMAKE_") {
