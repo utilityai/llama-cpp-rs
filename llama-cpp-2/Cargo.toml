@@ -15,8 +15,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
 encoding_rs = { workspace = true }
-llguidance = { version = "0.7.30", optional = true }
-toktrie = { version = "1.5.1", optional = true }
+llguidance = { version = "1.6.1", optional = true }
+toktrie = { version = "1.6.1", optional = true }
 
 [dev-dependencies]
 encoding_rs = { workspace = true }
