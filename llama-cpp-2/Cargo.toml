@@ -36,6 +36,7 @@ rocm = ["llama-cpp-sys-2/rocm"]
 sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
+android-static-stdcxx = ["llama-cpp-sys-2/static-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
 llguidance = ["dep:llguidance", "dep:toktrie"]

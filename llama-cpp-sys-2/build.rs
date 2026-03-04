@@ -505,6 +505,13 @@ fn main() {
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
         common_wrapper_build.flag("/std:c++17");
     }
+
+    // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
+    // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
+    if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
+        common_wrapper_build.cpp_link_stdlib(None);
+    }
+
     common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
 
     // Build with Cmake
@@ -636,6 +643,10 @@ fn main() {
     config.static_crt(static_crt);
 
     if matches!(target_os, TargetOs::Android) {
+        if cfg!(feature = "shared-stdcxx") && cfg!(feature = "static-stdcxx") {
+            panic!("Features 'shared-stdcxx' and 'static-stdcxx' are mutually exclusive");
+        }
+
         // Android NDK Build Configuration
         let android_ndk = env::var("ANDROID_NDK")
             .or_else(|_| env::var("NDK_ROOT"))
@@ -690,6 +701,15 @@ fn main() {
         };
 
         config.define("ANDROID_ABI", android_abi);
+
+        // Configure C++ standard library linkage for Android.
+        // By default, the NDK toolchain uses c++_shared.
+        // The shared-stdcxx and static-stdcxx features allow explicit control.
+        if cfg!(feature = "static-stdcxx") {
+            config.define("ANDROID_STL", "c++_static");
+        } else if cfg!(feature = "shared-stdcxx") {
+            config.define("ANDROID_STL", "c++_shared");
+        }
 
         // Configure architecture-specific compiler flags
         match android_abi {
@@ -1031,6 +1051,16 @@ fn main() {
                 }
                 AppleVariant::Other => (),
             }
+        }
+        TargetOs::Android => {
+            if cfg!(feature = "static-stdcxx") {
+                println!("cargo:rustc-link-lib=c++_static");
+                println!("cargo:rustc-link-lib=c++abi");
+            } else if cfg!(feature = "shared-stdcxx") {
+                println!("cargo:rustc-link-lib=c++_shared");
+            }
+            // When neither feature is set, the cc crate handles C++ stdlib
+            // linking automatically (defaults to c++_shared on Android).
         }
         _ => (),
     }
