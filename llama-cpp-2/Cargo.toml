@@ -42,7 +42,7 @@ system-ggml = ["llama-cpp-sys-2/system-ggml"]
 llguidance = ["dep:llguidance", "dep:toktrie"]
 
 
-[target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
+[target.'cfg(all(any(target_os = "macos", target_os = "ios"), any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-sys-2 = { path = "../llama-cpp-sys-2", version = "0.1.139", features = [
     "metal",
 ] }
