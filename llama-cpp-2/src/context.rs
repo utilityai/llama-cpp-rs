@@ -317,11 +317,14 @@ impl<'model> LlamaContext<'model> {
         adapter: &mut LlamaLoraAdapter,
         scale: f32,
     ) -> Result<(), LlamaLoraAdapterSetError> {
+        let mut adapters = [adapter.lora_adapter.as_ptr()];
+        let mut scales = [scale];
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_set_adapter_lora(
+            llama_cpp_sys_2::llama_set_adapters_lora(
                 self.context.as_ptr(),
-                adapter.lora_adapter.as_ptr(),
-                scale,
+                adapters.as_mut_ptr(),
+                1,
+                scales.as_mut_ptr(),
             )
         };
         if err_code != 0 {
@@ -332,19 +335,24 @@ impl<'model> LlamaContext<'model> {
         Ok(())
     }
 
-    /// Remove a lora adapter.
+    /// Remove all lora adapters.
+    ///
+    /// Note: The upstream API now replaces all adapters at once via
+    /// `llama_set_adapters_lora`. This clears all adapters from the context.
     ///
     /// # Errors
     ///
     /// See [`LlamaLoraAdapterRemoveError`] for more information.
     pub fn lora_adapter_remove(
         &self,
-        adapter: &mut LlamaLoraAdapter,
+        _adapter: &mut LlamaLoraAdapter,
     ) -> Result<(), LlamaLoraAdapterRemoveError> {
         let err_code = unsafe {
-            llama_cpp_sys_2::llama_rm_adapter_lora(
+            llama_cpp_sys_2::llama_set_adapters_lora(
                 self.context.as_ptr(),
-                adapter.lora_adapter.as_ptr(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
             )
         };
         if err_code != 0 {

@@ -443,9 +443,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63be97961acde393029492ce0be7a1af7e323e6bae9511ebfac33751be5e6806"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -453,9 +453,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.58"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f13174bda5dfd69d7e947827e5af4b0f2f94a4a3ee92912fba07a66150f21e2"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstream",
  "anstyle",
@@ -705,7 +705,7 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "embeddings"
-version = "0.1.137"
+version = "0.1.139"
 dependencies = [
  "anyhow",
  "clap",
@@ -1461,7 +1461,7 @@ checksum = "6373607a59f0be73a39b6fe456b8192fcc3585f602af20751600e974dd455e77"
 
 [[package]]
 name = "llama-cpp-2"
-version = "0.1.137"
+version = "0.1.139"
 dependencies = [
  "encoding_rs",
  "enumflags2",
@@ -1470,7 +1470,7 @@ dependencies = [
  "llguidance",
  "serde_json",
  "thiserror",
- "toktrie 1.5.1",
+ "toktrie",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -1478,7 +1478,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-sys-2"
-version = "0.1.137"
+version = "0.1.139"
 dependencies = [
  "bindgen",
  "cc",
@@ -1490,9 +1490,9 @@ dependencies = [
 
 [[package]]
 name = "llguidance"
-version = "0.7.30"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f1c053d526d83fa8ce2845abed02a251302d6447bb0efc39286e6b5d67dca8"
+checksum = "fd6bd9b883ab54097b0651668e5b590be1c7ca906500db40d4de74522382e011"
 dependencies = [
  "anyhow",
  "derivre",
@@ -1502,7 +1502,7 @@ dependencies = [
  "regex-syntax",
  "serde",
  "serde_json",
- "toktrie 0.7.30",
+ "toktrie",
 ]
 
 [[package]]
@@ -2263,7 +2263,7 @@ checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "simple"
-version = "0.1.137"
+version = "0.1.139"
 dependencies = [
  "anyhow",
  "clap",
@@ -2553,22 +2553,9 @@ dependencies = [
 
 [[package]]
 name = "toktrie"
-version = "0.7.30"
+version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f608eb3d140a51dde49b581009c5c08543e1bfd45d3591b6c2d724007fc777c7"
-dependencies = [
- "anyhow",
- "bytemuck",
- "bytemuck_derive",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "toktrie"
-version = "1.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffa8a452d8e72d897dc752aa6e93d8c7caae130d93292bb5b8c5e59baf0082b1"
+checksum = "06f161a10057ac758fe4d1bac8d86b1ce07e8a2255ee4f9eec1d408bed7be125"
 dependencies = [
  "anyhow",
  "bytemuck",
