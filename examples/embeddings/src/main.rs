@@ -118,7 +118,7 @@ fn main() -> Result<()> {
 
     // tokenize the prompt
     let tokens_lines_list = prompt_lines
-        .map(|line| model.str_to_token(line, AddBos::Always))
+        .map(|line| model.str_to_token(line, AddBos::Always, true))
         .collect::<Result<Vec<_>, _>>()
         .with_context(|| format!("failed to tokenize {prompt}"))?;
 
