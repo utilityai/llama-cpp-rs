@@ -299,6 +299,22 @@ fn detect_emscripten_cmake_toolchain() -> String {
     );
 }
 
+/// Configure a cc::Build for Emscripten: use em++, enable native wasm exceptions,
+/// and work around the cc crate unconditionally adding -fno-exceptions for wasm targets.
+/// Since -fno-exceptions is baked into cc's add_default_flags() and conflicts with
+/// -fwasm-exceptions, we disable all defaults and re-add the ones we need.
+fn configure_emscripten_cc(build: &mut cc::Build) {
+    build.compiler("em++");
+    build.cpp_link_stdlib(None);
+    build.no_default_flags(true);
+    // OPT_LEVEL is set by Cargo for build scripts (e.g. "0" for debug, "3" for release).
+    let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "0".into());
+    build.flag(&format!("-O{opt_level}"));
+    build.flag("-ffunction-sections");
+    build.flag("-fdata-sections");
+    build.flag("-fwasm-exceptions");
+}
+
 fn is_hidden(e: &DirEntry) -> bool {
     e.file_name()
         .to_str()
@@ -631,29 +647,12 @@ fn main() {
 
     // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
     // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
-    // Emscripten handles its own C++ stdlib linking via emcc.
-    if (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
-        || matches!(target_os, TargetOs::Emscripten)
-    {
+    if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
         common_wrapper_build.cpp_link_stdlib(None);
     }
 
-    // Emscripten: use em++ and enable native wasm exceptions.
-    // The cc crate unconditionally adds -fno-exceptions for wasm targets inside
-    // add_default_flags(). Since -fno-exceptions and -fwasm-exceptions conflict
-    // (the compiler rejects exception syntax when -fno-exceptions is present,
-    // regardless of -fwasm-exceptions), we must disable cc's defaults and
-    // re-add the ones we need.
     if matches!(target_os, TargetOs::Emscripten) {
-        common_wrapper_build.compiler("em++");
-        common_wrapper_build.no_default_flags(true);
-        // Re-add the useful defaults, minus -fno-exceptions.
-        // OPT_LEVEL is set by Cargo for build scripts (e.g. "0" for debug, "3" for release).
-        let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "0".into());
-        common_wrapper_build.flag(&format!("-O{opt_level}"));
-        common_wrapper_build.flag("-ffunction-sections");
-        common_wrapper_build.flag("-fdata-sections");
-        common_wrapper_build.flag("-fwasm-exceptions");
+        configure_emscripten_cc(&mut common_wrapper_build);
     }
 
     common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
@@ -1044,17 +1043,11 @@ fn main() {
         if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
             mtmd_build.cpp_link_stdlib(None);
         }
+
         // Emscripten: same treatment as the common wrapper build — use em++ and
         // enable native wasm exceptions (see longer comment above).
         if matches!(target_os, TargetOs::Emscripten) {
-            mtmd_build.compiler("em++");
-            mtmd_build.cpp_link_stdlib(None);
-            mtmd_build.no_default_flags(true);
-            let opt_level = env::var("OPT_LEVEL").unwrap_or_else(|_| "0".into());
-            mtmd_build.flag(&format!("-O{opt_level}"));
-            mtmd_build.flag("-ffunction-sections");
-            mtmd_build.flag("-fdata-sections");
-            mtmd_build.flag("-fwasm-exceptions");
+            configure_emscripten_cc(&mut mtmd_build);
         }
 
         // Collect all .cpp files in tools/mtmd and its subdirectories
