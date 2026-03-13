@@ -352,6 +352,13 @@ impl LlamaModelParams {
         self
     }
 
+    /// sets `use_mmap`
+    #[must_use]
+    pub fn with_use_mmap(mut self, use_mmap: bool) -> Self {
+        self.params.use_mmap = use_mmap;
+        self
+    }
+
     /// sets `use_mlock`
     #[must_use]
     pub fn with_use_mlock(mut self, use_mlock: bool) -> Self {
