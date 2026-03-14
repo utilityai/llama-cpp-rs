@@ -33,7 +33,7 @@ fn main() {
         .new_context(&backend, ctx_params)
         .expect("unable to create the llama_context");
     let tokens_list = model
-        .str_to_token(&prompt, AddBos::Always)
+        .str_to_token(&prompt, AddBos::Always, true)
         .unwrap_or_else(|_| panic!("failed to tokenize {prompt}"));
     let n_len = 1024;
 

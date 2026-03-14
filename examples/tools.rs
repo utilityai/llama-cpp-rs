@@ -129,7 +129,7 @@ fn main() {
     }
 
     let tokens = model
-        .str_to_token(&result.prompt, AddBos::Always)
+        .str_to_token(&result.prompt, AddBos::Always, true)
         .expect("Failed to tokenize prompt");
     let n_predict: i32 = 128;
     let n_ctx = model
@@ -160,7 +160,7 @@ fn main() {
     let mut preserved = HashSet::new();
     for token_str in &result.preserved_tokens {
         let tokens = model
-            .str_to_token(token_str, AddBos::Never)
+            .str_to_token(token_str, AddBos::Never, true)
             .expect("Failed to tokenize preserved token");
         if tokens.len() == 1 {
             preserved.insert(tokens[0]);
@@ -182,7 +182,7 @@ fn main() {
                     }
                     GrammarTriggerType::Word => {
                         let tokens = model
-                            .str_to_token(&trigger.value, AddBos::Never)
+                            .str_to_token(&trigger.value, AddBos::Never, true)
                             .expect("Failed to tokenize trigger word");
                         if tokens.len() == 1 {
                             if !preserved.contains(&tokens[0]) {

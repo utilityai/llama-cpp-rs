@@ -31,7 +31,7 @@ fn main() {
         .expect("unable to create the llama_context");
 
     let tokens_list = model
-        .str_to_token(prompt, AddBos::Always)
+        .str_to_token(prompt, AddBos::Always, true)
         .expect("failed to tokenize prompt");
 
     let mut batch = LlamaBatch::new(512, 1);

@@ -123,7 +123,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => println!("\nGrammar: <none>"),
     }
 
-    let tokens = model.str_to_token(&result.prompt, AddBos::Always)?;
+    let tokens = model.str_to_token(&result.prompt, AddBos::Always, true)?;
     let n_predict: i32 = 128;
     let n_ctx = model
         .n_ctx_train()
@@ -148,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut preserved = HashSet::new();
     for token_str in &result.preserved_tokens {
-        let tokens = model.str_to_token(token_str, AddBos::Never)?;
+        let tokens = model.str_to_token(token_str, AddBos::Never, true)?;
         if tokens.len() == 1 {
             preserved.insert(tokens[0]);
         }
@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
                     GrammarTriggerType::Word => {
-                        let tokens = model.str_to_token(&trigger.value, AddBos::Never)?;
+                        let tokens = model.str_to_token(&trigger.value, AddBos::Never, true)?;
                         if tokens.len() == 1 {
                             if !preserved.contains(&tokens[0]) {
                                 panic!(

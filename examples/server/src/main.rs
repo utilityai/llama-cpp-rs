@@ -184,7 +184,7 @@ fn build_sampler(
     let mut preserved = HashSet::new();
     for token_str in &result.preserved_tokens {
         let tokens = model
-            .str_to_token(token_str, AddBos::Never)
+            .str_to_token(token_str, AddBos::Never, true)
             .map_err(|e| internal_error(format!("preserved token error: {e}")))?;
         if tokens.len() == 1 {
             preserved.insert(tokens[0]);
@@ -208,12 +208,11 @@ fn build_sampler(
                         }
                     }
                     GrammarTriggerType::Word => {
-                        let tokens =
-                            model
-                                .str_to_token(&trigger.value, AddBos::Never)
-                                .map_err(|e| {
-                                    internal_error(format!("grammar trigger tokenize error: {e}"))
-                                })?;
+                        let tokens = model
+                            .str_to_token(&trigger.value, AddBos::Never, true)
+                            .map_err(|e| {
+                                internal_error(format!("grammar trigger tokenize error: {e}"))
+                            })?;
                         if tokens.len() == 1 {
                             if !preserved.contains(&tokens[0]) {
                                 return Err(internal_error(format!(
@@ -418,7 +417,7 @@ fn run_chat_completion(state: &AppState, body: &str) -> Result<String, HttpError
 
     let tokens = state
         .model
-        .str_to_token(&result.prompt, AddBos::Always)
+        .str_to_token(&result.prompt, AddBos::Always, true)
         .map_err(|e| internal_error(format!("tokenization failed: {e}")))?;
     let n_ctx = state
         .model

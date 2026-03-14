@@ -266,7 +266,7 @@ fn main() -> Result<()> {
     // tokenize the prompt
 
     let tokens_list = model
-        .str_to_token(&prompt, AddBos::Always)
+        .str_to_token(&prompt, AddBos::Always, true)
         .with_context(|| format!("failed to tokenize {prompt}"))?;
 
     let n_cxt = ctx.n_ctx() as i32;
