@@ -410,9 +410,14 @@ impl LlamaModelParams {
     /// Set `no_alloc`
     ///
     /// If this parameter is true, don't allocate memory for the tensor data
+    ///
+    /// You can't use `no_alloc` with `use_mmap`, so this also sets `use_mmap` to false.
     #[must_use]
     pub fn with_no_alloc(mut self, no_alloc: bool) -> Self {
         self.params.no_alloc = no_alloc;
+        if no_alloc {
+            self = self.with_use_mmap(false);
+        }
         self
     }
 
