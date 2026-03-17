@@ -12,6 +12,8 @@ enum WindowsVariant {
 
 enum AppleVariant {
     MacOS,
+    IOSDevice,
+    IOSSimulator,
     Other,
 }
 
@@ -42,6 +44,10 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
     } else if target.contains("apple") {
         if target.ends_with("-apple-darwin") {
             Ok((TargetOs::Apple(AppleVariant::MacOS), target))
+        } else if target == "aarch64-apple-ios" {
+            Ok((TargetOs::Apple(AppleVariant::IOSDevice), target))
+        } else if target == "aarch64-apple-ios-sim" {
+            Ok((TargetOs::Apple(AppleVariant::IOSSimulator), target))
         } else {
             Ok((TargetOs::Apple(AppleVariant::Other), target))
         }
@@ -168,6 +174,41 @@ fn macos_link_search_path() -> Option<String> {
     None
 }
 
+fn xcrun_sdk_path(sdk: &str) -> Result<String, String> {
+    let output = Command::new("xcrun")
+        .arg("--sdk")
+        .arg(sdk)
+        .arg("--show-sdk-path")
+        .output()
+        .map_err(|e| format!("Failed to run xcrun for SDK '{sdk}': {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "xcrun failed for SDK '{sdk}': {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let sdk_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if sdk_path.is_empty() {
+        return Err(format!("xcrun returned an empty SDK path for '{sdk}'"));
+    }
+
+    Ok(sdk_path)
+}
+
+fn ios_deployment_target() -> String {
+    env::var("IOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "16.4".to_string())
+}
+
+fn clang_target_for(target_triple: &str) -> &str {
+    match target_triple {
+        "aarch64-apple-ios" => "arm64-apple-ios",
+        "aarch64-apple-ios-sim" => "arm64-apple-ios-simulator",
+        _ => target_triple,
+    }
+}
+
 fn validate_android_ndk(ndk_path: &str) -> Result<(), String> {
     let ndk_path = Path::new(ndk_path);
 
@@ -220,6 +261,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+    println!("cargo:rerun-if-env-changed=IOS_DEPLOYMENT_TARGET");
 
     debug_log!("TARGET: {}", target_triple);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
@@ -422,6 +464,23 @@ fn main() {
         }
     }
 
+    if matches!(
+        target_os,
+        TargetOs::Apple(AppleVariant::IOSDevice | AppleVariant::IOSSimulator)
+    ) {
+        let sdk_name = match target_os {
+            TargetOs::Apple(AppleVariant::IOSDevice) => "iphoneos",
+            TargetOs::Apple(AppleVariant::IOSSimulator) => "iphonesimulator",
+            _ => unreachable!(),
+        };
+        let sdk_path = xcrun_sdk_path(sdk_name).unwrap_or_else(|e| panic!("{e}"));
+
+        bindings_builder = bindings_builder
+            .clang_arg(format!("--target={}", clang_target_for(&target_triple)))
+            .clang_arg("-isysroot")
+            .clang_arg(sdk_path);
+    }
+
     // Fix bindgen header discovery on Windows MSVC
     // Use cc crate to discover MSVC include paths by compiling a dummy file
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
@@ -621,6 +680,23 @@ fn main() {
 
     if matches!(target_os, TargetOs::Apple(_)) {
         config.define("GGML_BLAS", "OFF");
+    }
+
+    if matches!(
+        target_os,
+        TargetOs::Apple(AppleVariant::IOSDevice | AppleVariant::IOSSimulator)
+    ) {
+        let ios_sysroot = match target_os {
+            TargetOs::Apple(AppleVariant::IOSDevice) => "iphoneos",
+            TargetOs::Apple(AppleVariant::IOSSimulator) => "iphonesimulator",
+            _ => unreachable!(),
+        };
+
+        config.define("CMAKE_SYSTEM_NAME", "iOS");
+        config.define("CMAKE_OSX_SYSROOT", ios_sysroot);
+        config.define("CMAKE_OSX_ARCHITECTURES", "arm64");
+        config.define("CMAKE_OSX_DEPLOYMENT_TARGET", ios_deployment_target());
+        config.define("LLAMA_OPENSSL", "OFF");
     }
 
     if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
@@ -1055,7 +1131,7 @@ fn main() {
                         println!("cargo:rustc-link-search={}", path);
                     }
                 }
-                AppleVariant::Other => (),
+                AppleVariant::IOSDevice | AppleVariant::IOSSimulator | AppleVariant::Other => {}
             }
         }
         TargetOs::Android => {
