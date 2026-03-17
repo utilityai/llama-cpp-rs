@@ -269,6 +269,8 @@ fn main() {
         .derive_partialeq(true)
         .allowlist_function("ggml_.*")
         .allowlist_type("ggml_.*")
+        .allowlist_function("gguf_.*")
+        .allowlist_type("gguf_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
         .allowlist_function("llama_rs_.*")

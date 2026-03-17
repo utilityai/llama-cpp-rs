@@ -23,6 +23,7 @@ use std::path::PathBuf;
 use std::string::FromUtf8Error;
 
 pub mod context;
+pub mod gguf;
 pub mod llama_backend;
 pub mod llama_batch;
 #[cfg(feature = "llguidance")]
