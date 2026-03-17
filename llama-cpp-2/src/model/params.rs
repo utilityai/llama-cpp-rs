@@ -406,6 +406,28 @@ impl LlamaModelParams {
         }
         Ok(self)
     }
+
+    /// Set `no_alloc`
+    ///
+    /// If this parameter is true, don't allocate memory for the tensor data
+    ///
+    /// You can't use `no_alloc` with `use_mmap`, so this also sets `use_mmap` to false.
+    #[must_use]
+    pub fn with_no_alloc(mut self, no_alloc: bool) -> Self {
+        self.params.no_alloc = no_alloc;
+        if no_alloc {
+            self = self.with_use_mmap(false);
+        }
+        self
+    }
+
+    /// Get `no_alloc`
+    ///
+    /// If this parameter is true, don't allocate memory for the tensor data
+    #[must_use]
+    pub fn no_alloc(&self) -> bool {
+        self.params.no_alloc
+    }
 }
 
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
@@ -420,6 +442,7 @@ impl LlamaModelParams {
 /// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
 /// assert_eq!(params.split_mode(), Ok(LlamaSplitMode::Layer), "split_mode should be LAYER");
 /// assert_eq!(params.devices().len(), 0, "devices should be empty");
+/// assert_eq!(params.no_alloc(), false, "no_alloc should be false");
 /// ```
 impl Default for LlamaModelParams {
     fn default() -> Self {
