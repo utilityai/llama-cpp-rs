@@ -97,3 +97,6 @@ impl Drop for GgufContext {
         unsafe { llama_cpp_sys_2::gguf_free(self.ctx.as_ptr()) }
     }
 }
+
+#[cfg(test)]
+mod tests;
