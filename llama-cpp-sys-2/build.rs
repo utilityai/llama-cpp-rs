@@ -845,6 +845,12 @@ fn main() {
             mtmd_build.flag("/std:c++17");
         }
 
+        // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
+        // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
+        if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
+            mtmd_build.cpp_link_stdlib(None);
+        }
+
         // Collect all .cpp files in tools/mtmd and its subdirectories
         for entry in glob(mtmd_src.join("**/*.cpp").to_str().unwrap()).unwrap() {
             match entry {
