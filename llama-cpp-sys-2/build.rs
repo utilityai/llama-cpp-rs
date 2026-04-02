@@ -123,7 +123,7 @@ fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
     } else if cfg!(target_os = "macos") {
         "*.dylib"
     } else {
-        "*.so"
+        "*.so*"
     };
 
     let shared_libs_dir = if cfg!(windows) { "bin" } else { "lib" };
@@ -142,6 +142,41 @@ fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
     }
 
     files
+}
+
+/// Copy a shared library file to `dst`. Uses hard_link for regular files and
+/// recreates symlinks for symbolic links.
+///
+/// On Linux, CMake produces a soname symlink chain
+/// (`libfoo.so` -> `libfoo.so.0` -> `libfoo.so.0.x.x`). `std::fs::hard_link`
+/// on a symlink creates *another* symlink rather than a hard link to the
+/// underlying file, which can result in broken links in the target directory.
+fn copy_lib_asset(src: &Path, dst: &Path) {
+    if src.is_symlink() {
+        #[cfg(unix)]
+        {
+            let target = std::fs::read_link(src).unwrap();
+            debug_log!("SYMLINK {} -> {}", dst.display(), target.display());
+            if !dst.exists() {
+                std::os::unix::fs::symlink(target, dst).unwrap();
+            }
+        }
+        #[cfg(windows)]
+        {
+            // On Windows, DLLs are never symlinks in the CMake output, but
+            // handle it defensively by copying the target file.
+            let target = std::fs::read_link(src).unwrap();
+            debug_log!("COPY {} (symlink target) TO {}", target.display(), dst.display());
+            if !dst.exists() {
+                std::fs::copy(&target, dst).unwrap();
+            }
+        }
+    } else {
+        debug_log!("HARD LINK {} TO {}", src.display(), dst.display());
+        if !dst.exists() {
+            std::fs::hard_link(src, dst).unwrap();
+        }
+    }
 }
 
 fn macos_link_search_path() -> Option<String> {
@@ -1073,34 +1108,23 @@ fn main() {
         _ => (),
     }
 
-    // copy DLLs to target
+    // copy shared libs to target
     if build_shared_libs {
         let libs_assets = extract_lib_assets(&out_dir);
         for asset in libs_assets {
-            let asset_clone = asset.clone();
-            let filename = asset_clone.file_name().unwrap();
+            let filename = asset.file_name().unwrap();
             let filename = filename.to_str().unwrap();
-            let dst = target_dir.join(filename);
-            debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
-            if !dst.exists() {
-                std::fs::hard_link(asset.clone(), dst).unwrap();
-            }
 
-            // Copy DLLs to examples as well
+            // Copy to target/profile
+            copy_lib_asset(&asset, &target_dir.join(filename));
+
+            // Copy to target/profile/examples as well
             if target_dir.join("examples").exists() {
-                let dst = target_dir.join("examples").join(filename);
-                debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
-                if !dst.exists() {
-                    std::fs::hard_link(asset.clone(), dst).unwrap();
-                }
+                copy_lib_asset(&asset, &target_dir.join("examples").join(filename));
             }
 
-            // Copy DLLs to target/profile/deps as well for tests
-            let dst = target_dir.join("deps").join(filename);
-            debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
-            if !dst.exists() {
-                std::fs::hard_link(asset.clone(), dst).unwrap();
-            }
+            // Copy to target/profile/deps as well for tests
+            copy_lib_asset(&asset, &target_dir.join("deps").join(filename));
         }
     }
 }
