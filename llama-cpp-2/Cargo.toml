@@ -61,6 +61,9 @@ path = "../examples/usage.rs"
 name = "tools"
 path = "../examples/tools.rs"
 
+[[example]]
+name = "tools_reasoning"
+path = "../examples/tools_reasoning.rs"
 
 [[example]]
 name = "openai_stream"

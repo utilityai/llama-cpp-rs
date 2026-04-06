@@ -1,4 +1,4 @@
-//! OpenAI Specific Utility methods.
+//! OpenAI-compatible utility methods.
 use crate::{status_is_ok, status_to_i32, ChatParseError};
 use std::ffi::{c_char, CStr, CString};
 use std::mem;

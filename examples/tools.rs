@@ -116,7 +116,7 @@ fn main() {
         .apply_chat_template_with_tools_oaicompat(
             &template,
             &messages,
-            Some(tools_json.as_str()),
+            Some(&tools_json),
             None,
             true,
         )
@@ -286,7 +286,7 @@ fn main() {
         .parse_response_oaicompat(&generated_text, false)
         .expect("Failed to parse response");
     let parsed_value: serde_json::Value =
-        serde_json::from_str(&parsed_json).expect("Failed to decode parsed response");
+        serde_json::from_str(&parsed_json).expect("Failed to decode parsed response JSON");
     let parsed_pretty =
         serde_json::to_string_pretty(&parsed_value).expect("Failed to format parsed response");
     println!("\n\nParsed message:\n{}", parsed_pretty);

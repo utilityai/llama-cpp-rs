@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = model.apply_chat_template_with_tools_oaicompat(
         &template,
         &messages,
-        Some(tools_json.as_str()),
+        Some(&tools_json),
         None,
         true,
     )?;

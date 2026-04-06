@@ -8,6 +8,7 @@
 //! # Examples
 //!
 //! - [simple](https://github.com/utilityai/llama-cpp-rs/tree/main/examples/simple)
+//! - [tools](https://github.com/utilityai/llama-cpp-rs/tree/main/examples/tools)
 //!
 //! # Feature Flags
 //!
@@ -330,6 +331,28 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String> {
 
     unsafe { llama_cpp_sys_2::llama_rs_string_free(out) };
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::json_schema_to_grammar;
+
+    #[test]
+    fn json_schema_string_api_returns_grammar() {
+        let schema = r#"{
+            "type": "object",
+            "properties": {
+                "city": { "type": "string" },
+                "unit": { "enum": ["c", "f"] }
+            },
+            "required": ["city"]
+        }"#;
+
+        let grammar =
+            json_schema_to_grammar(schema).expect("string-based schema conversion should succeed");
+
+        assert!(grammar.contains("root ::="));
+    }
 }
 
 /// An error that can occur when converting a token to a string.
