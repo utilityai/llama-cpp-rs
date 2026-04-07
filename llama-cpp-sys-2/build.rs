@@ -166,7 +166,11 @@ fn copy_lib_asset(src: &Path, dst: &Path) {
             // On Windows, DLLs are never symlinks in the CMake output, but
             // handle it defensively by copying the target file.
             let target = std::fs::read_link(src).unwrap();
-            debug_log!("COPY {} (symlink target) TO {}", target.display(), dst.display());
+            debug_log!(
+                "COPY {} (symlink target) TO {}",
+                target.display(),
+                dst.display()
+            );
             if !dst.exists() {
                 std::fs::copy(&target, dst).unwrap();
             }
