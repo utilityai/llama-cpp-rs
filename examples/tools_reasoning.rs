@@ -92,7 +92,6 @@ fn generate_text(
     n_predict: i32,
 ) -> String {
     println!("Prompt:\n{}", result.prompt);
-    println!("thinking_forced_open: {}", result.thinking_forced_open);
     match result.grammar.as_deref() {
         Some(grammar) => println!("\nGrammar:\n{}", grammar),
         None => println!("\nGrammar: <none>"),

@@ -139,8 +139,6 @@ pub struct ChatTemplateResult {
     pub parser: Option<String>,
     /// Prefix that must be prepended for parser-compatible response reconstruction.
     pub generation_prompt: String,
-    /// Whether the parser expects a forced-open thinking block.
-    pub thinking_forced_open: bool,
     /// Whether tool calls should be parsed from the response.
     pub parse_tool_calls: bool,
 }
@@ -973,7 +971,6 @@ impl LlamaModel {
             parser: ptr::null_mut(),
             generation_prompt: ptr::null_mut(),
             chat_format: 0,
-            thinking_forced_open: false,
             grammar_lazy: false,
             grammar_triggers: ptr::null_mut(),
             grammar_triggers_count: 0,
@@ -1129,7 +1126,6 @@ impl LlamaModel {
                 chat_format: raw_result.chat_format,
                 parser,
                 generation_prompt,
-                thinking_forced_open: raw_result.thinking_forced_open,
                 parse_tool_calls,
             })
         })();
@@ -1160,7 +1156,6 @@ impl LlamaModel {
             parser: ptr::null_mut(),
             generation_prompt: ptr::null_mut(),
             chat_format: 0,
-            thinking_forced_open: false,
             grammar_lazy: false,
             grammar_triggers: ptr::null_mut(),
             grammar_triggers_count: 0,
@@ -1336,7 +1331,6 @@ impl LlamaModel {
                 chat_format: raw_result.chat_format,
                 parser,
                 generation_prompt,
-                thinking_forced_open: raw_result.thinking_forced_open,
                 parse_tool_calls,
             })
         })();
@@ -1373,7 +1367,6 @@ impl ChatTemplateResult {
                 generation_prompt_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
-                self.thinking_forced_open,
                 &mut out_json,
             )
         };
@@ -1411,7 +1404,6 @@ impl ChatTemplateResult {
                 generation_prompt_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
-                self.thinking_forced_open,
             )
         };
         let state = NonNull::new(state).ok_or(ChatParseError::NullResult)?;

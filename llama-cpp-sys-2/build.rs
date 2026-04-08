@@ -70,19 +70,23 @@ fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(target_dir.to_path_buf())
 }
 
-fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
-    let lib_pattern = if cfg!(windows) {
-        "*.lib"
-    } else if cfg!(target_os = "macos") {
-        if build_shared_libs {
-            "*.dylib"
-        } else {
-            "*.a"
+fn extract_lib_names(out_dir: &Path, build_shared_libs: bool, target_os: &TargetOs) -> Vec<String> {
+    let lib_pattern = match target_os {
+        TargetOs::Windows(_) => "*.lib",
+        TargetOs::Apple(_) => {
+            if build_shared_libs {
+                "*.dylib"
+            } else {
+                "*.a"
+            }
         }
-    } else if build_shared_libs {
-        "*.so"
-    } else {
-        "*.a"
+        TargetOs::Linux | TargetOs::Android => {
+            if build_shared_libs {
+                "*.so"
+            } else {
+                "*.a"
+            }
+        }
     };
     let libs_dir = out_dir.join("lib*");
     let pattern = libs_dir.join(lib_pattern);
@@ -117,16 +121,17 @@ fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
     lib_names
 }
 
-fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
-    let shared_lib_pattern = if cfg!(windows) {
-        "*.dll"
-    } else if cfg!(target_os = "macos") {
-        "*.dylib"
-    } else {
-        "*.so*"
+fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
+    let shared_lib_pattern = match target_os {
+        TargetOs::Windows(_) => "*.dll",
+        TargetOs::Apple(_) => "*.dylib",
+        TargetOs::Linux | TargetOs::Android => "*.so*",
     };
 
-    let shared_libs_dir = if cfg!(windows) { "bin" } else { "lib" };
+    let shared_libs_dir = match target_os {
+        TargetOs::Windows(_) => "bin",
+        _ => "lib",
+    };
     let libs_dir = out_dir.join(shared_libs_dir);
     let pattern = libs_dir.join(shared_lib_pattern);
     debug_log!("Extract lib assets {}", pattern.display());
@@ -1025,7 +1030,7 @@ fn main() {
     } else {
         "static"
     };
-    let mut llama_libs = extract_lib_names(&out_dir, build_shared_libs);
+    let llama_libs = extract_lib_names(&out_dir, build_shared_libs, &target_os);
 
     assert_ne!(llama_libs.len(), 0);
 
@@ -1078,7 +1083,7 @@ fn main() {
         TargetOs::Linux => {
             println!("cargo:rustc-link-lib=dylib=stdc++");
         }
-        TargetOs::Apple(variant) => {
+        TargetOs::Apple(ref variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
             println!("cargo:rustc-link-lib=framework=Metal");
             println!("cargo:rustc-link-lib=framework=MetalKit");
@@ -1114,7 +1119,7 @@ fn main() {
 
     // copy shared libs to target
     if build_shared_libs {
-        let libs_assets = extract_lib_assets(&out_dir);
+        let libs_assets = extract_lib_assets(&out_dir, &target_os);
         for asset in libs_assets {
             let filename = asset.file_name().unwrap();
             let filename = filename.to_str().unwrap();
