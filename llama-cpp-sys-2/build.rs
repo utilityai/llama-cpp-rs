@@ -1025,7 +1025,9 @@ fn main() {
     }
 
     // Link libraries
-    let llama_libs_kind = if build_shared_libs || cfg!(feature = "system-ggml") {
+    let llama_libs_kind = if build_shared_libs
+        || (cfg!(feature = "system-ggml") && !cfg!(feature = "system-ggml-static"))
+    {
         "dylib"
     } else {
         "static"
