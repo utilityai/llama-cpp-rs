@@ -308,7 +308,7 @@ fn assistant_tool_call_message(parsed_message: &serde_json::Value) -> serde_json
         "reasoning_content": parsed_message
             .get("reasoning_content")
             .cloned()
-            .unwrap_or(serde_json::Value::Null),
+            .unwrap_or(json!("")),
         "tool_calls": tool_calls,
     })
 }
