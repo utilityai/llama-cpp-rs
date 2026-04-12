@@ -1,7 +1,7 @@
 //! Demonstrates tool calling with explicit reasoning parsing enabled.
 //!
 //! Usage:
-//!   cargo run --example tools_reasoning -- [--continous] hf-model unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-Q4_K_M.gguf
+//!   cargo run --example tools_reasoning -- [--continuous] hf-model unsloth/Qwen3.5-4B-GGUF Qwen3.5-4B-Q4_K_M.gguf
 use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
@@ -24,7 +24,7 @@ fn resolve_args() -> Result<(PathBuf, bool), Box<dyn std::error::Error>> {
     let mut continuous = false;
     let mut positional = Vec::new();
     for arg in args {
-        if arg == "--continous" {
+        if arg == "--continuous" {
             continuous = true;
         } else {
             positional.push(arg);
@@ -34,7 +34,7 @@ fn resolve_args() -> Result<(PathBuf, bool), Box<dyn std::error::Error>> {
     let mut positional = positional.into_iter();
     let first = positional.next().ok_or_else(|| {
         format!(
-            "Usage: {exe} [--continous] <model_path> | {exe} [--continous] hf-model <repo> <model>"
+            "Usage: {exe} [--continuous] <model_path> | {exe} [--continuous] hf-model <repo> <model>"
         )
     })?;
 
@@ -296,7 +296,7 @@ fn assistant_tool_call_message(parsed_message: &serde_json::Value) -> serde_json
                         .and_then(|function| function.get("name"))
                         .cloned()
                         .unwrap_or(serde_json::Value::Null),
-                    "arguments": arguments.to_string(),
+                    "arguments": arguments,
                 }
             })
         })
@@ -311,6 +311,16 @@ fn assistant_tool_call_message(parsed_message: &serde_json::Value) -> serde_json
             .unwrap_or(serde_json::Value::Null),
         "tool_calls": tool_calls,
     })
+}
+
+fn unwrap_arguments(args: serde_json::Value) -> Option<serde_json::Value> {
+    // For some reason the tool calling API expects the parameters value not to be a JSON object,
+    // but a string serialization of a JSON object.
+    if let serde_json::Value::String(s) = args {
+	serde_json::from_str(&s).ok()
+    } else {
+	None
+    }
 }
 
 fn main() {
@@ -376,7 +386,7 @@ fn main() {
         .apply_chat_template_oaicompat(&template, &options)
         .expect("Failed to apply chat template");
 
-    let generated_text = generate_text(&model, &backend, &result, 128);
+    let generated_text = generate_text(&model, &backend, &result, 1024);
     let mut parsed_summaries = Vec::new();
 
     let parsed_json = result
@@ -400,7 +410,7 @@ fn main() {
             .unwrap_or_default();
 
         if tool_calls.is_empty() {
-            println!("\nNo tool calls were produced, skipping --continous follow-up.");
+            println!("\nNo tool calls were produced, skipping --continuous follow-up.");
         } else {
             let mut conversation = messages.as_array().cloned().expect("messages is an array");
             conversation.push(assistant_tool_call_message(&parsed_message));
@@ -420,6 +430,7 @@ fn main() {
                 let function_arguments = function
                     .get("arguments")
                     .cloned()
+                    .and_then(unwrap_arguments)
                     .unwrap_or(serde_json::Value::Null);
                 let tool_output = mock_tool_response(function_name, &function_arguments);
                 println!(
@@ -457,7 +468,7 @@ fn main() {
             let follow_up_result = model
                 .apply_chat_template_oaicompat(&template, &follow_up_options)
                 .expect("Failed to apply follow-up chat template");
-            let follow_up_text = generate_text(&model, &backend, &follow_up_result, 192);
+            let follow_up_text = generate_text(&model, &backend, &follow_up_result, 1024);
 
             let follow_up_raw = follow_up_result
                 .parse_response_oaicompat(&follow_up_text, false)
