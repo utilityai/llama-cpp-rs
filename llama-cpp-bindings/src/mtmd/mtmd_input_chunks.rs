@@ -180,4 +180,34 @@ mod tests {
                 .contains("Eval failed with code: 7")
         );
     }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn eval_chunks_returns_batch_size_exceeds_context_limit_for_huge_batch() {
+        use crate::context::params::LlamaContextParams;
+        use crate::mtmd::MtmdContext;
+        use crate::mtmd::MtmdContextParams;
+        use crate::mtmd::MtmdEvalError;
+        use crate::test_model;
+
+        let (backend, model, _mtmd_ctx) = test_model::load_default_mtmd().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(64));
+        let llama_ctx = model.new_context(&backend, ctx_params).unwrap();
+
+        let mmproj_path = test_model::download_mmproj().unwrap();
+        let mmproj_str = mmproj_path.to_str().unwrap();
+        let mtmd_params = MtmdContextParams::default();
+        let mtmd_ctx = MtmdContext::init_from_file(mmproj_str, &model, &mtmd_params).unwrap();
+
+        let chunks = MtmdInputChunks::new().unwrap();
+        let huge_batch = i32::try_from(llama_ctx.n_batch() + 1).unwrap();
+
+        let result = chunks.eval_chunks(&mtmd_ctx, &llama_ctx, 0, 0, huge_batch, false);
+
+        assert!(matches!(
+            result,
+            Err(MtmdEvalError::BatchSizeExceedsContextLimit { .. })
+        ));
+    }
 }

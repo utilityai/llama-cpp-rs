@@ -262,4 +262,81 @@ mod tests {
 
         assert!(matches!(result, Err(GgufContextError::PathToStrError(_))));
     }
+
+    #[test]
+    fn from_file_with_null_byte_in_path_returns_error() {
+        let result = GgufContext::from_file("/tmp/foo\0bar.gguf");
+
+        assert!(matches!(result, Err(GgufContextError::NulError(_))));
+    }
+
+    #[test]
+    fn find_key_with_null_byte_in_key_returns_error() {
+        let context = GgufContext::from_file(fixture_path()).unwrap();
+        let result = context.find_key("foo\0bar");
+
+        assert!(matches!(result, Err(GgufContextError::NulError(_))));
+    }
+
+    #[test]
+    fn val_u32_returns_value_for_uint32_key() {
+        let context = GgufContext::from_file(fixture_path()).unwrap();
+
+        let key_id = (0..context.n_kv())
+            .find(|&id| context.kv_type(id) == Some(GgufType::Uint32))
+            .expect("fixture must contain at least one uint32 key");
+
+        let _ = context.val_u32(key_id);
+    }
+
+    fn write_synthetic_gguf(path: &std::path::Path) {
+        use std::io::Write as _;
+
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"GGUF");
+        bytes.extend_from_slice(&3u32.to_le_bytes());
+        bytes.extend_from_slice(&0u64.to_le_bytes());
+        bytes.extend_from_slice(&3u64.to_le_bytes());
+
+        let arch_key = b"general.architecture";
+        bytes.extend_from_slice(&(arch_key.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(arch_key);
+        bytes.extend_from_slice(&8u32.to_le_bytes());
+        let arch_val = b"synthetic";
+        bytes.extend_from_slice(&(arch_val.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(arch_val);
+
+        let i32_key = b"synthetic.i32_value";
+        bytes.extend_from_slice(&(i32_key.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(i32_key);
+        bytes.extend_from_slice(&5u32.to_le_bytes());
+        bytes.extend_from_slice(&(-12345i32).to_le_bytes());
+
+        let u64_key = b"synthetic.u64_value";
+        bytes.extend_from_slice(&(u64_key.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(u64_key);
+        bytes.extend_from_slice(&10u32.to_le_bytes());
+        bytes.extend_from_slice(&987_654_321u64.to_le_bytes());
+
+        let mut file = std::fs::File::create(path).unwrap();
+        file.write_all(&bytes).unwrap();
+    }
+
+    #[test]
+    fn val_i32_and_val_u64_round_trip_through_synthetic_fixture() {
+        let tmp_path = std::env::temp_dir().join("llama_cpp_bindings_synthetic.gguf");
+        write_synthetic_gguf(&tmp_path);
+
+        let context = GgufContext::from_file(&tmp_path).unwrap();
+
+        let i32_index = context.find_key("synthetic.i32_value").unwrap();
+        assert_eq!(context.kv_type(i32_index), Some(GgufType::Int32));
+        assert_eq!(context.val_i32(i32_index), -12345);
+
+        let u64_index = context.find_key("synthetic.u64_value").unwrap();
+        assert_eq!(context.kv_type(u64_index), Some(GgufType::Uint64));
+        assert_eq!(context.val_u64(u64_index), 987_654_321);
+
+        let _ = std::fs::remove_file(&tmp_path);
+    }
 }

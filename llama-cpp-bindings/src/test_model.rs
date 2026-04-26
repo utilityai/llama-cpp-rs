@@ -188,4 +188,81 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_file_from_succeeds_for_known_repo_and_file() {
+        let result =
+            super::download_file_from("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf");
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_model_returns_path_with_env_set() {
+        let result = super::download_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_embedding_model_returns_path_with_env_set() {
+        let result = super::download_embedding_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_encoder_model_returns_path_with_env_set() {
+        let result = super::download_encoder_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_mmproj_returns_path_when_env_set() {
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf") };
+        let result = super::download_mmproj();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn has_mmproj_reflects_env_var() {
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf") };
+        assert!(super::has_mmproj());
+
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "") };
+        assert!(!super::has_mmproj());
+
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf") };
+    }
+
+    #[test]
+    fn fixtures_dir_is_under_manifest() {
+        let dir = super::fixtures_dir();
+
+        assert!(dir.ends_with("fixtures"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn download_mmproj_returns_error_when_env_empty() {
+        let original = std::env::var("LLAMA_TEST_HF_MMPROJ").unwrap_or_default();
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "") };
+        let result = super::download_mmproj();
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", original) };
+
+        assert!(result.is_err());
+    }
 }

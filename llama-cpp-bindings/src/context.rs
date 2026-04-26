@@ -699,6 +699,135 @@ mod tests {
 
     #[test]
     #[serial]
+    fn multi_sequence_embeddings_returns_one_embedding_per_sequence() {
+        let (backend, model) = test_model::load_default_embedding_model().unwrap();
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(std::num::NonZeroU32::new(512))
+            .with_n_seq_max(4)
+            .with_embeddings(true);
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let inputs = [
+            "alpha is here",
+            "beta runs fast",
+            "gamma waits",
+            "delta jumps",
+        ];
+        let mut batch = LlamaBatch::new(64, 4).unwrap();
+
+        for (sequence_index, text) in inputs.iter().enumerate() {
+            let tokens = model.str_to_token(text, AddBos::Always).unwrap();
+            let sequence_id = i32::try_from(sequence_index).unwrap();
+
+            batch.add_sequence(&tokens, sequence_id, true).unwrap();
+        }
+
+        context.decode(&mut batch).unwrap();
+
+        let n_embd = model.n_embd() as usize;
+        let mut collected: Vec<Vec<f32>> = Vec::with_capacity(inputs.len());
+
+        for sequence_index in 0..inputs.len() {
+            let sequence_id = i32::try_from(sequence_index).unwrap();
+            let embedding = context.embeddings_seq_ith(sequence_id).unwrap();
+
+            assert_eq!(
+                embedding.len(),
+                n_embd,
+                "sequence {sequence_index} embedding length mismatch"
+            );
+
+            collected.push(embedding.to_vec());
+        }
+
+        for (left_index, left) in collected.iter().enumerate() {
+            for (right_index, right) in collected.iter().enumerate().skip(left_index + 1) {
+                assert_ne!(
+                    left, right,
+                    "embedding for sequence {left_index} must differ from sequence {right_index}",
+                );
+            }
+        }
+    }
+
+    /// Reproduces paddler's embedding batching loop exactly with the document strings, batch
+    /// shape, and iteration pattern from the failing harness test
+    /// `agent_embedding_batch_distribution_independent_of_context_size`. A `LlamaBatch` is
+    /// allocated once with `n_tokens=64` and `n_seq_max=4`, then reused across two iterations
+    /// of two sequences each (because the four ~22-token docs do not all fit in one
+    /// 64-token window). Per iteration: `add_sequence` for each doc, `clear_kv_cache`,
+    /// `decode`, `embeddings_seq_ith` for each filled slot, `batch.clear()`. Every iteration
+    /// must yield distinct, non-empty embeddings — including iterations after the first.
+    #[test]
+    #[serial]
+    fn embeddings_returns_distinct_values_when_reused_batch_has_extra_capacity() {
+        let (backend, model) = test_model::load_default_embedding_model().unwrap();
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(std::num::NonZeroU32::new(512))
+            .with_n_seq_max(4)
+            .with_embeddings(true);
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let iterations = [
+            [
+                "This is the first document with enough content to contribute meaningfully to the batch size calculation",
+                "This is the second document that should be processed in a potentially different batch from the first",
+            ],
+            [
+                "This is the third document adding more content to ensure the total exceeds the configured chunk limit",
+                "This is the fourth document which should demonstrate that batching distributes across agent requests",
+            ],
+        ];
+
+        let n_embd = model.n_embd() as usize;
+        let mut batch = LlamaBatch::new(64, 4).unwrap();
+        let mut collected: Vec<Vec<f32>> = Vec::new();
+
+        for iteration_inputs in iterations {
+            for (sequence_index, text) in iteration_inputs.iter().enumerate() {
+                let tokens = model.str_to_token(text, AddBos::Always).unwrap();
+                let sequence_id = i32::try_from(sequence_index).unwrap();
+
+                batch.add_sequence(&tokens, sequence_id, true).unwrap();
+            }
+
+            context.clear_kv_cache();
+            context.decode(&mut batch).unwrap();
+
+            for sequence_index in 0..iteration_inputs.len() {
+                let sequence_id = i32::try_from(sequence_index).unwrap();
+                let embedding = context.embeddings_seq_ith(sequence_id).unwrap();
+
+                assert_eq!(
+                    embedding.len(),
+                    n_embd,
+                    "iteration sequence {sequence_index} embedding length mismatch"
+                );
+
+                collected.push(embedding.to_vec());
+            }
+
+            batch.clear();
+        }
+
+        assert_eq!(
+            collected.len(),
+            iterations.iter().flatten().count(),
+            "expected one embedding per input across every iteration"
+        );
+
+        for (left_index, left) in collected.iter().enumerate() {
+            for (right_index, right) in collected.iter().enumerate().skip(left_index + 1) {
+                assert_ne!(
+                    left, right,
+                    "embedding {left_index} must differ from embedding {right_index} across reused-batch iterations",
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
     fn embeddings_ith_returns_valid_embeddings() {
         let (backend, model) = test_model::load_default_embedding_model().unwrap();
         let ctx_params = LlamaContextParams::default()
@@ -926,5 +1055,79 @@ mod tests {
         let result = context.decode(&mut batch);
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial]
+    fn synchronize_completes_without_panic() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        context.synchronize();
+    }
+
+    #[test]
+    #[serial]
+    fn detach_threadpool_completes_without_panic() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        context.detach_threadpool();
+    }
+
+    #[test]
+    #[serial]
+    fn mark_logits_initialized_records_token_index() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        context.mark_logits_initialized(0);
+
+        assert_eq!(context.initialized_logits, vec![0]);
+    }
+
+    #[test]
+    #[serial]
+    fn print_memory_breakdown_completes_without_panic() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        context.print_memory_breakdown();
+    }
+
+    #[test]
+    #[serial]
+    fn get_logits_ith_returns_token_not_initialized_for_unknown_index() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        let result = context.get_logits_ith(7);
+
+        assert!(matches!(
+            result,
+            Err(crate::LogitsError::TokenNotInitialized(7))
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn get_logits_ith_returns_token_index_exceeds_context_for_huge_index() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(64));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let huge_index = i32::try_from(context.n_ctx()).unwrap();
+        context.mark_logits_initialized(huge_index);
+        let result = context.get_logits_ith(huge_index);
+
+        assert!(matches!(
+            result,
+            Err(crate::LogitsError::TokenIndexExceedsContext { .. })
+        ));
     }
 }

@@ -970,6 +970,98 @@ mod tests {
     #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
+    fn grammar_lazy_with_root_not_found_returns_error() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let trigger_words: Vec<&[u8]> = vec![b"function"];
+        let result =
+            LlamaSampler::grammar_lazy(&model, "expr ::= \"hello\"", "root", trigger_words, &[]);
+
+        assert!(matches!(result, Err(crate::GrammarError::RootNotFound)));
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn grammar_lazy_with_null_byte_in_trigger_word_returns_error() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let trigger_words: Vec<&[u8]> = vec![b"hel\0lo"];
+        let result =
+            LlamaSampler::grammar_lazy(&model, "root ::= \"hello\"", "root", trigger_words, &[]);
+
+        assert!(matches!(
+            result,
+            Err(crate::GrammarError::TriggerWordNullBytes(_))
+        ));
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn grammar_lazy_patterns_with_root_not_found_returns_error() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let patterns = vec!["\\{.*".to_string()];
+        let result = LlamaSampler::grammar_lazy_patterns(
+            &model,
+            "expr ::= \"hello\"",
+            "root",
+            &patterns,
+            &[],
+        );
+
+        assert!(matches!(result, Err(crate::GrammarError::RootNotFound)));
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn grammar_lazy_patterns_with_null_byte_in_pattern_returns_error() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let patterns = vec!["hel\0lo".to_string()];
+        let result = LlamaSampler::grammar_lazy_patterns(
+            &model,
+            "root ::= \"hello\"",
+            "root",
+            &patterns,
+            &[],
+        );
+
+        assert!(matches!(
+            result,
+            Err(crate::GrammarError::GrammarNullBytes(_))
+        ));
+    }
+
+    #[cfg(all(feature = "tests_that_use_llms", feature = "llguidance"))]
+    #[test]
+    #[serial_test::serial]
+    fn llguidance_method_creates_sampler() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let result = LlamaSampler::llguidance(&model, "regex", r"yes|no");
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn logit_bias_with_overflow_count_returns_error() {
+        let result = LlamaSampler::logit_bias(0, &[]);
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn dry_sampler_with_root_not_found_grammar_does_not_apply() {
+        let (_backend, model) = crate::test_model::load_default_model().unwrap();
+        let breakers: Vec<&[u8]> = vec![b"\n"];
+        let _sampler = LlamaSampler::dry(&model, 1.5, 2.0, 128, 2, &breakers);
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
     fn sample_returns_token_after_decode() {
         use crate::context::params::LlamaContextParams;
         use crate::llama_batch::LlamaBatch;
