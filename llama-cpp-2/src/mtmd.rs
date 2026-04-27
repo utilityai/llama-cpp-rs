@@ -75,6 +75,15 @@ pub struct MtmdContextParams {
     pub n_threads: i32,
     /// Media marker string used to identify media positions in text
     pub media_marker: CString,
+    /// Minimum number of tokens used to represent an image.
+    /// Controls the visual token budget lower bound. Use -1 for the model default.
+    /// Gemma 4 supported budgets: 70, 140, 280, 560, 1120.
+    pub image_min_tokens: i32,
+    /// Maximum number of tokens used to represent an image.
+    /// Controls the visual token budget upper bound. Use -1 for the model default.
+    /// Lower values reduce memory and compute at the cost of visual detail.
+    /// Gemma 4 supported budgets: 70, 140, 280, 560, 1120.
+    pub image_max_tokens: i32,
 }
 
 impl Default for MtmdContextParams {
@@ -91,12 +100,16 @@ impl From<&MtmdContextParams> for llama_cpp_sys_2::mtmd_context_params {
             print_timings,
             n_threads,
             media_marker,
+            image_min_tokens,
+            image_max_tokens,
         } = params;
 
         context.use_gpu = *use_gpu;
         context.print_timings = *print_timings;
         context.n_threads = *n_threads;
         context.media_marker = media_marker.as_ptr();
+        context.image_min_tokens = *image_min_tokens;
+        context.image_max_tokens = *image_max_tokens;
 
         context
     }
@@ -109,6 +122,8 @@ impl From<llama_cpp_sys_2::mtmd_context_params> for MtmdContextParams {
             print_timings: params.print_timings,
             n_threads: params.n_threads,
             media_marker: unsafe { CStr::from_ptr(params.media_marker) }.to_owned(),
+            image_min_tokens: params.image_min_tokens,
+            image_max_tokens: params.image_max_tokens,
         }
     }
 }
