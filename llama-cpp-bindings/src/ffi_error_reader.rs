@@ -22,12 +22,30 @@ pub unsafe fn read_and_free_cpp_error(error_ptr: *mut c_char) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+    use std::ffi::c_char;
+
     use super::read_and_free_cpp_error;
+
+    unsafe extern "C" {
+        fn strdup(s: *const c_char) -> *mut c_char;
+    }
 
     #[test]
     fn returns_unknown_for_null_pointer() {
         let result = unsafe { read_and_free_cpp_error(std::ptr::null_mut()) };
 
         assert_eq!(result, "unknown error");
+    }
+
+    #[test]
+    fn returns_message_for_valid_cstring_pointer() {
+        let original = CString::new("expected error message").unwrap();
+        let dup_ptr = unsafe { strdup(original.as_ptr()) };
+        assert!(!dup_ptr.is_null(), "strdup must allocate a copy");
+
+        let result = unsafe { read_and_free_cpp_error(dup_ptr) };
+
+        assert_eq!(result, "expected error message");
     }
 }

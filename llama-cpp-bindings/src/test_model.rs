@@ -164,6 +164,29 @@ pub fn load_default_mtmd() -> Result<(
 
 #[cfg(test)]
 mod tests {
+    struct EnvVarGuard {
+        name: &'static str,
+        original: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(name: &'static str, value: &str) -> Self {
+            let original = std::env::var(name).ok();
+            unsafe { std::env::set_var(name, value) };
+
+            Self { name, original }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.original {
+                Some(value) => unsafe { std::env::set_var(self.name, value) },
+                None => unsafe { std::env::remove_var(self.name) },
+            }
+        }
+    }
+
     #[test]
     fn required_env_returns_error_for_missing_var() {
         let result = super::required_env("LLAMA_TEST_NONEXISTENT_VAR_THAT_SHOULD_NOT_EXIST");
@@ -173,10 +196,10 @@ mod tests {
 
     #[cfg(feature = "mtmd")]
     #[test]
+    #[serial_test::serial]
     fn load_default_mtmd_fails_without_mmproj() {
-        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "") };
+        let _guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "");
         let result = super::load_default_mtmd();
-        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf") };
 
         assert!(result.is_err());
     }
@@ -185,6 +208,81 @@ mod tests {
     fn download_file_with_nonexistent_file_returns_error() {
         let result =
             super::download_file("unsloth/Qwen3.5-0.8B-GGUF", "this-file-does-not-exist.gguf");
+
+        assert!(result.is_err());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_file_from_succeeds_for_known_repo_and_file() {
+        let result =
+            super::download_file_from("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf");
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_model_returns_path_with_env_set() {
+        let result = super::download_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_embedding_model_returns_path_with_env_set() {
+        let result = super::download_embedding_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_encoder_model_returns_path_with_env_set() {
+        let result = super::download_encoder_model();
+
+        assert!(result.is_ok());
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn download_mmproj_returns_path_when_env_set() {
+        let _guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf");
+        let result = super::download_mmproj();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn has_mmproj_reflects_env_var() {
+        let _set_guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf");
+        assert!(super::has_mmproj());
+
+        let _empty_guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "");
+        assert!(!super::has_mmproj());
+    }
+
+    #[test]
+    fn fixtures_dir_is_under_manifest() {
+        let dir = super::fixtures_dir();
+
+        assert!(dir.ends_with("fixtures"));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn download_mmproj_returns_error_when_env_empty() {
+        let original = std::env::var("LLAMA_TEST_HF_MMPROJ").unwrap_or_default();
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "") };
+        let result = super::download_mmproj();
+        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", original) };
 
         assert!(result.is_err());
     }

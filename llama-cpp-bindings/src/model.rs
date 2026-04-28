@@ -1095,6 +1095,14 @@ mod tests {
 
     #[test]
     #[serial]
+    fn is_hybrid_returns_bool_for_test_model() {
+        let (_backend, model) = test_model::load_default_model().unwrap();
+
+        let _ = model.is_hybrid();
+    }
+
+    #[test]
+    #[serial]
     fn meta_key_by_index_returns_valid_key() {
         let (_backend, model) = test_model::load_default_model().unwrap();
         let key = model.meta_key_by_index(0).unwrap();

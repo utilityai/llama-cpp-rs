@@ -725,4 +725,102 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    #[serial]
+    fn state_save_file_with_null_byte_in_path_returns_error() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
+        let result = context.state_save_file(path_with_null, &[]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn state_load_file_with_null_byte_in_path_returns_error() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
+        let result = context.state_load_file(path_with_null, 512);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn state_seq_save_file_with_null_byte_in_path_returns_error() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let context = model.new_context(&backend, ctx_params).unwrap();
+
+        let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
+        let result = context.state_seq_save_file(path_with_null, 0, &[]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn state_seq_load_file_with_null_byte_in_path_returns_error() {
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
+        let result = context.state_seq_load_file(path_with_null, 0, 512);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[serial]
+    fn state_seq_get_size_ext_returns_size_for_decoded_sequence() {
+        use crate::context::llama_state_seq_flags::LlamaStateSeqFlags;
+
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let tokens = model.str_to_token("Hello world", AddBos::Always).unwrap();
+        let mut batch = LlamaBatch::new(512, 1).unwrap();
+        batch.add_sequence(&tokens, 0, false).unwrap();
+        context.decode(&mut batch).unwrap();
+
+        let flags = LlamaStateSeqFlags::empty();
+        let size = context.state_seq_get_size_ext(0, &flags);
+
+        assert!(size > 0);
+    }
+
+    #[test]
+    #[serial]
+    fn state_seq_get_data_ext_and_set_data_ext_round_trip() {
+        use crate::context::llama_state_seq_flags::LlamaStateSeqFlags;
+
+        let (backend, model) = test_model::load_default_model().unwrap();
+        let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+        let mut context = model.new_context(&backend, ctx_params).unwrap();
+
+        let tokens = model.str_to_token("Hello world", AddBos::Always).unwrap();
+        let mut batch = LlamaBatch::new(512, 1).unwrap();
+        batch.add_sequence(&tokens, 0, false).unwrap();
+        context.decode(&mut batch).unwrap();
+
+        let flags = LlamaStateSeqFlags::empty();
+        let size = context.state_seq_get_size_ext(0, &flags);
+        let mut buffer = vec![0u8; size];
+        let bytes_written = unsafe { context.state_seq_get_data_ext(&mut buffer, 0, &flags) };
+
+        assert!(bytes_written > 0);
+
+        let bytes_read = unsafe { context.state_seq_set_data_ext(&buffer, 0, &flags) };
+
+        assert!(bytes_read > 0);
+    }
 }
