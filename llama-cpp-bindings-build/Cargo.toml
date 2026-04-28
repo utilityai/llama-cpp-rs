@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-bindings-build"
 description = "Build system for llama-cpp-bindings-sys FFI bindings"
-version = "0.4.1"
+version = "0.4.2"
 edition.workspace = true
 license = "Apache-2.0"
 repository = "https://github.com/intentee/llama-cpp-bindings"
