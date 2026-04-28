@@ -1044,7 +1044,7 @@ mod tests {
     #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
-    fn logit_bias_with_overflow_count_returns_error() {
+    fn logit_bias_with_empty_biases_succeeds() {
         let result = LlamaSampler::logit_bias(0, &[]);
 
         assert!(result.is_ok());
