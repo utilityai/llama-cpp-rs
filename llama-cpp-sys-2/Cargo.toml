@@ -82,6 +82,14 @@ glob = "0.3.3"
 walkdir = "2"
 
 [features]
+default = ["common"]
+# Build the high-level OpenAI-compatible / chat-template / JSON-schema-to-grammar
+# helpers backed by llama.cpp's `common/` static library. Disabling this drops
+# `libcommon.a` (~14 MB) and the `wrapper_common.cpp` / `wrapper_oai.cpp`
+# bindings (~10 MB combined static archive) from the link line, which matters
+# for size-constrained downstream binaries that only need the core inference
+# API. Enabled by default to preserve backwards compatibility.
+common = []
 cuda = []
 # Disables the need to dynamically link against libcuda.so / cuda.dll
 cuda-no-vmm = ["cuda"]

@@ -11,13 +11,16 @@ use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
+#[cfg(feature = "common")]
 use crate::openai::{ChatParseStateOaicompat, OpenAIChatTemplateParams};
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
+#[cfg(feature = "common")]
+use crate::{status_is_ok, ChatParseError};
 use crate::{
-    status_is_ok, ApplyChatTemplateError, ChatParseError, ChatTemplateError, LlamaContextLoadError,
-    LlamaLoraAdapterInitError, LlamaModelLoadError, MetaValError, NewLlamaChatMessageError,
-    StringToTokenError, TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
+    LlamaModelLoadError, MetaValError, NewLlamaChatMessageError, StringToTokenError,
+    TokenToStringError,
 };
 
 pub mod params;
@@ -95,6 +98,7 @@ impl LlamaChatMessage {
 }
 
 /// Grammar trigger kinds used for lazy grammar sampling.
+#[cfg(feature = "common")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GrammarTriggerType {
     /// Trigger on a specific token.
@@ -108,6 +112,7 @@ pub enum GrammarTriggerType {
 }
 
 /// Lazy grammar trigger from chat template generation.
+#[cfg(feature = "common")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GrammarTrigger {
     /// Trigger kind.
@@ -119,6 +124,7 @@ pub struct GrammarTrigger {
 }
 
 /// Result of applying a chat template with tool grammar support.
+#[cfg(feature = "common")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChatTemplateResult {
     /// Rendered chat prompt.
@@ -945,6 +951,7 @@ impl LlamaModel {
     /// Apply the models chat template to some messages and return an optional tool grammar.
     /// `tools_json` should be an OpenAI-compatible tool definition JSON array string.
     /// `json_schema` should be a JSON schema string.
+    #[cfg(feature = "common")]
     #[tracing::instrument(skip_all)]
     pub fn apply_chat_template_with_tools_oaicompat(
         &self,
@@ -1135,6 +1142,7 @@ impl LlamaModel {
     }
 
     /// Apply the model chat template using OpenAI-compatible JSON messages.
+    #[cfg(feature = "common")]
     #[tracing::instrument(skip_all)]
     pub fn apply_chat_template_oaicompat(
         &self,
@@ -1340,6 +1348,7 @@ impl LlamaModel {
     }
 }
 
+#[cfg(feature = "common")]
 impl ChatTemplateResult {
     /// Parse a generated response into an OpenAI-compatible message JSON string.
     pub fn parse_response_oaicompat(
