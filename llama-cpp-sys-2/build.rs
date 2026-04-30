@@ -820,13 +820,46 @@ fn main() {
         config.define("LLAMA_USE_SYSTEM_GGML", "ON");
     }
 
-    // General
-    config
-        .profile(&profile)
-        .very_verbose(std::env::var("CMAKE_VERBOSE").is_ok()) // Not verbose by default
-        .always_configure(false);
+    let cmake_build_dir = if cfg!(feature = "system-ggml") {
+        use cmake_file_api::{objects, query, reply};
+        let out = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let build_dir = out.join("build");
+        query::Writer::default()
+            .request_object::<objects::CacheV2>()
+            .write_stateless(&build_dir)
+            .expect("Failed to write cmake-file-api query");
 
-    let build_dir = config.build();
+        // When system-ggml is enabled, always reconfigure so cmake picks up the file-api query
+        // and generates the reply needed to locate GGML library directories.
+        config.profile(&profile).always_configure(true);
+
+        let cmake_build_dir = config.build();
+
+        // Extract the GGML library directories.
+        let reader =
+            reply::Reader::from_build_dir(&build_dir).expect("Failed to read cmake-file-api reply");
+        let cache: objects::CacheV2 = reader.read_object().expect("Failed to read CacheV2 object");
+
+        let mut ggml_lib_dirs = std::collections::HashSet::new();
+        for entry in cache.entries {
+            if entry.name == "GGML_LIBRARY"
+                || entry.name == "GGML_BASE_LIBRARY"
+                || entry.name == "GGML_CPU_LIBRARY"
+            {
+                if let Some(parent) = std::path::Path::new(&entry.value).parent() {
+                    ggml_lib_dirs.insert(parent.to_path_buf());
+                }
+            }
+        }
+
+        for lib_dir in ggml_lib_dirs {
+            println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        }
+
+        cmake_build_dir
+    } else {
+        config.build()
+    };
 
     // Build mtmd directly with cc::Build, bypassing the cmake tools build.
     // Using LLAMA_BUILD_TOOLS=ON would pull in all tools (batched-bench, quantize, etc.)
@@ -880,35 +913,7 @@ fn main() {
         "cargo:rustc-link-search={}",
         out_dir.join("lib64").display()
     );
-    println!("cargo:rustc-link-search={}", build_dir.display());
-
-    if cfg!(feature = "system-ggml") {
-        // Extract library directory from CMake's found GGML package
-        let cmake_cache = build_dir.join("build").join("CMakeCache.txt");
-        if let Ok(cache_contents) = std::fs::read_to_string(&cmake_cache) {
-            let mut ggml_lib_dirs = std::collections::HashSet::new();
-
-            // Parse CMakeCache.txt to find where GGML libraries were found
-            for line in cache_contents.lines() {
-                if line.starts_with("GGML_LIBRARY:")
-                    || line.starts_with("GGML_BASE_LIBRARY:")
-                    || line.starts_with("GGML_CPU_LIBRARY:")
-                {
-                    if let Some(lib_path) = line.split('=').nth(1) {
-                        if let Some(parent) = Path::new(lib_path).parent() {
-                            ggml_lib_dirs.insert(parent.to_path_buf());
-                        }
-                    }
-                }
-            }
-
-            // Add each unique library directory to the search path
-            for lib_dir in ggml_lib_dirs {
-                println!("cargo:rustc-link-search=native={}", lib_dir.display());
-                debug_log!("Added system GGML library path: {}", lib_dir.display());
-            }
-        }
-    }
+    println!("cargo:rustc-link-search={}", cmake_build_dir.display());
 
     if cfg!(feature = "cuda") && !build_shared_libs {
         // Re-run build script if CUDA_PATH environment variable changes
