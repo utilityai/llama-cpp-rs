@@ -542,7 +542,7 @@ fn main() {
         }
     }
 
-    // extract the target-cpu config value, if specified
+    // extract the target-cpu and tune-cpu config values, if specified
     let target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
         .ok()
         .and_then(|rustflags| {
@@ -550,6 +550,15 @@ fn main() {
                 .split('\x1f')
                 .find(|f| f.contains("target-cpu="))
                 .and_then(|f| f.split("target-cpu=").nth(1))
+                .map(|s| s.to_string())
+        });
+    let tune_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .ok()
+        .and_then(|rustflags| {
+            rustflags
+                .split('\x1f')
+                .find(|f| f.contains("tune-cpu="))
+                .and_then(|f| f.split("tune-cpu=").nth(1))
                 .map(|s| s.to_string())
         });
 
@@ -567,6 +576,13 @@ fn main() {
             debug_log!("Setting baseline architecture: -march={}", cpu);
             config.cflag(format!("-march={}", cpu));
             config.cxxflag(format!("-march={}", cpu));
+        }
+
+        // if `tune-cpu` is set, forward it as -mtune
+        if let Some(ref cpu) = tune_cpu {
+            debug_log!("Setting tune-cpu: -mtune={}", cpu);
+            config.cflag(format!("-mtune={}", cpu));
+            config.cxxflag(format!("-mtune={}", cpu));
         }
 
         // I expect this env var to always be present
