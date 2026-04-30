@@ -30,6 +30,28 @@ macro_rules! debug_log {
     };
 }
 
+fn emit_compiler_static_archive_search_path(archive: &str) {
+    let compiler = cc::Build::new().get_compiler();
+    let Ok(output) = Command::new(compiler.path())
+        .arg(format!("--print-file-name={archive}"))
+        .output()
+    else {
+        return;
+    };
+
+    if !output.status.success() {
+        return;
+    }
+
+    let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let path = Path::new(&path);
+    if path.is_file() {
+        if let Some(parent) = path.parent() {
+            println!("cargo:rustc-link-search=native={}", parent.display());
+        }
+    }
+}
+
 fn parse_target_os() -> Result<(TargetOs, String), String> {
     let target = env::var("TARGET").unwrap();
 
@@ -1060,7 +1082,12 @@ fn main() {
 
     // OpenMP
     if cfg!(feature = "openmp") && target_triple.contains("gnu") {
-        println!("cargo:rustc-link-lib=gomp");
+        if cfg!(feature = "static-openmp") {
+            emit_compiler_static_archive_search_path("libgomp.a");
+            println!("cargo:rustc-link-lib=static=gomp");
+        } else {
+            println!("cargo:rustc-link-lib=gomp");
+        }
     }
 
     match target_os {
@@ -1078,7 +1105,12 @@ fn main() {
             }
         }
         TargetOs::Linux => {
-            println!("cargo:rustc-link-lib=dylib=stdc++");
+            if cfg!(feature = "static-stdcxx") {
+                emit_compiler_static_archive_search_path("libstdc++.a");
+                println!("cargo:rustc-link-lib=static=stdc++");
+            } else {
+                println!("cargo:rustc-link-lib=dylib=stdc++");
+            }
         }
         TargetOs::Apple(ref variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");

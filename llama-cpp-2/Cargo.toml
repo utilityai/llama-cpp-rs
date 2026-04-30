@@ -38,11 +38,17 @@ metal = ["llama-cpp-sys-2/metal"]
 dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
 openmp = ["llama-cpp-sys-2/openmp"]
+# Link GNU OpenMP (`libgomp`) statically on GNU targets while keeping OpenMP
+# enabled. Useful for self-contained downstream binaries.
+static-openmp = ["llama-cpp-sys-2/static-openmp"]
 rocm = ["llama-cpp-sys-2/rocm"]
 sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
 android-static-stdcxx = ["llama-cpp-sys-2/static-stdcxx"]
+# Generic alias for non-Android targets that also support static C++ stdlib
+# linkage through the sys crate.
+static-stdcxx = ["llama-cpp-sys-2/static-stdcxx"]
 mtmd = ["llama-cpp-sys-2/mtmd"]
 system-ggml = ["llama-cpp-sys-2/system-ggml"]
 system-ggml-static = ["llama-cpp-sys-2/system-ggml-static"]
