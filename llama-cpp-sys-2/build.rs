@@ -225,6 +225,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+    println!("cargo:rerun-if-env-changed=LLAMA_CUDA_DISABLE_NCCL");
 
     debug_log!("TARGET: {}", target_triple);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
@@ -797,6 +798,18 @@ fn main() {
 
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
+
+        // llama.cpp enables GGML_CUDA_NCCL by default and may auto-detect NCCL via
+        // find_package(NCCL). Downstream Rust linking then fails because this crate
+        // does not explicitly link libnccl. Disable NCCL by default unless the
+        // caller opts back in with LLAMA_CUDA_DISABLE_NCCL=0.
+        let disable_nccl = env::var("LLAMA_CUDA_DISABLE_NCCL")
+            .map(|v| v != "0")
+            .unwrap_or(true);
+        if disable_nccl {
+            config.define("CMAKE_DISABLE_FIND_PACKAGE_NCCL", "TRUE");
+            config.define("GGML_CUDA_NCCL", "OFF");
+        }
 
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");
