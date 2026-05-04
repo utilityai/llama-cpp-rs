@@ -33,18 +33,26 @@ fn embedding_generation_produces_vectors() -> Result<()> {
     let tokens = model
         .str_to_token(prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {prompt}"))?;
+    let prompt_token_count = u64::try_from(tokens.len())?;
 
     let n_ctx = usize::try_from(ctx.n_ctx())?;
     assert!(tokens.len() <= n_ctx, "prompt exceeds context window size");
 
     let t_main_start = ggml_time_us();
 
+    let mut classifier = model.reasoning_token_classifier()?;
     let mut batch = LlamaBatch::new(n_ctx, 1)?;
-    batch.add_sequence(&tokens, 0, false)?;
+    classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
+
+    assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
+    assert_eq!(classifier.usage().prompt_tokens(), 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
         .with_context(|| "llama_decode() failed")?;
+
+    let promoted = classifier.commit_prompt_tokens();
+    assert_eq!(promoted, prompt_token_count);
 
     let embedding = ctx
         .embeddings_seq_ith(0)
@@ -74,6 +82,10 @@ fn embedding_generation_produces_vectors() -> Result<()> {
         (magnitude - 1.0).abs() < 0.01,
         "normalized embedding magnitude should be approximately 1.0, got {magnitude}"
     );
+
+    let usage = classifier.into_usage();
+    assert_eq!(usage.prompt_tokens(), prompt_token_count);
+    assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())
 }

@@ -629,7 +629,8 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let token = SampledToken::Content(sampler.sample(&context, batch.n_tokens() - 1)?);
+    let mut classifier = model.reasoning_token_classifier()?;
+    let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
 
     assert!(
         !model.is_eog_token(&token),
@@ -649,6 +650,11 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
     assert!(
         first_char == 'y' || first_char == 'n',
         "Grammar should constrain first token to start with y/n, got: '{piece}'"
+    );
+    assert_eq!(
+        classifier.usage().completion_tokens(),
+        1,
+        "exactly one completion token sampled"
     );
 
     Ok(())
@@ -682,7 +688,8 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let token = SampledToken::Content(sampler.sample(&context, batch.n_tokens() - 1)?);
+    let mut classifier = model.reasoning_token_classifier()?;
+    let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
 
     assert!(
         !model.is_eog_token(&token),
@@ -695,6 +702,11 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
     assert!(
         piece.starts_with('{'),
         "JSON schema grammar should constrain first token to start with '{{', got: '{piece}'"
+    );
+    assert_eq!(
+        classifier.usage().completion_tokens(),
+        1,
+        "exactly one completion token sampled"
     );
 
     Ok(())
@@ -724,16 +736,39 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
+    let mut classifier = model.reasoning_token_classifier()?;
     let mut generated = String::new();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut position = batch.n_tokens();
+    let mut observed_content: u64 = 0;
+    let mut observed_reasoning: u64 = 0;
 
     for iteration in 0..10 {
-        let raw = sampler.sample(&context, -1)?;
-        let token = SampledToken::Content(raw);
+        let token = classifier.sample(&mut sampler, &context, -1)?;
         let is_eog = model.is_eog_token(&token);
 
-        eprintln!("  iteration={iteration} token={} eog={is_eog}", raw.0);
+        match token {
+            SampledToken::Content(raw) => {
+                eprintln!(
+                    "  iteration={iteration} token={} eog={is_eog} content",
+                    raw.0
+                );
+                observed_content += 1;
+            }
+            SampledToken::Reasoning(raw) => {
+                eprintln!(
+                    "  iteration={iteration} token={} eog={is_eog} reasoning",
+                    raw.0
+                );
+                observed_reasoning += 1;
+            }
+            SampledToken::Undeterminable(raw) => {
+                eprintln!(
+                    "  iteration={iteration} token={} eog={is_eog} undeterminable",
+                    raw.0
+                );
+            }
+        }
 
         if is_eog {
             break;
@@ -757,6 +792,17 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
     assert!(
         lowercase == "yes" || lowercase == "no",
         "Grammar loop should produce 'yes' or 'no', got: '{generated}'"
+    );
+
+    let usage = classifier.into_usage();
+    assert!(
+        usage.completion_tokens() > 0,
+        "loop should record at least one completion token"
+    );
+    assert_eq!(
+        usage.completion_tokens(),
+        observed_content + observed_reasoning,
+        "completion_tokens must equal observed content + reasoning"
     );
 
     Ok(())
@@ -783,11 +829,12 @@ fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
 
     let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
-    let mut token_count = 0;
+    let mut classifier = model.reasoning_token_classifier()?;
+    let mut token_count: u64 = 0;
     let mut position = batch.n_tokens();
 
     for _ in 0..5 {
-        let token = SampledToken::Content(sampler.sample(&context, -1)?);
+        let token = classifier.sample(&mut sampler, &context, -1)?;
 
         if model.is_eog_token(&token) {
             break;
@@ -805,6 +852,12 @@ fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
     assert!(
         token_count > 0,
         "Should produce at least one token without grammar"
+    );
+    let usage = classifier.into_usage();
+    assert!(
+        usage.completion_tokens() >= token_count,
+        "completion_tokens ({}) must include the {token_count} non-EOG samples",
+        usage.completion_tokens()
     );
 
     Ok(())

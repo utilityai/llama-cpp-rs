@@ -46,14 +46,15 @@ pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+pub mod token_usage;
 
 pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
-    GrammarError, LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError,
-    LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError, LlamaModelLoadError, LogitsError,
-    MetaValError, ModelParamsError, NewLlamaChatMessageError, ReasoningClassifierError, Result,
-    SampleError, SamplerAcceptError, SamplingError, StringToTokenError, TokenSamplingError,
-    TokenToStringError,
+    EvalMultimodalChunksError, GrammarError, LlamaContextLoadError, LlamaCppError,
+    LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError,
+    LlamaModelLoadError, LogitsError, MetaValError, ModelParamsError, NewLlamaChatMessageError,
+    ReasoningClassifierError, Result, SampleError, SamplerAcceptError, SamplingError,
+    StringToTokenError, TokenSamplingError, TokenToStringError, TokenUsageError,
 };
 
 pub use llama_backend_device::{
@@ -61,6 +62,7 @@ pub use llama_backend_device::{
 };
 pub use reasoning_token_classifier::ReasoningTokenClassifier;
 pub use sampled_token::SampledToken;
+pub use token_usage::TokenUsage;
 
 pub use ffi_status_is_ok::status_is_ok;
 pub use ffi_status_to_i32::status_to_i32;

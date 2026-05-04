@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use std::string::FromUtf8Error;
 
 use crate::llama_batch::BatchAddError;
+use crate::mtmd::MtmdEvalError;
+use crate::mtmd::mtmd_input_chunk_type::MtmdInputChunkTypeError;
 
 /// A failable result from a llama.cpp function.
 pub type Result<TValue> = std::result::Result<TValue, LlamaCppError>;
@@ -376,6 +378,35 @@ pub enum ReasoningClassifierError {
     CloseMarkerNotSpecial {
         /// The marker string returned by llama.cpp.
         marker: String,
+    },
+}
+
+/// Failed to evaluate multimodal chunks through the request classifier.
+#[derive(Debug, thiserror::Error)]
+pub enum EvalMultimodalChunksError {
+    /// `MtmdInputChunks::eval_chunks` returned an error.
+    #[error("{0}")]
+    EvalFailed(#[from] MtmdEvalError),
+    /// A chunk reported a type that is not known to this binding.
+    #[error("{0}")]
+    UnknownChunkType(#[from] MtmdInputChunkTypeError),
+    /// A chunk index that was within `chunks.len()` returned `None` from `chunks.get(index)`.
+    #[error("chunk index {0} out of bounds during post-eval walk")]
+    ChunkOutOfBounds(usize),
+}
+
+/// Token-usage accounting violations.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum TokenUsageError {
+    /// Cached prompt tokens cannot exceed the recorded prompt total.
+    #[error(
+        "cached prompt tokens would reach {cached_after} but only {prompt} prompt tokens were recorded"
+    )]
+    CachedExceedsPrompt {
+        /// Running cached total after this would-be call.
+        cached_after: u64,
+        /// Currently recorded prompt-token total.
+        prompt: u64,
     },
 }
 

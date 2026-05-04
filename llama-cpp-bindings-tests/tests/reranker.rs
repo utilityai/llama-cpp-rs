@@ -63,16 +63,31 @@ fn reranking_produces_scores() -> Result<()> {
         bail!("one of the provided prompts exceeds the size of the context window");
     }
 
+    let mut classifier = model.reasoning_token_classifier()?;
     let mut batch = LlamaBatch::new(2048, i32::try_from(document_count)?)?;
     let t_main_start = ggml_time_us();
 
     for (sequence_index, tokens) in tokens_lines_list.iter().enumerate() {
-        batch.add_sequence(tokens, i32::try_from(sequence_index)?, false)?;
+        classifier.feed_prompt_sequence_to_batch(
+            &mut batch,
+            tokens,
+            i32::try_from(sequence_index)?,
+            false,
+        )?;
     }
+
+    let total_tokens: usize = tokens_lines_list.iter().map(Vec::len).sum();
+    let total_token_count = u64::try_from(total_tokens)?;
+
+    assert_eq!(classifier.pending_prompt_tokens(), total_token_count);
+    assert_eq!(classifier.usage().prompt_tokens(), 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
         .with_context(|| "llama_decode() failed")?;
+
+    let promoted = classifier.commit_prompt_tokens();
+    assert_eq!(promoted, total_token_count);
 
     let mut embeddings = Vec::with_capacity(document_count);
 
@@ -84,7 +99,6 @@ fn reranking_produces_scores() -> Result<()> {
     }
 
     let t_main_end = ggml_time_us();
-    let total_tokens: usize = tokens_lines_list.iter().map(Vec::len).sum();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
     #[allow(clippy::cast_precision_loss)]
@@ -115,6 +129,10 @@ fn reranking_produces_scores() -> Result<()> {
         similarity.is_finite(),
         "cosine similarity should be a finite number"
     );
+
+    let usage = classifier.into_usage();
+    assert_eq!(usage.prompt_tokens(), total_token_count);
+    assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())
 }

@@ -24,9 +24,11 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     let prompt = "Hello my name is";
     let n_len: i32 = 64;
 
+    let mut classifier = model.reasoning_token_classifier()?;
     let tokens_list = model
         .str_to_token(prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {prompt}"))?;
+    let prompt_token_count = u64::try_from(tokens_list.len())?;
 
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
@@ -39,18 +41,22 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     std::io::stderr().flush()?;
 
     let mut batch = LlamaBatch::new(512, 1)?;
-    let last_index = i32::try_from(tokens_list.len() - 1)?;
+    classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens_list, 0, false)?;
 
-    for (index, token) in (0_i32..).zip(tokens_list.into_iter()) {
-        let is_last = index == last_index;
-        batch.add(&SampledToken::Content(token), index, &[0], is_last)?;
-    }
+    assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
+    assert_eq!(classifier.usage().prompt_tokens(), 0);
 
     ctx.decode(&mut batch)
         .with_context(|| "llama_decode() failed")?;
 
+    let promoted = classifier.commit_prompt_tokens();
+    assert_eq!(promoted, prompt_token_count);
+    assert_eq!(classifier.usage().prompt_tokens(), prompt_token_count);
+
     let mut n_cur = batch.n_tokens();
     let mut n_decode: i32 = 0;
+    let mut observed_content: u64 = 0;
+    let mut observed_reasoning: u64 = 0;
     let t_main_start = ggml_time_us();
 
     let mut sampler =
@@ -59,7 +65,13 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     let mut generated = String::new();
 
     while n_cur <= n_len {
-        let token = SampledToken::Content(sampler.sample(&ctx, batch.n_tokens() - 1)?);
+        let token = classifier.sample(&mut sampler, &ctx, batch.n_tokens() - 1)?;
+
+        match token {
+            SampledToken::Content(_) => observed_content += 1,
+            SampledToken::Reasoning(_) => observed_reasoning += 1,
+            SampledToken::Undeterminable(_) => {}
+        }
 
         if model.is_eog_token(&token) {
             break;
@@ -94,6 +106,27 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         "model should generate at least one token"
     );
 
+    let usage = classifier.into_usage();
+    assert_eq!(
+        usage.prompt_tokens(),
+        prompt_token_count,
+        "prompt_tokens must equal the tokenizer's prompt length"
+    );
+    assert_eq!(
+        usage.content_tokens(),
+        observed_content,
+        "content_tokens must equal observed Content variants"
+    );
+    assert_eq!(
+        usage.reasoning_tokens(),
+        observed_reasoning,
+        "reasoning_tokens must equal observed Reasoning variants"
+    );
+    assert_eq!(
+        usage.completion_tokens(),
+        observed_content + observed_reasoning
+    );
+
     Ok(())
 }
 
@@ -113,30 +146,41 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     )?];
     let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
 
+    let mut classifier = model.reasoning_token_classifier()?;
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;
-    let mut batch = LlamaBatch::new(512, 1)?;
+    let prompt_token_count = u64::try_from(tokens.len())?;
 
-    let last_index = i32::try_from(tokens.len())? - 1;
-    for (position, token) in (0_i32..).zip(tokens.into_iter()) {
-        let output_logits = position == last_index;
-        batch.add(&SampledToken::Content(token), position, &[0], output_logits)?;
-    }
+    let mut batch = LlamaBatch::new(512, 1)?;
+    classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
+
+    assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
+    assert_eq!(classifier.usage().prompt_tokens(), 0);
+
     context.decode(&mut batch)?;
+
+    let promoted = classifier.commit_prompt_tokens();
+    assert_eq!(promoted, prompt_token_count);
 
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut sampler = LlamaSampler::greedy();
-    let mut classifier = model.reasoning_token_classifier()?;
     let mut position = batch.n_tokens();
     let max_tokens = 1024;
     let mut generated = String::new();
-    let mut saw_reasoning = false;
-    let mut saw_content = false;
+    let mut observed_content: u64 = 0;
+    let mut observed_reasoning: u64 = 0;
 
     while position <= max_tokens {
-        let token = classifier.classify(sampler.sample(&context, batch.n_tokens() - 1)?);
+        let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
 
-        saw_reasoning |= matches!(token, SampledToken::Reasoning(_));
-        saw_content |= matches!(token, SampledToken::Content(_));
+        match token {
+            SampledToken::Content(_) => observed_content += 1,
+            SampledToken::Reasoning(_) => observed_reasoning += 1,
+            SampledToken::Undeterminable(_) => {
+                unreachable!(
+                    "Qwen3 chat template uses detected reasoning markers; classifier must not emit Undeterminable"
+                )
+            }
+        }
 
         if model.is_eog_token(&token) {
             break;
@@ -161,12 +205,39 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         "model should generate at least one token"
     );
     assert!(
-        saw_reasoning,
-        "expected at least one Reasoning token from the classifier"
+        observed_reasoning > 0,
+        "reasoning model should emit at least one Reasoning token"
     );
     assert!(
-        saw_content,
-        "expected at least one Content token from the classifier"
+        observed_content > 0,
+        "reasoning model should emit at least one Content token after </think>"
+    );
+
+    let usage = classifier.into_usage();
+
+    assert_eq!(
+        usage.prompt_tokens(),
+        prompt_token_count,
+        "prompt_tokens must equal the tokenizer's prompt length"
+    );
+    assert_eq!(
+        usage.content_tokens(),
+        observed_content,
+        "content_tokens must equal observed Content variants"
+    );
+    assert_eq!(
+        usage.reasoning_tokens(),
+        observed_reasoning,
+        "reasoning_tokens must equal observed Reasoning variants"
+    );
+    assert_eq!(
+        usage.completion_tokens(),
+        observed_content + observed_reasoning
+    );
+    assert_eq!(
+        usage.undeterminable_tokens(),
+        0,
+        "model with detected markers should never produce Undeterminable"
     );
 
     Ok(())
