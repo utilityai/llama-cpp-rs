@@ -192,9 +192,6 @@ impl LlamaSampler {
 
             for sampler in samplers {
                 llama_cpp_bindings_sys::llama_sampler_chain_add(chain, sampler.sampler);
-
-                // Do not call `llama_sampler_free` on the sampler, as the internal sampler is now
-                // owned by the chain
                 std::mem::forget(sampler);
             }
 

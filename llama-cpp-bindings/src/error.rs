@@ -37,7 +37,6 @@ pub enum LlamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
-    // See [`LlamaSamplerError`]
     /// Backend device not found
     #[error("Backend device {0} not found")]
     BackendDeviceNotFound(usize),

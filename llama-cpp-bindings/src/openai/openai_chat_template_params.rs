@@ -1,6 +1,8 @@
 /// Parameters for applying OpenAI-compatible chat templates.
-// This struct mirrors the OpenAI API flags which are inherently boolean.
-#[allow(clippy::struct_excessive_bools)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "this struct mirrors OpenAI API flags which are inherently boolean"
+)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpenAIChatTemplateParams<'params> {
     /// OpenAI-compatible messages JSON array.

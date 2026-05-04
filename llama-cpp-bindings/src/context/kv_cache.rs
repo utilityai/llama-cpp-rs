@@ -98,11 +98,11 @@ impl LlamaContext<'_> {
         Ok(unsafe { llama_cpp_bindings_sys::llama_memory_seq_rm(mem, src, p0, p1) })
     }
 
-    /// Clear the KV cache
+    /// Clear the KV cache, including both metadata and the underlying data buffers.
     pub fn clear_kv_cache(&mut self) {
         let mem = unsafe { llama_cpp_bindings_sys::llama_get_memory(self.context.as_ptr()) };
-        // clear both metadata and data buffers to match previous semantics
-        unsafe { llama_cpp_bindings_sys::llama_memory_clear(mem, true) }
+        let clear_data_buffers = true;
+        unsafe { llama_cpp_bindings_sys::llama_memory_clear(mem, clear_data_buffers) }
     }
 
     /// Removes all tokens that do not belong to the specified sequence

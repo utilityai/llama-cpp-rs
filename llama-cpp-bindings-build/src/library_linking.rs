@@ -72,7 +72,7 @@ fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: 
     let lib_names = extract_lib_names(out_dir, build_shared_libs);
     assert!(!lib_names.is_empty(), "no libraries found in build output");
 
-    link_common_library(out_dir, profile);
+    link_llama_common_internal_libraries(out_dir, profile);
     link_system_ggml_libraries(link_kind);
 
     for lib_name in lib_names {
@@ -82,28 +82,30 @@ fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: 
     }
 }
 
-fn link_common_library(out_dir: &Path, profile: &str) {
+fn link_llama_common_internal_libraries(out_dir: &Path, profile: &str) {
     let common_lib_dir = out_dir.join("build").join("common");
 
-    if !common_lib_dir.is_dir() {
-        return;
+    if common_lib_dir.is_dir() {
+        emit_search_path_with_profile(&common_lib_dir, profile);
+        println!("cargo:rustc-link-lib=static=llama-common-base");
     }
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        common_lib_dir.display()
-    );
+    let httplib_dir = out_dir.join("build").join("vendor").join("cpp-httplib");
 
-    let common_profile_dir = common_lib_dir.join(profile);
-
-    if common_profile_dir.is_dir() {
-        println!(
-            "cargo:rustc-link-search=native={}",
-            common_profile_dir.display()
-        );
+    if httplib_dir.is_dir() {
+        emit_search_path_with_profile(&httplib_dir, profile);
+        println!("cargo:rustc-link-lib=static=cpp-httplib");
     }
+}
 
-    println!("cargo:rustc-link-lib=static=common");
+fn emit_search_path_with_profile(lib_dir: &Path, profile: &str) {
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+    let profile_dir = lib_dir.join(profile);
+
+    if profile_dir.is_dir() {
+        println!("cargo:rustc-link-search=native={}", profile_dir.display());
+    }
 }
 
 fn link_system_ggml_libraries(link_kind: &str) {

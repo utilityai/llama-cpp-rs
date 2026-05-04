@@ -112,20 +112,13 @@ impl<'tokens> LlamaBatch<'tokens> {
         let n_seq_id = checked_usize_as_llama_seq_id(seq_ids.len(), "seq_ids.len()")?;
 
         unsafe {
-            // batch.token   [batch.n_tokens] = id;
             self.llama_batch.token.add(offset_usize).write(id);
-            // batch.pos     [batch.n_tokens] = pos,
             self.llama_batch.pos.add(offset_usize).write(pos);
-            // batch.n_seq_id[batch.n_tokens] = seq_ids.size();
             self.llama_batch.n_seq_id.add(offset_usize).write(n_seq_id);
-            // for (size_t i = 0; i < seq_ids.size(); ++i) {
-            //     batch.seq_id[batch.n_tokens][i] = seq_ids[i];
-            // }
             for (seq_index, seq_id) in seq_ids.iter().enumerate() {
                 let tmp = *self.llama_batch.seq_id.add(offset_usize);
                 tmp.add(seq_index).write(*seq_id);
             }
-            // batch.logits  [batch.n_tokens] = logits;
             self.llama_batch
                 .logits
                 .add(offset_usize)
@@ -207,8 +200,10 @@ impl<'tokens> LlamaBatch<'tokens> {
         let token_count = checked_usize_as_i32(tokens.len(), "token count")?;
 
         let batch = unsafe {
-            // llama_batch_get_one takes *mut i32 even though it does not mutate the tokens.
-            #[allow(clippy::as_ptr_cast_mut)]
+            #[expect(
+                clippy::as_ptr_cast_mut,
+                reason = "llama_batch_get_one signature requires *mut i32 but does not mutate the tokens"
+            )]
             let ptr = tokens.as_ptr() as *mut i32;
             llama_cpp_bindings_sys::llama_batch_get_one(ptr, token_count)
         };

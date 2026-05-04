@@ -184,7 +184,6 @@ mod tests {
     fn void_logs_suppresses_output() {
         let mut backend = LlamaBackend::init().unwrap();
         backend.void_logs();
-        // Loading a model triggers llama.cpp logs, exercising the void_log callback
         let model_path = crate::test_model::download_model().unwrap();
         let model_params = crate::model::params::LlamaModelParams::default();
         let _model =

@@ -8,6 +8,7 @@ pkgs.mkShell {
     clang
     pkg-config
     cargo-llvm-cov
+    ccache
   ];
 
   LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";

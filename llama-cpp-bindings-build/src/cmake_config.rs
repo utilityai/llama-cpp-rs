@@ -20,6 +20,7 @@ pub fn configure_and_build(
 
     configure_base_defines(&mut config);
     pass_cmake_env_vars(&mut config);
+    configure_compiler_launchers(&mut config);
     configure_cpu_features(&mut config, target_triple);
     configure_shared_libs(&mut config, build_shared_libs);
     configure_platform_specific(&mut config, target_os, target_triple, profile, android_ndk);
@@ -45,6 +46,39 @@ fn configure_base_defines(config: &mut Config) {
     config.define("LLAMA_CURL", "OFF");
     config.cflag("-w");
     config.cxxflag("-w");
+}
+
+fn configure_compiler_launchers(config: &mut Config) {
+    println!("cargo:rerun-if-env-changed=LLAMA_DISABLE_CCACHE");
+
+    if env::var("LLAMA_DISABLE_CCACHE").is_ok() {
+        return;
+    }
+
+    let Some(ccache) = which("ccache") else {
+        return;
+    };
+
+    let ccache_str = ccache.display().to_string();
+    debug_log!("Using ccache for compilation: {ccache_str}");
+
+    config.define("CMAKE_C_COMPILER_LAUNCHER", &ccache_str);
+    config.define("CMAKE_CXX_COMPILER_LAUNCHER", &ccache_str);
+    config.define("CMAKE_CUDA_COMPILER_LAUNCHER", &ccache_str);
+}
+
+fn which(program: &str) -> Option<PathBuf> {
+    let path = env::var_os("PATH")?;
+
+    for entry in env::split_paths(&path) {
+        let candidate = entry.join(program);
+
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
 }
 
 fn pass_cmake_env_vars(config: &mut Config) {
@@ -169,8 +203,11 @@ fn configure_msvc_release_workaround(config: &mut Config, profile: &str) {
     }
 }
 
-fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, target_triple: &str) {
-    #[allow(clippy::assertions_on_constants)]
+fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, _target_triple: &str) {
+    #[expect(
+        clippy::assertions_on_constants,
+        reason = "the assertion enforces a feature flag invariant at build time"
+    )]
     {
         assert!(
             !(cfg!(feature = "shared-stdcxx") && cfg!(feature = "static-stdcxx")),
@@ -200,8 +237,6 @@ fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, target_triple:
 
     println!("cargo:rustc-link-lib=log");
     println!("cargo:rustc-link-lib=android");
-
-    let _ = target_triple; // used by caller for context
 }
 
 fn configure_android_arch_flags(config: &mut Config, abi: &str) {

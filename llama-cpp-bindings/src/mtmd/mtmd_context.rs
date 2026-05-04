@@ -68,10 +68,16 @@ impl MtmdContext {
         Ok(Self { context })
     }
 
-    /// Check whether non-causal attention mask is needed before `llama_decode`.
+    /// Check whether non-causal attention mask is needed before `llama_decode`
+    /// for the given input chunk.
     #[must_use]
-    pub fn decode_use_non_causal(&self) -> bool {
-        unsafe { llama_cpp_bindings_sys::mtmd_decode_use_non_causal(self.context.as_ptr()) }
+    pub fn decode_use_non_causal(&self, chunk: &MtmdInputChunk) -> bool {
+        unsafe {
+            llama_cpp_bindings_sys::mtmd_decode_use_non_causal(
+                self.context.as_ptr(),
+                chunk.chunk.as_ptr(),
+            )
+        }
     }
 
     /// Check whether the current model uses M-RoPE for `llama_decode`.
@@ -288,7 +294,16 @@ mod tests {
     #[serial]
     fn decode_use_non_causal_returns_bool() {
         let (_backend, _model, mtmd_ctx) = test_model::load_default_mtmd().unwrap();
-        let _non_causal = mtmd_ctx.decode_use_non_causal();
+        let image_data = vec![128u8; 64 * 64 * 3];
+        let bitmap = MtmdBitmap::from_image_data(64, 64, &image_data).unwrap();
+        let input_text = MtmdInputText {
+            text: "Hello world <__media__>".to_string(),
+            add_special: true,
+            parse_special: true,
+        };
+        let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap]).unwrap();
+        let first_chunk = chunks.get(0).unwrap();
+        let _non_causal = mtmd_ctx.decode_use_non_causal(&first_chunk);
     }
 
     #[test]

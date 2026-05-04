@@ -119,12 +119,10 @@ impl State {
         }
     }
 
+    /// The match arms are duplicated per module because the `tracing` macros
+    /// require the `target` argument to be a string literal — the upstream
+    /// submodule name cannot be propagated dynamically.
     fn generate_log(&self, level: llama_cpp_bindings_sys::ggml_log_level, text: &str) {
-        // Tracing requires the target name to be a string literal (not even &'static str), so
-        // the match arms below are duplicated per module. The interior submodule name from
-        // llama.cpp/ggml cannot be propagated as a target because it is baked into a static
-        // variable by the tracing macro at compile time.
-
         let (module, text) = text
             .char_indices()
             .take_while(|(_, ch)| ch.is_ascii_lowercase() || *ch == '_')
@@ -247,12 +245,11 @@ impl State {
             .swap(false, std::sync::atomic::Ordering::Acquire)
             && let Some((buf_level, buf_text)) = self.buffered.lock().unwrap().take()
         {
-            // This warning indicates a bug within llama.cpp
             tracing::warn!(
                 level = buf_level,
                 text = buf_text,
                 origin = "crate",
-                "llama.cpp message buffered spuriously due to missing \\n and being followed by a non-CONT message!"
+                "llama.cpp message buffered spuriously due to missing \\n and being followed by a non-CONT message! (this indicates a bug within llama.cpp)"
             );
             self.generate_log(buf_level, buf_text.as_str());
         }
@@ -302,9 +299,10 @@ impl State {
         }
     }
 
-    /// Checks whether the given log level is enabled by the current tracing subscriber.
+    /// Checks whether the given log level is enabled by the current tracing
+    /// subscriber. CONT lines inherit the previous line's level rather than
+    /// being checked on their own.
     pub fn is_enabled_for_level(&self, level: llama_cpp_bindings_sys::ggml_log_level) -> bool {
-        // CONT logs do not need to check if they are enabled.
         let level = if level == llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT {
             self.previous_level
                 .load(std::sync::atomic::Ordering::Relaxed)
@@ -333,15 +331,19 @@ impl State {
 pub static LLAMA_STATE: OnceLock<Box<State>> = OnceLock::new();
 pub static GGML_STATE: OnceLock<Box<State>> = OnceLock::new();
 
+/// Bridges llama.cpp / ggml log callbacks into the `tracing` ecosystem.
+///
+/// The fast path — newline-terminated DEBUG/INFO/WARN/ERROR lines — must avoid
+/// taking the log state lock and must not allocate, so the buffering and
+/// CONT-handling logic only runs on the slow path. Lines that lack a trailing
+/// newline are buffered: their absence is the only signal upstream uses to
+/// announce that a CONT message will follow, and we cannot distinguish that
+/// from a typo until the next message arrives.
 extern "C" fn logs_to_trace(
     level: llama_cpp_bindings_sys::ggml_log_level,
     text: *const ::std::os::raw::c_char,
     data: *mut ::std::os::raw::c_void,
 ) {
-    // In the "fast-path" (i.e. the vast majority of logs) we want to avoid needing to take the log state
-    // lock at all. Similarly, we try to avoid any heap allocations within this function. This is accomplished
-    // by being a dummy pass-through to tracing in the normal case of DEBUG/INFO/WARN/ERROR logs that are
-    // newline terminated and limiting the slow-path of locks and/or heap allocations for other cases.
     use std::borrow::Borrow;
 
     let log_state = unsafe { &*(data as *const State) };
@@ -350,7 +352,6 @@ extern "C" fn logs_to_trace(
         return;
     }
 
-    // If the log level is disabled, we can just return early
     if !log_state.is_enabled_for_level(level) {
         log_state.update_previous_level_for_disabled_log(level);
 
@@ -360,11 +361,6 @@ extern "C" fn logs_to_trace(
     let text = unsafe { std::ffi::CStr::from_ptr(text) };
     let text = text.to_string_lossy();
     let text: &str = text.borrow();
-
-    // As best I can tell llama.cpp / ggml require all log format strings at call sites to have the '\n'.
-    // If it's missing, it means that you expect more logs via CONT (or there's a typo in the codebase). To
-    // distinguish typo from intentional support for CONT, we have to buffer until the next message comes in
-    // to know how to flush it.
 
     if level == llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT {
         log_state.cont_buffered_log(text);
@@ -376,11 +372,12 @@ extern "C" fn logs_to_trace(
 }
 
 /// Redirect llama.cpp logs into tracing.
+///
+/// `llama.cpp` and `ggml` are wired up to separate `State` instances so a CONT
+/// line emitted by one cannot be appended to a buffered line from the other.
+/// `llama_log_set` also installs the callback for `ggml`, so the `ggml_log_set`
+/// call must come second to override that and bind the ggml state explicitly.
 pub fn send_logs_to_tracing(options: LogOptions) {
-    // We set up separate log states for llama.cpp and ggml to make sure that CONT logs between the two
-    // can't possibly interfere with each other. In other words, if llama.cpp emits a log without a trailing
-    // newline and calls a GGML function, the logs won't be weirdly intermixed and instead we'll llama.cpp logs
-    // will CONT previous llama.cpp logs and GGML logs will CONT previous ggml logs.
     let llama_heap_state = Box::as_ref(
         LLAMA_STATE.get_or_init(|| Box::new(State::new(Module::LlamaCpp, options.clone()))),
     ) as *const _;
@@ -389,7 +386,6 @@ pub fn send_logs_to_tracing(options: LogOptions) {
             as *const _;
 
     unsafe {
-        // GGML has to be set after llama since setting llama sets ggml as well.
         llama_cpp_bindings_sys::llama_log_set(Some(logs_to_trace), llama_heap_state as *mut _);
         llama_cpp_bindings_sys::ggml_log_set(Some(logs_to_trace), ggml_heap_state as *mut _);
     }
@@ -583,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn cont_enabled_log() {
+    fn cont_message_concatenates_payload_then_flush_appends_extra_newline() {
         let logger = create_logger(tracing::Level::INFO);
         let mut log_state = Box::new(State::new(Module::LlamaCpp, LogOptions::default()));
         let log_ptr =
@@ -594,14 +590,21 @@ mod tests {
             c"Hello ".as_ptr(),
             log_ptr,
         );
+        let cont_payload_with_newline = c"world\n";
         logs_to_trace(
             llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT,
-            c"world\n".as_ptr(),
+            cont_payload_with_newline.as_ptr(),
             log_ptr,
         );
 
-        // The CONT message carries its own trailing newline, and the flush appends another.
-        assert_eq!(*logger.logs.lock().unwrap(), vec!["Hello world\n\n"]);
+        let payload_newline = '\n';
+        let flush_appended_newline = '\n';
+        assert_eq!(
+            *logger.logs.lock().unwrap(),
+            vec![format!(
+                "Hello world{payload_newline}{flush_appended_newline}"
+            )]
+        );
     }
 
     #[test]

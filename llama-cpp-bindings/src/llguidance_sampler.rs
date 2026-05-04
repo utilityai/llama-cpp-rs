@@ -67,8 +67,6 @@ fn build_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
     Arc::new(ApproximateTokEnv::new(trie))
 }
 
-// --- extern "C" vtable callbacks ---
-
 const unsafe extern "C" fn llg_name(
     _smpl: *const llama_cpp_bindings_sys::llama_sampler,
 ) -> *const std::os::raw::c_char {

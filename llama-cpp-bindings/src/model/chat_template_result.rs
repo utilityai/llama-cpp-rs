@@ -290,8 +290,6 @@ mod tests {
         CString::new(value).unwrap().into_raw()
     }
 
-    // --- parse_raw_cstr_array ---
-
     #[test]
     fn parse_cstr_array_zero_count_returns_empty() {
         let result = unsafe { parse_raw_cstr_array(ptr::null(), 0) };
@@ -331,8 +329,6 @@ mod tests {
         );
         unsafe { drop(CString::from_raw(array[0])) };
     }
-
-    // --- parse_raw_grammar_triggers ---
 
     #[test]
     fn parse_triggers_zero_count_returns_empty() {
@@ -446,8 +442,6 @@ mod tests {
         );
     }
 
-    // --- parse_chat_template_raw_result ---
-
     #[test]
     fn parse_raw_result_error_status_returns_ffi_error() {
         let mut raw = new_empty_chat_template_raw_result();
@@ -532,8 +526,6 @@ mod tests {
         assert!(parsed.parse_tool_calls);
     }
 
-    // --- parse_response_oaicompat ---
-
     #[test]
     fn parse_response_content_only_format() {
         let json_string = ChatTemplateResult::default()
@@ -549,8 +541,6 @@ mod tests {
         let result = ChatTemplateResult::default().parse_response_oaicompat("hello\0world", false);
         assert!(result.is_err());
     }
-
-    // --- parse_chat_template_raw_result with invalid grammar triggers ---
 
     #[test]
     fn parse_raw_result_invalid_triggers_propagates_error() {
@@ -573,8 +563,6 @@ mod tests {
                 .contains("invalid grammar trigger data")
         );
     }
-
-    // --- check_chat_parse_status / check_chat_parse_not_null ---
 
     #[test]
     fn check_chat_parse_status_ok() {
@@ -607,8 +595,6 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("null result"));
     }
 
-    // --- streaming_state_oaicompat ---
-
     #[test]
     fn streaming_state_returns_valid_state() {
         let template_result = ChatTemplateResult::default();
@@ -621,7 +607,6 @@ mod tests {
         let mut raw = new_empty_chat_template_raw_result();
         raw.prompt = heap_cstring("test");
         raw.preserved_tokens_count = 1;
-        // preserved_tokens pointer is null but count is 1
         let result = unsafe {
             parse_chat_template_raw_result(
                 llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
@@ -637,9 +622,7 @@ mod tests {
     fn parse_raw_result_null_additional_stop_propagates_error() {
         let mut raw = new_empty_chat_template_raw_result();
         raw.prompt = heap_cstring("test");
-        // valid preserved_tokens (empty)
         raw.additional_stops_count = 1;
-        // additional_stops pointer is null but count is 1
         let result = unsafe {
             parse_chat_template_raw_result(
                 llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,

@@ -598,8 +598,10 @@ impl LlamaModel {
     /// # Errors
     ///
     /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
-    // we intentionally do not derive Copy on `LlamaContextParams` to allow llama.cpp to change the type to be non-trivially copyable.
-    #[allow(clippy::needless_pass_by_value)]
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "LlamaContextParams may become non-trivially copyable upstream"
+    )]
     pub fn new_context<'model>(
         &'model self,
         _: &LlamaBackend,
@@ -855,7 +857,6 @@ mod extract_meta_string_tests {
                     unsafe { std::slice::from_raw_parts_mut(buf_ptr.cast::<u8>(), buf_len) };
                 buffer[0] = b'a';
                 buffer[1] = b'b';
-                // Intentionally do NOT write a null terminator at position 2
                 buffer[2] = b'c';
                 2
             },
@@ -892,25 +893,26 @@ mod extract_meta_string_tests {
 
     #[test]
     fn triggers_buffer_resize_when_returned_len_exceeds_capacity() {
+        let initial_capacity: usize = 4;
+        let length_exceeding_initial_capacity = 10;
+        let written_length = 2;
         let call_count = std::cell::Cell::new(0);
         let result = extract_meta_string(
             |buf_ptr, buf_len| {
                 let count = call_count.get();
                 call_count.set(count + 1);
                 if count == 0 {
-                    // First call: return length larger than capacity to trigger resize
-                    10
+                    length_exceeding_initial_capacity
                 } else {
-                    // Second call with larger buffer: write valid data
                     let buffer =
                         unsafe { std::slice::from_raw_parts_mut(buf_ptr.cast::<u8>(), buf_len) };
                     buffer[0] = b'h';
                     buffer[1] = b'i';
                     buffer[2] = 0;
-                    2
+                    written_length
                 }
             },
-            4,
+            initial_capacity,
         );
 
         assert_eq!(result.unwrap(), "hi");
@@ -1043,10 +1045,8 @@ mod tests {
         let (_backend, model) = test_model::load_default_model().unwrap();
         let mut count = 0;
 
-        for (token, piece_result) in model.tokens(false) {
+        for (token, _piece_result) in model.tokens(false) {
             assert!(token.0 >= 0);
-            // Not all tokens decode successfully, but the iterator should not panic
-            let _ = piece_result;
             count += 1;
 
             if count >= 100 {
@@ -1578,9 +1578,6 @@ mod tests {
     #[serial]
     fn str_to_token_with_many_tokens_triggers_buffer_resize() {
         let (_backend, model) = test_model::load_default_model().unwrap();
-        // Each digit typically becomes its own token, but the buffer estimate
-        // is len/2 which is smaller than the actual token count for
-        // single-char-token strings like "1 2 3 4 ..."
         let many_numbers: String = (0..2000).map(|number| format!("{number} ")).collect();
 
         let tokens = model.str_to_token(&many_numbers, AddBos::Always).unwrap();
@@ -1856,8 +1853,6 @@ mod tests {
         let mut sampler =
             LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
-        // sample() now returns Result to catch C++ exceptions at the FFI
-        // boundary instead of aborting the process.
         let result = sampler.sample(&context, batch.n_tokens() - 1);
 
         assert!(result.is_ok());

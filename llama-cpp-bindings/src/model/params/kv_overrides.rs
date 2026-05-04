@@ -20,8 +20,6 @@ impl KvOverrides<'_> {
 }
 
 impl<'model_params> IntoIterator for KvOverrides<'model_params> {
-    // I'm fairly certain this could be written returning by reference, but I'm not sure how to do it safely. I do not
-    // expect this to be a performance bottleneck so the copy should be fine. (let me know if it's not fine!)
     type Item = (CString, ParamOverrideValue);
     type IntoIter = KvOverrideValueIterator<'model_params>;
 
@@ -125,7 +123,6 @@ mod tests {
             .append_kv_override(&key, ParamOverrideValue::Int(99))
             .unwrap();
 
-        // Corrupt the tag of the first entry to an unknown value
         params.kv_overrides[0].tag = 9999;
 
         assert_eq!(params.kv_overrides().into_iter().count(), 0);

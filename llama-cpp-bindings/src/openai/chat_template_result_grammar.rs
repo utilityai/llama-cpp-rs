@@ -433,7 +433,7 @@ mod tests {
 
         #[test]
         #[serial]
-        fn build_grammar_sampler_with_multi_token_preserved_tokens() {
+        fn build_grammar_sampler_skips_multi_token_strings_leaving_preserved_set_empty() {
             let (_backend, model) = test_model::load_default_model().unwrap();
             let result = ChatTemplateResult {
                 preserved_tokens: vec!["hello world this is a long sentence".to_string()],
@@ -442,7 +442,6 @@ mod tests {
             let (sampler, preserved) = result.build_grammar_sampler(&model).unwrap();
 
             assert!(sampler.is_none());
-            // Multi-token strings are skipped, so preserved set may be empty
             assert!(preserved.is_empty());
         }
 

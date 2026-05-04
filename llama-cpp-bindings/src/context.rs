@@ -463,11 +463,6 @@ impl<'model> LlamaContext<'model> {
         tracing::debug!("Remove lora adapter");
         Ok(())
     }
-
-    /// Print a breakdown of per-device memory use to the default logger.
-    pub fn print_memory_breakdown(&self) {
-        unsafe { llama_cpp_bindings_sys::llama_memory_breakdown_print(self.context.as_ptr()) }
-    }
 }
 
 impl Drop for LlamaContext<'_> {
@@ -1087,16 +1082,6 @@ mod tests {
         context.mark_logits_initialized(0);
 
         assert_eq!(context.initialized_logits, vec![0]);
-    }
-
-    #[test]
-    #[serial]
-    fn print_memory_breakdown_completes_without_panic() {
-        let (backend, model) = test_model::load_default_model().unwrap();
-        let ctx_params = LlamaContextParams::default().with_n_ctx(std::num::NonZeroU32::new(512));
-        let context = model.new_context(&backend, ctx_params).unwrap();
-
-        context.print_memory_breakdown();
     }
 
     #[test]

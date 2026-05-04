@@ -110,10 +110,18 @@ impl LlamaModelParams {
         kv_override.tag = value.tag();
         kv_override.__bindgen_anon_1 = value.value();
 
-        // set to null pointer for panic safety (as push may move the vector, invalidating the pointer)
+        self.push_kv_override_terminator();
+
+        Ok(())
+    }
+
+    /// Pushes the trailing zero-tag sentinel onto `kv_overrides` and refreshes
+    /// `params.kv_overrides`. The cached pointer is nulled before [`Vec::push`]
+    /// so that a relocation-induced panic never leaves a dangling pointer in
+    /// `params`.
+    fn push_kv_override_terminator(mut self: Pin<&mut Self>) {
         self.params.kv_overrides = null();
 
-        // push the next one to ensure we maintain the iterator invariant of ending with a 0
         self.kv_overrides
             .push(llama_cpp_bindings_sys::llama_model_kv_override {
                 key: [0; 128],
@@ -123,10 +131,7 @@ impl LlamaModelParams {
                 },
             });
 
-        // set the pointer to the (potentially) new vector
         self.params.kv_overrides = self.kv_overrides.as_ptr();
-
-        Ok(())
     }
 }
 
@@ -171,20 +176,25 @@ impl LlamaModelParams {
         buft_override.pattern = key.as_ptr();
         buft_override.buft = unsafe { llama_cpp_bindings_sys::ggml_backend_cpu_buffer_type() };
 
-        // set to null pointer for panic safety (as push may move the vector, invalidating the pointer)
+        self.push_buft_override_terminator();
+
+        Ok(())
+    }
+
+    /// Pushes the trailing null-pattern sentinel onto `buft_overrides` and
+    /// refreshes `params.tensor_buft_overrides`. The cached pointer is nulled
+    /// before [`Vec::push`] so that a relocation-induced panic never leaves a
+    /// dangling pointer in `params`.
+    fn push_buft_override_terminator(mut self: Pin<&mut Self>) {
         self.params.tensor_buft_overrides = null();
 
-        // push the next one to ensure we maintain the iterator invariant of ending with a 0
         self.buft_overrides
             .push(llama_cpp_bindings_sys::llama_model_tensor_buft_override {
                 pattern: null(),
                 buft: std::ptr::null_mut(),
             });
 
-        // set the pointer to the (potentially) new vector
         self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
-
-        Ok(())
     }
 }
 
@@ -262,8 +272,6 @@ impl LlamaModelParams {
     /// ```
     #[must_use]
     pub fn with_n_gpu_layers(mut self, n_gpu_layers: u32) -> Self {
-        // The only way this conversion can fail is if u32 overflows the i32 - in which case we set
-        // to MAX
         let n_gpu_layers = i32::try_from(n_gpu_layers).unwrap_or(i32::MAX);
         self.params.n_gpu_layers = n_gpu_layers;
         self
@@ -354,7 +362,6 @@ impl LlamaModelParams {
         for dev in self.devices.iter_mut() {
             *dev = std::ptr::null_mut();
         }
-        // Check device count
         let max_devices = crate::max_devices().min(LLAMA_CPP_MAX_DEVICES);
         if devices.len() > max_devices {
             return Err(LlamaCppError::MaxDevicesExceeded(max_devices));
@@ -390,7 +397,6 @@ impl Default for LlamaModelParams {
         let default_params = unsafe { llama_cpp_bindings_sys::llama_model_default_params() };
         Self {
             params: default_params,
-            // push the next one to ensure we maintain the iterator invariant of ending with a 0
             kv_overrides: vec![llama_cpp_bindings_sys::llama_model_kv_override {
                 key: [0; 128],
                 tag: 0,

@@ -10,12 +10,20 @@ pub enum LlamaSplitMode {
     Row = LLAMA_SPLIT_MODE_ROW,
 }
 
-// These constants are known small u32 values from the C API that safely fit in i8.
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the C API split mode constants are known small values that fit in i8"
+)]
 const LLAMA_SPLIT_MODE_NONE: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_NONE as i8;
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the C API split mode constants are known small values that fit in i8"
+)]
 const LLAMA_SPLIT_MODE_LAYER: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_LAYER as i8;
-#[allow(clippy::cast_possible_truncation)]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the C API split mode constants are known small values that fit in i8"
+)]
 const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_ROW as i8;
 
 /// An error that occurs when unknown split mode is encountered.
