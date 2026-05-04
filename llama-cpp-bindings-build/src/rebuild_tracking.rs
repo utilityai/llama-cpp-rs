@@ -23,12 +23,15 @@ pub fn register_rebuild_triggers(llama_src: &Path) {
     println!("cargo:rerun-if-changed=wrapper_common.cpp");
     println!("cargo:rerun-if-changed=wrapper_oai.h");
     println!("cargo:rerun-if-changed=wrapper_oai.cpp");
+    println!("cargo:rerun-if-changed=wrapper_fit.h");
+    println!("cargo:rerun-if-changed=wrapper_fit.cpp");
     println!("cargo:rerun-if-changed=wrapper_utils.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
 
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+    println!("cargo:rerun-if-env-changed=LLAMA_CMAKE_BUILD_DIR_OVERRIDE");
 
     let source_directories = [
         llama_src.join("src"),

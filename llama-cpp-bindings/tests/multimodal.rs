@@ -1,4 +1,4 @@
-#![cfg(all(feature = "tests_that_use_llms", feature = "mtmd"))]
+#![cfg(feature = "tests_that_use_llms")]
 
 use std::num::NonZeroU32;
 

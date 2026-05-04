@@ -1,4 +1,4 @@
-FEATURES = mtmd,sampler,llguidance
+FEATURES = sampler,llguidance
 CARGO_TEST_LLM_FLAGS = --lib -p llama-cpp-bindings --features tests_that_use_llms,$(FEATURES) -- --test-threads=1
 CARGO_COV_LLM_FLAGS = --lib --features tests_that_use_llms,$(FEATURES) -p llama-cpp-bindings
 
@@ -49,3 +49,7 @@ fmt:
 .PHONY: clippy
 clippy:
 	cargo clippy --all-targets -p llama-cpp-bindings --features $(FEATURES) -- -D warnings
+
+.PHONY: clean.cmake
+clean.cmake:
+	rm -rf target/llama-cpp-cmake-build

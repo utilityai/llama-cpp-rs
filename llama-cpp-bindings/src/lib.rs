@@ -39,7 +39,6 @@ pub mod max_devices;
 pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
-#[cfg(feature = "mtmd")]
 pub mod mtmd;
 pub mod openai;
 pub mod sampling;

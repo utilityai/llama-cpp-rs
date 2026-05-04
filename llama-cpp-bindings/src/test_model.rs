@@ -139,7 +139,6 @@ pub fn load_default_embedding_model()
 /// # Errors
 /// Returns an error if the backend cannot be initialized, the model cannot be loaded,
 /// or the multimodal projection file is not configured.
-#[cfg(feature = "mtmd")]
 pub fn load_default_mtmd() -> Result<(
     crate::llama_backend::LlamaBackend,
     crate::model::LlamaModel,
@@ -194,7 +193,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "mtmd")]
     #[test]
     #[serial_test::serial]
     fn load_default_mtmd_fails_without_mmproj() {

@@ -4,7 +4,7 @@ use glob::glob;
 
 use crate::debug_log;
 
-pub fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
+pub fn extract_lib_assets(cmake_dir: &Path) -> Vec<PathBuf> {
     let shared_lib_pattern = if cfg!(windows) {
         "*.dll"
     } else if cfg!(target_os = "macos") {
@@ -14,7 +14,7 @@ pub fn extract_lib_assets(out_dir: &Path) -> Vec<PathBuf> {
     };
 
     let shared_libs_dir = if cfg!(windows) { "bin" } else { "lib" };
-    let libs_dir = out_dir.join(shared_libs_dir);
+    let libs_dir = cmake_dir.join(shared_libs_dir);
     let pattern = libs_dir.join(shared_lib_pattern);
     debug_log!("Extract lib assets {}", pattern.display());
 

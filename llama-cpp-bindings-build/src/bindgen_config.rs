@@ -11,9 +11,8 @@ pub fn generate_bindings(
     target_os: &TargetOs,
     target_triple: &str,
     android_ndk: Option<&AndroidNdk>,
-    mtmd_enabled: bool,
 ) {
-    let mut builder = create_base_builder(llama_src, mtmd_enabled);
+    let mut builder = create_base_builder(llama_src);
 
     if target_os.is_android()
         && let Some(ndk) = android_ndk
@@ -36,9 +35,10 @@ pub fn generate_bindings(
     debug_log!("Bindings Created");
 }
 
-fn create_base_builder(llama_src: &Path, mtmd_enabled: bool) -> bindgen::Builder {
-    let mut builder = bindgen::Builder::default()
+fn create_base_builder(llama_src: &Path) -> bindgen::Builder {
+    bindgen::Builder::default()
         .header("wrapper.h")
+        .header("wrapper_mtmd.h")
         .clang_arg(format!("-I{}", llama_src.join("include").display()))
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -51,16 +51,9 @@ fn create_base_builder(llama_src: &Path, mtmd_enabled: bool) -> bindgen::Builder
         .allowlist_type("llama_.*")
         .allowlist_function("llama_rs_.*")
         .allowlist_type("llama_rs_.*")
-        .prepend_enum_name(false);
-
-    if mtmd_enabled {
-        builder = builder
-            .header("wrapper_mtmd.h")
-            .allowlist_function("mtmd_.*")
-            .allowlist_type("mtmd_.*");
-    }
-
-    builder
+        .allowlist_function("mtmd_.*")
+        .allowlist_type("mtmd_.*")
+        .prepend_enum_name(false)
 }
 
 fn configure_android_bindgen(

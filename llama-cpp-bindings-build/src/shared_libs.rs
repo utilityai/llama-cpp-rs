@@ -3,8 +3,8 @@ use std::path::Path;
 use crate::debug_log;
 use crate::library_asset_extraction::extract_lib_assets;
 
-pub fn copy_shared_libraries(out_dir: &Path, target_dir: &Path) {
-    let assets = extract_lib_assets(out_dir);
+pub fn copy_shared_libraries(cmake_dir: &Path, target_dir: &Path) {
+    let assets = extract_lib_assets(cmake_dir);
 
     for asset in &assets {
         let Some(filename) = asset.file_name().and_then(|name| name.to_str()) else {

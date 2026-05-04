@@ -10,12 +10,14 @@ mod library_linking;
 mod library_name_extraction;
 mod rebuild_tracking;
 mod shared_libs;
+mod stable_cmake_build_dir;
 mod target_os;
 
 use std::env;
 use std::path::{Path, PathBuf};
 
 use android_ndk::AndroidNdk;
+use stable_cmake_build_dir::stable_cmake_build_dir;
 use target_os::TargetOs;
 
 #[macro_export]
@@ -32,6 +34,7 @@ macro_rules! debug_log {
 pub struct BuildContext {
     pub out_dir: PathBuf,
     pub target_dir: PathBuf,
+    pub cmake_dir: PathBuf,
     pub llama_src: PathBuf,
     pub target_os: TargetOs,
     pub target_triple: String,
@@ -73,15 +76,25 @@ impl BuildContext {
             None
         };
 
+        let cmake_dir = stable_cmake_build_dir(
+            &target_dir,
+            &target_triple,
+            &profile,
+            static_crt,
+            build_shared_libs,
+        );
+
         debug_log!("TARGET: {}", target_triple);
         debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
         debug_log!("TARGET_DIR: {}", target_dir.display());
         debug_log!("OUT_DIR: {}", out_dir.display());
+        debug_log!("CMAKE_DIR: {}", cmake_dir.display());
         debug_log!("BUILD_SHARED: {}", build_shared_libs);
 
         Self {
             out_dir,
             target_dir,
+            cmake_dir,
             llama_src,
             target_os,
             target_triple,
@@ -126,27 +139,16 @@ pub fn build() {
         &context.target_os,
         &context.target_triple,
         context.android_ndk.as_ref(),
-        cfg!(feature = "mtmd"),
     );
 
     cpp_wrapper::compile_cpp_wrappers(&context.llama_src, &context.target_os);
 
-    let build_dir = cmake_config::configure_and_build(
-        &context.llama_src,
-        &context.target_os,
-        &context.target_triple,
-        context.build_shared_libs,
-        &context.profile,
-        context.static_crt,
-        context.android_ndk.as_ref(),
-    );
+    let build_dir = cmake_config::configure_and_build(&context);
 
-    if cfg!(feature = "mtmd") {
-        cpp_wrapper_mtmd::compile_mtmd(&context.llama_src, &context.target_os);
-    }
+    cpp_wrapper_mtmd::compile_mtmd(&context.llama_src, &context.target_os);
 
     library_linking::link_libraries(
-        &context.out_dir,
+        &context.cmake_dir,
         &build_dir,
         &context.target_os,
         &context.target_triple,
@@ -155,6 +157,6 @@ pub fn build() {
     );
 
     if context.build_shared_libs {
-        shared_libs::copy_shared_libraries(&context.out_dir, &context.target_dir);
+        shared_libs::copy_shared_libraries(&context.cmake_dir, &context.target_dir);
     }
 }

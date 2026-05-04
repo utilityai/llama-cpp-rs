@@ -3,55 +3,53 @@ use std::path::{Path, PathBuf};
 
 use cmake::Config;
 
+use crate::BuildContext;
 use crate::android_ndk::AndroidNdk;
 use crate::debug_log;
 use crate::target_os::{TargetOs, WindowsVariant};
 
-pub fn configure_and_build(
-    llama_src: &Path,
-    target_os: &TargetOs,
-    target_triple: &str,
-    build_shared_libs: bool,
-    profile: &str,
-    static_crt: bool,
-    android_ndk: Option<&AndroidNdk>,
-) -> PathBuf {
-    let mut config = Config::new(llama_src);
+pub fn configure_and_build(context: &BuildContext) -> PathBuf {
+    let mut config = Config::new(&context.llama_src);
 
     configure_base_defines(&mut config);
     pass_cmake_env_vars(&mut config);
     configure_compiler_launchers(&mut config);
-    configure_cpu_features(&mut config, target_triple);
-    configure_shared_libs(&mut config, build_shared_libs);
-    configure_platform_specific(&mut config, target_os, target_triple, profile, android_ndk);
-    configure_gpu_backends(&mut config, target_os);
-    configure_openmp(&mut config, target_os);
+    configure_cpu_features(&mut config, &context.target_triple);
+    configure_shared_libs(&mut config, context.build_shared_libs);
+    configure_platform_specific(
+        &mut config,
+        &context.target_os,
+        &context.target_triple,
+        &context.profile,
+        context.android_ndk.as_ref(),
+    );
+    configure_gpu_backends(&mut config, &context.target_os);
+    configure_openmp(&mut config, &context.target_os);
     configure_system_ggml(&mut config);
-    let backends_dir = configure_dynamic_backends(&mut config);
+    let backends_dir = configure_dynamic_backends(&mut config, &context.cmake_dir);
 
-    config.static_crt(static_crt);
+    config.static_crt(context.static_crt);
     config
-        .profile(profile)
+        .out_dir(&context.cmake_dir)
+        .profile(&context.profile)
         .very_verbose(env::var("CMAKE_VERBOSE").is_ok())
         .always_configure(false);
 
-    let out_dir = config.build();
+    let install_dir = config.build();
 
     if let Some(dir) = backends_dir {
         println!("cargo:backends_dir={}", dir.display());
     }
 
-    out_dir
+    install_dir
 }
 
-fn configure_dynamic_backends(config: &mut Config) -> Option<PathBuf> {
+fn configure_dynamic_backends(config: &mut Config, cmake_dir: &Path) -> Option<PathBuf> {
     if !cfg!(feature = "dynamic-backends") {
         return None;
     }
 
-    let out_dir =
-        PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set in cargo build scripts"));
-    let backends_dir = out_dir.join("backends");
+    let backends_dir = cmake_dir.join("backends");
 
     std::fs::create_dir_all(&backends_dir).expect("failed to create backends directory");
 

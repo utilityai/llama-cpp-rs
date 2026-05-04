@@ -6,27 +6,30 @@ use crate::library_name_extraction::extract_lib_names;
 use crate::target_os::{AppleVariant, TargetOs, WindowsVariant};
 
 pub fn link_libraries(
-    out_dir: &Path,
+    cmake_dir: &Path,
     build_dir: &Path,
     target_os: &TargetOs,
     target_triple: &str,
     build_shared_libs: bool,
     profile: &str,
 ) {
-    emit_search_paths(out_dir, build_dir);
+    emit_search_paths(cmake_dir, build_dir);
     link_system_ggml_paths(build_dir);
-    link_cmake_built_libraries(out_dir, build_shared_libs, profile);
+    link_cmake_built_libraries(cmake_dir, build_shared_libs, profile);
     link_cuda_libraries(build_shared_libs);
     link_rocm_libraries(build_shared_libs);
     link_openmp(target_triple);
     link_platform_system_libraries(target_os);
 }
 
-fn emit_search_paths(out_dir: &Path, build_dir: &Path) {
-    println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
+fn emit_search_paths(cmake_dir: &Path, build_dir: &Path) {
     println!(
         "cargo:rustc-link-search={}",
-        out_dir.join("lib64").display()
+        cmake_dir.join("lib").display()
+    );
+    println!(
+        "cargo:rustc-link-search={}",
+        cmake_dir.join("lib64").display()
     );
     println!("cargo:rustc-link-search={}", build_dir.display());
 }
@@ -62,7 +65,7 @@ fn link_system_ggml_paths(build_dir: &Path) {
     }
 }
 
-fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: &str) {
+fn link_cmake_built_libraries(cmake_dir: &Path, build_shared_libs: bool, profile: &str) {
     let link_kind = if build_shared_libs {
         "dylib"
     } else if cfg!(feature = "system-ggml-static") {
@@ -73,10 +76,10 @@ fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: 
         "static"
     };
 
-    let lib_names = extract_lib_names(out_dir, build_shared_libs);
+    let lib_names = extract_lib_names(cmake_dir, build_shared_libs);
     assert!(!lib_names.is_empty(), "no libraries found in build output");
 
-    link_llama_common_internal_libraries(out_dir, profile);
+    link_llama_common_internal_libraries(cmake_dir, profile);
     link_system_ggml_libraries(link_kind);
 
     for lib_name in lib_names {
@@ -86,15 +89,15 @@ fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: 
     }
 }
 
-fn link_llama_common_internal_libraries(out_dir: &Path, profile: &str) {
-    let common_lib_dir = out_dir.join("build").join("common");
+fn link_llama_common_internal_libraries(cmake_dir: &Path, profile: &str) {
+    let common_lib_dir = cmake_dir.join("build").join("common");
 
     if common_lib_dir.is_dir() {
         emit_search_path_with_profile(&common_lib_dir, profile);
         println!("cargo:rustc-link-lib=static=llama-common-base");
     }
 
-    let httplib_dir = out_dir.join("build").join("vendor").join("cpp-httplib");
+    let httplib_dir = cmake_dir.join("build").join("vendor").join("cpp-httplib");
 
     if httplib_dir.is_dir() {
         emit_search_path_with_profile(&httplib_dir, profile);

@@ -28,7 +28,7 @@ fn extract_single_lib_name(path: &Path) -> Option<String> {
     Some(stem.to_string())
 }
 
-pub fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String> {
+pub fn extract_lib_names(cmake_dir: &Path, build_shared_libs: bool) -> Vec<String> {
     let lib_pattern = if cfg!(windows) {
         "*.lib"
     } else if cfg!(target_os = "macos") {
@@ -39,7 +39,7 @@ pub fn extract_lib_names(out_dir: &Path, build_shared_libs: bool) -> Vec<String>
         "*.a"
     };
 
-    let libs_dir = out_dir.join("lib*");
+    let libs_dir = cmake_dir.join("lib*");
     let pattern = libs_dir.join(lib_pattern);
     debug_log!("Extract libs {}", pattern.display());
 
