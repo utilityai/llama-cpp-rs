@@ -40,15 +40,14 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
-pub mod openai;
 pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
 
 pub use error::{
-    ApplyChatTemplateError, ChatParseError, ChatTemplateError, DecodeError, EmbeddingsError,
-    EncodeError, GrammarError, LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError,
+    ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
+    GrammarError, LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError,
     LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError, LlamaModelLoadError, LogitsError,
     MetaValError, ModelParamsError, NewLlamaChatMessageError, Result, SampleError,
     SamplerAcceptError, SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,

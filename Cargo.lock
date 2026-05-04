@@ -1048,8 +1048,6 @@ dependencies = [
  "hf-hub",
  "llama-cpp-bindings-sys",
  "llguidance",
- "serde",
- "serde_json",
  "serial_test",
  "thiserror",
  "toktrie",

@@ -21,8 +21,6 @@ pub fn register_rebuild_triggers(llama_src: &Path) {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=wrapper_common.h");
     println!("cargo:rerun-if-changed=wrapper_common.cpp");
-    println!("cargo:rerun-if-changed=wrapper_oai.h");
-    println!("cargo:rerun-if-changed=wrapper_oai.cpp");
     println!("cargo:rerun-if-changed=wrapper_fit.h");
     println!("cargo:rerun-if-changed=wrapper_fit.cpp");
     println!("cargo:rerun-if-changed=wrapper_utils.h");

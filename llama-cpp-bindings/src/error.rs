@@ -323,47 +323,12 @@ pub enum NewLlamaChatMessageError {
 /// Failed to apply model chat template.
 #[derive(Debug, thiserror::Error)]
 pub enum ApplyChatTemplateError {
-    /// the string contained a null byte and thus could not be converted to a c string.
-    #[error("{0}")]
-    NulError(#[from] NulError),
     /// the string could not be converted to utf8.
     #[error("{0}")]
     FromUtf8Error(#[from] FromUtf8Error),
-    /// llama.cpp returned a null pointer for the template result.
-    #[error("null result from llama.cpp")]
-    NullResult,
-    /// llama.cpp returned an error code.
-    #[error("ffi error {0}")]
-    FfiError(i32),
-    /// invalid grammar trigger data returned by llama.cpp.
-    #[error("invalid grammar trigger data")]
-    InvalidGrammarTriggerType,
     /// An integer conversion failed.
     #[error("Integer conversion error: {0}")]
     IntConversionError(#[from] std::num::TryFromIntError),
-    /// The JSON payload returned by llama.cpp could not be parsed.
-    #[error("json parse error: {0}")]
-    JsonParseError(#[from] serde_json::Error),
-}
-
-/// Failed to parse a chat response.
-#[derive(Debug, thiserror::Error)]
-pub enum ChatParseError {
-    /// the string contained a null byte and thus could not be converted to a c string.
-    #[error("{0}")]
-    NulError(#[from] NulError),
-    /// the string could not be converted to utf8.
-    #[error("{0}")]
-    Utf8Error(#[from] FromUtf8Error),
-    /// llama.cpp returned a null pointer for the parse result.
-    #[error("null result from llama.cpp")]
-    NullResult,
-    /// llama.cpp returned an error code.
-    #[error("ffi error {0}")]
-    FfiError(i32),
-    /// the JSON payload returned by llama.cpp could not be parsed.
-    #[error("json parse error: {0}")]
-    JsonParseError(#[from] serde_json::Error),
 }
 
 /// Failed to accept a token in a sampler.
