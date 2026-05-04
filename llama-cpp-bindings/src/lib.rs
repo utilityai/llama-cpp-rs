@@ -40,6 +40,8 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
+pub mod reasoning_token_classifier;
+pub mod sampled_token;
 pub mod sampling;
 pub mod timing;
 pub mod token;
@@ -49,13 +51,16 @@ pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
     GrammarError, LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError,
     LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError, LlamaModelLoadError, LogitsError,
-    MetaValError, ModelParamsError, NewLlamaChatMessageError, Result, SampleError,
-    SamplerAcceptError, SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,
+    MetaValError, ModelParamsError, NewLlamaChatMessageError, ReasoningClassifierError, Result,
+    SampleError, SamplerAcceptError, SamplingError, StringToTokenError, TokenSamplingError,
+    TokenToStringError,
 };
 
 pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
+pub use reasoning_token_classifier::ReasoningTokenClassifier;
+pub use sampled_token::SampledToken;
 
 pub use ffi_status_is_ok::status_is_ok;
 pub use ffi_status_to_i32::status_to_i32;
@@ -68,6 +73,3 @@ pub use mmap_supported::mmap_supported;
 
 pub use log::send_logs_to_tracing;
 pub use log_options::LogOptions;
-
-#[cfg(any(test, feature = "tests_that_use_llms"))]
-pub mod test_model;

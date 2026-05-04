@@ -1,6 +1,7 @@
 FEATURES = sampler,llguidance
-CARGO_TEST_LLM_FLAGS = --lib -p llama-cpp-bindings --features tests_that_use_llms,$(FEATURES) -- --test-threads=1
-CARGO_COV_LLM_FLAGS = --lib --features tests_that_use_llms,$(FEATURES) -p llama-cpp-bindings
+TEST_FEATURES =
+CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- --test-threads=1
+CARGO_COV_LLM_FLAGS = -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),)
 
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
@@ -11,13 +12,26 @@ QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
 	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
 
+QWEN3_6_35B_A3B_ENV = \
+	LLAMA_TEST_HF_REPO=unsloth/Qwen3.6-35B-A3B-GGUF \
+	LLAMA_TEST_HF_MODEL=Qwen3.6-35B-A3B-UD-Q4_K_M.gguf \
+	LLAMA_TEST_HF_MMPROJ=mmproj-F16.gguf \
+	LLAMA_TEST_HF_EMBED_REPO=Qwen/Qwen3-Embedding-0.6B-GGUF \
+	LLAMA_TEST_HF_EMBED_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf \
+	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
+	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
+
 .PHONY: test.unit
 test.unit: clippy
-	cargo test --lib -p llama-cpp-bindings --features $(FEATURES)
+	cargo test -p llama-cpp-bindings --features $(FEATURES)
 
 .PHONY: test.qwen3.5_0.8B
 test.qwen3.5_0.8B: clippy
 	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+
+.PHONY: test.qwen3.6_35b_a3b
+test.qwen3.6_35b_a3b: clippy
+	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
 
 .PHONY: test.qwen3.5_0.8B.coverage.run
 test.qwen3.5_0.8B.coverage.run: clippy
@@ -49,6 +63,7 @@ fmt:
 .PHONY: clippy
 clippy:
 	cargo clippy --all-targets -p llama-cpp-bindings --features $(FEATURES) -- -D warnings
+	cargo clippy --all-targets -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- -D warnings
 
 .PHONY: clean.cmake
 clean.cmake:

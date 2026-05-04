@@ -828,32 +828,4 @@ mod tests {
 
         assert_eq!(result, Err(FitError::Error));
     }
-
-    #[cfg(feature = "tests_that_use_llms")]
-    #[test]
-    #[serial_test::serial]
-    fn fit_params_succeeds_with_test_model() {
-        use crate::context::params::LlamaContextParams;
-        use crate::llama_backend::LlamaBackend;
-        use std::ffi::CString;
-
-        let _backend = LlamaBackend::init();
-        let model_path = crate::test_model::download_model().unwrap();
-        let model_path_cstr = CString::new(model_path.to_str().unwrap()).unwrap();
-
-        let mut params = std::pin::pin!(LlamaModelParams::default());
-        let mut context_params = LlamaContextParams::default();
-        let mut margins = vec![0usize; crate::max_devices()];
-
-        let result = params.as_mut().fit_params(
-            &model_path_cstr,
-            &mut context_params,
-            &mut margins,
-            512,
-            llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE,
-        );
-
-        let fit = result.expect("fit_params should succeed for a valid model");
-        assert!(fit.n_ctx > 0);
-    }
 }

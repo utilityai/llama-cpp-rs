@@ -26,12 +26,16 @@ use std::ptr::{self, NonNull};
 
 use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
+use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
+use crate::reasoning_token_classifier::ReasoningTokenClassifier;
+use crate::sampled_token::SampledToken;
 use crate::token::LlamaToken;
-use crate::token_type::LlamaTokenAttrs;
+use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
     ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, MetaValError, StringToTokenError, TokenToStringError,
+    LlamaModelLoadError, MetaValError, ReasoningClassifierError, StringToTokenError,
+    TokenToStringError,
 };
 
 pub mod add_bos;
@@ -93,7 +97,12 @@ impl LlamaModel {
                 let mut decoder = encoding_rs::UTF_8.new_decoder();
                 (
                     llama_token,
-                    self.token_to_piece(llama_token, &mut decoder, decode_special, None),
+                    self.token_to_piece(
+                        &SampledToken::Content(llama_token),
+                        &mut decoder,
+                        decode_special,
+                        None,
+                    ),
                 )
             })
     }
@@ -121,8 +130,12 @@ impl LlamaModel {
 
     /// Check if a token represents the end of generation (end of turn, end of sequence, etc.)
     #[must_use]
-    pub fn is_eog_token(&self, token: LlamaToken) -> bool {
-        unsafe { llama_cpp_bindings_sys::llama_token_is_eog(self.vocab_ptr(), token.0) }
+    pub fn is_eog_token(&self, token: &SampledToken) -> bool {
+        let (SampledToken::Content(LlamaToken(id))
+        | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::Undeterminable(LlamaToken(id))) = *token;
+
+        unsafe { llama_cpp_bindings_sys::llama_token_is_eog(self.vocab_ptr(), id) }
     }
 
     /// Get the decoder start token.
@@ -248,16 +261,19 @@ impl LlamaModel {
     /// - if the returned size from llama.cpp does not fit into a `usize`
     pub fn token_to_piece(
         &self,
-        token: LlamaToken,
+        token: &SampledToken,
         decoder: &mut encoding_rs::Decoder,
         special: bool,
         lstrip: Option<NonZeroU16>,
     ) -> Result<String, TokenToStringError> {
-        let bytes = match self.token_to_piece_bytes(token, 8, special, lstrip) {
+        let (SampledToken::Content(inner)
+        | SampledToken::Reasoning(inner)
+        | SampledToken::Undeterminable(inner)) = *token;
+        let bytes = match self.token_to_piece_bytes(inner, 8, special, lstrip) {
             Err(TokenToStringError::InsufficientBufferSpace(required_size)) => {
                 let buffer_size: usize = (-required_size).try_into()?;
 
-                self.token_to_piece_bytes(token, buffer_size, special, lstrip)
+                self.token_to_piece_bytes(inner, buffer_size, special, lstrip)
             }
             other => other,
         }?;
@@ -690,6 +706,144 @@ impl LlamaModel {
 
         truncated_buffer_to_string(buff, final_size)
     }
+
+    /// Build a [`ReasoningTokenClassifier`] for this model by detecting the model's
+    /// reasoning markers via llama.cpp's chat-template analyzer and resolving them
+    /// to single Control-attribute token ids.
+    ///
+    /// Returns an `Ok(undetermined)` classifier when the model exposes no detectable
+    /// reasoning markers — that is the canonical "this model has no reasoning" signal.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReasoningClassifierError`] when the C++ analyzer throws, when a
+    /// detected marker does not tokenize to exactly one token, or when the resolved
+    /// token does not have the [`LlamaTokenAttr::Control`] attribute.
+    pub fn reasoning_token_classifier(
+        &self,
+    ) -> Result<ReasoningTokenClassifier, ReasoningClassifierError> {
+        let mut out_open: *mut c_char = ptr::null_mut();
+        let mut out_close: *mut c_char = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+                self.model.as_ptr(),
+                &raw mut out_open,
+                &raw mut out_close,
+                &raw mut out_error,
+            )
+        };
+
+        let parsed = (|| match status {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
+                let open_string = read_optional_owned_cstr(out_open)?;
+                let close_string = read_optional_owned_cstr(out_close)?;
+
+                Ok((open_string, close_string))
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+                let message = read_optional_owned_cstr_lossy(out_error);
+
+                Err(ReasoningClassifierError::AnalyzeException(message))
+            }
+            other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
+        })();
+
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_open) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+
+        let (open_string, close_string) = parsed?;
+
+        let (Some(open_marker), Some(close_marker)) = (open_string, close_string) else {
+            return Ok(ReasoningTokenClassifier::undetermined());
+        };
+
+        let open_marker = open_marker.trim();
+        let close_marker = close_marker.trim();
+
+        let open_token = self.resolve_open_reasoning_marker(open_marker)?;
+        let close_token = self.resolve_close_reasoning_marker(close_marker)?;
+
+        Ok(ReasoningTokenClassifier::new(open_token, close_token))
+    }
+
+    fn resolve_open_reasoning_marker(
+        &self,
+        marker: &str,
+    ) -> Result<LlamaToken, ReasoningClassifierError> {
+        let tokens = self.str_to_token(marker, AddBos::Never)?;
+
+        if tokens.len() != 1 {
+            return Err(ReasoningClassifierError::OpenMarkerNotSingleToken {
+                marker: marker.to_string(),
+                token_count: tokens.len(),
+            });
+        }
+
+        let token = tokens[0];
+        let attrs = self.token_attr(token)?;
+
+        if !is_special_marker_attr(attrs) {
+            return Err(ReasoningClassifierError::OpenMarkerNotSpecial {
+                marker: marker.to_string(),
+            });
+        }
+
+        Ok(token)
+    }
+
+    fn resolve_close_reasoning_marker(
+        &self,
+        marker: &str,
+    ) -> Result<LlamaToken, ReasoningClassifierError> {
+        let tokens = self.str_to_token(marker, AddBos::Never)?;
+
+        if tokens.len() != 1 {
+            return Err(ReasoningClassifierError::CloseMarkerNotSingleToken {
+                marker: marker.to_string(),
+                token_count: tokens.len(),
+            });
+        }
+
+        let token = tokens[0];
+        let attrs = self.token_attr(token)?;
+
+        if !is_special_marker_attr(attrs) {
+            return Err(ReasoningClassifierError::CloseMarkerNotSpecial {
+                marker: marker.to_string(),
+            });
+        }
+
+        Ok(token)
+    }
+}
+
+fn is_special_marker_attr(attrs: LlamaTokenAttrs) -> bool {
+    attrs.contains(LlamaTokenAttr::Control) || attrs.contains(LlamaTokenAttr::UserDefined)
+}
+
+fn read_optional_owned_cstr(
+    ptr: *const c_char,
+) -> Result<Option<String>, ReasoningClassifierError> {
+    if ptr.is_null() {
+        return Ok(None);
+    }
+
+    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+
+    Ok(Some(String::from_utf8(bytes)?))
+}
+
+fn read_optional_owned_cstr_lossy(ptr: *const c_char) -> String {
+    if ptr.is_null() {
+        return String::new();
+    }
+
+    unsafe { CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn extract_meta_string<TCFunction>(
@@ -821,726 +975,5 @@ mod extract_meta_string_tests {
         let result = super::truncated_buffer_to_string(invalid_utf8, 3);
 
         assert!(result.is_err());
-    }
-}
-
-#[cfg(test)]
-#[cfg(feature = "tests_that_use_llms")]
-mod tests {
-    use serial_test::serial;
-
-    use super::LlamaModel;
-    use crate::llama_backend::LlamaBackend;
-    use crate::model::AddBos;
-    use crate::model::params::LlamaModelParams;
-    use crate::test_model;
-
-    #[test]
-    #[serial]
-    fn model_loads_with_valid_metadata() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        assert!(model.n_vocab() > 0);
-        assert!(model.n_embd() > 0);
-        assert!(model.n_params() > 0);
-        assert!(model.n_ctx_train().unwrap() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn special_tokens_exist() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let bos = model.token_bos();
-        let eos = model.token_eos();
-        assert_ne!(bos, eos);
-        assert!(model.is_eog_token(eos));
-        assert!(!model.is_eog_token(bos));
-    }
-
-    #[test]
-    #[serial]
-    fn str_to_token_roundtrip() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let tokens = model.str_to_token("hello world", AddBos::Never).unwrap();
-        assert!(!tokens.is_empty());
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let piece = model
-            .token_to_piece(tokens[0], &mut decoder, false, None)
-            .unwrap();
-        assert!(!piece.is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn chat_template_returns_non_empty() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let template = model.chat_template(None);
-        assert!(template.is_ok());
-    }
-
-    #[test]
-    #[serial]
-    fn apply_chat_template_produces_prompt() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let template = model.chat_template(None).unwrap();
-        let message =
-            crate::model::LlamaChatMessage::new("user".to_string(), "hello".to_string()).unwrap();
-        let prompt = model.apply_chat_template(&template, &[message], true);
-        assert!(prompt.is_ok());
-        assert!(!prompt.unwrap().is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_count_returns_positive() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        assert!(model.meta_count() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn tokens_iterator_produces_valid_entries() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let mut count = 0;
-
-        for (token, _piece_result) in model.tokens(false) {
-            assert!(token.0 >= 0);
-            count += 1;
-
-            if count >= 100 {
-                break;
-            }
-        }
-
-        assert_eq!(count, 100);
-    }
-
-    #[test]
-    #[serial]
-    fn token_to_piece_bytes_returns_bytes_for_known_token() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let tokens = model.str_to_token("hello", AddBos::Never).unwrap();
-        let bytes = model
-            .token_to_piece_bytes(tokens[0], 32, false, None)
-            .unwrap();
-
-        assert!(!bytes.is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn n_layer_returns_positive() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        assert!(model.n_layer().unwrap() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn n_head_returns_positive() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        assert!(model.n_head().unwrap() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn n_head_kv_returns_positive() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        assert!(model.n_head_kv().unwrap() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn is_hybrid_returns_bool_for_test_model() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        let _ = model.is_hybrid();
-    }
-
-    #[test]
-    #[serial]
-    fn meta_key_by_index_returns_valid_key() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let key = model.meta_key_by_index(0).unwrap();
-
-        assert!(!key.is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_val_str_by_index_returns_valid_value() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let value = model.meta_val_str_by_index(0).unwrap();
-
-        assert!(!value.is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_key_by_index_out_of_range_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let result = model.meta_key_by_index(999_999);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_val_str_by_index_out_of_range_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let result = model.meta_val_str_by_index(999_999);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_val_str_returns_value_for_known_key() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let first_key = model.meta_key_by_index(0).unwrap();
-        let value = model.meta_val_str(&first_key).unwrap();
-
-        assert!(!value.is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn model_size_returns_nonzero() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        assert!(model.size() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn is_recurrent_returns_false_for_transformer() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        assert!(!model.is_recurrent());
-    }
-
-    #[test]
-    #[serial]
-    fn rope_type_does_not_panic() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let _rope_type = model.rope_type();
-    }
-
-    #[test]
-    #[serial]
-    fn load_model_with_invalid_path_returns_error() {
-        let backend = LlamaBackend::init().unwrap();
-        let model_params = LlamaModelParams::default();
-        let result = LlamaModel::load_from_file(&backend, "/nonexistent/model.gguf", &model_params);
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::LlamaModelLoadError::FileNotFound(std::path::PathBuf::from(
-                "/nonexistent/model.gguf"
-            ))
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn load_model_with_invalid_file_content_returns_null_result() {
-        let backend = LlamaBackend::init().unwrap();
-        let model_params = LlamaModelParams::default();
-        let dummy_path = std::env::temp_dir().join("llama_test_invalid_model.gguf");
-        std::fs::write(&dummy_path, b"not a valid gguf model file").unwrap();
-
-        let result = LlamaModel::load_from_file(&backend, &dummy_path, &model_params);
-
-        assert_eq!(result.unwrap_err(), crate::LlamaModelLoadError::NullResult);
-        let _ = std::fs::remove_file(&dummy_path);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[serial]
-    fn load_model_with_non_utf8_path_returns_path_to_str_error() {
-        use std::ffi::OsStr;
-        use std::os::unix::ffi::OsStrExt;
-
-        let backend = LlamaBackend::init().unwrap();
-        let model_params = LlamaModelParams::default();
-        let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
-
-        let result = LlamaModel::load_from_file(&backend, non_utf8_path, &model_params);
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::LlamaModelLoadError::PathToStrError(non_utf8_path.to_path_buf())
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    #[serial]
-    fn lora_adapter_init_with_non_utf8_path_returns_error() {
-        use std::ffi::OsStr;
-        use std::os::unix::ffi::OsStrExt;
-
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
-
-        let result = model.lora_adapter_init(non_utf8_path);
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::LlamaLoraAdapterInitError::PathToStrError(non_utf8_path.to_path_buf())
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn lora_adapter_init_with_invalid_path_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let result = model.lora_adapter_init("/nonexistent/path/lora.gguf");
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::LlamaLoraAdapterInitError::FileNotFound(std::path::PathBuf::from(
-                "/nonexistent/path/lora.gguf"
-            ))
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn new_context_returns_valid_context() {
-        let (backend, model) = test_model::load_default_model().unwrap();
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(256));
-        let context = model.new_context(&backend, ctx_params).unwrap();
-
-        assert!(context.n_ctx() > 0);
-    }
-
-    #[test]
-    #[serial]
-    fn token_nl_returns_valid_token() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let nl_token = model.token_nl();
-
-        assert!(nl_token.0 >= 0);
-    }
-
-    #[test]
-    #[serial]
-    fn decode_start_token_returns_valid_token() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let _decode_start = model.decode_start_token();
-    }
-
-    #[test]
-    #[serial]
-    fn token_sep_returns_valid_token() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let _sep_token = model.token_sep();
-    }
-
-    #[test]
-    #[serial]
-    fn token_to_piece_handles_large_token_requiring_buffer_resize() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-
-        for (token, _) in model.tokens(true).take(200) {
-            let result = model.token_to_piece(token, &mut decoder, true, None);
-            assert!(result.is_ok());
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn token_to_piece_bytes_insufficient_buffer_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let tokens = model.str_to_token("hello", AddBos::Never).unwrap();
-        let result = model.token_to_piece_bytes(tokens[0], 1, false, None);
-
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Insufficient Buffer Space")
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn token_to_piece_with_lstrip() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let tokens = model.str_to_token("hello", AddBos::Never).unwrap();
-        let result =
-            model.token_to_piece(tokens[0], &mut decoder, false, std::num::NonZeroU16::new(1));
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    #[serial]
-    fn n_vocab_matches_tokens_iterator_count() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let n_vocab = model.n_vocab();
-        let count = model.tokens(false).count();
-
-        assert_eq!(count, n_vocab as usize);
-    }
-
-    #[test]
-    #[serial]
-    fn token_attr_returns_valid_attr() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let bos = model.token_bos();
-        let _attr = model.token_attr(bos).unwrap();
-    }
-
-    #[test]
-    #[serial]
-    fn vocab_type_returns_valid_type() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let _vocab_type = model.vocab_type().unwrap();
-    }
-
-    #[test]
-    #[serial]
-    fn apply_chat_template_buffer_resize_with_long_messages() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let template = model.chat_template(None).unwrap();
-        let long_content = "a".repeat(2000);
-        let message =
-            crate::model::LlamaChatMessage::new("user".to_string(), long_content).unwrap();
-        let prompt = model.apply_chat_template(&template, &[message], true);
-
-        assert!(prompt.is_ok());
-        assert!(!prompt.unwrap().is_empty());
-    }
-
-    #[test]
-    #[serial]
-    fn meta_val_str_with_long_value_triggers_buffer_resize() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let count = model.meta_count();
-
-        for index in 0..count {
-            let key = model.meta_key_by_index(index);
-            let value = model.meta_val_str_by_index(index);
-            assert!(key.is_ok());
-            assert!(value.is_ok());
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn str_to_token_with_add_bos_never() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let tokens_with_bos = model.str_to_token("hello", AddBos::Always).unwrap();
-        let tokens_without_bos = model.str_to_token("hello", AddBos::Never).unwrap();
-
-        assert!(tokens_with_bos.len() >= tokens_without_bos.len());
-    }
-
-    #[test]
-    #[serial]
-    fn chat_template_with_nonexistent_name_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        let result = model.chat_template(Some("nonexistent_template_name_xyz"));
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::ChatTemplateError::MissingTemplate
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn lora_adapter_init_with_invalid_gguf_returns_null_result() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let dummy_path = std::env::temp_dir().join("llama_test_dummy_lora.gguf");
-        std::fs::write(&dummy_path, b"not a valid gguf").unwrap();
-
-        let result = model.lora_adapter_init(&dummy_path);
-
-        assert_eq!(
-            result.unwrap_err(),
-            crate::LlamaLoraAdapterInitError::NullResult
-        );
-        let _ = std::fs::remove_file(&dummy_path);
-    }
-
-    #[test]
-    #[serial]
-    fn str_to_token_with_many_tokens_triggers_buffer_resize() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let many_numbers: String = (0..2000).map(|number| format!("{number} ")).collect();
-
-        let tokens = model.str_to_token(&many_numbers, AddBos::Always).unwrap();
-
-        assert!(tokens.len() > many_numbers.len() / 2);
-    }
-
-    #[test]
-    #[serial]
-    fn rope_type_returns_valid_result_for_test_model() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-
-        let _rope_type = model.rope_type();
-    }
-
-    #[test]
-    #[serial]
-    fn meta_val_str_with_null_byte_in_key_returns_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let result = model.meta_val_str("key\0with_null");
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn new_context_with_huge_ctx_returns_null_error() {
-        let (_backend, model) = test_model::load_default_model().unwrap();
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(u32::MAX));
-
-        let result = model.new_context(&_backend, ctx_params);
-
-        assert!(result.is_err());
-    }
-
-    #[test]
-    #[serial]
-    fn sample_returns_result_and_succeeds_with_valid_index() {
-        use crate::sampling::LlamaSampler;
-        use crate::token::LlamaToken;
-
-        let (backend, model) = test_model::load_default_model().unwrap();
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(256));
-        let mut context = model.new_context(&backend, ctx_params).unwrap();
-
-        let tokens = model.str_to_token("Hello", AddBos::Always).unwrap();
-        let mut batch = crate::llama_batch::LlamaBatch::new(512, 1).unwrap();
-
-        batch.add_sequence(&tokens, 0, false).unwrap();
-
-        context.decode(&mut batch).unwrap();
-
-        let mut sampler =
-            LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
-
-        let result = sampler.sample(&context, batch.n_tokens() - 1);
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    #[serial]
-    fn grammar_sampler_constrains_output_to_yes_or_no() {
-        use crate::sampling::LlamaSampler;
-        use std::sync::Arc;
-
-        let (backend, model) = test_model::load_default_model().unwrap();
-
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(512));
-        let mut context = model.new_context(&backend, ctx_params).unwrap();
-
-        let prompt = "<|im_start|>user\nIs the sky blue? Answer yes or no.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        let tokens = model.str_to_token(prompt, AddBos::Always).unwrap();
-        let mut batch = crate::llama_batch::LlamaBatch::new(512, 1).unwrap();
-
-        batch.add_sequence(&tokens, 0, false).unwrap();
-
-        context.decode(&mut batch).unwrap();
-
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::grammar(&model, r#"root ::= [Yy] [Ee] [Ss] | [Nn] [Oo]"#, "root")
-                .unwrap(),
-            LlamaSampler::temp(0.8),
-            LlamaSampler::greedy(),
-        ]);
-
-        let token = sampler.sample(&context, batch.n_tokens() - 1).unwrap();
-
-        assert!(
-            !model.is_eog_token(token),
-            "Grammar sampler should not allow EOS as first token"
-        );
-
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let piece = model
-            .token_to_piece(token, &mut decoder, true, None)
-            .unwrap();
-        let first_char = piece.chars().next().unwrap().to_lowercase().next().unwrap();
-
-        assert!(
-            first_char == 'y' || first_char == 'n',
-            "Grammar should constrain first token to start with y/n, got: '{piece}'"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn json_schema_grammar_sampler_constrains_output_to_json() {
-        use crate::sampling::LlamaSampler;
-        use std::sync::Arc;
-
-        let (backend, model) = test_model::load_default_model().unwrap();
-
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(512));
-        let mut context = model.new_context(&backend, ctx_params).unwrap();
-
-        let prompt = "<|im_start|>user\nWhat is 2+2? Respond with a JSON object.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        let tokens = model.str_to_token(prompt, AddBos::Always).unwrap();
-        let mut batch = crate::llama_batch::LlamaBatch::new(512, 1).unwrap();
-
-        batch.add_sequence(&tokens, 0, false).unwrap();
-
-        context.decode(&mut batch).unwrap();
-
-        let grammar_str = crate::json_schema_to_grammar(
-            r#"{"type": "object", "properties": {"answer": {"type": "string"}}, "required": ["answer"]}"#
-        ).unwrap();
-
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::grammar(&model, &grammar_str, "root").unwrap(),
-            LlamaSampler::temp(0.8),
-            LlamaSampler::greedy(),
-        ]);
-
-        let token = sampler.sample(&context, batch.n_tokens() - 1).unwrap();
-
-        assert!(
-            !model.is_eog_token(token),
-            "Grammar sampler should not allow EOS as first token"
-        );
-
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let piece = model
-            .token_to_piece(token, &mut decoder, true, None)
-            .unwrap();
-
-        assert!(
-            piece.starts_with('{'),
-            "JSON schema grammar should constrain first token to start with '{{', got: '{piece}'"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn sample_with_grammar_produces_constrained_output_in_loop() {
-        use crate::sampling::LlamaSampler;
-        use std::sync::Arc;
-
-        let (backend, model) = test_model::load_default_model().unwrap();
-
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(512));
-        let mut context = model.new_context(&backend, ctx_params).unwrap();
-
-        let prompt = "<|im_start|>user\nIs the sky blue? yes or no<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        let tokens = model.str_to_token(prompt, AddBos::Always).unwrap();
-        let mut batch = crate::llama_batch::LlamaBatch::new(512, 1).unwrap();
-
-        batch.add_sequence(&tokens, 0, false).unwrap();
-
-        context.decode(&mut batch).unwrap();
-
-        let mut sampler = LlamaSampler::chain_simple([
-            LlamaSampler::grammar(&model, r#"root ::= "yes" | "no""#, "root").unwrap(),
-            LlamaSampler::temp(0.8),
-            LlamaSampler::greedy(),
-        ]);
-
-        let mut generated = String::new();
-        let mut decoder = encoding_rs::UTF_8.new_decoder();
-        let mut position = batch.n_tokens();
-
-        for iteration in 0..10 {
-            let token = sampler.sample(&context, -1).unwrap();
-            let is_eog = model.is_eog_token(token);
-
-            eprintln!("  iteration={iteration} token={} eog={is_eog}", token.0);
-
-            if is_eog {
-                break;
-            }
-
-            let piece = model
-                .token_to_piece(token, &mut decoder, true, None)
-                .unwrap();
-
-            eprintln!("  piece='{piece}'");
-
-            generated.push_str(&piece);
-
-            batch.clear();
-            batch.add(token, position, &[0], true).unwrap();
-            position += 1;
-
-            context.decode(&mut batch).unwrap();
-        }
-
-        let lowercase = generated.to_lowercase();
-
-        assert!(
-            lowercase == "yes" || lowercase == "no",
-            "Grammar loop should produce 'yes' or 'no', got: '{generated}'"
-        );
-    }
-
-    #[test]
-    #[serial]
-    fn sample_without_grammar_produces_multiple_tokens() {
-        use crate::sampling::LlamaSampler;
-        use std::sync::Arc;
-
-        let (backend, model) = test_model::load_default_model().unwrap();
-
-        let ctx_params = crate::context::params::LlamaContextParams::default()
-            .with_n_ctx(std::num::NonZeroU32::new(512));
-        let mut context = model.new_context(&backend, ctx_params).unwrap();
-
-        let prompt =
-            "<|im_start|>user\nSay hello<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
-        let tokens = model.str_to_token(prompt, AddBos::Always).unwrap();
-        let mut batch = crate::llama_batch::LlamaBatch::new(512, 1).unwrap();
-
-        batch.add_sequence(&tokens, 0, false).unwrap();
-
-        context.decode(&mut batch).unwrap();
-
-        let mut sampler =
-            LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
-
-        let mut token_count = 0;
-        let mut position = batch.n_tokens();
-
-        for _ in 0..5 {
-            let token = sampler.sample(&context, -1).unwrap();
-
-            if model.is_eog_token(token) {
-                break;
-            }
-
-            token_count += 1;
-
-            batch.clear();
-            batch.add(token, position, &[0], true).unwrap();
-            position += 1;
-
-            context.decode(&mut batch).unwrap();
-        }
-
-        assert!(
-            token_count > 0,
-            "Should produce at least one token without grammar"
-        );
     }
 }

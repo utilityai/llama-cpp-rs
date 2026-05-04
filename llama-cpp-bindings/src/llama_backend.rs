@@ -178,18 +178,6 @@ mod tests {
         let _mlock = backend.supports_mlock();
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
-    #[test]
-    #[serial]
-    fn void_logs_suppresses_output() {
-        let mut backend = LlamaBackend::init().unwrap();
-        backend.void_logs();
-        let model_path = crate::test_model::download_model().unwrap();
-        let model_params = crate::model::params::LlamaModelParams::default();
-        let _model =
-            crate::model::LlamaModel::load_from_file(&backend, model_path, &model_params).unwrap();
-    }
-
     #[test]
     #[serial]
     fn drop_and_reinit_works() {

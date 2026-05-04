@@ -7,12 +7,12 @@ license = "Apache-2.0"
 repository = "https://github.com/intentee/llama-cpp-bindings"
 
 [dependencies]
-bindgen = { workspace = true }
-cc = { workspace = true, features = ["parallel"] }
-cmake = { workspace = true }
-find_cuda_helper = { workspace = true }
-glob = { workspace = true }
-walkdir = { workspace = true }
+bindgen = "0.72.1"
+cc = { version = "1.2.58", features = ["parallel"] }
+cmake = "0.1"
+find_cuda_helper = "0.2.0"
+glob = "0.3.3"
+walkdir = "2"
 
 [features]
 cuda = []

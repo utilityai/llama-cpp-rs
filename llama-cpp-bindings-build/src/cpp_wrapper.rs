@@ -10,6 +10,7 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
         .warnings(false)
         .file("wrapper_common.cpp")
         .file("wrapper_fit.cpp")
+        .file("wrapper_reasoning.cpp")
         .include(llama_src)
         .include(llama_src.join("common"))
         .include(llama_src.join("include"))

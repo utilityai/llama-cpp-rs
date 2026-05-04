@@ -1,5 +1,6 @@
 //! Safe wrapper around `llama_batch`.
 
+use crate::sampled_token::SampledToken;
 use crate::token::LlamaToken;
 use llama_cpp_bindings_sys::{
     llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id,
@@ -96,11 +97,14 @@ impl<'tokens> LlamaBatch<'tokens> {
     /// Returns an error if there is insufficient space in the buffer or if integer conversions fail.
     pub fn add(
         &mut self,
-        LlamaToken(id): LlamaToken,
+        sampled_token: &SampledToken,
         pos: llama_pos,
         seq_ids: &[i32],
         logits: bool,
     ) -> Result<(), BatchAddError> {
+        let (SampledToken::Content(LlamaToken(id))
+        | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::Undeterminable(LlamaToken(id))) = *sampled_token;
         let required = checked_n_tokens_plus_one_as_usize(self.n_tokens())?;
 
         if self.allocated < required {
@@ -152,7 +156,7 @@ impl<'tokens> LlamaBatch<'tokens> {
 
         for (position, token) in (0..).zip(tokens.iter()) {
             self.add(
-                *token,
+                &SampledToken::Content(*token),
                 position,
                 &[seq_id],
                 logits_all || position == last_index,
@@ -248,6 +252,7 @@ impl Drop for LlamaBatch<'_> {
 
 #[cfg(test)]
 mod tests {
+    use crate::sampled_token::SampledToken;
     use crate::token::LlamaToken;
 
     use super::{
@@ -266,7 +271,9 @@ mod tests {
     #[test]
     fn clear_resets_batch() {
         let mut batch = LlamaBatch::new(16, 1).unwrap();
-        batch.add(LlamaToken::new(1), 0, &[0], true).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], true)
+            .unwrap();
         assert_eq!(batch.n_tokens(), 1);
 
         batch.clear();
@@ -279,10 +286,14 @@ mod tests {
     fn add_increments_token_count() {
         let mut batch = LlamaBatch::new(16, 1).unwrap();
 
-        batch.add(LlamaToken::new(1), 0, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false)
+            .unwrap();
         assert_eq!(batch.n_tokens(), 1);
 
-        batch.add(LlamaToken::new(2), 1, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(2)), 1, &[0], false)
+            .unwrap();
         assert_eq!(batch.n_tokens(), 2);
     }
 
@@ -290,19 +301,25 @@ mod tests {
     fn add_tracks_logits() {
         let mut batch = LlamaBatch::new(16, 1).unwrap();
 
-        batch.add(LlamaToken::new(1), 0, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false)
+            .unwrap();
         assert!(batch.initialized_logits.is_empty());
 
-        batch.add(LlamaToken::new(2), 1, &[0], true).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(2)), 1, &[0], true)
+            .unwrap();
         assert_eq!(batch.initialized_logits, vec![1]);
     }
 
     #[test]
     fn add_returns_insufficient_space_when_full() {
         let mut batch = LlamaBatch::new(1, 1).unwrap();
-        batch.add(LlamaToken::new(1), 0, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false)
+            .unwrap();
 
-        let result = batch.add(LlamaToken::new(2), 1, &[0], false);
+        let result = batch.add(&SampledToken::Content(LlamaToken::new(2)), 1, &[0], false);
 
         assert_eq!(result, Err(BatchAddError::InsufficientSpace(1)));
     }
@@ -352,7 +369,9 @@ mod tests {
     #[test]
     fn add_sequence_fails_mid_loop_when_batch_fills() {
         let mut batch = LlamaBatch::new(2, 1).unwrap();
-        batch.add(LlamaToken::new(1), 0, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false)
+            .unwrap();
 
         let tokens = vec![LlamaToken::new(10), LlamaToken::new(20)];
         let result = batch.add_sequence(&tokens, 0, false);
@@ -390,10 +409,14 @@ mod tests {
     fn add_with_logits_false_retains_only_previous_logits() {
         let mut batch = LlamaBatch::new(16, 1).unwrap();
 
-        batch.add(LlamaToken::new(1), 0, &[0], true).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], true)
+            .unwrap();
         assert_eq!(batch.initialized_logits, vec![0]);
 
-        batch.add(LlamaToken::new(2), 0, &[0], false).unwrap();
+        batch
+            .add(&SampledToken::Content(LlamaToken::new(2)), 0, &[0], false)
+            .unwrap();
         assert_eq!(batch.initialized_logits, vec![0]);
     }
 
@@ -418,7 +441,12 @@ mod tests {
     fn add_with_multiple_seq_ids() -> Result<(), BatchAddError> {
         let mut batch = LlamaBatch::new(16, 4)?;
 
-        batch.add(LlamaToken::new(1), 0, &[0, 1, 2], true)?;
+        batch.add(
+            &SampledToken::Content(LlamaToken::new(1)),
+            0,
+            &[0, 1, 2],
+            true,
+        )?;
 
         assert_eq!(batch.n_tokens(), 1);
         assert_eq!(batch.initialized_logits, vec![0]);

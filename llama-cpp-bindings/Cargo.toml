@@ -8,22 +8,17 @@ repository = "https://github.com/intentee/llama-cpp-bindings"
 
 [dependencies]
 encoding_rs = { workspace = true }
-enumflags2 = { workspace = true }
+enumflags2 = "0.7.12"
 llama-cpp-bindings-sys = { workspace = true }
-thiserror = { workspace = true }
+thiserror = "2"
 tracing = { workspace = true }
-tracing-core = { workspace = true }
+tracing-core = "0.1"
 llguidance = { version = "1.7.0", optional = true }
 toktrie = { version = "1.7.0", optional = true }
-anyhow = { workspace = true, optional = true }
-hf-hub = { workspace = true, optional = true }
 
 [dev-dependencies]
-anyhow = { workspace = true }
-encoding_rs = { workspace = true }
-hf-hub = { workspace = true }
-serial_test = { workspace = true }
-tracing-subscriber = { workspace = true }
+serial_test = "3"
+tracing-subscriber = { version = "0.3", features = ["json"] }
 
 [features]
 default = ["openmp", "android-shared-stdcxx"]
@@ -42,7 +37,6 @@ android-static-stdcxx = ["llama-cpp-bindings-sys/static-stdcxx"]
 system-ggml = ["llama-cpp-bindings-sys/system-ggml"]
 system-ggml-static = ["system-ggml", "llama-cpp-bindings-sys/system-ggml-static"]
 llguidance = ["dep:llguidance", "dep:toktrie"]
-tests_that_use_llms = ["dep:anyhow", "dep:hf-hub"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-bindings-sys = { workspace = true, features = ["metal"] }

@@ -13,6 +13,8 @@ include = [
     "wrapper_common.cpp",
     "wrapper_fit.h",
     "wrapper_fit.cpp",
+    "wrapper_reasoning.h",
+    "wrapper_reasoning.cpp",
     "wrapper_utils.h",
     "wrapper_mtmd.h",
     "build.rs",

@@ -1,40 +1,27 @@
-#![cfg(feature = "tests_that_use_llms")]
-
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
 use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
-use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdContext, MtmdContextParams, MtmdInputText};
+use llama_cpp_bindings::model::LlamaChatMessage;
+use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputText};
+use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings::test_model;
+use llama_cpp_bindings_tests::{TestFixture, test_model};
 
 #[test]
 fn multimodal_vision_inference_produces_output() -> Result<()> {
-    let model_path = test_model::download_model()?;
-    let mmproj_path = test_model::download_mmproj()?;
-
-    let backend = LlamaBackend::init()?;
-    let model_params = LlamaModelParams::default();
-    let model = LlamaModel::load_from_file(&backend, &model_path, &model_params)
-        .with_context(|| "unable to load model")?;
+    let fixture = TestFixture::shared();
+    let backend = fixture.backend();
+    let model = fixture.default_model();
+    let mtmd_ctx = fixture.mtmd_context()?;
 
     let n_ctx = NonZeroU32::new(4096);
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(n_ctx)
         .with_n_batch(512);
     let mut ctx = model
-        .new_context(&backend, ctx_params)
+        .new_context(backend, ctx_params)
         .with_context(|| "unable to create llama context")?;
-
-    let mtmd_params = MtmdContextParams::default();
-    let mmproj_path_str = mmproj_path
-        .to_str()
-        .with_context(|| "mmproj path is not valid UTF-8")?;
-    let mtmd_ctx = MtmdContext::init_from_file(mmproj_path_str, &model, &mtmd_params)
-        .with_context(|| "unable to create mtmd context")?;
 
     assert!(
         mtmd_ctx.support_vision(),
@@ -45,7 +32,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     let image_path_str = image_path
         .to_str()
         .with_context(|| "image path is not valid UTF-8")?;
-    let bitmap = MtmdBitmap::from_file(&mtmd_ctx, image_path_str)
+    let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)
         .with_context(|| "failed to load image from file")?;
 
     let marker = llama_cpp_bindings::mtmd::mtmd_default_marker();
@@ -77,7 +64,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     );
 
     let n_past = chunks
-        .eval_chunks(&mtmd_ctx, &ctx, 0, 0, 512, true)
+        .eval_chunks(mtmd_ctx, &ctx, 0, 0, 512, true)
         .with_context(|| "failed to evaluate chunks")?;
 
     eprintln!("evaluated chunks, n_past = {n_past}");
@@ -91,19 +78,19 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     let mut current_position = n_past;
 
     for _ in 0..max_tokens {
-        let token = sampler.sample(&ctx, -1)?;
+        let token = SampledToken::Content(sampler.sample(&ctx, -1)?);
 
-        if model.is_eog_token(token) {
+        if model.is_eog_token(&token) {
             break;
         }
 
         let output_string = model
-            .token_to_piece(token, &mut decoder, false, None)
+            .token_to_piece(&token, &mut decoder, false, None)
             .with_context(|| "failed to convert token to piece")?;
         generated.push_str(&output_string);
 
         batch.clear();
-        batch.add(token, current_position, &[0], true)?;
+        batch.add(&token, current_position, &[0], true)?;
         current_position += 1;
 
         ctx.decode(&mut batch)

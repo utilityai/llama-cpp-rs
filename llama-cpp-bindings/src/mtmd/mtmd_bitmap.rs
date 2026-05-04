@@ -324,35 +324,4 @@ mod tests {
 
         assert!(result.is_err());
     }
-
-    #[cfg(feature = "tests_that_use_llms")]
-    mod model_tests {
-        use serial_test::serial;
-
-        use crate::mtmd::mtmd_bitmap::MtmdBitmap;
-        use crate::test_model;
-
-        #[test]
-        #[serial]
-        fn from_buffer_creates_bitmap_from_image_bytes() {
-            let (_backend, _model, mtmd_ctx) = test_model::load_default_mtmd().unwrap();
-            let fixtures = test_model::fixtures_dir();
-            let image_path = fixtures.join("llamas.jpg");
-            let image_bytes = std::fs::read(&image_path).unwrap();
-            let bitmap = MtmdBitmap::from_buffer(&mtmd_ctx, &image_bytes).unwrap();
-
-            assert!(bitmap.nx() > 0);
-            assert!(bitmap.ny() > 0);
-            assert!(!bitmap.is_audio());
-        }
-
-        #[test]
-        #[serial]
-        fn from_file_with_null_byte_in_path_returns_error() {
-            let (_backend, _model, mtmd_ctx) = test_model::load_default_mtmd().unwrap();
-            let result = MtmdBitmap::from_file(&mtmd_ctx, "path\0null");
-
-            assert!(result.is_err());
-        }
-    }
 }

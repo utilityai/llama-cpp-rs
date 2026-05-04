@@ -1,14 +1,22 @@
+//! Environment-driven download helpers for test models.
+//!
+//! Resolution rules:
+//!
+//! - `LLAMA_TEST_HF_REPO` and `LLAMA_TEST_HF_MODEL` are required for the default model.
+//! - `LLAMA_TEST_HF_EMBED_REPO` / `LLAMA_TEST_HF_EMBED_MODEL` for the embedding model.
+//! - `LLAMA_TEST_HF_ENCODER_REPO` / `LLAMA_TEST_HF_ENCODER_MODEL` for the encoder.
+//! - `LLAMA_TEST_HF_MMPROJ` is optional; when set, it points to the multimodal projection file
+//!   inside the same repo as the default model.
+//! - `HF_HOME` is honored automatically because the HF API client is built via
+//!   [`hf_hub::api::sync::ApiBuilder::from_env`].
+
 use std::env;
 use std::path::PathBuf;
 
 use anyhow::Result;
 
 fn required_env(var_name: &str) -> Result<String> {
-    env::var(var_name).map_err(|_| {
-        anyhow::anyhow!(
-            "Required env var {var_name} is not set. Source .env.test or set it manually."
-        )
-    })
+    env::var(var_name).map_err(|_| anyhow::anyhow!("Required env var {var_name} is not set"))
 }
 
 fn hf_repo() -> Result<String> {
@@ -48,7 +56,7 @@ pub fn download_file_from(repo: &str, filename: &str) -> Result<PathBuf> {
 }
 
 fn download_file(repo: &str, filename: &str) -> Result<PathBuf> {
-    let path = hf_hub::api::sync::ApiBuilder::new()
+    let path = hf_hub::api::sync::ApiBuilder::from_env()
         .with_progress(true)
         .build()?
         .model(repo.to_string())
@@ -107,60 +115,6 @@ pub fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures")
 }
 
-/// Loads the default test model and backend.
-///
-/// # Errors
-/// Returns an error if the backend cannot be initialized or the model cannot be loaded.
-pub fn load_default_model() -> Result<(crate::llama_backend::LlamaBackend, crate::model::LlamaModel)>
-{
-    let backend = crate::llama_backend::LlamaBackend::init()?;
-    let model_path = download_model()?;
-    let model_params = crate::model::params::LlamaModelParams::default();
-    let model = crate::model::LlamaModel::load_from_file(&backend, model_path, &model_params)?;
-    Ok((backend, model))
-}
-
-/// Loads the default embedding model and backend.
-///
-/// # Errors
-/// Returns an error if the backend cannot be initialized or the embedding model cannot be loaded.
-pub fn load_default_embedding_model()
--> Result<(crate::llama_backend::LlamaBackend, crate::model::LlamaModel)> {
-    let backend = crate::llama_backend::LlamaBackend::init()?;
-    let model_path = download_embedding_model()?;
-    let model_params = crate::model::params::LlamaModelParams::default();
-    let model = crate::model::LlamaModel::load_from_file(&backend, model_path, &model_params)?;
-
-    Ok((backend, model))
-}
-
-/// Loads the default test model, backend, and multimodal context.
-///
-/// # Errors
-/// Returns an error if the backend cannot be initialized, the model cannot be loaded,
-/// or the multimodal projection file is not configured.
-pub fn load_default_mtmd() -> Result<(
-    crate::llama_backend::LlamaBackend,
-    crate::model::LlamaModel,
-    crate::mtmd::MtmdContext,
-)> {
-    if !has_mmproj() {
-        anyhow::bail!("MTMD tests require mmproj — set LLAMA_TEST_HF_MMPROJ");
-    }
-
-    let backend = crate::llama_backend::LlamaBackend::init()?;
-    let model_path = download_model()?;
-    let mmproj_path = download_mmproj()?;
-    let model_params = crate::model::params::LlamaModelParams::default();
-    let model = crate::model::LlamaModel::load_from_file(&backend, &model_path, &model_params)?;
-    let mtmd_params = crate::mtmd::MtmdContextParams::default();
-    let mmproj_str = mmproj_path
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("mmproj path is not valid UTF-8"))?;
-    let mtmd_ctx = crate::mtmd::MtmdContext::init_from_file(mmproj_str, &model, &mtmd_params)?;
-    Ok((backend, model, mtmd_ctx))
-}
-
 #[cfg(test)]
 mod tests {
     struct EnvVarGuard {
@@ -194,15 +148,6 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
-    fn load_default_mtmd_fails_without_mmproj() {
-        let _guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "");
-        let result = super::load_default_mtmd();
-
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn download_file_with_nonexistent_file_returns_error() {
         let result =
             super::download_file("unsloth/Qwen3.5-0.8B-GGUF", "this-file-does-not-exist.gguf");
@@ -210,7 +155,6 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
     fn download_file_from_succeeds_for_known_repo_and_file() {
@@ -220,7 +164,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
     fn download_model_returns_path_with_env_set() {
@@ -229,7 +172,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
     fn download_embedding_model_returns_path_with_env_set() {
@@ -238,7 +180,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
     fn download_encoder_model_returns_path_with_env_set() {
@@ -247,7 +188,6 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[cfg(feature = "tests_that_use_llms")]
     #[test]
     #[serial_test::serial]
     fn download_mmproj_returns_path_when_env_set() {
@@ -255,6 +195,15 @@ mod tests {
         let result = super::download_mmproj();
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn download_mmproj_returns_error_when_env_empty() {
+        let _guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "");
+        let result = super::download_mmproj();
+
+        assert!(result.is_err());
     }
 
     #[test]
@@ -270,18 +219,8 @@ mod tests {
     #[test]
     fn fixtures_dir_is_under_manifest() {
         let dir = super::fixtures_dir();
+        let manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-        assert!(dir.ends_with("fixtures"));
-    }
-
-    #[test]
-    #[serial_test::serial]
-    fn download_mmproj_returns_error_when_env_empty() {
-        let original = std::env::var("LLAMA_TEST_HF_MMPROJ").unwrap_or_default();
-        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", "") };
-        let result = super::download_mmproj();
-        unsafe { std::env::set_var("LLAMA_TEST_HF_MMPROJ", original) };
-
-        assert!(result.is_err());
+        assert!(dir.starts_with(manifest));
     }
 }

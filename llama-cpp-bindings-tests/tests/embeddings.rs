@@ -1,15 +1,11 @@
-#![cfg(feature = "tests_that_use_llms")]
-
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_bindings::model::{AddBos, LlamaModel};
-use llama_cpp_bindings::test_model;
+use llama_cpp_bindings::model::AddBos;
+use llama_cpp_bindings_tests::TestFixture;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -22,17 +18,15 @@ fn normalize(input: &[f32]) -> Vec<f32> {
 
 #[test]
 fn embedding_generation_produces_vectors() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    let model_params = LlamaModelParams::default();
-    let model_path = test_model::download_embedding_model()?;
-    let model = LlamaModel::load_from_file(&backend, &model_path, &model_params)
-        .with_context(|| "unable to load model")?;
+    let fixture = TestFixture::shared();
+    let backend = fixture.backend();
+    let model = fixture.embedding_model()?;
 
     let ctx_params = LlamaContextParams::default()
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_embeddings(true);
     let mut ctx = model
-        .new_context(&backend, ctx_params)
+        .new_context(backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
