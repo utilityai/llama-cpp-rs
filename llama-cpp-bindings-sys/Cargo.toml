@@ -11,6 +11,8 @@ include = [
     "wrapper.h",
     "wrapper_common.h",
     "wrapper_common.cpp",
+    "wrapper_fit.h",
+    "wrapper_fit.cpp",
     "wrapper_oai.h",
     "wrapper_oai.cpp",
     "wrapper_utils.h",
@@ -79,6 +81,7 @@ cuda = ["llama-cpp-bindings-build/cuda"]
 cuda-no-vmm = ["cuda", "llama-cpp-bindings-build/cuda-no-vmm"]
 metal = ["llama-cpp-bindings-build/metal"]
 dynamic-link = ["llama-cpp-bindings-build/dynamic-link"]
+dynamic-backends = ["dynamic-link", "llama-cpp-bindings-build/dynamic-backends"]
 vulkan = ["llama-cpp-bindings-build/vulkan"]
 openmp = ["llama-cpp-bindings-build/openmp"]
 rocm = ["llama-cpp-bindings-build/rocm"]

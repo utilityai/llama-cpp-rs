@@ -27,6 +27,12 @@ pub mod llama_batch;
 pub mod llama_time_us;
 #[cfg(feature = "llguidance")]
 pub mod llguidance_sampler;
+#[cfg(feature = "dynamic-backends")]
+pub mod load_backends;
+#[cfg(feature = "dynamic-backends")]
+pub mod load_backends_error;
+#[cfg(feature = "dynamic-backends")]
+pub mod load_backends_from_path;
 pub mod log;
 pub mod log_options;
 pub mod max_devices;

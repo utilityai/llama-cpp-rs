@@ -46,6 +46,9 @@ pub enum LlamaCppError {
     /// Failed to convert JSON schema to grammar.
     #[error("JsonSchemaToGrammarError: {0}")]
     JsonSchemaToGrammarError(String),
+    /// see [`FitError`]
+    #[error(transparent)]
+    FitError(#[from] FitError),
 }
 
 /// There was an error while getting the chat template from a model.
@@ -394,6 +397,18 @@ pub enum TokenSamplingError {
     /// The sampler did not select any token.
     #[error("No token was selected by the sampler")]
     NoTokenSelected,
+}
+
+/// Returned by [`crate::model::params::LlamaModelParams::fit_params`].
+#[derive(Debug, Clone, Copy, Eq, PartialEq, thiserror::Error)]
+pub enum FitError {
+    /// Could not find allocations that fit available memory.
+    #[error("could not find allocations that fit available memory")]
+    Failure,
+    /// A hard error occurred during fitting (e.g. model not found at the specified path,
+    /// or the C++ wrapper threw an exception).
+    #[error("hard error during parameter fitting")]
+    Error,
 }
 
 #[cfg(test)]

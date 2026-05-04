@@ -19,6 +19,7 @@ struct llama_rs_chat_template_result {
     char * prompt;
     char * grammar;
     char * parser;
+    char * generation_prompt;
     int chat_format;
     bool supports_thinking;
     bool grammar_lazy;

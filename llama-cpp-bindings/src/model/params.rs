@@ -1,7 +1,9 @@
 //! A safe wrapper around `llama_model_params`.
 
 use crate::LlamaCppError;
-use crate::error::ModelParamsError;
+use crate::context::params::LlamaContextParams;
+use crate::error::{FitError, ModelParamsError};
+use crate::model::params::fit_result::FitResult;
 use crate::model::params::kv_overrides::KvOverrides;
 use crate::model::split_mode::{LlamaSplitMode, LlamaSplitModeParseError};
 use std::ffi::{CStr, c_char};
@@ -9,6 +11,7 @@ use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::ptr::null;
 
+pub mod fit_result;
 pub mod kv_overrides;
 pub mod param_override_value;
 
@@ -25,6 +28,7 @@ pub struct LlamaModelParams {
     kv_overrides: Vec<llama_cpp_bindings_sys::llama_model_kv_override>,
     buft_overrides: Vec<llama_cpp_bindings_sys::llama_model_tensor_buft_override>,
     devices: Pin<Box<[llama_cpp_bindings_sys::ggml_backend_dev_t; LLAMA_CPP_MAX_DEVICES]>>,
+    tensor_split: Vec<f32>,
 }
 
 impl Debug for LlamaModelParams {
@@ -379,6 +383,98 @@ impl LlamaModelParams {
     }
 }
 
+impl LlamaModelParams {
+    /// Automatically fit model and context parameters to available device memory.
+    ///
+    /// Wraps llama.cpp's `common_fit_params`. Given a model path, available per-device memory
+    /// margins, and a minimum context size, it fills in `n_gpu_layers`, `tensor_split`, and
+    /// `tensor_buft_overrides` to fit the model to the available VRAM, and may reduce
+    /// `cparams.n_ctx` if needed. On success the model and context params are updated in place.
+    ///
+    /// # Requirements
+    ///
+    /// Per the C API docstring, only parameters that still hold their default value are
+    /// modified. In practice this means:
+    /// - `n_gpu_layers` must be at its default (`-1`). Do not call
+    ///   [`with_n_gpu_layers`](Self::with_n_gpu_layers) before this.
+    /// - No `tensor_buft_overrides` may be set. Do not call
+    ///   [`add_cpu_buft_override`](Self::add_cpu_buft_override) or
+    ///   [`add_cpu_moe_override`](Self::add_cpu_moe_override) before this.
+    /// - `cparams.n_ctx` is only auto-selected if it is `0`; otherwise it is left alone.
+    ///
+    /// # Arguments
+    ///
+    /// - `model_path` — path to the GGUF model file as a C string.
+    /// - `context_params` — context parameters; `n_ctx` may be modified (see above).
+    /// - `margins` — memory margin per device in bytes. Must have at least
+    ///   `crate::max_devices()` elements.
+    /// - `n_ctx_min` — minimum context size to preserve when reducing memory usage.
+    /// - `log_level` — minimum log level for fitting output; lower levels go to the debug log.
+    ///
+    /// # Thread safety
+    ///
+    /// This function is **not** thread safe: the underlying C call mutates the global
+    /// llama logger state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FitError::Failure`] if no fitting allocation could be found, or
+    /// [`FitError::Error`] on a hard error (e.g. the model file could not be read or the C++
+    /// implementation threw an exception).
+    pub fn fit_params(
+        mut self: Pin<&mut Self>,
+        model_path: &CStr,
+        context_params: &mut LlamaContextParams,
+        margins: &mut [usize],
+        n_ctx_min: u32,
+        log_level: llama_cpp_bindings_sys::ggml_log_level,
+    ) -> Result<FitResult, FitError> {
+        let max_devices = unsafe { llama_cpp_bindings_sys::llama_max_devices() };
+        let max_buft = unsafe { llama_cpp_bindings_sys::llama_max_tensor_buft_overrides() };
+
+        self.tensor_split.clear();
+        self.tensor_split.resize(max_devices, 0.0);
+
+        self.buft_overrides.clear();
+        self.buft_overrides.resize(
+            max_buft + 1,
+            llama_cpp_bindings_sys::llama_model_tensor_buft_override {
+                pattern: null(),
+                buft: std::ptr::null_mut(),
+            },
+        );
+
+        self.params.tensor_split = null::<f32>();
+        self.params.tensor_buft_overrides = null();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_fit_params(
+                model_path.as_ptr(),
+                &raw mut self.params,
+                &raw mut context_params.context_params,
+                self.tensor_split.as_mut_ptr(),
+                self.buft_overrides.as_mut_ptr(),
+                margins.as_mut_ptr(),
+                n_ctx_min,
+                log_level,
+            )
+        };
+
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_STATUS_SUCCESS => {}
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_STATUS_FAILURE => return Err(FitError::Failure),
+            _ => return Err(FitError::Error),
+        }
+
+        self.params.tensor_split = self.tensor_split.as_ptr();
+        self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
+
+        Ok(FitResult {
+            n_ctx: context_params.context_params.n_ctx,
+        })
+    }
+}
+
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
 /// ```
 /// # use llama_cpp_bindings::model::params::LlamaModelParams;
@@ -409,6 +505,7 @@ impl Default for LlamaModelParams {
                 buft: std::ptr::null_mut(),
             }],
             devices: Box::pin([std::ptr::null_mut(); 16]),
+            tensor_split: Vec::new(),
         }
     }
 }
@@ -656,6 +753,9 @@ mod tests {
 
     #[test]
     fn with_devices_sets_devices_when_available() {
+        #[cfg(feature = "dynamic-backends")]
+        crate::load_backends::load_backends().unwrap();
+
         let dev_count = unsafe { llama_cpp_bindings_sys::ggml_backend_dev_count() };
         assert!(dev_count > 0, "Test requires at least one backend device");
 
@@ -703,5 +803,57 @@ mod tests {
             result,
             Err(crate::error::ModelParamsError::InvalidCharacterInKey { byte: 0xff, .. })
         ));
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn fit_params_invalid_model_path_returns_error() {
+        use crate::context::params::LlamaContextParams;
+        use crate::error::FitError;
+        use crate::llama_backend::LlamaBackend;
+
+        let _backend = LlamaBackend::init();
+        let mut params = std::pin::pin!(LlamaModelParams::default());
+        let mut context_params = LlamaContextParams::default();
+        let mut margins = vec![0usize; crate::max_devices()];
+
+        let bogus_path = c"/nonexistent/path/to/model.gguf";
+        let result = params.as_mut().fit_params(
+            bogus_path,
+            &mut context_params,
+            &mut margins,
+            512,
+            llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE,
+        );
+
+        assert_eq!(result, Err(FitError::Error));
+    }
+
+    #[cfg(feature = "tests_that_use_llms")]
+    #[test]
+    #[serial_test::serial]
+    fn fit_params_succeeds_with_test_model() {
+        use crate::context::params::LlamaContextParams;
+        use crate::llama_backend::LlamaBackend;
+        use std::ffi::CString;
+
+        let _backend = LlamaBackend::init();
+        let model_path = crate::test_model::download_model().unwrap();
+        let model_path_cstr = CString::new(model_path.to_str().unwrap()).unwrap();
+
+        let mut params = std::pin::pin!(LlamaModelParams::default());
+        let mut context_params = LlamaContextParams::default();
+        let mut margins = vec![0usize; crate::max_devices()];
+
+        let result = params.as_mut().fit_params(
+            &model_path_cstr,
+            &mut context_params,
+            &mut margins,
+            512,
+            llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE,
+        );
+
+        let fit = result.expect("fit_params should succeed for a valid model");
+        assert!(fit.n_ctx > 0);
     }
 }

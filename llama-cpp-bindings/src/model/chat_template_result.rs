@@ -44,6 +44,10 @@ pub struct ChatTemplateResult {
     pub chat_format: i32,
     /// Optional serialized PEG parser for tool-call parsing.
     pub parser: Option<String>,
+    /// Generation prompt prefix that was prepended to the conversation.
+    /// Empty when the template did not produce one. The parser uses this prefix to
+    /// reconstruct responses without misattributing model output to the prompt.
+    pub generation_prompt: String,
     /// Whether the model supports thinking/reasoning blocks.
     pub supports_thinking: bool,
     /// Whether tool calls should be parsed from the response.
@@ -57,6 +61,7 @@ pub const fn new_empty_chat_template_raw_result()
         prompt: ptr::null_mut(),
         grammar: ptr::null_mut(),
         parser: ptr::null_mut(),
+        generation_prompt: ptr::null_mut(),
         chat_format: 0,
         supports_thinking: false,
         grammar_lazy: false,
@@ -186,6 +191,15 @@ pub unsafe fn parse_chat_template_raw_result(
             Some(String::from_utf8(parser_bytes)?)
         };
 
+        let generation_prompt = if raw.generation_prompt.is_null() {
+            String::new()
+        } else {
+            let bytes = unsafe { CStr::from_ptr(raw.generation_prompt) }
+                .to_bytes()
+                .to_vec();
+            String::from_utf8(bytes)?
+        };
+
         let grammar_triggers = unsafe {
             parse_raw_grammar_triggers(raw.grammar_triggers, raw.grammar_triggers_count)
         }?;
@@ -205,6 +219,7 @@ pub unsafe fn parse_chat_template_raw_result(
             additional_stops,
             chat_format: raw.chat_format,
             parser,
+            generation_prompt,
             supports_thinking: raw.supports_thinking,
             parse_tool_calls,
         })
@@ -227,6 +242,11 @@ impl ChatTemplateResult {
     ) -> Result<String, ChatParseError> {
         let text_cstr = CString::new(text)?;
         let parser_cstr = self.parser.as_deref().map(CString::new).transpose()?;
+        let generation_prompt_cstr = if self.generation_prompt.is_empty() {
+            None
+        } else {
+            Some(CString::new(self.generation_prompt.as_str())?)
+        };
         let mut out_json: *mut c_char = ptr::null_mut();
         let rc = unsafe {
             llama_cpp_bindings_sys::llama_rs_chat_parse_to_oaicompat(
@@ -235,6 +255,9 @@ impl ChatTemplateResult {
                 self.chat_format,
                 self.parse_tool_calls,
                 parser_cstr
+                    .as_ref()
+                    .map_or(ptr::null(), |cstr| cstr.as_ptr()),
+                generation_prompt_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
                 &raw mut out_json,
@@ -259,11 +282,19 @@ impl ChatTemplateResult {
     /// Returns an error if the parser state cannot be initialized.
     pub fn streaming_state_oaicompat(&self) -> Result<ChatParseStateOaicompat, ChatParseError> {
         let parser_cstr = self.parser.as_deref().map(CString::new).transpose()?;
+        let generation_prompt_cstr = if self.generation_prompt.is_empty() {
+            None
+        } else {
+            Some(CString::new(self.generation_prompt.as_str())?)
+        };
         let state = unsafe {
             llama_cpp_bindings_sys::llama_rs_chat_parse_state_init_oaicompat(
                 self.chat_format,
                 self.parse_tool_calls,
                 parser_cstr
+                    .as_ref()
+                    .map_or(ptr::null(), |cstr| cstr.as_ptr()),
+                generation_prompt_cstr
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
             )
@@ -680,5 +711,84 @@ mod tests {
         let result = template_result.streaming_state_oaicompat();
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_raw_result_with_generation_prompt() {
+        let mut raw = new_empty_chat_template_raw_result();
+        raw.prompt = heap_cstring("prompt");
+        raw.generation_prompt = heap_cstring("<|assistant|>");
+        let result = unsafe {
+            parse_chat_template_raw_result(
+                llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+                &raw mut raw,
+                false,
+            )
+        };
+
+        assert_eq!(result.unwrap().generation_prompt, "<|assistant|>");
+    }
+
+    #[test]
+    fn parse_raw_result_null_generation_prompt_yields_empty_string() {
+        let mut raw = new_empty_chat_template_raw_result();
+        raw.prompt = heap_cstring("prompt");
+        let result = unsafe {
+            parse_chat_template_raw_result(
+                llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+                &raw mut raw,
+                false,
+            )
+        };
+
+        assert!(result.unwrap().generation_prompt.is_empty());
+    }
+
+    #[test]
+    fn parse_response_with_generation_prompt_succeeds() {
+        let template_result = ChatTemplateResult {
+            generation_prompt: "<|assistant|>".to_string(),
+            ..ChatTemplateResult::default()
+        };
+
+        let result = template_result.parse_response_oaicompat("hello", false);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_response_with_null_byte_generation_prompt_returns_error() {
+        let template_result = ChatTemplateResult {
+            generation_prompt: "null\0byte".to_string(),
+            ..ChatTemplateResult::default()
+        };
+
+        let result = template_result.parse_response_oaicompat("hello", false);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn streaming_state_with_generation_prompt_succeeds() {
+        let template_result = ChatTemplateResult {
+            generation_prompt: "<|assistant|>".to_string(),
+            ..ChatTemplateResult::default()
+        };
+
+        let result = template_result.streaming_state_oaicompat();
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn streaming_state_with_null_byte_generation_prompt_returns_error() {
+        let template_result = ChatTemplateResult {
+            generation_prompt: "null\0byte".to_string(),
+            ..ChatTemplateResult::default()
+        };
+
+        let result = template_result.streaming_state_oaicompat();
+
+        assert!(result.is_err());
     }
 }

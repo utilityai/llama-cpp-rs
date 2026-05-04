@@ -27,6 +27,7 @@ pub fn configure_and_build(
     configure_gpu_backends(&mut config, target_os);
     configure_openmp(&mut config, target_os);
     configure_system_ggml(&mut config);
+    let backends_dir = configure_dynamic_backends(&mut config);
 
     config.static_crt(static_crt);
     config
@@ -34,7 +35,36 @@ pub fn configure_and_build(
         .very_verbose(env::var("CMAKE_VERBOSE").is_ok())
         .always_configure(false);
 
-    config.build()
+    let out_dir = config.build();
+
+    if let Some(dir) = backends_dir {
+        println!("cargo:backends_dir={}", dir.display());
+    }
+
+    out_dir
+}
+
+fn configure_dynamic_backends(config: &mut Config) -> Option<PathBuf> {
+    if !cfg!(feature = "dynamic-backends") {
+        return None;
+    }
+
+    let out_dir =
+        PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR must be set in cargo build scripts"));
+    let backends_dir = out_dir.join("backends");
+
+    std::fs::create_dir_all(&backends_dir).expect("failed to create backends directory");
+
+    config.define("GGML_BACKEND_DL", "ON");
+    config.define("GGML_CPU_ALL_VARIANTS", "ON");
+    config.define(
+        "GGML_BACKEND_DIR",
+        backends_dir
+            .to_str()
+            .expect("backends directory must be valid UTF-8"),
+    );
+
+    Some(backends_dir)
 }
 
 fn configure_base_defines(config: &mut Config) {

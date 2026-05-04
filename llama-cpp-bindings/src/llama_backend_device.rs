@@ -119,6 +119,9 @@ mod tests {
 
     #[test]
     fn list_devices_returns_at_least_one() {
+        #[cfg(feature = "dynamic-backends")]
+        crate::load_backends::load_backends().unwrap();
+
         let devices = list_llama_ggml_backend_devices();
         assert!(!devices.is_empty());
         assert_eq!(devices[0].index, 0);
