@@ -1,7 +1,5 @@
 use std::ffi::{CStr, CString, c_char};
-use std::mem;
 use std::ptr::{self, NonNull};
-use std::slice;
 
 use crate::{ChatParseError, status_is_ok, status_to_i32};
 
@@ -15,53 +13,12 @@ const fn check_ffi_status(
     }
 }
 
-const fn check_not_null_with_count(
-    pointer: *const llama_cpp_bindings_sys::llama_rs_chat_msg_diff_oaicompat,
-    count: usize,
-) -> Result<(), ChatParseError> {
-    if count > 0 && pointer.is_null() {
-        Err(ChatParseError::NullResult)
-    } else {
-        Ok(())
-    }
-}
-
-/// # Safety
-///
-/// `diffs_ptr` must point to at least `count` valid `llama_rs_chat_msg_diff_oaicompat`
-/// values that remain valid for the lifetime `'diffs`.
-const unsafe fn diffs_as_slice<'diffs>(
-    diffs_ptr: *const llama_cpp_bindings_sys::llama_rs_chat_msg_diff_oaicompat,
-    count: usize,
-) -> &'diffs [llama_cpp_bindings_sys::llama_rs_chat_msg_diff_oaicompat] {
-    if count == 0 {
-        &[]
-    } else {
-        unsafe { slice::from_raw_parts(diffs_ptr, count) }
-    }
-}
-
 const fn check_json_not_null(json_ptr: *const c_char) -> Result<(), ChatParseError> {
     if json_ptr.is_null() {
         Err(ChatParseError::NullResult)
     } else {
         Ok(())
     }
-}
-
-fn handle_diff_json_error(
-    status: llama_cpp_bindings_sys::llama_rs_status,
-    json_ptr: *mut c_char,
-) -> Result<(), ChatParseError> {
-    if !status_is_ok(status) {
-        if !json_ptr.is_null() {
-            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(json_ptr) };
-        }
-
-        return Err(ChatParseError::FfiError(status_to_i32(status)));
-    }
-
-    Ok(())
 }
 
 /// Streaming OpenAI-compatible parser state.
@@ -75,65 +32,42 @@ impl ChatParseStateOaicompat {
     /// Update the parser with additional text and return OpenAI-compatible deltas as JSON strings.
     ///
     /// # Errors
-    /// Returns an error if the FFI call fails or the result is null.
+    /// Returns an error if the FFI call fails, the JSON pointer is null, or the JSON
+    /// payload returned by the C wrapper is not a valid array of objects.
     pub fn update(
         &mut self,
         text_added: &str,
         is_partial: bool,
     ) -> Result<Vec<String>, ChatParseError> {
         let text_cstr = CString::new(text_added)?;
-        let mut out_msg: llama_cpp_bindings_sys::llama_rs_chat_msg_oaicompat =
-            unsafe { mem::zeroed() };
-        let mut out_diffs: *mut llama_cpp_bindings_sys::llama_rs_chat_msg_diff_oaicompat =
-            ptr::null_mut();
-        let mut out_diffs_count: usize = 0;
+        let mut out_json: *mut c_char = ptr::null_mut();
         let rc = unsafe {
             llama_cpp_bindings_sys::llama_rs_chat_parse_state_update_oaicompat(
                 self.state.as_ptr(),
                 text_cstr.as_ptr(),
                 is_partial,
-                &raw mut out_msg,
-                &raw mut out_diffs,
-                &raw mut out_diffs_count,
+                &raw mut out_json,
             )
         };
 
-        let result = {
+        let result = (|| {
             check_ffi_status(rc)?;
-            check_not_null_with_count(out_diffs, out_diffs_count)?;
+            check_json_not_null(out_json)?;
+            let bytes = unsafe { CStr::from_ptr(out_json) }.to_bytes().to_vec();
+            let json_str = String::from_utf8(bytes)?;
+            split_diff_array(&json_str)
+        })();
 
-            let diffs = unsafe { diffs_as_slice(out_diffs, out_diffs_count) };
-            let mut deltas = Vec::with_capacity(diffs.len());
-
-            for diff in diffs {
-                let mut out_json: *mut c_char = ptr::null_mut();
-                let rc = unsafe {
-                    llama_cpp_bindings_sys::llama_rs_chat_msg_diff_to_oaicompat_json(
-                        diff,
-                        &raw mut out_json,
-                    )
-                };
-                handle_diff_json_error(rc, out_json)?;
-                check_json_not_null(out_json)?;
-
-                let bytes = unsafe { CStr::from_ptr(out_json) }.to_bytes().to_vec();
-                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_json) };
-                deltas.push(String::from_utf8(bytes)?);
-            }
-
-            Ok(deltas)
-        };
-
-        unsafe { llama_cpp_bindings_sys::llama_rs_chat_msg_free_oaicompat(&raw mut out_msg) };
-        unsafe {
-            llama_cpp_bindings_sys::llama_rs_chat_msg_diff_free_oaicompat(
-                out_diffs,
-                out_diffs_count,
-            );
-        };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_json) };
 
         result
     }
+}
+
+fn split_diff_array(json_array: &str) -> Result<Vec<String>, ChatParseError> {
+    let values: Vec<serde_json::Value> = serde_json::from_str(json_array)?;
+
+    Ok(values.into_iter().map(|value| value.to_string()).collect())
 }
 
 impl Drop for ChatParseStateOaicompat {
@@ -146,6 +80,7 @@ impl Drop for ChatParseStateOaicompat {
 
 #[cfg(test)]
 mod tests {
+    use super::split_diff_array;
     use crate::model::chat_template_result::ChatTemplateResult;
 
     fn content_only_template() -> ChatTemplateResult {
@@ -175,6 +110,14 @@ mod tests {
     }
 
     #[test]
+    fn update_empty_text_returns_empty_diff_list() {
+        let mut state = content_only_template().streaming_state_oaicompat().unwrap();
+        let deltas = state.update("", true).unwrap();
+
+        assert!(deltas.is_empty());
+    }
+
+    #[test]
     fn check_ffi_status_returns_error_for_invalid() {
         let result =
             super::check_ffi_status(llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT);
@@ -183,15 +126,8 @@ mod tests {
     }
 
     #[test]
-    fn check_not_null_with_count_returns_error() {
-        let result = super::check_not_null_with_count(std::ptr::null(), 1);
-
-        assert!(result.unwrap_err().to_string().contains("null result"));
-    }
-
-    #[test]
-    fn check_not_null_with_count_zero_is_ok() {
-        let result = super::check_not_null_with_count(std::ptr::null(), 0);
+    fn check_ffi_status_returns_ok_for_ok_status() {
+        let result = super::check_ffi_status(llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK);
 
         assert!(result.is_ok());
     }
@@ -204,30 +140,40 @@ mod tests {
     }
 
     #[test]
-    fn handle_diff_json_error_frees_and_returns_error() {
-        let result = super::handle_diff_json_error(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION,
-            std::ptr::null_mut(),
-        );
+    fn check_json_not_null_with_pointer_is_ok() {
+        let cstr = std::ffi::CString::new("ok").unwrap();
+        let result = super::check_json_not_null(cstr.as_ptr());
 
-        assert!(result.unwrap_err().to_string().contains("ffi error"));
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn handle_diff_json_error_frees_non_null_pointer_on_error() {
-        let leaked_string = std::ffi::CString::new("test").unwrap().into_raw();
-        let result = super::handle_diff_json_error(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION,
-            leaked_string,
-        );
+    fn split_diff_array_parses_empty_array() {
+        let parts = split_diff_array("[]").unwrap();
 
-        assert!(result.unwrap_err().to_string().contains("ffi error"));
+        assert!(parts.is_empty());
     }
 
     #[test]
-    fn diffs_as_slice_returns_empty_for_zero_count() {
-        let result = unsafe { super::diffs_as_slice(std::ptr::null(), 0) };
+    fn split_diff_array_parses_single_diff() {
+        let parts = split_diff_array(r#"[{"content":"hi"}]"#).unwrap();
 
-        assert!(result.is_empty());
+        assert_eq!(parts, vec![r#"{"content":"hi"}"#.to_string()]);
+    }
+
+    #[test]
+    fn split_diff_array_parses_multiple_diffs() {
+        let parts = split_diff_array(r#"[{"a":1},{"b":2}]"#).unwrap();
+
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], r#"{"a":1}"#);
+        assert_eq!(parts[1], r#"{"b":2}"#);
+    }
+
+    #[test]
+    fn split_diff_array_rejects_non_json() {
+        let result = split_diff_array("not json");
+
+        assert!(result.is_err());
     }
 }

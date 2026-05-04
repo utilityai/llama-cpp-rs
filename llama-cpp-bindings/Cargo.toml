@@ -10,6 +10,8 @@ repository = "https://github.com/intentee/llama-cpp-bindings"
 encoding_rs = { workspace = true }
 enumflags2 = { workspace = true }
 llama-cpp-bindings-sys = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-core = { workspace = true }
@@ -22,7 +24,6 @@ hf-hub = { workspace = true, optional = true }
 anyhow = { workspace = true }
 encoding_rs = { workspace = true }
 hf-hub = { workspace = true }
-serde_json = { workspace = true }
 serial_test = { workspace = true }
 tracing-subscriber = { workspace = true }
 

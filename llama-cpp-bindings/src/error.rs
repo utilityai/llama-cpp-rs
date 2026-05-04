@@ -341,6 +341,9 @@ pub enum ApplyChatTemplateError {
     /// An integer conversion failed.
     #[error("Integer conversion error: {0}")]
     IntConversionError(#[from] std::num::TryFromIntError),
+    /// The JSON payload returned by llama.cpp could not be parsed.
+    #[error("json parse error: {0}")]
+    JsonParseError(#[from] serde_json::Error),
 }
 
 /// Failed to parse a chat response.
@@ -358,6 +361,9 @@ pub enum ChatParseError {
     /// llama.cpp returned an error code.
     #[error("ffi error {0}")]
     FfiError(i32),
+    /// the JSON payload returned by llama.cpp could not be parsed.
+    #[error("json parse error: {0}")]
+    JsonParseError(#[from] serde_json::Error),
 }
 
 /// Failed to accept a token in a sampler.

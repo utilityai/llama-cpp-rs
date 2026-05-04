@@ -55,7 +55,7 @@ pub use llama_lora_adapter::LlamaLoraAdapter;
 pub use rope_type::RopeType;
 pub use vocab_type::{LlamaTokenTypeFromIntError, VocabType};
 
-use chat_template_result::{new_empty_chat_template_raw_result, parse_chat_template_raw_result};
+use chat_template_result::parse_chat_template_json_result;
 use params::LlamaModelParams;
 
 /// A safe wrapper around `llama_model`.
@@ -723,7 +723,7 @@ impl LlamaModel {
         let tools_cstr = tools_json.map(CString::new).transpose()?;
         let json_schema_cstr = json_schema.map(CString::new).transpose()?;
 
-        let mut raw_result = new_empty_chat_template_raw_result();
+        let mut out_json: *mut c_char = ptr::null_mut();
 
         let rc = unsafe {
             llama_cpp_bindings_sys::llama_rs_apply_chat_template_with_tools_oaicompat(
@@ -738,13 +738,13 @@ impl LlamaModel {
                     .as_ref()
                     .map_or(ptr::null(), |cstr| cstr.as_ptr()),
                 add_generation_prompt,
-                &raw mut raw_result,
+                &raw mut out_json,
             )
         };
 
         let parse_tool_calls = tools_json.is_some_and(|tools| !tools.is_empty());
 
-        unsafe { parse_chat_template_raw_result(rc, &raw mut raw_result, parse_tool_calls) }
+        unsafe { parse_chat_template_json_result(rc, out_json, parse_tool_calls) }
     }
 
     /// Apply the model chat template using OpenAI-compatible JSON messages.
@@ -766,7 +766,7 @@ impl LlamaModel {
         let reasoning_cstr = params.reasoning_format.map(CString::new).transpose()?;
         let kwargs_cstr = params.chat_template_kwargs.map(CString::new).transpose()?;
 
-        let mut raw_result = new_empty_chat_template_raw_result();
+        let mut out_json: *mut c_char = ptr::null_mut();
 
         let ffi_params = llama_cpp_bindings_sys::llama_rs_chat_template_oaicompat_params {
             messages: messages_cstr.as_ptr(),
@@ -801,11 +801,11 @@ impl LlamaModel {
                 self.model.as_ptr(),
                 tmpl.0.as_ptr(),
                 &raw const ffi_params,
-                &raw mut raw_result,
+                &raw mut out_json,
             )
         };
 
-        unsafe { parse_chat_template_raw_result(rc, &raw mut raw_result, parse_tool_calls) }
+        unsafe { parse_chat_template_json_result(rc, out_json, parse_tool_calls) }
     }
 }
 
