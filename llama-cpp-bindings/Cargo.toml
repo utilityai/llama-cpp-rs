@@ -41,6 +41,7 @@ android-shared-stdcxx = ["llama-cpp-bindings-sys/shared-stdcxx"]
 android-static-stdcxx = ["llama-cpp-bindings-sys/static-stdcxx"]
 mtmd = ["llama-cpp-bindings-sys/mtmd"]
 system-ggml = ["llama-cpp-bindings-sys/system-ggml"]
+system-ggml-static = ["system-ggml", "llama-cpp-bindings-sys/system-ggml-static"]
 llguidance = ["dep:llguidance", "dep:toktrie"]
 tests_that_use_llms = ["dep:anyhow", "dep:hf-hub"]
 

@@ -63,7 +63,11 @@ fn link_system_ggml_paths(build_dir: &Path) {
 }
 
 fn link_cmake_built_libraries(out_dir: &Path, build_shared_libs: bool, profile: &str) {
-    let link_kind = if build_shared_libs || cfg!(feature = "system-ggml") {
+    let link_kind = if build_shared_libs {
+        "dylib"
+    } else if cfg!(feature = "system-ggml-static") {
+        "static"
+    } else if cfg!(feature = "system-ggml") {
         "dylib"
     } else {
         "static"
