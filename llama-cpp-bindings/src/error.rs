@@ -381,6 +381,26 @@ pub enum ReasoningClassifierError {
     },
 }
 
+/// Failed to parse a chat message via [`crate::Model::parse_chat_message`].
+#[derive(Debug, thiserror::Error)]
+pub enum ParseChatMessageError {
+    /// llama.cpp returned an error code from the parse FFI call.
+    #[error("ffi error {0}")]
+    FfiError(i32),
+    /// The C++ side threw an exception while parsing.
+    #[error("c++ exception during chat parse: {0}")]
+    ParseException(String),
+    /// An accessor returned bytes that were not valid UTF-8.
+    #[error("ffi returned non-utf8 string: {0}")]
+    StringUtf8Error(#[from] FromUtf8Error),
+    /// Failed to serialize the tools array for the FFI call.
+    #[error("could not serialize tools to JSON: {0}")]
+    ToolsSerialization(String),
+    /// The model has no usable chat template, so the parser cannot be built.
+    #[error("model has no chat template")]
+    NoChatTemplate,
+}
+
 /// Failed to evaluate multimodal chunks through the request classifier.
 #[derive(Debug, thiserror::Error)]
 pub enum EvalMultimodalChunksError {

@@ -19,6 +19,8 @@ fn is_cmake_file(entry: &DirEntry) -> bool {
 pub fn register_rebuild_triggers(llama_src: &Path) {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper_chat_parse.h");
+    println!("cargo:rerun-if-changed=wrapper_chat_parse.cpp");
     println!("cargo:rerun-if-changed=wrapper_common.h");
     println!("cargo:rerun-if-changed=wrapper_common.cpp");
     println!("cargo:rerun-if-changed=wrapper_fit.h");

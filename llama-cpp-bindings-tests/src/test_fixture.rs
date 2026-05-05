@@ -33,14 +33,7 @@ impl TestFixture {
     pub fn shared() -> &'static Self {
         static FIXTURE: OnceLock<TestFixture> = OnceLock::new();
 
-        if let Some(fixture) = FIXTURE.get() {
-            return fixture;
-        }
-
-        let fixture = Self::load().expect("test fixture: load failed");
-        let _ = FIXTURE.set(fixture);
-
-        FIXTURE.get().expect("test fixture: just set above")
+        FIXTURE.get_or_init(|| Self::load().expect("test fixture: load failed"))
     }
 
     fn load() -> Result<Self> {

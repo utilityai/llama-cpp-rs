@@ -28,6 +28,8 @@ use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
+use crate::parsed_chat_message::ParsedChatMessage;
+use crate::parsed_tool_call::ParsedToolCall;
 use crate::sampled_token::SampledToken;
 use crate::sampled_token_classifier::SampledTokenClassifier;
 use crate::sampled_token_classifier::SampledTokenClassifierMarkers;
@@ -36,8 +38,8 @@ use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
     ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, MetaValError, ReasoningClassifierError, StringToTokenError,
-    TokenToStringError,
+    LlamaModelLoadError, MetaValError, ParseChatMessageError, ReasoningClassifierError,
+    StringToTokenError, TokenToStringError,
 };
 
 pub mod add_bos;
@@ -743,6 +745,59 @@ impl LlamaModel {
 
     /// Render the chat template with the autoparser's standard tool-call
     /// synthetic inputs. Returns `(output_no_tools, output_with_tools)`. Each
+    /// Parse the assistant's output text via llama.cpp's `common_chat_parse`,
+    /// driven by the model's autoparser-built peg parser. Returns structured
+    /// content / reasoning / tool-call data — never a raw JSON blob to
+    /// deserialize on the Rust side.
+    ///
+    /// `tools_json` is a JSON-array string of OpenAI-style tool definitions
+    /// (use `"[]"` when no tools are in scope). `is_partial` switches between
+    /// mid-stream (lenient) and final (strict) parses.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseChatMessageError`] when the FFI returns a non-OK
+    /// status, the C++ side throws, or accessor strings are not valid UTF-8.
+    pub fn parse_chat_message(
+        &self,
+        tools_json: &str,
+        input: &str,
+        is_partial: bool,
+    ) -> Result<ParsedChatMessage, ParseChatMessageError> {
+        let tools_cstring = CString::new(tools_json)
+            .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
+        let input_cstring = CString::new(input)
+            .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
+
+        let mut handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_parse_chat_message(
+                self.model.as_ptr(),
+                tools_cstring.as_ptr(),
+                input_cstring.as_ptr(),
+                if is_partial { 1 } else { 0 },
+                &raw mut handle,
+                &raw mut out_error,
+            )
+        };
+
+        let parsed = match status {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => collect_parsed_chat_message(handle),
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+                let message = read_optional_owned_cstr_lossy(out_error);
+                Err(ParseChatMessageError::ParseException(message))
+            }
+            other => Err(ParseChatMessageError::FfiError(status_to_i32(other))),
+        };
+
+        unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+
+        parsed
+    }
+
     /// can be empty when the template throws during rendering. Useful for
     /// debugging tool-call marker detection.
     ///
@@ -899,6 +954,54 @@ impl LlamaModel {
 
 fn is_special_marker_attr(attrs: LlamaTokenAttrs) -> bool {
     attrs.contains(LlamaTokenAttr::Control) || attrs.contains(LlamaTokenAttr::UserDefined)
+}
+
+fn collect_parsed_chat_message(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+) -> Result<ParsedChatMessage, ParseChatMessageError> {
+    if handle.is_null() {
+        return Ok(ParsedChatMessage::default());
+    }
+
+    let content = read_owned_cstr_for_parse(unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_content(handle)
+    })?;
+    let reasoning_content = read_owned_cstr_for_parse(unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content(handle)
+    })?;
+
+    let count =
+        unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(handle) };
+
+    let mut tool_calls = Vec::with_capacity(count);
+    for index in 0..count {
+        let id = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_id(handle, index)
+        })?;
+        let name = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_name(handle, index)
+        })?;
+        let arguments_json = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments(handle, index)
+        })?;
+
+        tool_calls.push(ParsedToolCall::new(id, name, arguments_json));
+    }
+
+    Ok(ParsedChatMessage::new(content, reasoning_content, tool_calls))
+}
+
+fn read_owned_cstr_for_parse(ptr: *mut c_char) -> Result<String, ParseChatMessageError> {
+    if ptr.is_null() {
+        return Ok(String::new());
+    }
+
+    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+    let owned = String::from_utf8(bytes)?;
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(ptr) };
+
+    Ok(owned)
 }
 
 fn read_optional_owned_cstr(

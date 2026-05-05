@@ -40,6 +40,8 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
+pub mod parsed_chat_message;
+pub mod parsed_tool_call;
 pub mod sampled_token;
 pub mod sampled_token_classifier;
 pub mod sampling;
@@ -53,13 +55,15 @@ pub use error::{
     EvalMultimodalChunksError, GrammarError, LlamaContextLoadError, LlamaCppError,
     LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError,
     LlamaModelLoadError, LogitsError, MetaValError, ModelParamsError, NewLlamaChatMessageError,
-    ReasoningClassifierError, Result, SampleError, SamplerAcceptError, SamplingError,
-    StringToTokenError, TokenSamplingError, TokenToStringError, TokenUsageError,
+    ParseChatMessageError, ReasoningClassifierError, Result, SampleError, SamplerAcceptError,
+    SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError, TokenUsageError,
 };
 
 pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
+pub use parsed_chat_message::ParsedChatMessage;
+pub use parsed_tool_call::ParsedToolCall;
 pub use sampled_token::SampledToken;
 pub use sampled_token_classifier::SampledTokenClassifier;
 pub use sampled_token_classifier::SampledTokenClassifierMarkers;

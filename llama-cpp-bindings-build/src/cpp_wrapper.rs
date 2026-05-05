@@ -8,6 +8,7 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
     build
         .cpp(true)
         .warnings(false)
+        .file("wrapper_chat_parse.cpp")
         .file("wrapper_common.cpp")
         .file("wrapper_fit.cpp")
         .file("wrapper_reasoning.cpp")
