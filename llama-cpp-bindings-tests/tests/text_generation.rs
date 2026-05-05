@@ -70,8 +70,7 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         match token {
             SampledToken::Content(_) => observed_content += 1,
             SampledToken::Reasoning(_) => observed_reasoning += 1,
-            SampledToken::ToolCall(_) => {}
-            SampledToken::Undeterminable(_) => {}
+            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
         }
 
         if model.is_eog_token(&token) {

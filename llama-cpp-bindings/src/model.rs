@@ -745,6 +745,11 @@ impl LlamaModel {
     /// synthetic inputs. Returns `(output_no_tools, output_with_tools)`. Each
     /// can be empty when the template throws during rendering. Useful for
     /// debugging tool-call marker detection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ReasoningClassifierError`] when the C++ analyzer throws or
+    /// the FFI returns a non-OK status.
     pub fn diagnose_tool_call_synthetic_renders(
         &self,
     ) -> Result<(String, String), ReasoningClassifierError> {

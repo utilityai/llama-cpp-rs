@@ -76,8 +76,7 @@ fn drive_sampling_loop(
         match token {
             SampledToken::Content(_) => totals.observed_content += 1,
             SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
-            SampledToken::ToolCall(_) => {}
-            SampledToken::Undeterminable(_) => {}
+            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
         }
 
         if model.is_eog_token(&token) {

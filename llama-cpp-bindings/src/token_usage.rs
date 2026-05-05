@@ -132,7 +132,7 @@ impl TokenUsage {
     }
 
     /// Sum of every token kind the model produced after the prompt: content,
-    /// reasoning, tool-call and undeterminable. Matches OpenAI's
+    /// reasoning, tool-call and undeterminable. Matches `OpenAI`'s
     /// `usage.completion_tokens` semantics — every generated token counts
     /// regardless of which classifier bucket it landed in.
     #[must_use]
