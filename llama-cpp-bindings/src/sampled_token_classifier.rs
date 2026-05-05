@@ -268,6 +268,11 @@ impl SampledTokenClassifier {
     pub const fn is_in_tool_call(&self) -> bool {
         self.in_tool_call
     }
+
+    #[must_use]
+    pub const fn markers(&self) -> &SampledTokenClassifierMarkers {
+        &self.markers
+    }
 }
 
 #[cfg(test)]

@@ -741,6 +741,48 @@ impl LlamaModel {
         }))
     }
 
+    /// Render the chat template with the autoparser's standard tool-call
+    /// synthetic inputs. Returns `(output_no_tools, output_with_tools)`. Each
+    /// can be empty when the template throws during rendering. Useful for
+    /// debugging tool-call marker detection.
+    pub fn diagnose_tool_call_synthetic_renders(
+        &self,
+    ) -> Result<(String, String), ReasoningClassifierError> {
+        let mut out_no_tools: *mut c_char = ptr::null_mut();
+        let mut out_with_tools: *mut c_char = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
+                self.model.as_ptr(),
+                &raw mut out_no_tools,
+                &raw mut out_with_tools,
+                &raw mut out_error,
+            )
+        };
+
+        let parsed = (|| match status {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
+                let no_tools = read_optional_owned_cstr(out_no_tools)?;
+                let with_tools = read_optional_owned_cstr(out_with_tools)?;
+
+                Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+                let message = read_optional_owned_cstr_lossy(out_error);
+
+                Err(ReasoningClassifierError::AnalyzeException(message))
+            }
+            other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
+        })();
+
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_no_tools) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_with_tools) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+
+        parsed
+    }
+
     fn detect_marker_strings(
         &self,
         detect_fn: unsafe extern "C" fn(

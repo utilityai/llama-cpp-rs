@@ -27,6 +27,24 @@ llama_rs_status llama_rs_detect_tool_call_markers(
     char ** out_close,
     char ** out_error);
 
+/**
+ * Render the model's chat template with the autoparser's standard synthetic
+ * inputs (assistant_no_tools vs assistant_with_tools). Useful for diagnosing
+ * why marker detection fails.
+ *
+ * On success (LLAMA_RS_STATUS_OK):
+ *   - *out_no_tools and *out_with_tools point to heap-allocated rendered
+ *     outputs (free via llama_rs_string_free). Either can be empty when the
+ *     template throws during rendering.
+ *
+ * On LLAMA_RS_STATUS_EXCEPTION, *out_error is set.
+ */
+llama_rs_status llama_rs_diagnose_tool_call_synthetic_renders(
+    const struct llama_model * model,
+    char ** out_no_tools,
+    char ** out_with_tools,
+    char ** out_error);
+
 #ifdef __cplusplus
 }
 #endif
