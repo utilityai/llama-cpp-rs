@@ -397,6 +397,31 @@ mod tests {
     }
 
     #[test]
+    fn markers_getter_returns_constructor_input() {
+        let markers = SampledTokenClassifierMarkers {
+            reasoning: Some(TokenBoundary {
+                open: REASONING_OPEN,
+                close: REASONING_CLOSE,
+            }),
+            tool_call: Some(TokenBoundary {
+                open: TOOL_CALL_OPEN,
+                close: TOOL_CALL_CLOSE,
+            }),
+        };
+        let classifier = SampledTokenClassifier::new(markers);
+
+        assert_eq!(*classifier.markers(), markers);
+    }
+
+    #[test]
+    fn undetermined_classifier_reports_no_markers() {
+        let classifier = SampledTokenClassifier::undetermined();
+
+        assert_eq!(classifier.markers().reasoning, None);
+        assert_eq!(classifier.markers().tool_call, None);
+    }
+
+    #[test]
     fn classifier_with_only_reasoning_emits_content_outside_block() {
         let mut classifier = fresh_reasoning_classifier();
         let token = LlamaToken::new(1);
