@@ -40,8 +40,8 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
-pub mod reasoning_token_classifier;
 pub mod sampled_token;
+pub mod sampled_token_classifier;
 pub mod sampling;
 pub mod timing;
 pub mod token;
@@ -60,8 +60,10 @@ pub use error::{
 pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
-pub use reasoning_token_classifier::ReasoningTokenClassifier;
 pub use sampled_token::SampledToken;
+pub use sampled_token_classifier::SampledTokenClassifier;
+pub use sampled_token_classifier::SampledTokenClassifierMarkers;
+pub use sampled_token_classifier::TokenBoundary;
 pub use token_usage::TokenUsage;
 
 pub use ffi_status_is_ok::status_is_ok;

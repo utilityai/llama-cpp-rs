@@ -28,8 +28,10 @@ use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
-use crate::reasoning_token_classifier::ReasoningTokenClassifier;
 use crate::sampled_token::SampledToken;
+use crate::sampled_token_classifier::SampledTokenClassifier;
+use crate::sampled_token_classifier::SampledTokenClassifierMarkers;
+use crate::sampled_token_classifier::TokenBoundary;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
@@ -133,6 +135,7 @@ impl LlamaModel {
     pub fn is_eog_token(&self, token: &SampledToken) -> bool {
         let (SampledToken::Content(LlamaToken(id))
         | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::ToolCall(LlamaToken(id))
         | SampledToken::Undeterminable(LlamaToken(id))) = *token;
 
         unsafe { llama_cpp_bindings_sys::llama_token_is_eog(self.vocab_ptr(), id) }
@@ -268,6 +271,7 @@ impl LlamaModel {
     ) -> Result<String, TokenToStringError> {
         let (SampledToken::Content(inner)
         | SampledToken::Reasoning(inner)
+        | SampledToken::ToolCall(inner)
         | SampledToken::Undeterminable(inner)) = *token;
         let bytes = match self.token_to_piece_bytes(inner, 8, special, lstrip) {
             Err(TokenToStringError::InsufficientBufferSpace(required_size)) => {
@@ -707,27 +711,51 @@ impl LlamaModel {
         truncated_buffer_to_string(buff, final_size)
     }
 
-    /// Build a [`ReasoningTokenClassifier`] for this model by detecting the model's
-    /// reasoning markers via llama.cpp's chat-template analyzer and resolving them
-    /// to single Control-attribute token ids.
+    /// Build a [`SampledTokenClassifier`] for this model by detecting both the
+    /// reasoning and tool-call section markers via llama.cpp's chat-template
+    /// analyzer and resolving each pair to single Control-attribute token ids.
     ///
-    /// Returns an `Ok(undetermined)` classifier when the model exposes no detectable
-    /// reasoning markers — that is the canonical "this model has no reasoning" signal.
+    /// Either marker pair (or both) may be absent — the resulting classifier
+    /// reports tokens as `Content` outside any block, `Reasoning`/`ToolCall`
+    /// inside the corresponding block, or `Undeterminable` when neither pair
+    /// is known.
     ///
     /// # Errors
     ///
     /// Returns [`ReasoningClassifierError`] when the C++ analyzer throws, when a
     /// detected marker does not tokenize to exactly one token, or when the resolved
     /// token does not have the [`LlamaTokenAttr::Control`] attribute.
-    pub fn reasoning_token_classifier(
+    pub fn sampled_token_classifier(
         &self,
-    ) -> Result<ReasoningTokenClassifier, ReasoningClassifierError> {
+    ) -> Result<SampledTokenClassifier, ReasoningClassifierError> {
+        let reasoning = self.detect_marker_strings(
+            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers,
+        )?;
+        let tool_call = self.detect_marker_strings(
+            llama_cpp_bindings_sys::llama_rs_detect_tool_call_markers,
+        )?;
+
+        Ok(SampledTokenClassifier::new(SampledTokenClassifierMarkers {
+            reasoning: self.resolve_optional_boundary(reasoning)?,
+            tool_call: self.resolve_optional_boundary(tool_call)?,
+        }))
+    }
+
+    fn detect_marker_strings(
+        &self,
+        detect_fn: unsafe extern "C" fn(
+            *const llama_cpp_bindings_sys::llama_model,
+            *mut *mut c_char,
+            *mut *mut c_char,
+            *mut *mut c_char,
+        ) -> llama_cpp_bindings_sys::llama_rs_status,
+    ) -> Result<(Option<String>, Option<String>), ReasoningClassifierError> {
         let mut out_open: *mut c_char = ptr::null_mut();
         let mut out_close: *mut c_char = ptr::null_mut();
         let mut out_error: *mut c_char = ptr::null_mut();
 
         let status = unsafe {
-            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+            detect_fn(
                 self.model.as_ptr(),
                 &raw mut out_open,
                 &raw mut out_close,
@@ -754,22 +782,24 @@ impl LlamaModel {
         unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
         unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
 
-        let (open_string, close_string) = parsed?;
-
-        let (Some(open_marker), Some(close_marker)) = (open_string, close_string) else {
-            return Ok(ReasoningTokenClassifier::undetermined());
-        };
-
-        let open_marker = open_marker.trim();
-        let close_marker = close_marker.trim();
-
-        let open_token = self.resolve_open_reasoning_marker(open_marker)?;
-        let close_token = self.resolve_close_reasoning_marker(close_marker)?;
-
-        Ok(ReasoningTokenClassifier::new(open_token, close_token))
+        parsed
     }
 
-    fn resolve_open_reasoning_marker(
+    fn resolve_optional_boundary(
+        &self,
+        markers: (Option<String>, Option<String>),
+    ) -> Result<Option<TokenBoundary>, ReasoningClassifierError> {
+        let (Some(open_marker), Some(close_marker)) = markers else {
+            return Ok(None);
+        };
+
+        let open = self.resolve_open_marker_token(open_marker.trim())?;
+        let close = self.resolve_close_marker_token(close_marker.trim())?;
+
+        Ok(Some(TokenBoundary { open, close }))
+    }
+
+    fn resolve_open_marker_token(
         &self,
         marker: &str,
     ) -> Result<LlamaToken, ReasoningClassifierError> {
@@ -794,7 +824,7 @@ impl LlamaModel {
         Ok(token)
     }
 
-    fn resolve_close_reasoning_marker(
+    fn resolve_close_marker_token(
         &self,
         marker: &str,
     ) -> Result<LlamaToken, ReasoningClassifierError> {

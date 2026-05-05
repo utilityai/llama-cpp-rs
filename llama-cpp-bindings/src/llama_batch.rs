@@ -104,6 +104,7 @@ impl<'tokens> LlamaBatch<'tokens> {
     ) -> Result<(), BatchAddError> {
         let (SampledToken::Content(LlamaToken(id))
         | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::ToolCall(LlamaToken(id))
         | SampledToken::Undeterminable(LlamaToken(id))) = *sampled_token;
         let required = checked_n_tokens_plus_one_as_usize(self.n_tokens())?;
 

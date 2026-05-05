@@ -17,6 +17,7 @@ pub struct TokenUsage {
     input_audio_tokens: u64,
     content_tokens: u64,
     reasoning_tokens: u64,
+    tool_call_tokens: u64,
     undeterminable_tokens: u64,
 }
 
@@ -30,6 +31,7 @@ impl TokenUsage {
             input_audio_tokens: 0,
             content_tokens: 0,
             reasoning_tokens: 0,
+            tool_call_tokens: 0,
             undeterminable_tokens: 0,
         }
     }
@@ -72,6 +74,10 @@ impl TokenUsage {
         self.reasoning_tokens = self.reasoning_tokens.saturating_add(1);
     }
 
+    pub const fn record_tool_call_token(&mut self) {
+        self.tool_call_tokens = self.tool_call_tokens.saturating_add(1);
+    }
+
     pub const fn record_undeterminable_token(&mut self) {
         self.undeterminable_tokens = self.undeterminable_tokens.saturating_add(1);
     }
@@ -80,6 +86,7 @@ impl TokenUsage {
         match token {
             SampledToken::Content(_) => self.record_content_token(),
             SampledToken::Reasoning(_) => self.record_reasoning_token(),
+            SampledToken::ToolCall(_) => self.record_tool_call_token(),
             SampledToken::Undeterminable(_) => self.record_undeterminable_token(),
         }
     }
@@ -115,13 +122,25 @@ impl TokenUsage {
     }
 
     #[must_use]
+    pub const fn tool_call_tokens(&self) -> u64 {
+        self.tool_call_tokens
+    }
+
+    #[must_use]
     pub const fn undeterminable_tokens(&self) -> u64 {
         self.undeterminable_tokens
     }
 
+    /// Sum of every token kind the model produced after the prompt: content,
+    /// reasoning, tool-call and undeterminable. Matches OpenAI's
+    /// `usage.completion_tokens` semantics — every generated token counts
+    /// regardless of which classifier bucket it landed in.
     #[must_use]
     pub const fn completion_tokens(&self) -> u64 {
-        self.content_tokens.saturating_add(self.reasoning_tokens)
+        self.content_tokens
+            .saturating_add(self.reasoning_tokens)
+            .saturating_add(self.tool_call_tokens)
+            .saturating_add(self.undeterminable_tokens)
     }
 }
 
@@ -165,6 +184,7 @@ impl AddAssign<&Self> for TokenUsage {
             .saturating_add(other.input_audio_tokens);
         self.content_tokens = self.content_tokens.saturating_add(other.content_tokens);
         self.reasoning_tokens = self.reasoning_tokens.saturating_add(other.reasoning_tokens);
+        self.tool_call_tokens = self.tool_call_tokens.saturating_add(other.tool_call_tokens);
         self.undeterminable_tokens = self
             .undeterminable_tokens
             .saturating_add(other.undeterminable_tokens);
@@ -202,6 +222,7 @@ mod tests {
         assert_eq!(usage.input_audio_tokens(), 0);
         assert_eq!(usage.content_tokens(), 0);
         assert_eq!(usage.reasoning_tokens(), 0);
+        assert_eq!(usage.tool_call_tokens(), 0);
         assert_eq!(usage.undeterminable_tokens(), 0);
     }
 
@@ -319,6 +340,7 @@ mod tests {
 
         assert_eq!(usage.content_tokens(), 1);
         assert_eq!(usage.reasoning_tokens(), 0);
+        assert_eq!(usage.tool_call_tokens(), 0);
         assert_eq!(usage.undeterminable_tokens(), 0);
     }
 
@@ -329,6 +351,18 @@ mod tests {
 
         assert_eq!(usage.content_tokens(), 0);
         assert_eq!(usage.reasoning_tokens(), 1);
+        assert_eq!(usage.tool_call_tokens(), 0);
+        assert_eq!(usage.undeterminable_tokens(), 0);
+    }
+
+    #[test]
+    fn record_sampled_tool_call_increments_only_tool_call() {
+        let mut usage = TokenUsage::new();
+        usage.record_sampled(&SampledToken::ToolCall(TOKEN));
+
+        assert_eq!(usage.content_tokens(), 0);
+        assert_eq!(usage.reasoning_tokens(), 0);
+        assert_eq!(usage.tool_call_tokens(), 1);
         assert_eq!(usage.undeterminable_tokens(), 0);
     }
 
@@ -339,27 +373,20 @@ mod tests {
 
         assert_eq!(usage.content_tokens(), 0);
         assert_eq!(usage.reasoning_tokens(), 0);
+        assert_eq!(usage.tool_call_tokens(), 0);
         assert_eq!(usage.undeterminable_tokens(), 1);
     }
 
     #[test]
-    fn undeterminable_tokens_do_not_contribute_to_completion_tokens() {
-        let mut usage = TokenUsage::new();
-        usage.record_undeterminable_token();
-        usage.record_undeterminable_token();
-
-        assert_eq!(usage.undeterminable_tokens(), 2);
-        assert_eq!(usage.completion_tokens(), 0);
-    }
-
-    #[test]
-    fn completion_tokens_sums_only_content_and_reasoning() {
+    fn completion_tokens_sums_every_output_kind() {
         let mut usage = TokenUsage::new();
         usage.record_content_token();
         usage.record_content_token();
         usage.record_reasoning_token();
+        usage.record_tool_call_token();
+        usage.record_undeterminable_token();
 
-        assert_eq!(usage.completion_tokens(), 3);
+        assert_eq!(usage.completion_tokens(), 5);
     }
 
     #[test]
@@ -388,12 +415,14 @@ mod tests {
         left.record_cached_prompt_tokens(1).unwrap();
         left.record_content_token();
         left.record_reasoning_token();
+        left.record_tool_call_token();
         left.record_undeterminable_token();
 
         let mut right = TokenUsage::new();
         right.record_prompt_tokens(5);
         right.record_cached_prompt_tokens(2).unwrap();
         right.record_content_token();
+        right.record_tool_call_token();
 
         let combined = left + right;
 
@@ -401,6 +430,7 @@ mod tests {
         assert_eq!(combined.cached_prompt_tokens(), 3);
         assert_eq!(combined.content_tokens(), 2);
         assert_eq!(combined.reasoning_tokens(), 1);
+        assert_eq!(combined.tool_call_tokens(), 2);
         assert_eq!(combined.undeterminable_tokens(), 1);
     }
 

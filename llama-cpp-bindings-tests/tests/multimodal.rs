@@ -6,7 +6,7 @@ use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText};
-use llama_cpp_bindings::reasoning_token_classifier::ReasoningTokenClassifier;
+use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
@@ -55,7 +55,7 @@ struct SamplingTotals {
 }
 
 fn drive_sampling_loop(
-    classifier: &mut ReasoningTokenClassifier,
+    classifier: &mut SampledTokenClassifier,
     model: &LlamaModel,
     ctx: &mut LlamaContext,
     starting_position: llama_pos,
@@ -76,6 +76,7 @@ fn drive_sampling_loop(
         match token {
             SampledToken::Content(_) => totals.observed_content += 1,
             SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
+            SampledToken::ToolCall(_) => {}
             SampledToken::Undeterminable(_) => {}
         }
 
@@ -159,7 +160,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
         "vision input must produce at least one image chunk"
     );
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier
         .eval_multimodal_chunks(&chunks, mtmd_ctx, &ctx, 0, 0, 512, true)
         .with_context(|| "failed to evaluate chunks")?;

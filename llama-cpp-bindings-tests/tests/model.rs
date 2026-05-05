@@ -629,7 +629,7 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
 
     assert!(
@@ -688,7 +688,7 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
 
     assert!(
@@ -736,7 +736,7 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let mut generated = String::new();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut position = batch.n_tokens();
@@ -761,6 +761,12 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
                     raw.0
                 );
                 observed_reasoning += 1;
+            }
+            SampledToken::ToolCall(raw) => {
+                eprintln!(
+                    "  iteration={iteration} token={} eog={is_eog} tool_call",
+                    raw.0
+                );
             }
             SampledToken::Undeterminable(raw) => {
                 eprintln!(
@@ -829,7 +835,7 @@ fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
 
     let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let mut token_count: u64 = 0;
     let mut position = batch.n_tokens();
 

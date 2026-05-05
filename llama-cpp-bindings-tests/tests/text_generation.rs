@@ -24,7 +24,7 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     let prompt = "Hello my name is";
     let n_len: i32 = 64;
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let tokens_list = model
         .str_to_token(prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {prompt}"))?;
@@ -70,6 +70,7 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         match token {
             SampledToken::Content(_) => observed_content += 1,
             SampledToken::Reasoning(_) => observed_reasoning += 1,
+            SampledToken::ToolCall(_) => {}
             SampledToken::Undeterminable(_) => {}
         }
 
@@ -146,7 +147,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     )?];
     let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier()?;
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;
     let prompt_token_count = u64::try_from(tokens.len())?;
 
@@ -175,6 +176,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         match token {
             SampledToken::Content(_) => observed_content += 1,
             SampledToken::Reasoning(_) => observed_reasoning += 1,
+            SampledToken::ToolCall(_) => {}
             SampledToken::Undeterminable(_) => {
                 unreachable!(
                     "Qwen3 chat template uses detected reasoning markers; classifier must not emit Undeterminable"

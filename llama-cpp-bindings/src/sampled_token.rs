@@ -4,5 +4,6 @@ use crate::token::LlamaToken;
 pub enum SampledToken {
     Content(LlamaToken),
     Reasoning(LlamaToken),
+    ToolCall(LlamaToken),
     Undeterminable(LlamaToken),
 }
