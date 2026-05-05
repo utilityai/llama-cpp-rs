@@ -37,7 +37,7 @@ fn parses_qwen3_tool_call_payload() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
-    let input = "<tool_call>\n{\"name\":\"get_weather\",\"arguments\":{\"location\":\"Paris\"}}\n</tool_call>";
+    let input = "<tool_call>\n<function=get_weather>\n<parameter=location>\nParis\n</parameter>\n</function>\n</tool_call>";
     let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, false)?;
 
     assert_eq!(
@@ -47,11 +47,15 @@ fn parses_qwen3_tool_call_payload() -> Result<()> {
         parsed.tool_calls
     );
     assert_eq!(parsed.tool_calls[0].name, "get_weather");
-    assert!(
-        parsed.tool_calls[0].arguments_json.contains("Paris"),
-        "arguments missing location: {}",
-        parsed.tool_calls[0].arguments_json
-    );
+    let location = match &parsed.tool_calls[0].arguments {
+        llama_cpp_bindings::ToolCallArguments::ValidJson(value) => {
+            value.get("location").and_then(|v| v.as_str()).map(str::to_owned)
+        }
+        llama_cpp_bindings::ToolCallArguments::InvalidJson(raw) => {
+            anyhow::bail!("expected ValidJson, got InvalidJson: {raw}");
+        }
+    };
+    assert_eq!(location.as_deref(), Some("Paris"));
 
     Ok(())
 }
@@ -61,7 +65,7 @@ fn parses_partial_tool_call_returns_pending_state() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
-    let input = "<tool_call>\n{\"name\":\"get_weather\",\"argum";
+    let input = "<tool_call>\n<function=get_weather>\n<parameter=lo";
     let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, true)?;
 
     assert!(parsed.tool_calls.is_empty() || parsed.tool_calls.len() == 1);
@@ -74,11 +78,14 @@ fn parses_multiple_tool_calls() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
-    let input = "<tool_call>\n{\"name\":\"get_weather\",\"arguments\":{\"location\":\"Paris\"}}\n</tool_call><tool_call>\n{\"name\":\"get_weather\",\"arguments\":{\"location\":\"Berlin\"}}\n</tool_call>";
+    let input = concat!(
+        "<tool_call>\n<function=get_weather>\n<parameter=location>\nParis\n</parameter>\n</function>\n</tool_call>",
+        "\n<tool_call>\n<function=get_weather>\n<parameter=location>\nBerlin\n</parameter>\n</function>\n</tool_call>",
+    );
     let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, false)?;
 
     assert!(
-        parsed.tool_calls.len() >= 1,
+        !parsed.tool_calls.is_empty(),
         "expected at least one tool call; got {:?}",
         parsed.tool_calls
     );

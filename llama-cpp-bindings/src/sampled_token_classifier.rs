@@ -1,10 +1,12 @@
 use llama_cpp_bindings_sys::llama_pos;
 use llama_cpp_bindings_sys::llama_seq_id;
 
+use llama_cpp_bindings_types::TokenUsage;
+use llama_cpp_bindings_types::TokenUsageError;
+
 use crate::context::LlamaContext;
 use crate::error::EvalMultimodalChunksError;
 use crate::error::SampleError;
-use crate::error::TokenUsageError;
 use crate::llama_batch::BatchAddError;
 use crate::llama_batch::LlamaBatch;
 use crate::mtmd::MtmdContext;
@@ -13,7 +15,6 @@ use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
 use crate::token::LlamaToken;
-use crate::token_usage::TokenUsage;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct TokenBoundary {
@@ -277,10 +278,11 @@ impl SampledTokenClassifier {
 
 #[cfg(test)]
 mod tests {
+    use llama_cpp_bindings_types::TokenUsageError;
+
     use super::SampledTokenClassifier;
     use super::SampledTokenClassifierMarkers;
     use super::TokenBoundary;
-    use crate::error::TokenUsageError;
     use crate::llama_batch::LlamaBatch;
     use crate::sampled_token::SampledToken;
     use crate::token::LlamaToken;
@@ -463,9 +465,9 @@ mod tests {
         classifier.ingest(LlamaToken::new(6));
         classifier.ingest(TOOL_CALL_CLOSE);
 
-        assert_eq!(classifier.usage().tool_call_tokens(), 4);
-        assert_eq!(classifier.usage().content_tokens(), 0);
-        assert_eq!(classifier.usage().reasoning_tokens(), 0);
+        assert_eq!(classifier.usage().tool_call_tokens, 4);
+        assert_eq!(classifier.usage().content_tokens, 0);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
     }
 
     #[test]
@@ -475,9 +477,9 @@ mod tests {
         classifier.ingest(LlamaToken::new(5));
         classifier.ingest(REASONING_CLOSE);
 
-        assert_eq!(classifier.usage().reasoning_tokens(), 3);
-        assert_eq!(classifier.usage().tool_call_tokens(), 0);
-        assert_eq!(classifier.usage().content_tokens(), 0);
+        assert_eq!(classifier.usage().reasoning_tokens, 3);
+        assert_eq!(classifier.usage().tool_call_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
     }
 
     #[test]
@@ -486,7 +488,7 @@ mod tests {
         classifier.ingest(LlamaToken::new(1));
         classifier.ingest(LlamaToken::new(2));
 
-        assert_eq!(classifier.usage().content_tokens(), 2);
+        assert_eq!(classifier.usage().content_tokens, 2);
     }
 
     #[test]
@@ -495,7 +497,7 @@ mod tests {
         classifier.record_prompt_tokens(11);
         classifier.record_prompt_tokens(2);
 
-        assert_eq!(classifier.usage().prompt_tokens(), 13);
+        assert_eq!(classifier.usage().prompt_tokens, 13);
     }
 
     #[test]
@@ -504,7 +506,7 @@ mod tests {
         classifier.record_prompt_tokens(10);
         classifier.record_cached_prompt_tokens(4).unwrap();
 
-        assert_eq!(classifier.usage().cached_prompt_tokens(), 4);
+        assert_eq!(classifier.usage().cached_prompt_tokens, 4);
     }
 
     #[test]
@@ -521,7 +523,7 @@ mod tests {
                 prompt: 2,
             })
         );
-        assert_eq!(classifier.usage().cached_prompt_tokens(), 0);
+        assert_eq!(classifier.usage().cached_prompt_tokens, 0);
     }
 
     #[test]
@@ -536,10 +538,10 @@ mod tests {
 
         let usage = classifier.into_usage();
 
-        assert_eq!(usage.prompt_tokens(), 5);
-        assert_eq!(usage.content_tokens(), 1);
-        assert_eq!(usage.reasoning_tokens(), 2);
-        assert_eq!(usage.tool_call_tokens(), 2);
+        assert_eq!(usage.prompt_tokens, 5);
+        assert_eq!(usage.content_tokens, 1);
+        assert_eq!(usage.reasoning_tokens, 2);
+        assert_eq!(usage.tool_call_tokens, 2);
         assert_eq!(usage.completion_tokens(), 5);
     }
 
@@ -553,7 +555,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(classifier.pending_prompt_tokens(), 1);
-        assert_eq!(classifier.usage().prompt_tokens(), 0);
+        assert_eq!(classifier.usage().prompt_tokens, 0);
     }
 
     #[test]
@@ -569,7 +571,7 @@ mod tests {
 
         assert_eq!(promoted, 3);
         assert_eq!(classifier.pending_prompt_tokens(), 0);
-        assert_eq!(classifier.usage().prompt_tokens(), 3);
+        assert_eq!(classifier.usage().prompt_tokens, 3);
     }
 
     #[test]
@@ -585,7 +587,7 @@ mod tests {
 
         assert_eq!(discarded, 2);
         assert_eq!(classifier.pending_prompt_tokens(), 0);
-        assert_eq!(classifier.usage().prompt_tokens(), 0);
+        assert_eq!(classifier.usage().prompt_tokens, 0);
     }
 
     #[test]

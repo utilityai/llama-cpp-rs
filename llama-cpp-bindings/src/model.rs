@@ -28,8 +28,9 @@ use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
-use crate::parsed_chat_message::ParsedChatMessage;
-use crate::parsed_tool_call::ParsedToolCall;
+use llama_cpp_bindings_types::ParsedChatMessage;
+use llama_cpp_bindings_types::ParsedToolCall;
+use llama_cpp_bindings_types::ToolCallArguments;
 use crate::sampled_token::SampledToken;
 use crate::sampled_token_classifier::SampledTokenClassifier;
 use crate::sampled_token_classifier::SampledTokenClassifierMarkers;
@@ -777,7 +778,7 @@ impl LlamaModel {
                 self.model.as_ptr(),
                 tools_cstring.as_ptr(),
                 input_cstring.as_ptr(),
-                if is_partial { 1 } else { 0 },
+                i32::from(is_partial),
                 &raw mut handle,
                 &raw mut out_error,
             )
@@ -985,7 +986,8 @@ fn collect_parsed_chat_message(
             llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments(handle, index)
         })?;
 
-        tool_calls.push(ParsedToolCall::new(id, name, arguments_json));
+        let arguments = ToolCallArguments::from_string(arguments_json);
+        tool_calls.push(ParsedToolCall::new(id, name, arguments));
     }
 
     Ok(ParsedChatMessage::new(content, reasoning_content, tool_calls))

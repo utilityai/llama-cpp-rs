@@ -168,9 +168,9 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
 
     {
         let usage = classifier.usage();
-        assert_eq!(usage.prompt_tokens(), expected.text);
-        assert_eq!(usage.input_image_tokens(), expected.image);
-        assert_eq!(usage.input_audio_tokens(), expected.audio);
+        assert_eq!(usage.prompt_tokens, expected.text);
+        assert_eq!(usage.input_image_tokens, expected.image);
+        assert_eq!(usage.input_audio_tokens, expected.audio);
     }
 
     let totals = drive_sampling_loop(&mut classifier, model, &mut ctx, n_past, 512)?;
@@ -183,11 +183,11 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), expected.text);
-    assert_eq!(usage.input_image_tokens(), expected.image);
-    assert_eq!(usage.input_audio_tokens(), expected.audio);
-    assert_eq!(usage.content_tokens(), totals.observed_content);
-    assert_eq!(usage.reasoning_tokens(), totals.observed_reasoning);
+    assert_eq!(usage.prompt_tokens, expected.text);
+    assert_eq!(usage.input_image_tokens, expected.image);
+    assert_eq!(usage.input_audio_tokens, expected.audio);
+    assert_eq!(usage.content_tokens, totals.observed_content);
+    assert_eq!(usage.reasoning_tokens, totals.observed_reasoning);
     assert_eq!(
         usage.completion_tokens(),
         totals.observed_content + totals.observed_reasoning

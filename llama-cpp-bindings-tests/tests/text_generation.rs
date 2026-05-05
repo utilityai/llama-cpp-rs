@@ -44,14 +44,14 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens_list, 0, false)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     ctx.decode(&mut batch)
         .with_context(|| "llama_decode() failed")?;
 
     let promoted = classifier.commit_prompt_tokens();
     assert_eq!(promoted, prompt_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), prompt_token_count);
+    assert_eq!(classifier.usage().prompt_tokens, prompt_token_count);
 
     let mut n_cur = batch.n_tokens();
     let mut n_decode: i32 = 0;
@@ -108,17 +108,17 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
 
     let usage = classifier.into_usage();
     assert_eq!(
-        usage.prompt_tokens(),
+        usage.prompt_tokens,
         prompt_token_count,
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens(),
+        usage.content_tokens,
         observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens(),
+        usage.reasoning_tokens,
         observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
@@ -154,7 +154,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     context.decode(&mut batch)?;
 
@@ -217,17 +217,17 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     let usage = classifier.into_usage();
 
     assert_eq!(
-        usage.prompt_tokens(),
+        usage.prompt_tokens,
         prompt_token_count,
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens(),
+        usage.content_tokens,
         observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens(),
+        usage.reasoning_tokens,
         observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
@@ -236,7 +236,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         observed_content + observed_reasoning
     );
     assert_eq!(
-        usage.undeterminable_tokens(),
+        usage.undeterminable_tokens,
         0,
         "model with detected markers should never produce Undeterminable"
     );

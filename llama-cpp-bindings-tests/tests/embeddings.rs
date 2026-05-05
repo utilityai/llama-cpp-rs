@@ -45,7 +45,7 @@ fn embedding_generation_produces_vectors() -> Result<()> {
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
@@ -84,7 +84,7 @@ fn embedding_generation_produces_vectors() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), prompt_token_count);
+    assert_eq!(usage.prompt_tokens, prompt_token_count);
     assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())

@@ -415,21 +415,6 @@ pub enum EvalMultimodalChunksError {
     ChunkOutOfBounds(usize),
 }
 
-/// Token-usage accounting violations.
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum TokenUsageError {
-    /// Cached prompt tokens cannot exceed the recorded prompt total.
-    #[error(
-        "cached prompt tokens would reach {cached_after} but only {prompt} prompt tokens were recorded"
-    )]
-    CachedExceedsPrompt {
-        /// Running cached total after this would-be call.
-        cached_after: u64,
-        /// Currently recorded prompt-token total.
-        prompt: u64,
-    },
-}
-
 /// Failed to accept a token in a sampler.
 #[derive(Debug, thiserror::Error)]
 pub enum SamplerAcceptError {

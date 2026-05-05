@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "llama-cpp-bindings-build",
   "llama-cpp-bindings-sys",
+  "llama-cpp-bindings-types",
   "llama-cpp-bindings",
   "llama-cpp-bindings-tests",
 ]
@@ -15,5 +16,8 @@ encoding_rs = "0.8.35"
 llama-cpp-bindings = { path = "llama-cpp-bindings", version = "0.5.0" }
 llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "0.5.0" }
 llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "0.5.0" }
+llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "0.5.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tracing = "0.1"
 

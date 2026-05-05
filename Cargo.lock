@@ -1045,7 +1045,9 @@ dependencies = [
  "encoding_rs",
  "enumflags2",
  "llama-cpp-bindings-sys",
+ "llama-cpp-bindings-types",
  "llguidance",
+ "serde_json",
  "serial_test",
  "thiserror",
  "toktrie",
@@ -1086,6 +1088,15 @@ dependencies = [
  "serial_test",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "llama-cpp-bindings-types"
+version = "0.5.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

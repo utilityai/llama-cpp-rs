@@ -10,6 +10,8 @@ repository = "https://github.com/intentee/llama-cpp-bindings"
 encoding_rs = { workspace = true }
 enumflags2 = "0.7.12"
 llama-cpp-bindings-sys = { workspace = true }
+llama-cpp-bindings-types = { workspace = true }
+serde_json = { workspace = true }
 thiserror = "2"
 tracing = { workspace = true }
 tracing-core = "0.1"

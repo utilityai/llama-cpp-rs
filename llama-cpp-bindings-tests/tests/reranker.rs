@@ -80,7 +80,7 @@ fn reranking_produces_scores() -> Result<()> {
     let total_token_count = u64::try_from(total_tokens)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), total_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
@@ -131,7 +131,7 @@ fn reranking_produces_scores() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), total_token_count);
+    assert_eq!(usage.prompt_tokens, total_token_count);
     assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())
