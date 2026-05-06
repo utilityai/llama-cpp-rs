@@ -785,12 +785,68 @@ impl LlamaModel {
                 )
             })?;
 
+        let (effective_tool_call_open, effective_tool_call_close) = self
+            .resolve_tool_call_marker_strings(tool_call_open_str, tool_call_close_str);
+
         Ok(StreamingMarkers {
             reasoning_open: self.tokenize_marker(reasoning_open_str.as_deref()),
             reasoning_close: self.tokenize_marker(reasoning_close_str.as_deref()),
-            tool_call_open: self.tokenize_marker(tool_call_open_str.as_deref()),
-            tool_call_close: self.tokenize_marker(tool_call_close_str.as_deref()),
+            tool_call_open: self.tokenize_marker(effective_tool_call_open.as_deref()),
+            tool_call_close: self.tokenize_marker(effective_tool_call_close.as_deref()),
         })
+    }
+
+    /// When the autoparser-driven FFI returned no tool-call markers, consult the
+    /// per-template override registry so wrapper-known templates (Gemma 4,
+    /// Mistral 3, ...) still drive the classifier.
+    fn resolve_tool_call_marker_strings(
+        &self,
+        autoparser_open: Option<String>,
+        autoparser_close: Option<String>,
+    ) -> (Option<String>, Option<String>) {
+        if autoparser_open
+            .as_deref()
+            .is_some_and(|raw| !raw.trim().is_empty())
+        {
+            return (autoparser_open, autoparser_close);
+        }
+        let Some(markers) = self.tool_call_markers() else {
+            return (autoparser_open, autoparser_close);
+        };
+        let close = if markers.close.is_empty() {
+            None
+        } else {
+            Some(markers.close)
+        };
+        (Some(markers.open), close)
+    }
+
+    /// Returns the rich tool-call marker bundle (open / separator / close /
+    /// optional value-quote pair) for this model's chat template, sourced from
+    /// the wrapper's per-template override registry. Returns `None` when no
+    /// registered override matches — callers in that case fall back to
+    /// llama.cpp's autoparser via [`Self::parse_chat_message`].
+    #[must_use]
+    pub fn tool_call_markers(&self) -> Option<crate::ToolCallMarkers> {
+        let template = match self.chat_template(None) {
+            Ok(template) => template,
+            Err(error) => {
+                tracing::debug!(
+                    "tool-call markers unavailable: chat template missing or invalid: {error}"
+                );
+                return None;
+            }
+        };
+        let template_str = match template.to_str() {
+            Ok(template_str) => template_str,
+            Err(error) => {
+                tracing::debug!(
+                    "tool-call markers unavailable: chat template is not valid UTF-8: {error}"
+                );
+                return None;
+            }
+        };
+        crate::tool_call_template_overrides::detect(template_str)
     }
 
     fn tokenize_marker(&self, marker: Option<&str>) -> Option<Vec<LlamaToken>> {

@@ -46,6 +46,7 @@ pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+pub mod tool_call_template_overrides;
 
 pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
@@ -60,7 +61,9 @@ pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
 pub use llama_cpp_bindings_types::{
-    ParsedChatMessage, ParsedToolCall, TokenUsage, TokenUsageError, ToolCallArguments,
+    BracketedJsonShape, PairedQuoteShape, ParsedChatMessage, ParsedToolCall, TokenUsage,
+    TokenUsageError, ToolCallArgsShape, ToolCallArguments, ToolCallMarkers, ToolCallValueQuote,
+    XmlTagsShape,
 };
 pub use sampled_token::SampledToken;
 pub use sampled_token_classifier::SampledTokenClassifier;
