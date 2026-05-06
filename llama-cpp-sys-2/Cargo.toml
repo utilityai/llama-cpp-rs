@@ -82,6 +82,7 @@ glob = "0.3.3"
 walkdir = "2"
 
 [features]
+default = ["openssl"]
 cuda = []
 # Disables the need to dynamically link against libcuda.so / cuda.dll
 cuda-no-vmm = ["cuda"]
@@ -97,3 +98,7 @@ system-ggml = []
 system-ggml-static = ["system-ggml"]
 mtmd = []
 dynamic-backends = ["dynamic-link"]
+# Enables HTTPS in vendored cpp-httplib (links against system OpenSSL).
+# Default-on for backwards compatibility with upstream llama.cpp's
+# LLAMA_OPENSSL=ON default. Disable to omit OpenSSL linkage entirely.
+openssl = []

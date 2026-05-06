@@ -535,6 +535,15 @@ fn main() {
     config.define("LLAMA_BUILD_COMMON", "ON");
     config.define("LLAMA_CURL", "OFF");
 
+    // Gate cpp-httplib's HTTPS support on the `openssl` Cargo feature
+    // (default ON to preserve backwards-compatible behavior with upstream
+    // llama.cpp's default of LLAMA_OPENSSL=ON). Downstream consumers that
+    // do not call cpp-httplib's HTTP client can disable this feature to
+    // drop the OpenSSL link dependency entirely.
+    if !cfg!(feature = "openssl") {
+        config.define("LLAMA_OPENSSL", "OFF");
+    }
+
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
         if key.starts_with("CMAKE_") {
