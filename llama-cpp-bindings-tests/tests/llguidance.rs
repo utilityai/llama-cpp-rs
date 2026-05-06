@@ -1,5 +1,6 @@
 use std::ffi::CStr;
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
 use anyhow::Result;
 use llama_cpp_bindings::context::params::LlamaContextParams;
@@ -159,6 +160,35 @@ fn accept_invalid_token_id_does_not_panic() -> Result<()> {
 
     let huge_token = LlamaToken(i32::MAX - 1);
     let _ = sampler.accept(huge_token);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn approximate_tok_env_returns_same_arc_across_calls() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let first = model.approximate_tok_env();
+    let second = model.approximate_tok_env();
+
+    assert!(Arc::ptr_eq(&first, &second));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn approximate_tok_env_drives_consistent_grammar_constraint() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let first = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
+    let second = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
+
+    assert!(!first.sampler.is_null());
+    assert!(!second.sampler.is_null());
 
     Ok(())
 }

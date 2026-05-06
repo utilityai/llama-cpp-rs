@@ -14,7 +14,11 @@ pub struct ParsedToolCall {
 impl ParsedToolCall {
     #[must_use]
     pub const fn new(id: String, name: String, arguments: ToolCallArguments) -> Self {
-        Self { id, name, arguments }
+        Self {
+            id,
+            name,
+            arguments,
+        }
     }
 }
 
@@ -44,6 +48,9 @@ mod tests {
 
         assert!(parsed.id.is_empty());
         assert!(parsed.name.is_empty());
-        assert_eq!(parsed.arguments, ToolCallArguments::InvalidJson(String::new()));
+        assert_eq!(
+            parsed.arguments,
+            ToolCallArguments::InvalidJson(String::new())
+        );
     }
 }

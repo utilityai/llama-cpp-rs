@@ -1,12 +1,12 @@
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
+use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText};
-use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;

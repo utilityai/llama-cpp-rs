@@ -48,9 +48,10 @@ fn parses_qwen3_tool_call_payload() -> Result<()> {
     );
     assert_eq!(parsed.tool_calls[0].name, "get_weather");
     let location = match &parsed.tool_calls[0].arguments {
-        llama_cpp_bindings::ToolCallArguments::ValidJson(value) => {
-            value.get("location").and_then(|v| v.as_str()).map(str::to_owned)
-        }
+        llama_cpp_bindings::ToolCallArguments::ValidJson(value) => value
+            .get("location")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned),
         llama_cpp_bindings::ToolCallArguments::InvalidJson(raw) => {
             anyhow::bail!("expected ValidJson, got InvalidJson: {raw}");
         }
@@ -102,8 +103,7 @@ fn parses_reasoning_section_into_reasoning_content() -> Result<()> {
     let parsed = model.parse_chat_message("[]", input, false)?;
 
     assert!(
-        parsed.reasoning_content.contains("step")
-            || parsed.content.contains("step"),
+        parsed.reasoning_content.contains("step") || parsed.content.contains("step"),
         "neither content nor reasoning contains 'step'; content={:?} reasoning={:?}",
         parsed.content,
         parsed.reasoning_content

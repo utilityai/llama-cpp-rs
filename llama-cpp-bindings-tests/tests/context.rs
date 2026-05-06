@@ -11,8 +11,8 @@ use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaLoraAdapter;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::model::params::LlamaModelParams;
 use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
 use llama_cpp_bindings_tests::test_model;
 use serial_test::serial;
 
@@ -549,7 +549,7 @@ fn encode_succeeds_with_encoder_model() -> Result<()> {
     let fixture = TestFixture::shared();
     let backend = fixture.backend();
     let model_path = test_model::download_encoder_model()?;
-    let model_params = LlamaModelParams::default();
+    let model_params = inference_model_params();
     let model = LlamaModel::load_from_file(backend, &model_path, &model_params)?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))

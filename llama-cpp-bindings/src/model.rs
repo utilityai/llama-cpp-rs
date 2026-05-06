@@ -3,6 +3,17 @@ use std::ffi::{CStr, CString, c_char};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
+use std::sync::OnceLock;
+
+#[cfg(feature = "llguidance")]
+use std::sync::Arc;
+
+#[cfg(feature = "llguidance")]
+use toktrie::ApproximateTokEnv;
+#[cfg(feature = "llguidance")]
+use toktrie::TokRxInfo;
+#[cfg(feature = "llguidance")]
+use toktrie::TokTrie;
 
 fn truncated_buffer_to_string(
     mut buffer: Vec<u8>,
@@ -28,9 +39,6 @@ use crate::context::LlamaContext;
 use crate::context::params::LlamaContextParams;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
-use llama_cpp_bindings_types::ParsedChatMessage;
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ToolCallArguments;
 use crate::sampled_token::SampledToken;
 use crate::sampled_token_classifier::SampledTokenClassifier;
 use crate::sampled_token_classifier::SampledTokenClassifierMarkers;
@@ -42,6 +50,9 @@ use crate::{
     LlamaModelLoadError, MetaValError, ParseChatMessageError, ReasoningClassifierError,
     StringToTokenError, TokenToStringError,
 };
+use llama_cpp_bindings_types::ParsedChatMessage;
+use llama_cpp_bindings_types::ParsedToolCall;
+use llama_cpp_bindings_types::ToolCallArguments;
 
 pub mod add_bos;
 pub mod llama_chat_message;
@@ -62,11 +73,20 @@ pub use vocab_type::{LlamaTokenTypeFromIntError, VocabType};
 use params::LlamaModelParams;
 
 /// A safe wrapper around `llama_model`.
-#[derive(Debug)]
-#[repr(transparent)]
 pub struct LlamaModel {
     /// Raw pointer to the underlying `llama_model`.
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
+    sampled_classifier_markers: OnceLock<SampledTokenClassifierMarkers>,
+    #[cfg(feature = "llguidance")]
+    tok_env: OnceLock<Arc<ApproximateTokEnv>>,
+}
+
+impl std::fmt::Debug for LlamaModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlamaModel")
+            .field("model", &self.model)
+            .finish_non_exhaustive()
+    }
 }
 
 unsafe impl Send for LlamaModel {}
@@ -574,7 +594,12 @@ impl LlamaModel {
             None => return Err(LlamaModelLoadError::NullResult),
         };
 
-        Ok(Self { model })
+        Ok(Self {
+            model,
+            sampled_classifier_markers: OnceLock::new(),
+            #[cfg(feature = "llguidance")]
+            tok_env: OnceLock::new(),
+        })
     }
 
     /// Initializes a lora adapter from a file.
@@ -731,17 +756,29 @@ impl LlamaModel {
     pub fn sampled_token_classifier(
         &self,
     ) -> Result<SampledTokenClassifier, ReasoningClassifierError> {
-        let reasoning = self.detect_marker_strings(
-            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers,
-        )?;
-        let tool_call = self.detect_marker_strings(
-            llama_cpp_bindings_sys::llama_rs_detect_tool_call_markers,
-        )?;
+        let markers = if let Some(cached) = self.sampled_classifier_markers.get() {
+            *cached
+        } else {
+            let resolved = self.resolve_sampled_classifier_markers()?;
+            let _ = self.sampled_classifier_markers.set(resolved);
+            resolved
+        };
 
-        Ok(SampledTokenClassifier::new(SampledTokenClassifierMarkers {
+        Ok(SampledTokenClassifier::new(markers))
+    }
+
+    fn resolve_sampled_classifier_markers(
+        &self,
+    ) -> Result<SampledTokenClassifierMarkers, ReasoningClassifierError> {
+        let reasoning =
+            self.detect_marker_strings(llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers)?;
+        let tool_call =
+            self.detect_marker_strings(llama_cpp_bindings_sys::llama_rs_detect_tool_call_markers)?;
+
+        Ok(SampledTokenClassifierMarkers {
             reasoning: self.resolve_optional_boundary(reasoning)?,
             tool_call: self.resolve_optional_boundary(tool_call)?,
-        }))
+        })
     }
 
     /// Render the chat template with the autoparser's standard tool-call
@@ -809,39 +846,17 @@ impl LlamaModel {
     pub fn diagnose_tool_call_synthetic_renders(
         &self,
     ) -> Result<(String, String), ReasoningClassifierError> {
-        let mut out_no_tools: *mut c_char = ptr::null_mut();
-        let mut out_with_tools: *mut c_char = ptr::null_mut();
-        let mut out_error: *mut c_char = ptr::null_mut();
+        let (no_tools, with_tools) =
+            invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+                llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
+                    self.model.as_ptr(),
+                    first,
+                    second,
+                    error,
+                )
+            })?;
 
-        let status = unsafe {
-            llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
-                self.model.as_ptr(),
-                &raw mut out_no_tools,
-                &raw mut out_with_tools,
-                &raw mut out_error,
-            )
-        };
-
-        let parsed = (|| match status {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
-                let no_tools = read_optional_owned_cstr(out_no_tools)?;
-                let with_tools = read_optional_owned_cstr(out_with_tools)?;
-
-                Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
-                let message = read_optional_owned_cstr_lossy(out_error);
-
-                Err(ReasoningClassifierError::AnalyzeException(message))
-            }
-            other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
-        })();
-
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_no_tools) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_with_tools) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-
-        parsed
+        Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
     }
 
     fn detect_marker_strings(
@@ -853,39 +868,9 @@ impl LlamaModel {
             *mut *mut c_char,
         ) -> llama_cpp_bindings_sys::llama_rs_status,
     ) -> Result<(Option<String>, Option<String>), ReasoningClassifierError> {
-        let mut out_open: *mut c_char = ptr::null_mut();
-        let mut out_close: *mut c_char = ptr::null_mut();
-        let mut out_error: *mut c_char = ptr::null_mut();
-
-        let status = unsafe {
-            detect_fn(
-                self.model.as_ptr(),
-                &raw mut out_open,
-                &raw mut out_close,
-                &raw mut out_error,
-            )
-        };
-
-        let parsed = (|| match status {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
-                let open_string = read_optional_owned_cstr(out_open)?;
-                let close_string = read_optional_owned_cstr(out_close)?;
-
-                Ok((open_string, close_string))
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
-                let message = read_optional_owned_cstr_lossy(out_error);
-
-                Err(ReasoningClassifierError::AnalyzeException(message))
-            }
-            other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
-        })();
-
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_open) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-
-        parsed
+        invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+            detect_fn(self.model.as_ptr(), first, second, error)
+        })
     }
 
     fn resolve_optional_boundary(
@@ -953,6 +938,58 @@ impl LlamaModel {
     }
 }
 
+#[cfg(feature = "llguidance")]
+impl LlamaModel {
+    /// Returns a process-cached, approximate token environment built from this model's vocabulary.
+    ///
+    /// The first call iterates the full vocabulary and constructs the trie; subsequent calls
+    /// return the cached `Arc` without further FFI work.
+    pub fn approximate_tok_env(&self) -> Arc<ApproximateTokEnv> {
+        Arc::clone(self.tok_env.get_or_init(|| build_approximate_tok_env(self)))
+    }
+}
+
+#[cfg(feature = "llguidance")]
+fn build_approximate_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
+    let n_vocab = model.n_vocab().cast_unsigned();
+    let tok_eos = {
+        let eot = unsafe { llama_cpp_bindings_sys::llama_vocab_eot(model.vocab_ptr()) };
+        if eot == -1 {
+            model.token_eos().0.cast_unsigned()
+        } else {
+            eot.cast_unsigned()
+        }
+    };
+    let info = TokRxInfo::new(n_vocab, tok_eos);
+
+    let mut words = Vec::with_capacity(n_vocab as usize);
+
+    for token_id in 0..n_vocab.cast_signed() {
+        let token = LlamaToken(token_id);
+        let bytes = model
+            .token_to_piece_bytes(token, 32, false, None)
+            .unwrap_or_default();
+        if bytes.is_empty() {
+            let special_bytes = model
+                .token_to_piece_bytes(token, 32, true, None)
+                .unwrap_or_default();
+            if special_bytes.is_empty() {
+                words.push(vec![]);
+            } else {
+                let mut marked = Vec::with_capacity(special_bytes.len() + 1);
+                marked.push(0xFF);
+                marked.extend(special_bytes);
+                words.push(marked);
+            }
+        } else {
+            words.push(bytes);
+        }
+    }
+
+    let trie = TokTrie::from(&info, &words);
+    Arc::new(ApproximateTokEnv::new(trie))
+}
+
 fn is_special_marker_attr(attrs: LlamaTokenAttrs) -> bool {
     attrs.contains(LlamaTokenAttr::Control) || attrs.contains(LlamaTokenAttr::UserDefined)
 }
@@ -971,8 +1008,7 @@ fn collect_parsed_chat_message(
         llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content(handle)
     })?;
 
-    let count =
-        unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(handle) };
+    let count = unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(handle) };
 
     let mut tool_calls = Vec::with_capacity(count);
     for index in 0..count {
@@ -990,7 +1026,49 @@ fn collect_parsed_chat_message(
         tool_calls.push(ParsedToolCall::new(id, name, arguments));
     }
 
-    Ok(ParsedChatMessage::new(content, reasoning_content, tool_calls))
+    Ok(ParsedChatMessage::new(
+        content,
+        reasoning_content,
+        tool_calls,
+    ))
+}
+
+fn invoke_ffi_string_pair_detector<TInvoke>(
+    invoke: TInvoke,
+) -> Result<(Option<String>, Option<String>), ReasoningClassifierError>
+where
+    TInvoke: FnOnce(
+        *mut *mut c_char,
+        *mut *mut c_char,
+        *mut *mut c_char,
+    ) -> llama_cpp_bindings_sys::llama_rs_status,
+{
+    let mut out_first: *mut c_char = ptr::null_mut();
+    let mut out_second: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = invoke(&raw mut out_first, &raw mut out_second, &raw mut out_error);
+
+    let parsed = (|| match status {
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
+            let first = read_optional_owned_cstr(out_first)?;
+            let second = read_optional_owned_cstr(out_second)?;
+
+            Ok((first, second))
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+            let message = read_optional_owned_cstr_lossy(out_error);
+
+            Err(ReasoningClassifierError::AnalyzeException(message))
+        }
+        other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
+    })();
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_first) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_second) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+
+    parsed
 }
 
 fn read_owned_cstr_for_parse(ptr: *mut c_char) -> Result<String, ParseChatMessageError> {
@@ -999,11 +1077,9 @@ fn read_owned_cstr_for_parse(ptr: *mut c_char) -> Result<String, ParseChatMessag
     }
 
     let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
-    let owned = String::from_utf8(bytes)?;
-
     unsafe { llama_cpp_bindings_sys::llama_rs_string_free(ptr) };
 
-    Ok(owned)
+    Ok(String::from_utf8(bytes)?)
 }
 
 fn read_optional_owned_cstr(

@@ -108,18 +108,15 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
 
     let usage = classifier.into_usage();
     assert_eq!(
-        usage.prompt_tokens,
-        prompt_token_count,
+        usage.prompt_tokens, prompt_token_count,
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens,
-        observed_content,
+        usage.content_tokens, observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens,
-        observed_reasoning,
+        usage.reasoning_tokens, observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
     assert_eq!(
@@ -217,18 +214,15 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     let usage = classifier.into_usage();
 
     assert_eq!(
-        usage.prompt_tokens,
-        prompt_token_count,
+        usage.prompt_tokens, prompt_token_count,
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens,
-        observed_content,
+        usage.content_tokens, observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens,
-        observed_reasoning,
+        usage.reasoning_tokens, observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
     assert_eq!(
@@ -236,8 +230,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         observed_content + observed_reasoning
     );
     assert_eq!(
-        usage.undeterminable_tokens,
-        0,
+        usage.undeterminable_tokens, 0,
         "model with detected markers should never produce Undeterminable"
     );
 

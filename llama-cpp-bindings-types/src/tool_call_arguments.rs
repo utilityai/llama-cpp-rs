@@ -11,8 +11,7 @@ pub enum ToolCallArguments {
 impl ToolCallArguments {
     #[must_use]
     pub fn from_string(raw: String) -> Self {
-        serde_json::from_str::<Value>(&raw)
-            .map_or_else(|_| Self::InvalidJson(raw), Self::ValidJson)
+        serde_json::from_str::<Value>(&raw).map_or_else(|_| Self::InvalidJson(raw), Self::ValidJson)
     }
 }
 
@@ -32,7 +31,10 @@ mod tests {
     fn from_string_object_returns_valid() {
         let result = ToolCallArguments::from_string(r#"{"location":"Paris"}"#.to_owned());
 
-        assert_eq!(result, ToolCallArguments::ValidJson(json!({"location": "Paris"})));
+        assert_eq!(
+            result,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"}))
+        );
     }
 
     #[test]
@@ -66,6 +68,9 @@ mod tests {
 
     #[test]
     fn default_is_empty_invalid() {
-        assert_eq!(ToolCallArguments::default(), ToolCallArguments::InvalidJson(String::new()));
+        assert_eq!(
+            ToolCallArguments::default(),
+            ToolCallArguments::InvalidJson(String::new())
+        );
     }
 }

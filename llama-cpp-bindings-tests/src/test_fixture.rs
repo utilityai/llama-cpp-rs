@@ -9,6 +9,8 @@ use llama_cpp_bindings::model::params::LlamaModelParams;
 use llama_cpp_bindings::mtmd::MtmdContext;
 use llama_cpp_bindings::mtmd::MtmdContextParams;
 
+use crate::gpu_backend::inference_model_params;
+use crate::gpu_backend::require_compiled_backends_present;
 use crate::test_model;
 
 /// Shared test resources reused across LLM-backed integration tests in a single process.
@@ -38,6 +40,7 @@ impl TestFixture {
 
     fn load() -> Result<Self> {
         let backend = LlamaBackend::init()?;
+        require_compiled_backends_present()?;
         let default_model = Self::load_default_model(&backend)?;
 
         Ok(Self {
@@ -50,7 +53,7 @@ impl TestFixture {
 
     fn load_default_model(backend: &LlamaBackend) -> Result<LlamaModel> {
         let path = test_model::download_model()?;
-        let params = LlamaModelParams::default();
+        let params = inference_model_params();
 
         Ok(LlamaModel::load_from_file(backend, &path, &params)?)
     }

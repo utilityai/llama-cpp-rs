@@ -29,3 +29,16 @@ fn classifier_resolves_tool_call_diff_runs_without_panic() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn classifier_returns_identical_markers_across_calls() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let first = model.sampled_token_classifier()?;
+    let second = model.sampled_token_classifier()?;
+
+    assert_eq!(first.markers(), second.markers());
+
+    Ok(())
+}

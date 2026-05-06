@@ -18,14 +18,16 @@ impl ParsedChatMessage {
         reasoning_content: String,
         tool_calls: Vec<ParsedToolCall>,
     ) -> Self {
-        Self { content, reasoning_content, tool_calls }
+        Self {
+            content,
+            reasoning_content,
+            tool_calls,
+        }
     }
 
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.content.is_empty()
-            && self.reasoning_content.is_empty()
-            && self.tool_calls.is_empty()
+        self.content.is_empty() && self.reasoning_content.is_empty() && self.tool_calls.is_empty()
     }
 }
 

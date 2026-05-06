@@ -7,12 +7,11 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 use llguidance::Matcher;
-use toktrie::{ApproximateTokEnv, TokRxInfo, TokTrie};
+use toktrie::ApproximateTokEnv;
 
 use crate::GrammarError;
 use crate::model::LlamaModel;
 use crate::sampling::LlamaSampler;
-use crate::token::LlamaToken;
 
 /// Internal state for the llguidance sampler.
 struct LlgContext {
@@ -20,51 +19,6 @@ struct LlgContext {
     tok_env: Arc<ApproximateTokEnv>,
     grammar_kind: String,
     grammar_data: String,
-}
-
-/// Build a [`toktrie::TokEnv`] from a [`LlamaModel`]'s vocabulary.
-///
-/// This mirrors the logic in upstream `llguidance.cpp` — for each token:
-/// - Try normal detokenize (special=false)
-/// - If empty, detokenize with special=true and prefix with 0xFF marker byte
-fn build_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
-    let n_vocab = model.n_vocab().cast_unsigned();
-    let tok_eos = {
-        let eot = unsafe { llama_cpp_bindings_sys::llama_vocab_eot(model.vocab_ptr()) };
-        if eot == -1 {
-            model.token_eos().0.cast_unsigned()
-        } else {
-            eot.cast_unsigned()
-        }
-    };
-    let info = TokRxInfo::new(n_vocab, tok_eos);
-
-    let mut words = Vec::with_capacity(n_vocab as usize);
-
-    for token_id in 0..n_vocab.cast_signed() {
-        let token = LlamaToken(token_id);
-        let bytes = model
-            .token_to_piece_bytes(token, 32, false, None)
-            .unwrap_or_default();
-        if bytes.is_empty() {
-            let special_bytes = model
-                .token_to_piece_bytes(token, 32, true, None)
-                .unwrap_or_default();
-            if special_bytes.is_empty() {
-                words.push(vec![]);
-            } else {
-                let mut marked = Vec::with_capacity(special_bytes.len() + 1);
-                marked.push(0xFF);
-                marked.extend(special_bytes);
-                words.push(marked);
-            }
-        } else {
-            words.push(bytes);
-        }
-    }
-
-    let trie = TokTrie::from(&info, &words);
-    Arc::new(ApproximateTokEnv::new(trie))
 }
 
 const unsafe extern "C" fn llg_name(
@@ -175,7 +129,7 @@ pub fn create_llg_sampler(
     grammar_kind: &str,
     grammar_data: &str,
 ) -> Result<LlamaSampler, GrammarError> {
-    let tok_env = build_tok_env(model);
+    let tok_env = model.approximate_tok_env();
     let tok_env_dyn: Arc<dyn toktrie::TokenizerEnv + Sync> = tok_env.clone();
 
     let factory = llguidance::ParserFactory::new_simple(&tok_env_dyn)
