@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use llama_cpp_bindings_sys::llama_pos;
 use llama_cpp_bindings_sys::llama_seq_id;
 
@@ -9,6 +11,7 @@ use crate::error::EvalMultimodalChunksError;
 use crate::error::SampleError;
 use crate::llama_batch::BatchAddError;
 use crate::llama_batch::LlamaBatch;
+use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
 use crate::mtmd::MtmdInputChunkType;
 use crate::mtmd::MtmdInputChunks;
@@ -17,134 +20,353 @@ use crate::sampling::LlamaSampler;
 use crate::token::LlamaToken;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct TokenBoundary {
-    pub open: LlamaToken,
-    pub close: LlamaToken,
-}
-
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
-pub struct SampledTokenClassifierMarkers {
-    pub reasoning: Option<TokenBoundary>,
-    pub tool_call: Option<TokenBoundary>,
+pub enum SampledTokenSection {
+    Pending,
+    Content,
+    Reasoning,
+    ToolCall,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub struct SampledTokenClassifier {
-    markers: SampledTokenClassifierMarkers,
-    in_reasoning: bool,
-    in_tool_call: bool,
+enum MarkerKind {
+    ReasoningOpen,
+    ReasoningClose,
+    ToolCallOpen,
+    ToolCallClose,
+}
+
+/// Tokenized marker sequences (token IDs, not strings).
+///
+/// Each marker is a `Vec<LlamaToken>` of length `>= 1`; absent markers are
+/// `None`. Sequence matching at every `ingest()` is by token-ID equality,
+/// never by substring scanning of decoded text.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct StreamingMarkers {
+    pub reasoning_open: Option<Vec<LlamaToken>>,
+    pub reasoning_close: Option<Vec<LlamaToken>>,
+    pub tool_call_open: Option<Vec<LlamaToken>>,
+    pub tool_call_close: Option<Vec<LlamaToken>>,
+}
+
+impl StreamingMarkers {
+    const fn has_any(&self) -> bool {
+        self.reasoning_open.is_some()
+            || self.reasoning_close.is_some()
+            || self.tool_call_open.is_some()
+            || self.tool_call_close.is_some()
+    }
+
+    fn max_token_len(&self) -> usize {
+        [
+            self.reasoning_open.as_deref(),
+            self.reasoning_close.as_deref(),
+            self.tool_call_open.as_deref(),
+            self.tool_call_close.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(<[LlamaToken]>::len)
+        .max()
+        .unwrap_or(0)
+    }
+
+    fn lookup(&self, kind: MarkerKind) -> Option<&[LlamaToken]> {
+        match kind {
+            MarkerKind::ReasoningOpen => self.reasoning_open.as_deref(),
+            MarkerKind::ReasoningClose => self.reasoning_close.as_deref(),
+            MarkerKind::ToolCallOpen => self.tool_call_open.as_deref(),
+            MarkerKind::ToolCallClose => self.tool_call_close.as_deref(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IngestOutcome {
+    pub sampled_token: SampledToken,
+    /// Empty when the token is part of a recognised marker boundary; otherwise
+    /// the decoded UTF-8 piece. Callers should stream `visible_piece` and skip
+    /// emission when it is empty.
+    pub visible_piece: String,
+    /// Always the decoded UTF-8 piece, even for marker-boundary tokens. Useful
+    /// for accumulating the full raw model output (e.g. for downstream parser
+    /// cross-checks) without losing marker bytes.
+    pub raw_piece: String,
+}
+
+#[derive(Clone, Debug)]
+struct PendingToken {
+    token: LlamaToken,
+    decoded: String,
+    section: SampledTokenSection,
+    is_boundary: bool,
+    is_from_prompt: bool,
+}
+
+pub struct SampledTokenClassifier<'model> {
+    model: &'model LlamaModel,
+    markers: StreamingMarkers,
+    decoder: encoding_rs::Decoder,
+    pending: VecDeque<PendingToken>,
+    section: SampledTokenSection,
     pending_prompt_tokens: u64,
     usage: TokenUsage,
 }
 
-impl SampledTokenClassifier {
+impl<'model> SampledTokenClassifier<'model> {
     #[must_use]
-    pub const fn new(markers: SampledTokenClassifierMarkers) -> Self {
+    pub fn new(model: &'model LlamaModel, markers: StreamingMarkers) -> Self {
         Self {
+            model,
             markers,
-            in_reasoning: false,
-            in_tool_call: false,
+            decoder: encoding_rs::UTF_8.new_decoder(),
+            pending: VecDeque::new(),
+            section: SampledTokenSection::Pending,
             pending_prompt_tokens: 0,
             usage: TokenUsage::new(),
         }
     }
 
-    /// Build a classifier with no marker pairs known. Every ingested token is
-    /// reported as [`SampledToken::Undeterminable`].
-    #[must_use]
-    pub const fn undetermined() -> Self {
-        Self::new(SampledTokenClassifierMarkers {
-            reasoning: None,
-            tool_call: None,
-        })
-    }
-
-    /// Build a classifier that only knows reasoning markers. Tokens emitted
-    /// outside the reasoning block are classified as [`SampledToken::Content`].
-    #[must_use]
-    pub const fn with_reasoning(open_token: LlamaToken, close_token: LlamaToken) -> Self {
-        Self::new(SampledTokenClassifierMarkers {
-            reasoning: Some(TokenBoundary {
-                open: open_token,
-                close: close_token,
-            }),
-            tool_call: None,
-        })
-    }
-
-    pub fn ingest(&mut self, token: LlamaToken) -> SampledToken {
-        if self.in_tool_call {
-            return self.ingest_within_tool_call(token);
-        }
-
-        if self.in_reasoning {
-            return self.ingest_within_reasoning(token);
-        }
-
-        if let Some(boundary) = self.markers.tool_call
-            && token == boundary.open
-        {
-            self.in_tool_call = true;
-            self.usage.record_tool_call_token();
-
-            return SampledToken::ToolCall(token);
-        }
-
-        if let Some(boundary) = self.markers.reasoning
-            && token == boundary.open
-        {
-            self.in_reasoning = true;
-            self.usage.record_reasoning_token();
-
-            return SampledToken::Reasoning(token);
-        }
-
-        if self.markers.reasoning.is_none() && self.markers.tool_call.is_none() {
+    /// Ingest one sampled token. Returns the outcomes that have finalised this
+    /// turn — typically a single outcome, occasionally zero (the classifier is
+    /// holding back tokens that may yet form a marker), or several when a
+    /// buffered marker prefix diverges and the held-back tokens flush.
+    ///
+    /// Each [`IngestOutcome`] carries both the [`SampledToken`] variant for
+    /// classification and the decoded `visible_piece` for streaming. Marker
+    /// boundaries get an empty `visible_piece` so their text never reaches
+    /// user-visible streams.
+    pub fn ingest(&mut self, token: LlamaToken) -> Vec<IngestOutcome> {
+        if !self.markers.has_any() {
             self.usage.record_undeterminable_token();
-
-            return SampledToken::Undeterminable(token);
+            let piece = self.decode(token);
+            return vec![IngestOutcome {
+                sampled_token: SampledToken::Undeterminable(token),
+                visible_piece: piece.clone(),
+                raw_piece: piece,
+            }];
         }
 
-        self.usage.record_content_token();
+        let decoded = self.decode(token);
+        self.pending.push_back(PendingToken {
+            token,
+            decoded,
+            section: self.section,
+            is_boundary: false,
+            is_from_prompt: false,
+        });
 
-        SampledToken::Content(token)
+        self.try_consume_marker_at_tail();
+        self.drain_overflow()
     }
 
-    fn ingest_within_tool_call(&mut self, token: LlamaToken) -> SampledToken {
-        if let Some(boundary) = self.markers.tool_call
-            && token == boundary.close
-        {
-            self.in_tool_call = false;
+    /// Replay one prompt token through the marker state machine so that the
+    /// section at end-of-prompt reflects the chat template's rendered tail
+    /// (e.g. for Qwen3.5/3.6 with `enable_thinking=false` the prompt ends with
+    /// a closed empty `<think>...</think>` block, leaving the section in
+    /// `Content`; with `enable_thinking=true` it ends inside an open `<think>`,
+    /// leaving the section in `Reasoning`).
+    ///
+    /// Prompt tokens never produce [`IngestOutcome`]s and never increment usage
+    /// counters — they are not generated content.
+    pub fn ingest_prompt_token(&mut self, token: LlamaToken) {
+        if !self.markers.has_any() {
+            return;
         }
 
-        self.usage.record_tool_call_token();
+        self.pending.push_back(PendingToken {
+            token,
+            decoded: String::new(),
+            section: self.section,
+            is_boundary: false,
+            is_from_prompt: true,
+        });
 
-        SampledToken::ToolCall(token)
+        self.try_consume_marker_at_tail();
+        self.drain_overflow();
     }
 
-    fn ingest_within_reasoning(&mut self, token: LlamaToken) -> SampledToken {
-        if let Some(boundary) = self.markers.reasoning
-            && token == boundary.close
+    pub fn ingest_prompt_tokens(&mut self, tokens: &[LlamaToken]) {
+        if !self.markers.has_any() {
+            return;
+        }
+        for &token in tokens {
+            self.ingest_prompt_token(token);
+        }
+    }
+
+    /// Drain every still-buffered token. Call once at end of generation (EOG)
+    /// to make sure no decoded text is silently dropped. After `flush()` the
+    /// classifier behaves as if freshly constructed in terms of buffer state.
+    pub fn flush(&mut self) -> Vec<IngestOutcome> {
+        let mut outcomes = Vec::with_capacity(self.pending.len());
+        while let Some(entry) = self.pending.pop_front() {
+            if entry.is_from_prompt {
+                continue;
+            }
+            outcomes.push(self.finalize_entry(entry));
+        }
+        outcomes
+    }
+
+    fn decode(&mut self, token: LlamaToken) -> String {
+        match self
+            .model
+            .token_to_piece(&SampledToken::Content(token), &mut self.decoder, true, None)
         {
-            self.in_reasoning = false;
+            Ok(piece) => piece,
+            Err(detokenize_error) => {
+                tracing::debug!(
+                    "token_to_piece failed during classification, dropping piece: {detokenize_error}"
+                );
+                String::new()
+            }
+        }
+    }
+
+    fn try_consume_marker_at_tail(&mut self) {
+        // Probe every marker in every section so the user-visible streams stay
+        // free of marker text even when the model misbehaves: a stray
+        // `</think>` / `<channel|>` / `[/THINK]` while in `Content` is
+        // suppressed (close markers transition to Content — a no-op when
+        // already there); a nested `<think>` while in `Reasoning` is also
+        // suppressed (open markers keep the section in Reasoning). Without
+        // this, models like Gemma 4 E4B that emit close markers without ever
+        // opening leak the literal marker text into `content_stream`.
+        const PROBE_KINDS: &[MarkerKind] = &[
+            MarkerKind::ReasoningOpen,
+            MarkerKind::ReasoningClose,
+            MarkerKind::ToolCallOpen,
+            MarkerKind::ToolCallClose,
+        ];
+
+        for &kind in PROBE_KINDS {
+            let Some(marker) = self.markers.lookup(kind) else {
+                continue;
+            };
+            if marker.is_empty() || self.pending.len() < marker.len() {
+                continue;
+            }
+            let span_start = self.pending.len() - marker.len();
+            let matches = self
+                .pending
+                .iter()
+                .skip(span_start)
+                .zip(marker)
+                .all(|(entry, marker_token)| entry.token == *marker_token);
+            if matches {
+                self.mark_marker_span(span_start, kind);
+                return;
+            }
+        }
+    }
+
+    fn mark_marker_span(&mut self, span_start: usize, kind: MarkerKind) {
+        let next_section = match kind {
+            MarkerKind::ReasoningOpen => SampledTokenSection::Reasoning,
+            MarkerKind::ReasoningClose | MarkerKind::ToolCallClose => SampledTokenSection::Content,
+            MarkerKind::ToolCallOpen => SampledTokenSection::ToolCall,
+        };
+        // For open markers, the boundary tokens are classified as the destination
+        // section — they are the marker itself (`<think>` is part of reasoning,
+        // `<tool_call>` is part of the tool-call protocol). For close markers,
+        // the boundary tokens are classified as the section the model was in:
+        // a normal `</think>` while in `Reasoning` is still reasoning, but a
+        // spurious `</think>` while in `Content` (e.g. some Gemma variants
+        // re-emit close markers without ever opening) is just noise in the
+        // content section — counting it as `Reasoning` would inflate
+        // `observed_reasoning` and falsely indicate the model thought.
+        let span_section = match kind {
+            MarkerKind::ReasoningOpen => SampledTokenSection::Reasoning,
+            MarkerKind::ToolCallOpen => SampledTokenSection::ToolCall,
+            MarkerKind::ReasoningClose => {
+                if self.section == SampledTokenSection::Reasoning {
+                    SampledTokenSection::Reasoning
+                } else {
+                    SampledTokenSection::Content
+                }
+            }
+            MarkerKind::ToolCallClose => {
+                if self.section == SampledTokenSection::ToolCall {
+                    SampledTokenSection::ToolCall
+                } else {
+                    SampledTokenSection::Content
+                }
+            }
+        };
+
+        for entry in self.pending.iter_mut().skip(span_start) {
+            entry.is_boundary = true;
+            entry.section = span_section;
         }
 
-        self.usage.record_reasoning_token();
+        self.section = next_section;
+    }
 
-        SampledToken::Reasoning(token)
+    fn drain_overflow(&mut self) -> Vec<IngestOutcome> {
+        let lookback = self.markers.max_token_len().saturating_sub(1);
+        let mut outcomes = Vec::new();
+        while let Some(front) = self.pending.front() {
+            let beyond_lookback = self.pending.len() > lookback;
+            if !front.is_boundary && !beyond_lookback {
+                break;
+            }
+            let entry = self
+                .pending
+                .pop_front()
+                .expect("front existed in this iteration");
+            if entry.is_from_prompt {
+                continue;
+            }
+            outcomes.push(self.finalize_entry(entry));
+        }
+        outcomes
+    }
+
+    fn finalize_entry(&mut self, entry: PendingToken) -> IngestOutcome {
+        let section = entry.section;
+        match section {
+            SampledTokenSection::Reasoning => self.usage.record_reasoning_token(),
+            SampledTokenSection::Content => self.usage.record_content_token(),
+            SampledTokenSection::ToolCall => self.usage.record_tool_call_token(),
+            SampledTokenSection::Pending => self.usage.record_undeterminable_token(),
+        }
+
+        let sampled_token = match section {
+            SampledTokenSection::Reasoning => SampledToken::Reasoning(entry.token),
+            SampledTokenSection::Content => SampledToken::Content(entry.token),
+            SampledTokenSection::ToolCall => SampledToken::ToolCall(entry.token),
+            SampledTokenSection::Pending => SampledToken::Undeterminable(entry.token),
+        };
+
+        let visible_piece = if entry.is_boundary {
+            String::new()
+        } else {
+            entry.decoded.clone()
+        };
+
+        IngestOutcome {
+            sampled_token,
+            visible_piece,
+            raw_piece: entry.decoded,
+        }
     }
 
     /// # Errors
     /// Forwards [`LlamaSampler::sample`] errors verbatim. Nothing is recorded on failure.
+    ///
+    /// Returns the raw sampled token (for downstream `batch.add` / `is_eog_token`
+    /// calls) alongside the outcomes that finalised this turn — see
+    /// [`Self::ingest`] for buffering semantics.
     pub fn sample(
         &mut self,
         sampler: &mut LlamaSampler,
         context: &LlamaContext,
         idx: i32,
-    ) -> Result<SampledToken, SampleError> {
+    ) -> Result<(LlamaToken, Vec<IngestOutcome>), SampleError> {
         let raw = sampler.sample(context, idx)?;
+        let outcomes = self.ingest(raw);
 
-        Ok(self.ingest(raw))
+        Ok((raw, outcomes))
     }
 
     /// # Errors
@@ -158,6 +380,7 @@ impl SampledTokenClassifier {
         logits: bool,
     ) -> Result<(), BatchAddError> {
         batch.add(&SampledToken::Content(token), position, seq_ids, logits)?;
+        self.ingest_prompt_token(token);
         self.pending_prompt_tokens = self.pending_prompt_tokens.saturating_add(1);
 
         Ok(())
@@ -173,6 +396,7 @@ impl SampledTokenClassifier {
         logits_all: bool,
     ) -> Result<(), BatchAddError> {
         batch.add_sequence(tokens, seq_id, logits_all)?;
+        self.ingest_prompt_tokens(tokens);
         self.pending_prompt_tokens = self
             .pending_prompt_tokens
             .saturating_add(tokens.len() as u64);
@@ -256,364 +480,486 @@ impl SampledTokenClassifier {
     }
 
     #[must_use]
-    pub const fn into_usage(self) -> TokenUsage {
+    pub fn into_usage(self) -> TokenUsage {
         self.usage
     }
 
     #[must_use]
-    pub const fn is_in_reasoning(&self) -> bool {
-        self.in_reasoning
+    pub const fn current_section(&self) -> SampledTokenSection {
+        self.section
     }
 
     #[must_use]
-    pub const fn is_in_tool_call(&self) -> bool {
-        self.in_tool_call
-    }
-
-    #[must_use]
-    pub const fn markers(&self) -> &SampledTokenClassifierMarkers {
+    pub const fn markers(&self) -> &StreamingMarkers {
         &self.markers
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::TokenUsageError;
-
+    use super::IngestOutcome;
+    use super::PendingToken;
     use super::SampledTokenClassifier;
-    use super::SampledTokenClassifierMarkers;
-    use super::TokenBoundary;
-    use crate::llama_batch::LlamaBatch;
+    use super::SampledTokenSection;
+    use super::StreamingMarkers;
     use crate::sampled_token::SampledToken;
     use crate::token::LlamaToken;
 
-    const REASONING_OPEN: LlamaToken = LlamaToken::new(100);
-    const REASONING_CLOSE: LlamaToken = LlamaToken::new(200);
-    const TOOL_CALL_OPEN: LlamaToken = LlamaToken::new(300);
-    const TOOL_CALL_CLOSE: LlamaToken = LlamaToken::new(400);
-
-    fn fresh_reasoning_classifier() -> SampledTokenClassifier {
-        SampledTokenClassifier::with_reasoning(REASONING_OPEN, REASONING_CLOSE)
+    fn token(id: i32) -> LlamaToken {
+        LlamaToken::new(id)
     }
 
-    fn fresh_full_classifier() -> SampledTokenClassifier {
-        SampledTokenClassifier::new(SampledTokenClassifierMarkers {
-            reasoning: Some(TokenBoundary {
-                open: REASONING_OPEN,
-                close: REASONING_CLOSE,
-            }),
-            tool_call: Some(TokenBoundary {
-                open: TOOL_CALL_OPEN,
-                close: TOOL_CALL_CLOSE,
-            }),
-        })
+    fn markers_with(
+        reasoning_open: Option<Vec<LlamaToken>>,
+        reasoning_close: Option<Vec<LlamaToken>>,
+    ) -> StreamingMarkers {
+        StreamingMarkers {
+            reasoning_open,
+            reasoning_close,
+            tool_call_open: None,
+            tool_call_close: None,
+        }
     }
 
-    #[test]
-    fn content_token_outside_blocks_classified_as_content() {
-        let mut classifier = fresh_full_classifier();
-        let token = LlamaToken::new(1);
-
-        assert_eq!(classifier.ingest(token), SampledToken::Content(token));
+    /// Builds a classifier without a real model — only safe for tests that go
+    /// through `try_consume_marker_at_tail` / `drain_overflow` directly, never
+    /// through `ingest()` (which calls `model.token_to_piece`).
+    fn synthetic_classifier(markers: StreamingMarkers) -> SampledTokenClassifier<'static> {
+        SampledTokenClassifier {
+            model: unsafe { &*std::ptr::NonNull::<crate::model::LlamaModel>::dangling().as_ptr() },
+            markers,
+            decoder: encoding_rs::UTF_8.new_decoder(),
+            pending: std::collections::VecDeque::new(),
+            section: SampledTokenSection::Pending,
+            pending_prompt_tokens: 0,
+            usage: llama_cpp_bindings_types::TokenUsage::new(),
+        }
     }
 
-    #[test]
-    fn reasoning_open_enters_reasoning_state() {
-        let mut classifier = fresh_full_classifier();
-
-        assert_eq!(
-            classifier.ingest(REASONING_OPEN),
-            SampledToken::Reasoning(REASONING_OPEN)
-        );
-        assert!(classifier.is_in_reasoning());
+    fn push_pending(classifier: &mut SampledTokenClassifier<'_>, token_id: i32, decoded: &str) {
+        classifier.pending.push_back(PendingToken {
+            token: token(token_id),
+            decoded: decoded.to_owned(),
+            section: classifier.section,
+            is_boundary: false,
+            is_from_prompt: false,
+        });
     }
 
-    #[test]
-    fn reasoning_close_exits_reasoning_state() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(REASONING_OPEN);
-
-        assert_eq!(
-            classifier.ingest(REASONING_CLOSE),
-            SampledToken::Reasoning(REASONING_CLOSE)
-        );
-        assert!(!classifier.is_in_reasoning());
+    fn push_pending_from_prompt(classifier: &mut SampledTokenClassifier<'_>, token_id: i32) {
+        classifier.pending.push_back(PendingToken {
+            token: token(token_id),
+            decoded: String::new(),
+            section: classifier.section,
+            is_boundary: false,
+            is_from_prompt: true,
+        });
     }
 
-    #[test]
-    fn tool_call_open_enters_tool_call_state() {
-        let mut classifier = fresh_full_classifier();
-
-        assert_eq!(
-            classifier.ingest(TOOL_CALL_OPEN),
-            SampledToken::ToolCall(TOOL_CALL_OPEN)
-        );
-        assert!(classifier.is_in_tool_call());
+    fn outcome_pieces(outcomes: &[IngestOutcome]) -> Vec<&str> {
+        outcomes.iter().map(|o| o.visible_piece.as_str()).collect()
     }
 
-    #[test]
-    fn tool_call_close_exits_tool_call_state() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(TOOL_CALL_OPEN);
-
-        assert_eq!(
-            classifier.ingest(TOOL_CALL_CLOSE),
-            SampledToken::ToolCall(TOOL_CALL_CLOSE)
-        );
-        assert!(!classifier.is_in_tool_call());
-    }
-
-    #[test]
-    fn token_inside_tool_call_classified_as_tool_call() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(TOOL_CALL_OPEN);
-        let inner = LlamaToken::new(42);
-
-        assert_eq!(classifier.ingest(inner), SampledToken::ToolCall(inner));
-    }
-
-    #[test]
-    fn reasoning_marker_inside_tool_call_stays_tool_call() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(TOOL_CALL_OPEN);
-
-        assert_eq!(
-            classifier.ingest(REASONING_OPEN),
-            SampledToken::ToolCall(REASONING_OPEN)
-        );
-        assert!(classifier.is_in_tool_call());
-        assert!(!classifier.is_in_reasoning());
-    }
-
-    #[test]
-    fn tool_call_marker_inside_reasoning_stays_reasoning() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(REASONING_OPEN);
-
-        assert_eq!(
-            classifier.ingest(TOOL_CALL_OPEN),
-            SampledToken::Reasoning(TOOL_CALL_OPEN)
-        );
-        assert!(classifier.is_in_reasoning());
-        assert!(!classifier.is_in_tool_call());
-    }
-
-    #[test]
-    fn markers_getter_returns_constructor_input() {
-        let markers = SampledTokenClassifierMarkers {
-            reasoning: Some(TokenBoundary {
-                open: REASONING_OPEN,
-                close: REASONING_CLOSE,
-            }),
-            tool_call: Some(TokenBoundary {
-                open: TOOL_CALL_OPEN,
-                close: TOOL_CALL_CLOSE,
-            }),
-        };
-        let classifier = SampledTokenClassifier::new(markers);
-
-        assert_eq!(*classifier.markers(), markers);
-    }
-
-    #[test]
-    fn undetermined_classifier_reports_no_markers() {
-        let classifier = SampledTokenClassifier::undetermined();
-
-        assert_eq!(classifier.markers().reasoning, None);
-        assert_eq!(classifier.markers().tool_call, None);
-    }
-
-    #[test]
-    fn classifier_with_only_reasoning_emits_content_outside_block() {
-        let mut classifier = fresh_reasoning_classifier();
-        let token = LlamaToken::new(1);
-
-        assert_eq!(classifier.ingest(token), SampledToken::Content(token));
-        assert_eq!(
-            classifier.ingest(REASONING_OPEN),
-            SampledToken::Reasoning(REASONING_OPEN)
-        );
-        assert_eq!(
-            classifier.ingest(REASONING_CLOSE),
-            SampledToken::Reasoning(REASONING_CLOSE)
-        );
-        assert_eq!(
-            classifier.ingest(LlamaToken::new(7)),
-            SampledToken::Content(LlamaToken::new(7))
-        );
-    }
-
-    #[test]
-    fn classifier_without_markers_emits_undeterminable() {
-        let mut classifier = SampledTokenClassifier::undetermined();
-
-        assert_eq!(
-            classifier.ingest(REASONING_OPEN),
-            SampledToken::Undeterminable(REASONING_OPEN)
-        );
-        assert_eq!(
-            classifier.ingest(TOOL_CALL_OPEN),
-            SampledToken::Undeterminable(TOOL_CALL_OPEN)
-        );
-    }
-
-    #[test]
-    fn ingest_records_tool_call_in_usage() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(TOOL_CALL_OPEN);
-        classifier.ingest(LlamaToken::new(5));
-        classifier.ingest(LlamaToken::new(6));
-        classifier.ingest(TOOL_CALL_CLOSE);
-
-        assert_eq!(classifier.usage().tool_call_tokens, 4);
-        assert_eq!(classifier.usage().content_tokens, 0);
-        assert_eq!(classifier.usage().reasoning_tokens, 0);
-    }
-
-    #[test]
-    fn ingest_records_reasoning_in_usage() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(REASONING_OPEN);
-        classifier.ingest(LlamaToken::new(5));
-        classifier.ingest(REASONING_CLOSE);
-
-        assert_eq!(classifier.usage().reasoning_tokens, 3);
-        assert_eq!(classifier.usage().tool_call_tokens, 0);
-        assert_eq!(classifier.usage().content_tokens, 0);
-    }
-
-    #[test]
-    fn ingest_records_content_in_usage() {
-        let mut classifier = fresh_full_classifier();
-        classifier.ingest(LlamaToken::new(1));
-        classifier.ingest(LlamaToken::new(2));
-
-        assert_eq!(classifier.usage().content_tokens, 2);
-    }
-
-    #[test]
-    fn record_prompt_tokens_updates_usage() {
-        let mut classifier = fresh_reasoning_classifier();
-        classifier.record_prompt_tokens(11);
-        classifier.record_prompt_tokens(2);
-
-        assert_eq!(classifier.usage().prompt_tokens, 13);
-    }
-
-    #[test]
-    fn record_cached_prompt_tokens_updates_usage() {
-        let mut classifier = fresh_reasoning_classifier();
-        classifier.record_prompt_tokens(10);
-        classifier.record_cached_prompt_tokens(4).unwrap();
-
-        assert_eq!(classifier.usage().cached_prompt_tokens, 4);
-    }
-
-    #[test]
-    fn record_cached_above_prompt_returns_error() {
-        let mut classifier = fresh_reasoning_classifier();
-        classifier.record_prompt_tokens(2);
-
-        let result = classifier.record_cached_prompt_tokens(3);
-
-        assert_eq!(
-            result,
-            Err(TokenUsageError::CachedExceedsPrompt {
-                cached_after: 3,
-                prompt: 2,
+    fn outcome_sections(outcomes: &[IngestOutcome]) -> Vec<SampledTokenSection> {
+        outcomes
+            .iter()
+            .map(|o| match o.sampled_token {
+                SampledToken::Reasoning(_) => SampledTokenSection::Reasoning,
+                SampledToken::Content(_) => SampledTokenSection::Content,
+                SampledToken::ToolCall(_) => SampledTokenSection::ToolCall,
+                SampledToken::Undeterminable(_) => SampledTokenSection::Pending,
             })
+            .collect()
+    }
+
+    #[test]
+    fn streaming_markers_with_no_markers_reports_none() {
+        let markers = StreamingMarkers::default();
+        assert!(!markers.has_any());
+        assert_eq!(markers.max_token_len(), 0);
+    }
+
+    #[test]
+    fn streaming_markers_max_token_len_takes_longest() {
+        let markers = StreamingMarkers {
+            reasoning_open: Some(vec![token(1)]),
+            reasoning_close: Some(vec![token(2), token(3), token(4)]),
+            tool_call_open: Some(vec![token(5), token(6)]),
+            tool_call_close: None,
+        };
+        assert_eq!(markers.max_token_len(), 3);
+    }
+
+    #[test]
+    fn single_token_close_marker_when_already_in_reasoning_emits_empty_piece_for_marker() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
+
+        push_pending(&mut classifier, 7, "step");
+        classifier.try_consume_marker_at_tail();
+        let mut outcomes = classifier.drain_overflow();
+
+        push_pending(&mut classifier, 200, "</think>");
+        classifier.try_consume_marker_at_tail();
+        outcomes.extend(classifier.drain_overflow());
+
+        push_pending(&mut classifier, 9, "Hi");
+        classifier.try_consume_marker_at_tail();
+        outcomes.extend(classifier.drain_overflow());
+
+        outcomes.extend(classifier.flush());
+
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![
+                SampledTokenSection::Reasoning,
+                SampledTokenSection::Reasoning,
+                SampledTokenSection::Content,
+            ],
         );
-        assert_eq!(classifier.usage().cached_prompt_tokens, 0);
+        assert_eq!(outcome_pieces(&outcomes), vec!["step", "", "Hi"]);
+        assert_eq!(classifier.section, SampledTokenSection::Content);
     }
 
     #[test]
-    fn into_usage_returns_accumulated_counters() {
-        let mut classifier = fresh_full_classifier();
-        classifier.record_prompt_tokens(5);
-        classifier.ingest(LlamaToken::new(1));
-        classifier.ingest(REASONING_OPEN);
-        classifier.ingest(REASONING_CLOSE);
-        classifier.ingest(TOOL_CALL_OPEN);
-        classifier.ingest(TOOL_CALL_CLOSE);
+    fn multi_token_close_marker_suppresses_every_marker_token() {
+        let markers = markers_with(
+            Some(vec![token(100)]),
+            Some(vec![token(200), token(201), token(202)]),
+        );
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
 
-        let usage = classifier.into_usage();
+        let mut outcomes = Vec::new();
+        for (id, decoded) in [(7, "r"), (200, "</"), (201, "thi"), (202, "nk>"), (9, "OK")] {
+            push_pending(&mut classifier, id, decoded);
+            classifier.try_consume_marker_at_tail();
+            outcomes.extend(classifier.drain_overflow());
+        }
+        outcomes.extend(classifier.flush());
 
-        assert_eq!(usage.prompt_tokens, 5);
-        assert_eq!(usage.content_tokens, 1);
-        assert_eq!(usage.reasoning_tokens, 2);
-        assert_eq!(usage.tool_call_tokens, 2);
-        assert_eq!(usage.completion_tokens(), 5);
+        assert_eq!(outcome_pieces(&outcomes), vec!["r", "", "", "", "OK"]);
+        assert_eq!(classifier.section, SampledTokenSection::Content);
     }
 
     #[test]
-    fn feed_prompt_to_batch_stages_one_pending_on_success() {
-        let mut classifier = fresh_reasoning_classifier();
-        let mut batch = LlamaBatch::new(4, 1).unwrap();
+    fn marker_prefix_that_diverges_does_not_suppress_buffered_tokens() {
+        let markers = markers_with(
+            Some(vec![token(100)]),
+            Some(vec![token(200), token(201), token(202)]),
+        );
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
 
-        classifier
-            .feed_prompt_to_batch(&mut batch, LlamaToken::new(1), 0, &[0], false)
-            .unwrap();
+        let mut outcomes = Vec::new();
+        for (id, decoded) in [(7, "r"), (200, "a"), (201, "b"), (300, "x")] {
+            push_pending(&mut classifier, id, decoded);
+            classifier.try_consume_marker_at_tail();
+            outcomes.extend(classifier.drain_overflow());
+        }
+        outcomes.extend(classifier.flush());
 
-        assert_eq!(classifier.pending_prompt_tokens(), 1);
-        assert_eq!(classifier.usage().prompt_tokens, 0);
+        assert_eq!(outcome_pieces(&outcomes), vec!["r", "a", "b", "x"]);
+        assert!(outcomes
+            .iter()
+            .all(|outcome| matches!(outcome.sampled_token, SampledToken::Reasoning(_))));
+        assert_eq!(classifier.section, SampledTokenSection::Reasoning);
     }
 
     #[test]
-    fn commit_prompt_tokens_moves_pending_into_committed() {
-        let mut classifier = fresh_reasoning_classifier();
-        let mut batch = LlamaBatch::new(8, 1).unwrap();
-        let tokens = [LlamaToken::new(1), LlamaToken::new(2), LlamaToken::new(3)];
-        classifier
-            .feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)
-            .unwrap();
+    fn open_then_close_back_to_back_emits_two_empty_pieces_around_zero_content() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
 
-        let promoted = classifier.commit_prompt_tokens();
+        let mut outcomes = Vec::new();
+        for (id, decoded) in [(100, "<think>"), (200, "</think>"), (9, "Hi")] {
+            push_pending(&mut classifier, id, decoded);
+            classifier.try_consume_marker_at_tail();
+            outcomes.extend(classifier.drain_overflow());
+        }
+        outcomes.extend(classifier.flush());
 
-        assert_eq!(promoted, 3);
-        assert_eq!(classifier.pending_prompt_tokens(), 0);
-        assert_eq!(classifier.usage().prompt_tokens, 3);
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![
+                SampledTokenSection::Reasoning,
+                SampledTokenSection::Reasoning,
+                SampledTokenSection::Content,
+            ],
+        );
+        assert_eq!(outcome_pieces(&outcomes), vec!["", "", "Hi"]);
+        assert_eq!(classifier.section, SampledTokenSection::Content);
     }
 
     #[test]
-    fn discard_pending_prompt_tokens_resets_pending_without_touching_usage() {
-        let mut classifier = fresh_reasoning_classifier();
-        let mut batch = LlamaBatch::new(8, 1).unwrap();
-        let tokens = [LlamaToken::new(1), LlamaToken::new(2)];
-        classifier
-            .feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)
-            .unwrap();
+    fn flush_drains_remaining_pending_at_eog() {
+        let markers = markers_with(
+            Some(vec![token(100)]),
+            Some(vec![token(200), token(201), token(202)]),
+        );
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
 
-        let discarded = classifier.discard_pending_prompt_tokens();
+        push_pending(&mut classifier, 7, "abc");
+        push_pending(&mut classifier, 200, "</");
+        push_pending(&mut classifier, 201, "th");
 
-        assert_eq!(discarded, 2);
-        assert_eq!(classifier.pending_prompt_tokens(), 0);
-        assert_eq!(classifier.usage().prompt_tokens, 0);
+        let outcomes = classifier.flush();
+
+        assert_eq!(outcome_pieces(&outcomes), vec!["abc", "</", "th"]);
+        assert!(classifier.pending.is_empty());
     }
 
     #[test]
-    fn feed_prompt_to_batch_does_not_stage_when_batch_rejects() {
-        let mut classifier = fresh_reasoning_classifier();
-        let mut batch = LlamaBatch::new(1, 1).unwrap();
-        classifier
-            .feed_prompt_to_batch(&mut batch, LlamaToken::new(1), 0, &[0], false)
-            .unwrap();
+    fn no_markers_marks_each_token_undeterminable_with_visible_piece() {
+        let markers = StreamingMarkers::default();
+        let mut classifier = synthetic_classifier(markers);
 
-        let rejection =
-            classifier.feed_prompt_to_batch(&mut batch, LlamaToken::new(2), 1, &[0], false);
+        push_pending(&mut classifier, 1, "h");
+        push_pending(&mut classifier, 2, "i");
+        let outcomes = classifier.flush();
 
-        assert!(rejection.is_err());
-        assert_eq!(classifier.pending_prompt_tokens(), 1);
+        assert_eq!(outcome_pieces(&outcomes), vec!["h", "i"]);
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![SampledTokenSection::Pending, SampledTokenSection::Pending],
+        );
     }
 
     #[test]
-    fn feed_prompt_sequence_to_batch_does_not_stage_full_count_when_batch_rejects() {
-        let mut classifier = fresh_reasoning_classifier();
-        let mut batch = LlamaBatch::new(2, 1).unwrap();
-        let tokens = [LlamaToken::new(1), LlamaToken::new(2), LlamaToken::new(3)];
+    fn ingest_prompt_tokens_without_markers_is_noop() {
+        let markers = StreamingMarkers::default();
+        let mut classifier = synthetic_classifier(markers);
 
-        let rejection = classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false);
+        push_pending_from_prompt(&mut classifier, 7);
+        push_pending_from_prompt(&mut classifier, 8);
 
-        assert!(rejection.is_err());
-        assert_eq!(classifier.pending_prompt_tokens(), 0);
+        assert_eq!(classifier.section, SampledTokenSection::Pending);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+        assert_eq!(classifier.usage().tool_call_tokens, 0);
+        assert_eq!(classifier.usage().undeterminable_tokens, 0);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_through_open_close_pair_ends_in_content() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+
+        for token_id in [100, 7, 200] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+        assert_eq!(classifier.usage().tool_call_tokens, 0);
+        assert_eq!(classifier.usage().undeterminable_tokens, 0);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_through_open_only_ends_in_reasoning() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+
+        for token_id in [100, 7] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+
+        assert_eq!(classifier.section, SampledTokenSection::Reasoning);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_does_not_record_usage() {
+        let markers = markers_with(
+            Some(vec![token(100)]),
+            Some(vec![token(200), token(201), token(202)]),
+        );
+        let mut classifier = synthetic_classifier(markers);
+
+        for token_id in [100, 7, 8, 9, 200, 201, 202, 11] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+        let drained = classifier.flush();
+        assert!(drained.is_empty());
+
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+        assert_eq!(classifier.usage().tool_call_tokens, 0);
+        assert_eq!(classifier.usage().undeterminable_tokens, 0);
+    }
+
+    #[test]
+    fn prompt_token_completing_marker_with_generated_token_is_suppressed_correctly() {
+        let markers = markers_with(
+            Some(vec![token(100)]),
+            Some(vec![token(200), token(201), token(202)]),
+        );
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
+
+        for token_id in [200, 201] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+
+        assert_eq!(classifier.section, SampledTokenSection::Reasoning);
+        assert_eq!(classifier.pending.len(), 2);
+
+        classifier.pending.push_back(PendingToken {
+            token: token(202),
+            decoded: "k>".to_owned(),
+            section: classifier.section,
+            is_boundary: false,
+            is_from_prompt: false,
+        });
+        classifier.try_consume_marker_at_tail();
+        let outcomes = classifier.drain_overflow();
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(matches!(
+            outcomes[0].sampled_token,
+            SampledToken::Reasoning(_)
+        ));
+        assert_eq!(outcomes[0].visible_piece, "");
+        assert_eq!(outcomes[0].raw_piece, "k>");
+
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+        assert_eq!(classifier.usage().reasoning_tokens, 1);
+        assert_eq!(classifier.usage().content_tokens, 0);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_with_multiple_round_trips_ends_in_content() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+
+        // <think> body </think> <think> body </think>
+        for token_id in [100, 7, 200, 100, 8, 200] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+        assert_eq!(classifier.usage().tool_call_tokens, 0);
+        assert_eq!(classifier.usage().undeterminable_tokens, 0);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_initial_section_is_always_pending() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let classifier = synthetic_classifier(markers);
+
+        assert_eq!(classifier.section, SampledTokenSection::Pending);
+    }
+
+    #[test]
+    fn ingest_prompt_tokens_then_drain_for_generated_token_classifies_correctly() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+
+        // Closed-think prompt: <think> body </think>
+        for token_id in [100, 7, 200] {
+            push_pending_from_prompt(&mut classifier, token_id);
+            classifier.try_consume_marker_at_tail();
+            classifier.drain_overflow();
+        }
+
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().content_tokens, 0);
+
+        // Generated content token (not from prompt): pushed with section=Content,
+        // is_from_prompt=false. drain_overflow finalises it as SampledToken::Content
+        // and increments usage.content_tokens.
+        classifier.pending.push_back(PendingToken {
+            token: token(50),
+            decoded: "hi".to_owned(),
+            section: classifier.section,
+            is_boundary: false,
+            is_from_prompt: false,
+        });
+        classifier.try_consume_marker_at_tail();
+        let outcomes = classifier.drain_overflow();
+
+        assert_eq!(outcomes.len(), 1);
+        assert!(matches!(
+            outcomes[0].sampled_token,
+            SampledToken::Content(_)
+        ));
+        assert_eq!(outcomes[0].visible_piece, "hi");
+        assert_eq!(classifier.usage().content_tokens, 1);
+        assert_eq!(classifier.usage().reasoning_tokens, 0);
+        assert_eq!(classifier.usage().undeterminable_tokens, 0);
+    }
+
+    #[test]
+    fn close_marker_in_content_section_is_suppressed_as_boundary() {
+        // When a misbehaving model emits a close marker (e.g. `</think>`) while
+        // already in the Content section, the classifier must treat it as a
+        // boundary so the marker text never reaches the user-visible content
+        // stream. The boundary token is classified as Content (not Reasoning):
+        // there is no reasoning to close, the close marker is just noise in
+        // the content section. This is the architectural backstop against
+        // models that re-emit close markers without a preceding open.
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let mut outcomes = Vec::new();
+        for (id, decoded) in [(7, "hi"), (200, "</think>"), (8, "ok")] {
+            push_pending(&mut classifier, id, decoded);
+            classifier.try_consume_marker_at_tail();
+            outcomes.extend(classifier.drain_overflow());
+        }
+        outcomes.extend(classifier.flush());
+
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![
+                SampledTokenSection::Content,
+                SampledTokenSection::Content,
+                SampledTokenSection::Content,
+            ],
+        );
+        // The close marker's `visible_piece` is empty (boundary), so the
+        // user-visible content stream is "hi" + "" + "ok" = "hiok".
+        assert_eq!(outcome_pieces(&outcomes), vec!["hi", "", "ok"]);
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+    }
+
+    #[test]
+    fn open_marker_in_reasoning_section_is_suppressed_as_boundary() {
+        // A nested `<think>` while already in Reasoning is suppressed (so the
+        // user never sees the marker text in the reasoning stream) and the
+        // section stays Reasoning.
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
+
+        let mut outcomes = Vec::new();
+        for (id, decoded) in [(7, "step1"), (100, "<think>"), (8, "step2")] {
+            push_pending(&mut classifier, id, decoded);
+            classifier.try_consume_marker_at_tail();
+            outcomes.extend(classifier.drain_overflow());
+        }
+        outcomes.extend(classifier.flush());
+
+        assert_eq!(outcome_pieces(&outcomes), vec!["step1", "", "step2"]);
+        assert_eq!(classifier.section, SampledTokenSection::Reasoning);
     }
 }

@@ -3,6 +3,7 @@
 #include "llama.cpp/common/chat-auto-parser.h"
 #include "llama.cpp/common/chat.h"
 #include "llama.cpp/include/llama.h"
+#include "marker_probes/marker_probe.h"
 
 #include <exception>
 #include <nlohmann/json.hpp>
@@ -63,6 +64,21 @@ extern "C" llama_rs_status llama_rs_parse_chat_message(
 
         common_chat_template tmpl(tmpl_src, bos_token, eos_token);
 
+        autoparser::autoparser parser;
+        parser.analyze_template(tmpl);
+
+        if (parser.reasoning.mode == autoparser::reasoning_mode::NONE) {
+            for (auto probe : marker_probes::registered()) {
+                auto fallback = probe(tmpl);
+                if (fallback.found) {
+                    parser.reasoning.mode  = autoparser::reasoning_mode::TAG_BASED;
+                    parser.reasoning.start = std::move(fallback.start);
+                    parser.reasoning.end   = std::move(fallback.end);
+                    break;
+                }
+            }
+        }
+
         autoparser::generation_params inputs;
         inputs.add_generation_prompt = true;
         inputs.enable_thinking = true;
@@ -77,7 +93,7 @@ extern "C" llama_rs_status llama_rs_parse_chat_message(
         }
 
         common_chat_params chat_params =
-            autoparser::peg_generator::generate_parser(tmpl, inputs);
+            autoparser::peg_generator::generate_parser(tmpl, inputs, parser);
 
         common_chat_parser_params parser_params(chat_params);
         parser_params.parser.load(chat_params.parser);

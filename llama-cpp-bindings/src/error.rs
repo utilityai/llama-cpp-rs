@@ -333,9 +333,9 @@ pub enum ApplyChatTemplateError {
     IntConversionError(#[from] std::num::TryFromIntError),
 }
 
-/// Failed to build a [`crate::reasoning_token_classifier::ReasoningTokenClassifier`] for a model.
+/// Failed to detect tool-call diagnostic markers for a model.
 #[derive(Debug, thiserror::Error)]
-pub enum ReasoningClassifierError {
+pub enum MarkerDetectionError {
     /// llama.cpp returned an error code from the marker detection FFI call.
     #[error("ffi error {0}")]
     FfiError(i32),
@@ -345,40 +345,6 @@ pub enum ReasoningClassifierError {
     /// llama.cpp returned a marker string but its bytes were not valid UTF-8.
     #[error("ffi returned non-utf8 marker bytes: {0}")]
     MarkerUtf8Error(#[from] FromUtf8Error),
-    /// Tokenizing a detected marker string failed.
-    #[error("marker tokenization failed: {0}")]
-    MarkerTokenization(#[from] StringToTokenError),
-    /// Reading token attributes for a resolved marker token failed.
-    #[error("token attribute lookup failed: {0}")]
-    TokenAttr(#[from] crate::token_type::LlamaTokenTypeFromIntError),
-    /// The detected open-marker string did not tokenize to exactly one token.
-    #[error("open marker {marker:?} tokenized to {token_count} tokens, expected 1")]
-    OpenMarkerNotSingleToken {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-        /// The number of tokens the marker tokenized to.
-        token_count: usize,
-    },
-    /// The detected close-marker string did not tokenize to exactly one token.
-    #[error("close marker {marker:?} tokenized to {token_count} tokens, expected 1")]
-    CloseMarkerNotSingleToken {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-        /// The number of tokens the marker tokenized to.
-        token_count: usize,
-    },
-    /// The detected open-marker token is not registered as a special token (Control or `UserDefined`).
-    #[error("open marker {marker:?} is not a registered special token")]
-    OpenMarkerNotSpecial {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-    },
-    /// The detected close-marker token is not registered as a special token (Control or `UserDefined`).
-    #[error("close marker {marker:?} is not a registered special token")]
-    CloseMarkerNotSpecial {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-    },
 }
 
 /// Failed to parse a chat message via [`crate::Model::parse_chat_message`].

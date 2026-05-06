@@ -40,7 +40,7 @@ fn embedding_generation_produces_vectors() -> Result<()> {
 
     let t_main_start = ggml_time_us();
 
-    let mut classifier = model.sampled_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let mut batch = LlamaBatch::new(n_ctx, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 

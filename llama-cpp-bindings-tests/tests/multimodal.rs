@@ -67,33 +67,40 @@ fn drive_sampling_loop(
         observed_content: 0,
         observed_reasoning: 0,
     };
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut batch = LlamaBatch::new(512, 1)?;
     let mut current_position = starting_position;
 
     for _ in 0..max_tokens {
-        let token = classifier.sample(&mut sampler, ctx, -1)?;
-        match token {
-            SampledToken::Content(_) => totals.observed_content += 1,
-            SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
-            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
+        let (raw_token, outcomes) = classifier.sample(&mut sampler, ctx, -1)?;
+        for outcome in &outcomes {
+            totals.generated.push_str(&outcome.raw_piece);
+            match outcome.sampled_token {
+                SampledToken::Content(_) => totals.observed_content += 1,
+                SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
+                SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
+            }
         }
 
-        if model.is_eog_token(&token) {
+        let raw_as_sampled = SampledToken::Content(raw_token);
+        if model.is_eog_token(&raw_as_sampled) {
             break;
         }
 
-        let piece = model
-            .token_to_piece(&token, &mut decoder, false, None)
-            .with_context(|| "failed to convert token to piece")?;
-        totals.generated.push_str(&piece);
-
         batch.clear();
-        batch.add(&token, current_position, &[0], true)?;
+        batch.add(&raw_as_sampled, current_position, &[0], true)?;
         current_position += 1;
 
         ctx.decode(&mut batch)
             .with_context(|| "failed to decode generated token")?;
+    }
+
+    for outcome in classifier.flush() {
+        totals.generated.push_str(&outcome.raw_piece);
+        match outcome.sampled_token {
+            SampledToken::Content(_) => totals.observed_content += 1,
+            SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
+            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
+        }
     }
 
     Ok(totals)
@@ -159,7 +166,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
         "vision input must produce at least one image chunk"
     );
 
-    let mut classifier = model.sampled_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let n_past = classifier
         .eval_multimodal_chunks(&chunks, mtmd_ctx, &ctx, 0, 0, 512, true)
         .with_context(|| "failed to evaluate chunks")?;

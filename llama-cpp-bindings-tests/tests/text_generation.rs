@@ -1,14 +1,17 @@
 use std::io::Write;
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::{AddBos, LlamaChatMessage};
+use llama_cpp_bindings::model::AddBos;
+use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 
 #[test]
 fn raw_prompt_completion_with_timing() -> Result<()> {
@@ -22,9 +25,9 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
-    let n_len: i32 = 64;
+    let max_generated_tokens: i32 = 64;
 
-    let mut classifier = model.sampled_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let tokens_list = model
         .str_to_token(prompt, AddBos::Always)
         .with_context(|| format!("failed to tokenize {prompt}"))?;
@@ -53,57 +56,55 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     assert_eq!(promoted, prompt_token_count);
     assert_eq!(classifier.usage().prompt_tokens, prompt_token_count);
 
-    let mut n_cur = batch.n_tokens();
-    let mut n_decode: i32 = 0;
-    let mut observed_content: u64 = 0;
-    let mut observed_reasoning: u64 = 0;
-    let t_main_start = ggml_time_us();
-
     let mut sampler =
         LlamaSampler::chain_simple([LlamaSampler::dist(1234), LlamaSampler::greedy()]);
-
-    let mut generated = String::new();
-
-    while n_cur <= n_len {
-        let token = classifier.sample(&mut sampler, &ctx, batch.n_tokens() - 1)?;
-
-        match token {
-            SampledToken::Content(_) => observed_content += 1,
-            SampledToken::Reasoning(_) => observed_reasoning += 1,
-            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
-        }
-
-        if model.is_eog_token(&token) {
-            break;
-        }
-
-        let output_string = model.token_to_piece(&token, &mut decoder, true, None)?;
-        generated.push_str(&output_string);
-        print!("{output_string}");
-        std::io::stdout().flush()?;
-
-        batch.clear();
-        batch.add(&token, n_cur, &[0], true)?;
-        n_cur += 1;
-
-        ctx.decode(&mut batch).with_context(|| "failed to eval")?;
-        n_decode += 1;
+    let initial_position = batch.n_tokens();
+    let t_main_start = ggml_time_us();
+    let outcome = ClassifySampleLoop {
+        model,
+        classifier: &mut classifier,
+        sampler: &mut sampler,
+        context: &mut ctx,
+        batch: &mut batch,
+        initial_position,
+        max_generated_tokens,
     }
-
+    .run()?;
     let t_main_end = ggml_time_us();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
     #[allow(clippy::cast_precision_loss)]
-    let tokens_per_second = n_decode as f32 / duration.as_secs_f32();
+    let tokens_per_second =
+        (outcome.observed_undeterminable as f32 + outcome.observed_content as f32 + outcome.observed_reasoning as f32) / duration.as_secs_f32();
 
     eprintln!(
-        "\ndecoded {n_decode} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
+        "\ndecoded {} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
+        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable,
         duration.as_secs_f32(),
     );
 
     assert!(
-        !generated.is_empty(),
+        !outcome.generated_raw.is_empty(),
         "model should generate at least one token"
+    );
+    assert_eq!(
+        outcome.observed_tool_call, 0,
+        "raw prompt without tool-call markers must not produce ToolCall tokens; \
+         outcome={outcome:?}"
+    );
+    // The raw prompt carries no chat-template markers, so the classifier starts
+    // in Pending. The exact split between Content / Reasoning / Undeterminable
+    // depends on the model: Qwen 3.5 keeps generating raw text and never emits
+    // `<think>`, so every token is Undeterminable; Qwen 3.6 was trained to
+    // start every reply with a `<think>...</think>` block even without a
+    // chat template, so the same prompt yields a mix. Both behaviours are
+    // correct — we only assert internal consistency below.
+    let total_observed = outcome.observed_content
+        + outcome.observed_reasoning
+        + outcome.observed_undeterminable;
+    assert!(
+        total_observed > 0,
+        "model must produce at least one classified token; outcome={outcome:?}"
     );
 
     let usage = classifier.into_usage();
@@ -112,16 +113,25 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens, observed_content,
+        usage.content_tokens, outcome.observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens, observed_reasoning,
+        usage.reasoning_tokens, outcome.observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
     assert_eq!(
+        usage.undeterminable_tokens, outcome.observed_undeterminable,
+        "undeterminable_tokens must equal observed Undeterminable variants"
+    );
+    assert_eq!(
+        usage.tool_call_tokens, outcome.observed_tool_call,
+        "tool_call_tokens must equal observed ToolCall variants"
+    );
+    assert_eq!(
         usage.completion_tokens(),
-        observed_content + observed_reasoning
+        total_observed,
+        "completion_tokens must equal Content + Reasoning + Undeterminable"
     );
 
     Ok(())
@@ -143,7 +153,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     )?];
     let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
 
-    let mut classifier = model.sampled_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;
     let prompt_token_count = u64::try_from(tokens.len())?;
 
@@ -158,57 +168,53 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     let promoted = classifier.commit_prompt_tokens();
     assert_eq!(promoted, prompt_token_count);
 
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut sampler = LlamaSampler::greedy();
-    let mut position = batch.n_tokens();
-    let max_tokens = 1024;
-    let mut generated = String::new();
-    let mut observed_content: u64 = 0;
-    let mut observed_reasoning: u64 = 0;
-
-    while position <= max_tokens {
-        let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
-
-        match token {
-            SampledToken::Content(_) => observed_content += 1,
-            SampledToken::Reasoning(_) => observed_reasoning += 1,
-            SampledToken::ToolCall(_) => {}
-            SampledToken::Undeterminable(_) => {
-                unreachable!(
-                    "Qwen3 chat template uses detected reasoning markers; classifier must not emit Undeterminable"
-                )
-            }
-        }
-
-        if model.is_eog_token(&token) {
-            break;
-        }
-
-        let piece = model.token_to_piece(&token, &mut decoder, true, None)?;
-        generated.push_str(&piece);
-        print!("{piece}");
-        std::io::stdout().flush()?;
-
-        batch.clear();
-        batch.add(&token, position, &[0], true)?;
-        position += 1;
-
-        context.decode(&mut batch)?;
+    let initial_position = batch.n_tokens();
+    let outcome = ClassifySampleLoop {
+        model,
+        classifier: &mut classifier,
+        sampler: &mut sampler,
+        context: &mut context,
+        batch: &mut batch,
+        initial_position,
+        max_generated_tokens: 1024,
     }
+    .run()?;
 
     println!();
 
     assert!(
-        !generated.is_empty(),
+        !outcome.generated_raw.is_empty(),
         "model should generate at least one token"
     );
     assert!(
-        observed_reasoning > 0,
-        "reasoning model should emit at least one Reasoning token"
+        outcome.observed_reasoning > 0,
+        "reasoning model should emit at least one Reasoning token; outcome={outcome:?}"
     );
     assert!(
-        observed_content > 0,
-        "reasoning model should emit at least one Content token after </think>"
+        outcome.observed_content > 0,
+        "reasoning model should emit at least one Content token after </think>; outcome={outcome:?}"
+    );
+    assert_eq!(
+        outcome.observed_undeterminable, 0,
+        "chat template auto-opens reasoning, so classifier must never emit Undeterminable; \
+         outcome={outcome:?}"
+    );
+    assert_eq!(
+        outcome.observed_tool_call, 0,
+        "chat without tool definitions must not produce ToolCall tokens; outcome={outcome:?}"
+    );
+
+    // The classifier sees the prompt's auto-injected `<think>` via prompt-token
+    // replay; the parser sees only the generated text, which never contains the
+    // open marker. So we cannot assert classifier/parser symmetry on reasoning.
+    // We do assert the parser sees at least the post-`</think>` content.
+    let parsed = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
+    assert!(
+        !parsed.content.is_empty(),
+        "parser must see post-</think> content in generated text; \
+         generated={:?}",
+        outcome.generated_raw
     );
 
     let usage = classifier.into_usage();
@@ -218,20 +224,21 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         "prompt_tokens must equal the tokenizer's prompt length"
     );
     assert_eq!(
-        usage.content_tokens, observed_content,
+        usage.content_tokens, outcome.observed_content,
         "content_tokens must equal observed Content variants"
     );
     assert_eq!(
-        usage.reasoning_tokens, observed_reasoning,
+        usage.reasoning_tokens, outcome.observed_reasoning,
         "reasoning_tokens must equal observed Reasoning variants"
     );
     assert_eq!(
         usage.completion_tokens(),
-        observed_content + observed_reasoning
+        outcome.observed_content + outcome.observed_reasoning
     );
     assert_eq!(
         usage.undeterminable_tokens, 0,
-        "model with detected markers should never produce Undeterminable"
+        "model with detected markers and chat-template-opened reasoning must never \
+         produce Undeterminable"
     );
 
     Ok(())

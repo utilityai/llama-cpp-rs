@@ -51,8 +51,8 @@ pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
     EvalMultimodalChunksError, GrammarError, LlamaContextLoadError, LlamaCppError,
     LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError,
-    LlamaModelLoadError, LogitsError, MetaValError, ModelParamsError, NewLlamaChatMessageError,
-    ParseChatMessageError, ReasoningClassifierError, Result, SampleError, SamplerAcceptError,
+    LlamaModelLoadError, LogitsError, MarkerDetectionError, MetaValError, ModelParamsError,
+    NewLlamaChatMessageError, ParseChatMessageError, Result, SampleError, SamplerAcceptError,
     SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,
 };
 
@@ -64,8 +64,7 @@ pub use llama_cpp_bindings_types::{
 };
 pub use sampled_token::SampledToken;
 pub use sampled_token_classifier::SampledTokenClassifier;
-pub use sampled_token_classifier::SampledTokenClassifierMarkers;
-pub use sampled_token_classifier::TokenBoundary;
+pub use sampled_token_classifier::SampledTokenSection;
 
 pub use ffi_status_is_ok::status_is_ok;
 pub use ffi_status_to_i32::status_to_i32;

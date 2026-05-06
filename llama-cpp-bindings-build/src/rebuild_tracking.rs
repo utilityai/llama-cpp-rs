@@ -31,6 +31,10 @@ pub fn register_rebuild_triggers(llama_src: &Path) {
     println!("cargo:rerun-if-changed=wrapper_tool_calls.cpp");
     println!("cargo:rerun-if-changed=wrapper_utils.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
+    println!("cargo:rerun-if-changed=marker_probes/marker_probe.h");
+    println!("cargo:rerun-if-changed=marker_probes/registry.cpp");
+    println!("cargo:rerun-if-changed=marker_probes/chunked_thinking.h");
+    println!("cargo:rerun-if-changed=marker_probes/chunked_thinking.cpp");
 
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");

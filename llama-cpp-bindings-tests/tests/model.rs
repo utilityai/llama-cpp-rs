@@ -16,6 +16,7 @@ use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::model::params::LlamaModelParams;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use serial_test::serial;
 
 #[test]
@@ -629,16 +630,20 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.sampled_token_classifier()?;
-    let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    let mut classifier = model.sampled_token_classifier();
+    let (raw_token, mut outcomes) = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    outcomes.extend(classifier.flush());
 
+    assert_eq!(outcomes.len(), 1, "expected one finalised outcome after flush");
+    let outcome = &outcomes[0];
+
+    let raw_as_sampled = SampledToken::Content(raw_token);
     assert!(
-        !model.is_eog_token(&token),
+        !model.is_eog_token(&raw_as_sampled),
         "Grammar sampler should not allow EOS as first token"
     );
 
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let piece = model.token_to_piece(&token, &mut decoder, true, None)?;
+    let piece = &outcome.raw_piece;
     let first_char = piece
         .chars()
         .next()
@@ -688,16 +693,20 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.sampled_token_classifier()?;
-    let token = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    let mut classifier = model.sampled_token_classifier();
+    let (raw_token, mut outcomes) = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    outcomes.extend(classifier.flush());
 
+    assert_eq!(outcomes.len(), 1, "expected one finalised outcome after flush");
+    let outcome = &outcomes[0];
+
+    let raw_as_sampled = SampledToken::Content(raw_token);
     assert!(
-        !model.is_eog_token(&token),
+        !model.is_eog_token(&raw_as_sampled),
         "Grammar sampler should not allow EOS as first token"
     );
 
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let piece = model.token_to_piece(&token, &mut decoder, true, None)?;
+    let piece = &outcome.raw_piece;
 
     assert!(
         piece.starts_with('{'),
@@ -726,9 +735,11 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
     let tokens = model.str_to_token(prompt, AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
 
-    batch.add_sequence(&tokens, 0, false)?;
+    let mut classifier = model.sampled_token_classifier();
+    classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 
     context.decode(&mut batch)?;
+    classifier.commit_prompt_tokens();
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::grammar(model, r#"root ::= "yes" | "no""#, "root")?,
@@ -736,79 +747,60 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
         LlamaSampler::greedy(),
     ]);
 
-    let mut classifier = model.sampled_token_classifier()?;
-    let mut generated = String::new();
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-    let mut position = batch.n_tokens();
-    let mut observed_content: u64 = 0;
-    let mut observed_reasoning: u64 = 0;
-
-    for iteration in 0..10 {
-        let token = classifier.sample(&mut sampler, &context, -1)?;
-        let is_eog = model.is_eog_token(&token);
-
-        match token {
-            SampledToken::Content(raw) => {
-                eprintln!(
-                    "  iteration={iteration} token={} eog={is_eog} content",
-                    raw.0
-                );
-                observed_content += 1;
-            }
-            SampledToken::Reasoning(raw) => {
-                eprintln!(
-                    "  iteration={iteration} token={} eog={is_eog} reasoning",
-                    raw.0
-                );
-                observed_reasoning += 1;
-            }
-            SampledToken::ToolCall(raw) => {
-                eprintln!(
-                    "  iteration={iteration} token={} eog={is_eog} tool_call",
-                    raw.0
-                );
-            }
-            SampledToken::Undeterminable(raw) => {
-                eprintln!(
-                    "  iteration={iteration} token={} eog={is_eog} undeterminable",
-                    raw.0
-                );
-            }
-        }
-
-        if is_eog {
-            break;
-        }
-
-        let piece = model.token_to_piece(&token, &mut decoder, true, None)?;
-
-        eprintln!("  piece='{piece}'");
-
-        generated.push_str(&piece);
-
-        batch.clear();
-        batch.add(&token, position, &[0], true)?;
-        position += 1;
-
-        context.decode(&mut batch)?;
+    let initial_position = batch.n_tokens();
+    let outcome = ClassifySampleLoop {
+        model,
+        classifier: &mut classifier,
+        sampler: &mut sampler,
+        context: &mut context,
+        batch: &mut batch,
+        initial_position,
+        max_generated_tokens: 10,
     }
+    .run()?;
 
-    let lowercase = generated.to_lowercase();
-
+    let lowercase = outcome.generated_raw.to_lowercase();
     assert!(
         lowercase == "yes" || lowercase == "no",
-        "Grammar loop should produce 'yes' or 'no', got: '{generated}'"
+        "Grammar loop should produce 'yes' or 'no', got: '{}'",
+        outcome.generated_raw
+    );
+    assert!(
+        outcome.eog_seen,
+        "loop must terminate via EOG once grammar accepts, not by exhausting the budget; \
+         outcome={outcome:?}"
+    );
+    assert_eq!(
+        outcome.observed_reasoning, 0,
+        "closed-think prompt must not produce Reasoning tokens; outcome={outcome:?}"
+    );
+    assert_eq!(
+        outcome.observed_undeterminable, 0,
+        "prompt-token replay closes the think block before generation, so the section \
+         must be Content and no Undeterminable tokens may be emitted; outcome={outcome:?}"
+    );
+    assert_eq!(
+        outcome.observed_tool_call, 0,
+        "prompt without tool definitions must not produce ToolCall tokens; outcome={outcome:?}"
+    );
+    assert!(
+        outcome.observed_content > 0,
+        "grammar must yield at least one Content token (the answer); outcome={outcome:?}"
     );
 
     let usage = classifier.into_usage();
-    assert!(
-        usage.completion_tokens() > 0,
-        "loop should record at least one completion token"
-    );
     assert_eq!(
         usage.completion_tokens(),
-        observed_content + observed_reasoning,
-        "completion_tokens must equal observed content + reasoning"
+        outcome.observed_content,
+        "for the closed-think grammar prompt, completion_tokens equals observed Content"
+    );
+    assert_eq!(
+        usage.reasoning_tokens, 0,
+        "usage.reasoning_tokens must be zero; usage={usage:?}"
+    );
+    assert_eq!(
+        usage.undeterminable_tokens, 0,
+        "usage.undeterminable_tokens must be zero; usage={usage:?}"
     );
 
     Ok(())
@@ -835,34 +827,37 @@ fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
 
     let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
-    let mut classifier = model.sampled_token_classifier()?;
-    let mut token_count: u64 = 0;
+    let mut classifier = model.sampled_token_classifier();
+    let mut sampled_count: u64 = 0;
     let mut position = batch.n_tokens();
 
     for _ in 0..5 {
-        let token = classifier.sample(&mut sampler, &context, -1)?;
+        let (raw_token, _outcomes) = classifier.sample(&mut sampler, &context, -1)?;
+        let raw_as_sampled = SampledToken::Content(raw_token);
 
-        if model.is_eog_token(&token) {
+        if model.is_eog_token(&raw_as_sampled) {
             break;
         }
 
-        token_count += 1;
+        sampled_count += 1;
 
         batch.clear();
-        batch.add(&token, position, &[0], true)?;
+        batch.add(&raw_as_sampled, position, &[0], true)?;
         position += 1;
 
         context.decode(&mut batch)?;
     }
 
+    let _ = classifier.flush();
+
     assert!(
-        token_count > 0,
+        sampled_count > 0,
         "Should produce at least one token without grammar"
     );
     let usage = classifier.into_usage();
     assert!(
-        usage.completion_tokens() >= token_count,
-        "completion_tokens ({}) must include the {token_count} non-EOG samples",
+        usage.completion_tokens() >= sampled_count,
+        "completion_tokens ({}) must include the {sampled_count} non-EOG samples",
         usage.completion_tokens()
     );
 
