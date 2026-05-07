@@ -21,9 +21,7 @@ fn gemma4_template_override_returns_full_markers() -> Result<()> {
     let template = model
         .chat_template(None)
         .expect("Gemma 4 chat template must be present");
-    let template_str = template
-        .to_str()
-        .expect("template must be valid UTF-8");
+    let template_str = template.to_str().expect("template must be valid UTF-8");
     assert!(
         template_str.contains("<|tool_call>call:"),
         "Gemma 4 chat template must contain '<|tool_call>call:' fingerprint; \

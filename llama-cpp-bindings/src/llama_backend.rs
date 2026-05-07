@@ -19,8 +19,8 @@ impl LlamaBackend {
     /// Mark the llama backend as initialized
     fn mark_init() -> crate::Result<()> {
         match LLAMA_BACKEND_INITIALIZED.compare_exchange(false, true, SeqCst, SeqCst) {
-            Ok(_) => Ok(()),
-            Err(_) => Err(LlamaCppError::BackendAlreadyInitialized),
+            Ok(_was_uninitialized) => Ok(()),
+            Err(_was_already_initialized) => Err(LlamaCppError::BackendAlreadyInitialized),
         }
     }
 

@@ -522,7 +522,6 @@ impl LlamaSampler {
     ///
     /// # Errors
     /// Returns an error if any string in `seq_breakers` contains null bytes.
-    #[allow(missing_docs)]
     pub fn dry(
         model: &LlamaModel,
         multiplier: f32,

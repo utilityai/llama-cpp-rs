@@ -3,7 +3,7 @@ use llama_cpp_bindings_types::ToolCallArgsShape;
 use llama_cpp_bindings_types::ToolCallMarkers;
 use llama_cpp_bindings_types::ToolCallValueQuote;
 
-const TEMPLATE_FINGERPRINT: &str = "<|tool_call>call:";
+const TEMPLATE_FINGERPRINT: &str = "'<|tool_call>call:'";
 
 #[must_use]
 pub fn detect(template: &str) -> Option<ToolCallMarkers> {
@@ -52,5 +52,11 @@ mod tests {
     #[test]
     fn returns_none_for_empty_template() {
         assert!(detect("").is_none());
+    }
+
+    #[test]
+    fn returns_none_when_fingerprint_substring_appears_without_jinja_apostrophes() {
+        let template = "doc explaining the <|tool_call>call: format in prose, not as a literal";
+        assert!(detect(template).is_none());
     }
 }

@@ -12,6 +12,7 @@
 
 pub mod context;
 pub mod error;
+pub mod extract_tool_call_markers_from_haystack;
 pub mod ffi_error_reader;
 pub mod ffi_status_is_ok;
 pub mod ffi_status_to_i32;
@@ -46,6 +47,7 @@ pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+pub mod tool_call_marker_pair;
 pub mod tool_call_template_overrides;
 
 pub use error::{

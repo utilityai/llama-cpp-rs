@@ -41,9 +41,7 @@ pub fn require_compiled_backends_present() -> Result<()> {
     let devices = list_llama_ggml_backend_devices();
 
     if devices.is_empty() {
-        anyhow::bail!(
-            "no ggml backends registered; even CPU-only builds register a CPU backend"
-        );
+        anyhow::bail!("no ggml backends registered; even CPU-only builds register a CPU backend");
     }
 
     #[cfg(feature = "cuda")]

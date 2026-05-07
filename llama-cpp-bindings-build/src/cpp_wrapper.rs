@@ -12,6 +12,7 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
         .file("wrapper_common.cpp")
         .file("wrapper_fit.cpp")
         .file("wrapper_reasoning.cpp")
+        .file("wrapper_token_text.cpp")
         .file("wrapper_tool_calls.cpp")
         .file("marker_probes/chunked_thinking.cpp")
         .file("marker_probes/registry.cpp")

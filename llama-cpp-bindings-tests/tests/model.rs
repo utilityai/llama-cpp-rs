@@ -631,10 +631,15 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
     ]);
 
     let mut classifier = model.sampled_token_classifier();
-    let (raw_token, mut outcomes) = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    let (raw_token, mut outcomes) =
+        classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
     outcomes.extend(classifier.flush());
 
-    assert_eq!(outcomes.len(), 1, "expected one finalised outcome after flush");
+    assert_eq!(
+        outcomes.len(),
+        1,
+        "expected one finalised outcome after flush"
+    );
     let outcome = &outcomes[0];
 
     let raw_as_sampled = SampledToken::Content(raw_token);
@@ -694,10 +699,15 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
     ]);
 
     let mut classifier = model.sampled_token_classifier();
-    let (raw_token, mut outcomes) = classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
+    let (raw_token, mut outcomes) =
+        classifier.sample(&mut sampler, &context, batch.n_tokens() - 1)?;
     outcomes.extend(classifier.flush());
 
-    assert_eq!(outcomes.len(), 1, "expected one finalised outcome after flush");
+    assert_eq!(
+        outcomes.len(),
+        1,
+        "expected one finalised outcome after flush"
+    );
     let outcome = &outcomes[0];
 
     let raw_as_sampled = SampledToken::Content(raw_token);

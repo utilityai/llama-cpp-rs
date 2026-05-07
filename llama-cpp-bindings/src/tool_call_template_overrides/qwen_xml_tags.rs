@@ -52,4 +52,10 @@ mod tests {
     fn returns_none_for_empty_template() {
         assert!(detect("").is_none());
     }
+
+    #[test]
+    fn detects_qwen_xml_template_with_concatenated_string_literal() {
+        let template = "{{- '\\n\\n<tool_call>\\n<function=' + tool_call.name + '>\\n' }}";
+        assert!(detect(template).is_some());
+    }
 }

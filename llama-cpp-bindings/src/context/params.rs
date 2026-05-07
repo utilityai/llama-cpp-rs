@@ -121,7 +121,16 @@ impl From<LlamaAttentionType> for i32 {
 }
 
 /// A rusty wrapper around `ggml_type` for KV cache types.
-#[allow(non_camel_case_types, missing_docs)]
+#[expect(
+    non_camel_case_types,
+    reason = "variant names mirror llama.cpp's `enum ggml_type` symbol names verbatim so they can \
+              be matched 1:1 against the C ABI without a translation table"
+)]
+#[expect(
+    missing_docs,
+    reason = "each variant denotes a quantisation flavour whose semantics are defined upstream in \
+              ggml; restating the upstream spec inline would risk drifting from the source of truth"
+)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum KvCacheType {
     /// Represents an unknown or not-yet-mapped `ggml_type` and carries the raw value.
@@ -260,10 +269,16 @@ impl From<llama_cpp_bindings_sys::ggml_type> for KvCacheType {
 /// assert_eq!(ctx_params.n_ctx(), NonZeroU32::new(2048));
 /// ```
 #[derive(Debug, Clone)]
-#[allow(
+#[expect(
     missing_docs,
-    clippy::struct_excessive_bools,
-    clippy::module_name_repetitions
+    reason = "field meanings mirror llama.cpp's `llama_context_params` C struct; restating each \
+              one inline would risk drift from the upstream spec — the doc-comment on the struct \
+              points at the canonical reference"
+)]
+#[expect(
+    clippy::module_name_repetitions,
+    reason = "`LlamaContextParams` is the canonical Rust name in the public API; renaming it to \
+              `Params` would force `params::Params` at every call site"
 )]
 pub struct LlamaContextParams {
     pub context_params: llama_cpp_bindings_sys::llama_context_params,

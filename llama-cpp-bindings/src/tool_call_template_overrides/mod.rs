@@ -11,7 +11,9 @@ pub fn detect(template: &str) -> Option<ToolCallMarkers> {
         mistral3_arrow_args::detect,
         qwen_xml_tags::detect,
     ];
-    detectors.into_iter().find_map(|detector| detector(template))
+    detectors
+        .into_iter()
+        .find_map(|detector| detector(template))
 }
 
 #[cfg(test)]
@@ -26,7 +28,10 @@ mod tests {
         let markers = detect(template).expect("must dispatch to Gemma 4");
 
         assert_eq!(markers.open, "<|tool_call>call:");
-        assert!(matches!(markers.args_shape, ToolCallArgsShape::PairedQuote(_)));
+        assert!(matches!(
+            markers.args_shape,
+            ToolCallArgsShape::PairedQuote(_)
+        ));
     }
 
     #[test]
@@ -35,7 +40,10 @@ mod tests {
         let markers = detect(template).expect("must dispatch to Mistral 3");
 
         assert_eq!(markers.open, "[TOOL_CALLS]");
-        assert!(matches!(markers.args_shape, ToolCallArgsShape::BracketedJson(_)));
+        assert!(matches!(
+            markers.args_shape,
+            ToolCallArgsShape::BracketedJson(_)
+        ));
     }
 
     #[test]

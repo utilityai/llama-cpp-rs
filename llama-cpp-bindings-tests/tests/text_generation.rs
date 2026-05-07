@@ -74,8 +74,10 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
     #[allow(clippy::cast_precision_loss)]
-    let tokens_per_second =
-        (outcome.observed_undeterminable as f32 + outcome.observed_content as f32 + outcome.observed_reasoning as f32) / duration.as_secs_f32();
+    let tokens_per_second = (outcome.observed_undeterminable as f32
+        + outcome.observed_content as f32
+        + outcome.observed_reasoning as f32)
+        / duration.as_secs_f32();
 
     eprintln!(
         "\ndecoded {} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
@@ -99,9 +101,8 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     // start every reply with a `<think>...</think>` block even without a
     // chat template, so the same prompt yields a mix. Both behaviours are
     // correct — we only assert internal consistency below.
-    let total_observed = outcome.observed_content
-        + outcome.observed_reasoning
-        + outcome.observed_undeterminable;
+    let total_observed =
+        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable;
     assert!(
         total_observed > 0,
         "model must produce at least one classified token; outcome={outcome:?}"

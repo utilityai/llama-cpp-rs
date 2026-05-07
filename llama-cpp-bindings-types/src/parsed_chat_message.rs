@@ -70,4 +70,22 @@ mod tests {
 
         assert!(!parsed.is_empty());
     }
+
+    #[test]
+    fn message_with_all_three_fields_populated_is_not_empty() {
+        let parsed = ParsedChatMessage::new(
+            "hello".to_owned(),
+            "thinking".to_owned(),
+            vec![ParsedToolCall::new(
+                "id-1".to_owned(),
+                "tool".to_owned(),
+                ToolCallArguments::default(),
+            )],
+        );
+
+        assert!(!parsed.is_empty());
+        assert_eq!(parsed.content, "hello");
+        assert_eq!(parsed.reasoning_content, "thinking");
+        assert_eq!(parsed.tool_calls.len(), 1);
+    }
 }

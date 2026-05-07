@@ -8,23 +8,24 @@ extern "C" {
 #endif
 
 /**
- * Detect the tool-call section open/close marker strings for a model by
- * analyzing its Jinja chat template via llama.cpp's autoparser.
+ * Render the model's chat template with the autoparser's standard tool-call
+ * vs. plain-assistant synthetic turns and return the diff slice that surrounds
+ * the tool-call payload. The returned haystack is the text that lives between
+ * the model's tool-call open/close markers (with any reasoning prelude
+ * stripped). Marker extraction from the haystack is performed in Rust.
  *
  * On success (LLAMA_RS_STATUS_OK):
- *   - If the model has detected tool-call section markers, *out_open and
- *     *out_close are set to heap-allocated null-terminated strings owned by
- *     the caller. Free each via llama_rs_string_free.
- *   - If the model declares no tool-call markers (or an empty pair),
- *     *out_open and *out_close are left as nullptr.
+ *   - If the model declares no tool-call markers (or an empty haystack),
+ *     *out_haystack is left as nullptr.
+ *   - Otherwise *out_haystack is a heap-allocated null-terminated string owned
+ *     by the caller. Free via llama_rs_string_free.
  *
  * On LLAMA_RS_STATUS_EXCEPTION, *out_error is set to a heap-allocated message;
  * free via llama_rs_string_free.
  */
-llama_rs_status llama_rs_detect_tool_call_markers(
+llama_rs_status llama_rs_compute_tool_call_haystack(
     const struct llama_model * model,
-    char ** out_open,
-    char ** out_close,
+    char ** out_haystack,
     char ** out_error);
 
 /**

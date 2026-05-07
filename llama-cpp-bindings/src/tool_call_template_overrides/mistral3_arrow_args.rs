@@ -32,7 +32,10 @@ mod tests {
         assert_eq!(markers.open, "[TOOL_CALLS]");
         assert!(markers.close.is_empty());
         let ToolCallArgsShape::BracketedJson(shape) = markers.args_shape else {
-            panic!("expected BracketedJson variant, got {:?}", markers.args_shape);
+            panic!(
+                "expected BracketedJson variant, got {:?}",
+                markers.args_shape
+            );
         };
         assert_eq!(shape.name_args_separator, "[ARGS]");
     }
@@ -45,5 +48,11 @@ mod tests {
     #[test]
     fn returns_none_for_empty_template() {
         assert!(detect("").is_none());
+    }
+
+    #[test]
+    fn returns_none_when_fingerprint_substring_appears_without_jinja_apostrophes() {
+        let template = "doc text mentioning the [ARGS] tag without quoting it as a literal";
+        assert!(detect(template).is_none());
     }
 }

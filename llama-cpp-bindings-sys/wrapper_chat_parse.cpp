@@ -1,4 +1,5 @@
 #include "wrapper_chat_parse.h"
+#include "wrapper_token_text.h"
 
 #include "llama.cpp/common/chat-auto-parser.h"
 #include "llama.cpp/common/chat.h"
@@ -9,26 +10,11 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
+using wrapper_helpers::token_text_or_empty;
+
 struct llama_rs_parsed_chat {
     common_chat_msg message;
 };
-
-namespace {
-
-std::string token_text_or_empty(const llama_vocab * vocab, llama_token token) {
-    if (token == LLAMA_TOKEN_NULL) {
-        return {};
-    }
-
-    const char * text = llama_vocab_get_text(vocab, token);
-    if (!text) {
-        return {};
-    }
-
-    return std::string(text);
-}
-
-}  // namespace
 
 extern "C" llama_rs_status llama_rs_parse_chat_message(
     const struct llama_model * model,

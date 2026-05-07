@@ -1,4 +1,5 @@
 #include "wrapper_tool_calls.h"
+#include "wrapper_token_text.h"
 
 #include "llama.cpp/common/chat-auto-parser.h"
 #include "llama.cpp/common/chat-auto-parser-helpers.h"
@@ -9,22 +10,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
-namespace {
-
-std::string token_text_or_empty(const llama_vocab * vocab, llama_token token) {
-    if (token == LLAMA_TOKEN_NULL) {
-        return {};
-    }
-
-    const char * text = llama_vocab_get_text(vocab, token);
-    if (!text) {
-        return {};
-    }
-
-    return std::string(text);
-}
-
-}  // namespace
+using wrapper_helpers::token_text_or_empty;
 
 namespace {
 
@@ -119,78 +105,20 @@ std::string detect_tool_call_haystack(
     return haystack;
 }
 
-bool extract_tool_call_markers_from_haystack(
-    const std::string & haystack,
-    std::string & out_open,
-    std::string & out_close) {
-    if (haystack.empty()) {
-        return false;
-    }
-
-    auto json_start = haystack.find_first_of('{');
-    auto json_end = haystack.find_last_of('}');
-
-    if (json_start == std::string::npos || json_end == std::string::npos
-        || json_end < json_start) {
-        return false;
-    }
-
-    std::string json_cut = haystack.substr(json_start, json_end - json_start + 1);
-
-    try {
-        // Validate it parses — confirms we're looking at the tool-call payload
-        // rather than incidental braces in surrounding text.
-        (void) nlohmann::ordered_json::parse(json_cut);
-    } catch (const std::exception &) {
-        return false;
-    }
-
-    std::string raw_open = haystack.substr(0, json_start);
-    std::string raw_close = haystack.substr(json_end + 1);
-
-    // Markers may sit alongside whitespace from the chat template — trim each
-    // end so a single token (e.g. `<tool_call>`) can be resolved by the
-    // caller's tokenizer.
-    auto trim = [](std::string & value) {
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) {
-            value.erase(value.begin());
-        }
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
-            value.pop_back();
-        }
-    };
-
-    trim(raw_open);
-    trim(raw_close);
-
-    if (raw_open.empty() || raw_close.empty()) {
-        return false;
-    }
-
-    out_open = std::move(raw_open);
-    out_close = std::move(raw_close);
-
-    return true;
-}
-
 }  // namespace
 
-extern "C" llama_rs_status llama_rs_detect_tool_call_markers(
+extern "C" llama_rs_status llama_rs_compute_tool_call_haystack(
     const struct llama_model * model,
-    char ** out_open,
-    char ** out_close,
+    char ** out_haystack,
     char ** out_error) {
-    if (out_open) {
-        *out_open = nullptr;
-    }
-    if (out_close) {
-        *out_close = nullptr;
+    if (out_haystack) {
+        *out_haystack = nullptr;
     }
     if (out_error) {
         *out_error = nullptr;
     }
 
-    if (!model || !out_open || !out_close || !out_error) {
+    if (!model || !out_haystack || !out_error) {
         return LLAMA_RS_STATUS_INVALID_ARGUMENT;
     }
 
@@ -213,26 +141,16 @@ extern "C" llama_rs_status llama_rs_detect_tool_call_markers(
         autoparser::analyze_reasoning reasoning(tmpl, jinja_caps.supports_tool_calls);
 
         std::string haystack = detect_tool_call_haystack(tmpl, reasoning);
-
-        std::string open_marker;
-        std::string close_marker;
-
-        if (!extract_tool_call_markers_from_haystack(haystack, open_marker, close_marker)) {
+        if (haystack.empty()) {
             return LLAMA_RS_STATUS_OK;
         }
 
-        char * open_dup = llama_rs_dup_string(open_marker);
-        char * close_dup = llama_rs_dup_string(close_marker);
-
-        if (!open_dup || !close_dup) {
-            std::free(open_dup);
-            std::free(close_dup);
-
+        char * haystack_dup = llama_rs_dup_string(haystack);
+        if (!haystack_dup) {
             return LLAMA_RS_STATUS_ALLOCATION_FAILED;
         }
 
-        *out_open = open_dup;
-        *out_close = close_dup;
+        *out_haystack = haystack_dup;
 
         return LLAMA_RS_STATUS_OK;
     } catch (const std::exception & ex) {

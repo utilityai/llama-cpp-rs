@@ -500,7 +500,11 @@ mod tests {
     }
 
     struct Logger {
-        #[allow(unused)]
+        #[expect(
+            unused,
+            reason = "guard must outlive the test body so the tracing subscriber stays installed; \
+                      dropping it un-installs the subscriber and tests would silently miss log lines"
+        )]
         guard: tracing::subscriber::DefaultGuard,
         logs: Arc<Mutex<Vec<String>>>,
     }

@@ -74,19 +74,22 @@ fn detect_ndk_path(target_triple: &str) -> Result<String, String> {
 }
 
 fn detect_ndk_from_sdk() -> Result<String, env::VarError> {
-    #[allow(deprecated)]
     let home = env::home_dir().ok_or(env::VarError::NotPresent)?;
 
-    let android_home = env::var("ANDROID_HOME")
-        .or_else(|_| env::var("ANDROID_SDK_ROOT"))
-        .unwrap_or_else(|_| format!("{}/Android/Sdk", home.display()));
+    let android_home = match env::var("ANDROID_HOME")
+        .or_else(|_android_home_unset| env::var("ANDROID_SDK_ROOT"))
+    {
+        Ok(value) => value,
+        Err(_neither_env_var_set) => format!("{}/Android/Sdk", home.display()),
+    };
 
     let ndk_dir = format!("{android_home}/ndk");
-    let entries = std::fs::read_dir(&ndk_dir).map_err(|_| env::VarError::NotPresent)?;
+    let entries =
+        std::fs::read_dir(&ndk_dir).map_err(|_directory_unreadable| env::VarError::NotPresent)?;
 
     let mut versions: Vec<String> = entries
         .filter_map(std::result::Result::ok)
-        .filter(|entry| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+        .filter(|entry| entry.file_type().is_ok_and(|file_type| file_type.is_dir()))
         .filter_map(|entry| {
             entry
                 .file_name()

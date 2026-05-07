@@ -209,10 +209,12 @@ impl<'model> SampledTokenClassifier<'model> {
     }
 
     fn decode(&mut self, token: LlamaToken) -> String {
-        match self
-            .model
-            .token_to_piece(&SampledToken::Content(token), &mut self.decoder, true, None)
-        {
+        match self.model.token_to_piece(
+            &SampledToken::Content(token),
+            &mut self.decoder,
+            true,
+            None,
+        ) {
             Ok(piece) => piece,
             Err(detokenize_error) => {
                 tracing::debug!(
@@ -305,20 +307,24 @@ impl<'model> SampledTokenClassifier<'model> {
     fn drain_overflow(&mut self) -> Vec<IngestOutcome> {
         let lookback = self.markers.max_token_len().saturating_sub(1);
         let mut outcomes = Vec::new();
-        while let Some(front) = self.pending.front() {
+
+        loop {
             let beyond_lookback = self.pending.len() > lookback;
+            let Some(front) = self.pending.front() else {
+                break;
+            };
             if !front.is_boundary && !beyond_lookback {
                 break;
             }
-            let entry = self
-                .pending
-                .pop_front()
-                .expect("front existed in this iteration");
+            let Some(entry) = self.pending.pop_front() else {
+                break;
+            };
             if entry.is_from_prompt {
                 continue;
             }
             outcomes.push(self.finalize_entry(entry));
         }
+
         outcomes
     }
 
@@ -661,9 +667,11 @@ mod tests {
         outcomes.extend(classifier.flush());
 
         assert_eq!(outcome_pieces(&outcomes), vec!["r", "a", "b", "x"]);
-        assert!(outcomes
-            .iter()
-            .all(|outcome| matches!(outcome.sampled_token, SampledToken::Reasoning(_))));
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Reasoning(_)))
+        );
         assert_eq!(classifier.section, SampledTokenSection::Reasoning);
     }
 
