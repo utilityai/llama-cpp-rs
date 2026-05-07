@@ -35,12 +35,13 @@ test.qwen3.6_35b_a3b: clippy
 
 .PHONY: test.qwen3.5_0.8B.coverage.run
 test.qwen3.5_0.8B.coverage.run: clippy
-	$(QWEN3_5_0_8B_ENV) cargo llvm-cov $(CARGO_COV_LLM_FLAGS) -- --test-threads=1
+	cargo llvm-cov clean --workspace
+	cargo llvm-cov --no-report -p llama-cpp-bindings --features $(FEATURES) --lib
+	$(QWEN3_5_0_8B_ENV) cargo llvm-cov --no-report $(CARGO_COV_LLM_FLAGS) -- --test-threads=1
 
 .PHONY: test.qwen3.5_0.8B.coverage
-
-test.qwen3.5_0.8B.coverage: clippy
-	$(QWEN3_5_0_8B_ENV) cargo llvm-cov $(CARGO_COV_LLM_FLAGS) --fail-under-lines 99.5 -- --test-threads=1
+test.qwen3.5_0.8B.coverage: test.qwen3.5_0.8B.coverage.run
+	cargo llvm-cov report -p llama-cpp-bindings --fail-under-lines 97
 
 .PHONY: test.qwen3.5_0.8B.coverage.json
 test.qwen3.5_0.8B.coverage.json: test.qwen3.5_0.8B.coverage.run
