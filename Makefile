@@ -1,4 +1,4 @@
-FEATURES = sampler,llguidance
+FEATURES = sampler
 TEST_FEATURES =
 CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- --test-threads=1
 CARGO_COV_LLM_FLAGS = -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),)
@@ -41,7 +41,7 @@ test.qwen3.5_0.8B.coverage.run: clippy
 
 .PHONY: test.qwen3.5_0.8B.coverage
 test.qwen3.5_0.8B.coverage: test.qwen3.5_0.8B.coverage.run
-	cargo llvm-cov report -p llama-cpp-bindings --fail-under-lines 97
+	cargo llvm-cov report -p llama-cpp-bindings --fail-under-lines 98.5
 
 .PHONY: test.qwen3.5_0.8B.coverage.json
 test.qwen3.5_0.8B.coverage.json: test.qwen3.5_0.8B.coverage.run

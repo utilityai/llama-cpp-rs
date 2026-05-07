@@ -427,6 +427,114 @@ fn token_to_piece_with_lstrip() -> Result<()> {
 
 #[test]
 #[serial]
+fn is_eog_token_classifies_reasoning_variant() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let eos = model.token_eos();
+
+    assert!(model.is_eog_token(&SampledToken::Reasoning(eos)));
+}
+
+#[test]
+#[serial]
+fn is_eog_token_classifies_tool_call_variant() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let eos = model.token_eos();
+
+    assert!(model.is_eog_token(&SampledToken::ToolCall(eos)));
+}
+
+#[test]
+#[serial]
+fn is_eog_token_classifies_undeterminable_variant() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let eos = model.token_eos();
+
+    assert!(model.is_eog_token(&SampledToken::Undeterminable(eos)));
+}
+
+#[test]
+#[serial]
+fn token_to_piece_decodes_reasoning_variant() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let tokens = model.str_to_token("hi", AddBos::Never)?;
+
+    let piece = model.token_to_piece(
+        &SampledToken::Reasoning(tokens[0]),
+        &mut decoder,
+        true,
+        None,
+    )?;
+
+    assert!(!piece.is_empty());
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn token_to_piece_decodes_tool_call_variant() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let tokens = model.str_to_token("hi", AddBos::Never)?;
+
+    let piece =
+        model.token_to_piece(&SampledToken::ToolCall(tokens[0]), &mut decoder, true, None)?;
+
+    assert!(!piece.is_empty());
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn token_to_piece_decodes_undeterminable_variant() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
+    let tokens = model.str_to_token("hi", AddBos::Never)?;
+
+    let piece = model.token_to_piece(
+        &SampledToken::Undeterminable(tokens[0]),
+        &mut decoder,
+        true,
+        None,
+    )?;
+
+    assert!(!piece.is_empty());
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn str_to_token_grows_buffer_when_initial_estimation_too_small() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    // A short input that tokenises to many small tokens. The initial
+    // capacity is `max(8, str.len()/2 + 1)` so a string with len < 16 may
+    // tokenise to >8 tokens, forcing the second `llama_tokenize` call along
+    // the buffer-grow path.
+    let many_short_chars = "a b c d e f g h i j k l";
+    let tokens = model.str_to_token(many_short_chars, AddBos::Always)?;
+
+    assert!(
+        tokens.len() > 8,
+        "expected regrow; got {} tokens",
+        tokens.len()
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn n_vocab_matches_tokens_iterator_count() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();

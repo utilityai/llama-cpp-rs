@@ -123,3 +123,42 @@ fn parses_empty_input_yields_empty_message() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn parses_malformed_tools_json_returns_parse_exception() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let result = model.parse_chat_message("not_a_json[}", "hello", false);
+
+    assert!(matches!(
+        result,
+        Err(llama_cpp_bindings::ParseChatMessageError::ParseException(_))
+    ));
+}
+
+#[test]
+fn parses_with_tools_null_byte_returns_tools_serialization_error() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let result = model.parse_chat_message("[]\0extra", "hello", false);
+
+    assert!(matches!(
+        result,
+        Err(llama_cpp_bindings::ParseChatMessageError::ToolsSerialization(_))
+    ));
+}
+
+#[test]
+fn parses_with_input_null_byte_returns_tools_serialization_error() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let result = model.parse_chat_message("[]", "hello\0world", false);
+
+    assert!(matches!(
+        result,
+        Err(llama_cpp_bindings::ParseChatMessageError::ToolsSerialization(_))
+    ));
+}

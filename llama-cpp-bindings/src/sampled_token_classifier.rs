@@ -702,6 +702,45 @@ mod tests {
     }
 
     #[test]
+    fn spurious_reasoning_close_in_content_section_classifies_as_content() {
+        let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        push_pending(&mut classifier, 200, "</think>");
+        classifier.try_consume_marker_at_tail();
+        let outcomes = classifier.drain_overflow();
+
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![SampledTokenSection::Content],
+        );
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+    }
+
+    #[test]
+    fn spurious_tool_call_close_in_reasoning_section_classifies_as_tool_call() {
+        let markers = StreamingMarkers {
+            reasoning_open: Some(vec![token(100)]),
+            reasoning_close: Some(vec![token(200)]),
+            tool_call_open: Some(vec![token(300)]),
+            tool_call_close: Some(vec![token(400)]),
+        };
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::ToolCall;
+
+        push_pending(&mut classifier, 400, "</tool_call>");
+        classifier.try_consume_marker_at_tail();
+        let outcomes = classifier.drain_overflow();
+
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![SampledTokenSection::ToolCall],
+        );
+        assert_eq!(classifier.section, SampledTokenSection::Content);
+    }
+
+    #[test]
     fn flush_drains_remaining_pending_at_eog() {
         let markers = markers_with(
             Some(vec![token(100)]),
@@ -969,5 +1008,79 @@ mod tests {
 
         assert_eq!(outcome_pieces(&outcomes), vec!["step1", "", "step2"]);
         assert_eq!(classifier.section, SampledTokenSection::Reasoning);
+    }
+
+    #[test]
+    fn record_prompt_tokens_updates_usage() {
+        let markers = markers_with(None, None);
+        let mut classifier = synthetic_classifier(markers);
+
+        classifier.record_prompt_tokens(7);
+
+        assert_eq!(classifier.usage().prompt_tokens, 7);
+    }
+
+    #[test]
+    fn record_cached_prompt_tokens_updates_usage_when_under_limit() {
+        let markers = markers_with(None, None);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.record_prompt_tokens(10);
+
+        classifier.record_cached_prompt_tokens(3).unwrap();
+
+        assert_eq!(classifier.usage().cached_prompt_tokens, 3);
+    }
+
+    #[test]
+    fn record_cached_prompt_tokens_returns_error_when_over_prompt_total() {
+        let markers = markers_with(None, None);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.record_prompt_tokens(2);
+
+        let result = classifier.record_cached_prompt_tokens(5);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn markers_accessor_returns_configured_markers() {
+        let configured = markers_with(Some(vec![token(1)]), Some(vec![token(2)]));
+        let classifier = synthetic_classifier(configured);
+
+        let returned = classifier.markers();
+
+        assert_eq!(returned.reasoning_open.as_deref(), Some(&[token(1)][..]));
+        assert_eq!(returned.reasoning_close.as_deref(), Some(&[token(2)][..]));
+    }
+
+    #[test]
+    fn into_usage_consumes_classifier_and_yields_usage_snapshot() {
+        let markers = markers_with(None, None);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.record_prompt_tokens(11);
+
+        let usage = classifier.into_usage();
+
+        assert_eq!(usage.prompt_tokens, 11);
+    }
+
+    #[test]
+    fn spurious_tool_call_close_in_content_section_classifies_as_content() {
+        // A `</tool_call>` while in Content (model misbehaves) is classified as
+        // Content (not ToolCall) so observed_tool_calls isn't inflated.
+        let mut markers = markers_with(None, None);
+        markers.tool_call_close = Some(vec![token(300)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        push_pending(&mut classifier, 300, "</tool_call>");
+        classifier.try_consume_marker_at_tail();
+        let outcomes = classifier.drain_overflow();
+
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![SampledTokenSection::Content],
+        );
+        assert_eq!(classifier.section, SampledTokenSection::Content);
     }
 }

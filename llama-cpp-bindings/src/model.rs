@@ -3,16 +3,11 @@ use std::ffi::{CStr, CString, c_char};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
-#[cfg(feature = "llguidance")]
 use std::sync::Arc;
-#[cfg(feature = "llguidance")]
 use std::sync::OnceLock;
 
-#[cfg(feature = "llguidance")]
 use toktrie::ApproximateTokEnv;
-#[cfg(feature = "llguidance")]
 use toktrie::TokRxInfo;
-#[cfg(feature = "llguidance")]
 use toktrie::TokTrie;
 
 fn truncated_buffer_to_string(
@@ -75,7 +70,6 @@ use params::LlamaModelParams;
 pub struct LlamaModel {
     /// Raw pointer to the underlying `llama_model`.
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
-    #[cfg(feature = "llguidance")]
     tok_env: OnceLock<Arc<ApproximateTokEnv>>,
 }
 
@@ -586,7 +580,6 @@ impl LlamaModel {
 
         Ok(Self {
             model,
-            #[cfg(feature = "llguidance")]
             tok_env: OnceLock::new(),
         })
     }
@@ -951,7 +944,6 @@ impl LlamaModel {
     }
 }
 
-#[cfg(feature = "llguidance")]
 impl LlamaModel {
     /// Returns a process-cached, approximate token environment built from this model's vocabulary.
     ///
@@ -962,7 +954,6 @@ impl LlamaModel {
     }
 }
 
-#[cfg(feature = "llguidance")]
 fn build_approximate_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
     let n_vocab = model.n_vocab().cast_unsigned();
     let tok_eos = {
@@ -1280,5 +1271,154 @@ mod extract_meta_string_tests {
         let result = super::truncated_buffer_to_string(invalid_utf8, 3);
 
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod ffi_helper_tests {
+    use std::ffi::CString;
+    use std::ptr;
+
+    use super::invoke_ffi_single_string_detector;
+    use super::invoke_ffi_string_pair_detector;
+    use super::parse_single_string_status;
+    use super::read_optional_owned_cstr_lossy;
+    use crate::MarkerDetectionError;
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_returns_empty_for_null() {
+        let result = read_optional_owned_cstr_lossy(ptr::null());
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_returns_string_for_valid_pointer() {
+        let owned = CString::new("hello").expect("static literal has no nuls");
+        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
+
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_handles_invalid_utf8_via_replacement() {
+        let owned = CString::new(vec![b'a', 0xFF, b'b']).expect("no interior nul");
+        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
+
+        assert!(result.starts_with('a'));
+        assert!(result.ends_with('b'));
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_none_for_ok_with_null() {
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+
+        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_some_for_ok_with_value() {
+        let owned = CString::new("present").expect("no nul");
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+            owned.as_ptr().cast_mut(),
+            ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result.expect("OK + value returns Ok(Some)"),
+            Some("present".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_analyze_exception() {
+        let owned = CString::new("boom").expect("no nul");
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION,
+            ptr::null_mut(),
+            owned.as_ptr().cast_mut(),
+        );
+
+        match result.expect_err("EXCEPTION must yield Err") {
+            MarkerDetectionError::AnalyzeException(message) => assert_eq!(message, "boom"),
+            other => panic!("expected AnalyzeException, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_ffi_error_for_other_status() {
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+
+        match result.expect_err("invalid status must yield Err") {
+            MarkerDetectionError::FfiError(_) => {}
+            other => panic!("expected FfiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invoke_ffi_single_string_detector_propagates_invalid_argument_status() {
+        let result = invoke_ffi_single_string_detector(|_value, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
+        });
+
+        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
+    }
+
+    #[test]
+    fn invoke_ffi_single_string_detector_returns_none_for_ok_with_null() {
+        let result = invoke_ffi_single_string_detector(|value, _error| {
+            unsafe {
+                *value = ptr::null_mut();
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
+        });
+
+        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_propagates_invalid_argument_status() {
+        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
+        });
+
+        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_returns_pair_of_none_for_ok_with_nulls() {
+        let result = invoke_ffi_string_pair_detector(|first, second, _error| {
+            unsafe {
+                *first = ptr::null_mut();
+                *second = ptr::null_mut();
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
+        });
+
+        assert_eq!(
+            result.expect("OK with both null returns Ok((None, None))"),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_propagates_invalid_status_codes() {
+        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_ALLOCATION_FAILED
+        });
+
+        match result.expect_err("non-OK status yields Err") {
+            MarkerDetectionError::FfiError(code) => assert!(code != 0),
+            other => panic!("expected FfiError, got {other:?}"),
+        }
     }
 }

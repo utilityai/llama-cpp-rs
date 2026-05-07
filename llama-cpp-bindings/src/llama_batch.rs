@@ -326,6 +326,44 @@ mod tests {
     }
 
     #[test]
+    fn add_accepts_reasoning_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(&SampledToken::Reasoning(LlamaToken::new(11)), 0, &[0], true)
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
+    }
+
+    #[test]
+    fn add_accepts_tool_call_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(&SampledToken::ToolCall(LlamaToken::new(22)), 0, &[0], true)
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
+    }
+
+    #[test]
+    fn add_accepts_undeterminable_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(
+                &SampledToken::Undeterminable(LlamaToken::new(33)),
+                0,
+                &[0],
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
+    }
+
+    #[test]
     fn add_sequence_adds_all_tokens() {
         let mut batch = LlamaBatch::new(16, 1).unwrap();
         let tokens = vec![

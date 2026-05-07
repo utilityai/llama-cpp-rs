@@ -6,6 +6,7 @@ use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::sampling::LlamaSampler;
+use llama_cpp_bindings::token::LlamaToken;
 use llama_cpp_bindings_tests::TestFixture;
 use serial_test::serial;
 
@@ -156,6 +157,81 @@ fn dry_sampler_with_root_not_found_grammar_does_not_apply() -> Result<()> {
     let model = fixture.default_model();
     let breakers: Vec<&[u8]> = vec![b"\n"];
     let _sampler = LlamaSampler::dry(model, 1.5, 2.0, 128, 2, &breakers);
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn accept_many_iterates_over_borrowed_tokens() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let mut sampler = LlamaSampler::chain_simple([LlamaSampler::greedy()]);
+    let tokens = vec![model.token_bos(), model.token_eos()];
+
+    sampler.accept_many(&tokens)?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn with_tokens_returns_self_after_accepting_each_token() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let sampler = LlamaSampler::chain_simple([LlamaSampler::greedy()]);
+    let tokens = [model.token_bos(), model.token_eos()];
+
+    let _consumed = sampler.with_tokens(tokens.iter().copied())?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn accept_consumes_a_single_token() -> Result<()> {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+    let mut sampler = LlamaSampler::chain_simple([LlamaSampler::greedy()]);
+
+    sampler.accept(model.token_bos())?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn try_accept_returns_ok_for_a_valid_token() -> Result<()> {
+    let _fixture = TestFixture::shared();
+    let mut sampler = LlamaSampler::chain_simple([LlamaSampler::greedy()]);
+
+    sampler.try_accept(LlamaToken::new(0))?;
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn apply_runs_sampler_over_token_data_array() -> Result<()> {
+    use std::num::NonZeroU32;
+
+    use llama_cpp_bindings::context::params::LlamaContextParams;
+    use llama_cpp_bindings::llama_batch::LlamaBatch;
+    use llama_cpp_bindings::model::AddBos;
+
+    let fixture = TestFixture::shared();
+    let backend = fixture.backend();
+    let model = fixture.default_model();
+    let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
+    let mut context = model.new_context(backend, ctx_params)?;
+    let tokens = model.str_to_token("Hi", AddBos::Always)?;
+    let mut batch = LlamaBatch::new(512, 1)?;
+    batch.add_sequence(&tokens, 0, false)?;
+    context.decode(&mut batch)?;
+
+    let mut data_array = context.token_data_array_ith(batch.n_tokens() - 1)?;
+    let sampler = LlamaSampler::greedy();
+    sampler.apply(&mut data_array);
 
     Ok(())
 }

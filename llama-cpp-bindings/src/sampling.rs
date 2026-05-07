@@ -475,7 +475,6 @@ impl LlamaSampler {
     /// # Errors
     ///
     /// Returns [`GrammarError`] if the grammar is invalid or the sampler cannot be initialized.
-    #[cfg(feature = "llguidance")]
     pub fn llguidance(
         model: &LlamaModel,
         grammar_kind: &str,

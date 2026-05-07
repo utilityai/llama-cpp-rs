@@ -15,8 +15,8 @@ serde_json = { workspace = true }
 thiserror = "2"
 tracing = { workspace = true }
 tracing-core = "0.1"
-llguidance = { version = "1.7.0", optional = true }
-toktrie = { version = "1.7.0", optional = true }
+llguidance = "1.7.0"
+toktrie = "1.7.0"
 
 [dev-dependencies]
 serial_test = "3"
@@ -38,7 +38,6 @@ android-shared-stdcxx = ["llama-cpp-bindings-sys/shared-stdcxx"]
 android-static-stdcxx = ["llama-cpp-bindings-sys/static-stdcxx"]
 system-ggml = ["llama-cpp-bindings-sys/system-ggml"]
 system-ggml-static = ["system-ggml", "llama-cpp-bindings-sys/system-ggml-static"]
-llguidance = ["dep:llguidance", "dep:toktrie"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-bindings-sys = { workspace = true, features = ["metal"] }

@@ -26,7 +26,6 @@ pub mod llama_backend_device;
 pub mod llama_backend_numa_strategy;
 pub mod llama_batch;
 pub mod llama_time_us;
-#[cfg(feature = "llguidance")]
 pub mod llguidance_sampler;
 #[cfg(feature = "dynamic-backends")]
 pub mod load_backends;
