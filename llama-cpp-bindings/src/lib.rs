@@ -46,6 +46,7 @@ pub mod sampling;
 pub mod timing;
 pub mod token;
 pub mod token_type;
+pub mod tool_call_format;
 pub mod tool_call_marker_pair;
 pub mod tool_call_template_overrides;
 

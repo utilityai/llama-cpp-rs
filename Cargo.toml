@@ -17,6 +17,7 @@ llama-cpp-bindings = { path = "llama-cpp-bindings", version = "0.5.0" }
 llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "0.5.0" }
 llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "0.5.0" }
 llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "0.5.0" }
+nom = "=8.0.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tracing = "0.1"

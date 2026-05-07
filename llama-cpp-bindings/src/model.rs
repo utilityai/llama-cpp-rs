@@ -47,6 +47,10 @@ use crate::{
 use llama_cpp_bindings_types::ParsedChatMessage;
 use llama_cpp_bindings_types::ParsedToolCall;
 use llama_cpp_bindings_types::ToolCallArguments;
+use llama_cpp_bindings_types::ToolCallMarkers;
+
+use crate::tool_call_format;
+use crate::tool_call_format::ToolCallFormatOutcome;
 
 pub mod add_bos;
 pub mod llama_chat_message;
@@ -826,7 +830,7 @@ impl LlamaModel {
     /// registered override matches — callers in that case fall back to
     /// llama.cpp's autoparser via [`Self::parse_chat_message`].
     #[must_use]
-    pub fn tool_call_markers(&self) -> Option<crate::ToolCallMarkers> {
+    pub fn tool_call_markers(&self) -> Option<ToolCallMarkers> {
         let template = match self.chat_template(None) {
             Ok(template) => template,
             Err(error) => {
@@ -870,6 +874,13 @@ impl LlamaModel {
     /// content / reasoning / tool-call data — never a raw JSON blob to
     /// deserialize on the Rust side.
     ///
+    /// When llama.cpp's autoparser returns no tool calls but the model's chat
+    /// template is recognised by the wrapper-side override registry (Gemma 4,
+    /// Mistral 3, Qwen 3.5+), the wrapper-side fallback parser runs and
+    /// replaces `tool_calls` with what it found. Empty `id` fields (some
+    /// templates leave them blank) are filled with `call_{index}` before
+    /// returning, so callers always see well-formed identifiers.
+    ///
     /// `tools_json` is a JSON-array string of OpenAI-style tool definitions
     /// (use `"[]"` when no tools are in scope). `is_partial` switches between
     /// mid-stream (lenient) and final (strict) parses.
@@ -877,8 +888,29 @@ impl LlamaModel {
     /// # Errors
     ///
     /// Returns [`ParseChatMessageError`] when the FFI returns a non-OK
-    /// status, the C++ side throws, or accessor strings are not valid UTF-8.
+    /// status, the C++ side throws, accessor strings are not valid UTF-8, or
+    /// the wrapper-side fallback parser detects a structural issue in the
+    /// body it tried to parse.
     pub fn parse_chat_message(
+        &self,
+        tools_json: &str,
+        input: &str,
+        is_partial: bool,
+    ) -> Result<ParsedChatMessage, ParseChatMessageError> {
+        let mut parsed = self.parse_chat_message_via_ffi(tools_json, input, is_partial)?;
+
+        if parsed.tool_calls.is_empty()
+            && let Some(markers) = self.tool_call_markers()
+        {
+            apply_template_override_fallback(&mut parsed.tool_calls, input, &markers)?;
+        }
+
+        synthesize_missing_tool_call_ids(&mut parsed.tool_calls);
+
+        Ok(parsed)
+    }
+
+    fn parse_chat_message_via_ffi(
         &self,
         tools_json: &str,
         input: &str,
@@ -1031,6 +1063,32 @@ fn collect_parsed_chat_message(
         reasoning_content,
         tool_calls,
     ))
+}
+
+fn apply_template_override_fallback(
+    tool_calls: &mut Vec<ParsedToolCall>,
+    input: &str,
+    markers: &ToolCallMarkers,
+) -> Result<(), ParseChatMessageError> {
+    match tool_call_format::try_parse(input, markers) {
+        ToolCallFormatOutcome::Parsed(calls) => {
+            *tool_calls = calls;
+
+            Ok(())
+        }
+        ToolCallFormatOutcome::NoMatch => Ok(()),
+        ToolCallFormatOutcome::Failed(failure) => {
+            Err(ParseChatMessageError::TemplateOverrideFailed(failure))
+        }
+    }
+}
+
+fn synthesize_missing_tool_call_ids(tool_calls: &mut [ParsedToolCall]) {
+    for (index, call) in tool_calls.iter_mut().enumerate() {
+        if call.id.is_empty() {
+            call.id = format!("call_{index}");
+        }
+    }
 }
 
 fn parse_single_string_status(

@@ -365,6 +365,81 @@ pub enum ParseChatMessageError {
     /// The model has no usable chat template, so the parser cannot be built.
     #[error("model has no chat template")]
     NoChatTemplate,
+    /// The wrapper-side fallback parser detected a structural issue while parsing the body.
+    #[error("template-override fallback parser failed: {0}")]
+    TemplateOverrideFailed(#[from] ToolCallFormatFailure),
+}
+
+/// Top-level failure for the wrapper-side template-override parsers (one variant per supported shape).
+#[derive(Debug, thiserror::Error)]
+pub enum ToolCallFormatFailure {
+    #[error("bracketed-args fallback parser: {0}")]
+    BracketedArgs(#[from] BracketedArgsFailure),
+    #[error("paired-quote fallback parser: {0}")]
+    PairedQuote(#[from] PairedQuoteFailure),
+    #[error("xml-function-tags fallback parser: {0}")]
+    XmlFunctionTags(#[from] XmlFunctionTagsFailure),
+}
+
+/// Failures specific to the bracketed-JSON args parser (Mistral 3 `[TOOL_CALLS]name[ARGS]{...}`).
+#[derive(Debug, thiserror::Error)]
+pub enum BracketedArgsFailure {
+    #[error("tool call '{tool_name}' arguments are not valid JSON: {message}")]
+    InvalidJsonArguments {
+        tool_name: String,
+        message: String,
+    },
+    #[error("tool call '{tool_name}' arguments truncated before JSON value completed")]
+    UnterminatedArguments { tool_name: String },
+}
+
+/// Failures specific to the paired-quote args parser (Gemma 4 `<|tool_call>call:name{key:<|"|>val<|"|>}`).
+#[derive(Debug, thiserror::Error)]
+pub enum PairedQuoteFailure {
+    #[error("empty key in tool call '{tool_name}' arguments")]
+    EmptyKey { tool_name: String },
+    #[error("tool call '{tool_name}' translated arguments are not valid JSON: {message}")]
+    InvalidJsonArguments {
+        tool_name: String,
+        message: String,
+    },
+    #[error("tool call '{tool_name}' has unclosed quoted value for key '{key}'")]
+    UnclosedQuotedValue { tool_name: String, key: String },
+    #[error("tool call '{tool_name}' arguments ended without close marker (state: {state})")]
+    UnclosedArgumentBlock {
+        tool_name: String,
+        state: &'static str,
+    },
+    #[error(
+        "tool call '{tool_name}' has unexpected character '{character}' after value for key '{key}'"
+    )]
+    UnexpectedCharAfterValue {
+        tool_name: String,
+        key: String,
+        character: char,
+    },
+}
+
+/// Failures specific to the XML function-tags parser (Qwen 3.5+ `<function=name><parameter=key>val</parameter></function>`).
+#[derive(Debug, thiserror::Error)]
+pub enum XmlFunctionTagsFailure {
+    #[error("tool call function tag has empty name")]
+    EmptyFunctionName,
+    #[error("tool call function '{function_name}' is missing close tag '{expected_close}'")]
+    UnclosedFunctionBlock {
+        function_name: String,
+        expected_close: String,
+    },
+    #[error("tool call function '{function_name}' has parameter with empty name")]
+    EmptyParameterName { function_name: String },
+    #[error(
+        "tool call function '{function_name}' parameter '{parameter_name}' is missing close tag '{expected_close}'"
+    )]
+    UnclosedParameterBlock {
+        function_name: String,
+        parameter_name: String,
+        expected_close: String,
+    },
 }
 
 /// Failed to evaluate multimodal chunks through the request classifier.
