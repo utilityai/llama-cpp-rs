@@ -11,3 +11,6 @@ target/
 
 # Local test environment files (test env vars are passed through Makefile targets instead)
 .env.test
+
+# Mac stuff
+.DS_Store
