@@ -13,7 +13,6 @@ use crate::llama_batch::BatchAddError;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
-use crate::mtmd::MtmdInputChunkType;
 use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
@@ -458,12 +457,7 @@ impl<'model> SampledTokenClassifier<'model> {
             let chunk = chunks
                 .get(index)
                 .ok_or(EvalMultimodalChunksError::ChunkOutOfBounds(index))?;
-            let n_tokens = chunk.n_tokens() as u64;
-            match chunk.chunk_type()? {
-                MtmdInputChunkType::Text => self.usage.record_prompt_tokens(n_tokens),
-                MtmdInputChunkType::Image => self.usage.record_input_image_tokens(n_tokens),
-                MtmdInputChunkType::Audio => self.usage.record_input_audio_tokens(n_tokens),
-            }
+            crate::ingest_prompt_chunk::ingest_prompt_chunk(self, &chunk)?;
         }
 
         Ok(n_past_after)
@@ -471,6 +465,14 @@ impl<'model> SampledTokenClassifier<'model> {
 
     pub const fn record_prompt_tokens(&mut self, count: u64) {
         self.usage.record_prompt_tokens(count);
+    }
+
+    pub const fn record_input_image_tokens(&mut self, count: u64) {
+        self.usage.record_input_image_tokens(count);
+    }
+
+    pub const fn record_input_audio_tokens(&mut self, count: u64) {
+        self.usage.record_input_audio_tokens(count);
     }
 
     /// # Errors
