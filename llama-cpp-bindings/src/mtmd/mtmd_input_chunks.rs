@@ -99,7 +99,7 @@ impl MtmdInputChunks {
         &self,
         mtmd_ctx: &MtmdContext,
         llama_ctx: &LlamaContext,
-        n_past: llama_cpp_bindings_sys::llama_pos,
+        start_position: llama_cpp_bindings_sys::llama_pos,
         seq_id: llama_cpp_bindings_sys::llama_seq_id,
         n_batch: i32,
         logits_last: bool,
@@ -113,24 +113,29 @@ impl MtmdInputChunks {
             });
         }
 
-        let mut new_n_past: llama_cpp_bindings_sys::llama_pos = 0;
+        // mtmd_helper_eval_chunks overwrites `*new_n_past` at the end of its
+        // chunk loop (mtmd-helper.cpp:413), so any seed would be fine — but
+        // we mirror the per-chunk wrapper's `start_position` / `final_position`
+        // shape here for parity, keeping the read-only input and write-only
+        // output strictly separated.
+        let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
 
         let result = unsafe {
             llama_cpp_bindings_sys::mtmd_helper_eval_chunks(
                 mtmd_ctx.context.as_ptr(),
                 llama_ctx.context.as_ptr(),
                 self.chunks.as_ptr(),
-                n_past,
+                start_position,
                 seq_id,
                 n_batch,
                 logits_last,
-                &raw mut new_n_past,
+                &raw mut final_position,
             )
         };
 
         check_eval_result(result)?;
 
-        Ok(new_n_past)
+        Ok(final_position)
     }
 }
 

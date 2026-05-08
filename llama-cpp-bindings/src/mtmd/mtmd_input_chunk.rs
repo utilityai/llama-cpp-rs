@@ -2,8 +2,11 @@ use std::ffi::CStr;
 use std::ptr::NonNull;
 use std::slice;
 
+use crate::context::LlamaContext;
 use crate::token::LlamaToken;
 
+use super::mtmd_context::MtmdContext;
+use super::mtmd_error::MtmdEvalError;
 use super::mtmd_error::MtmdInputChunkError;
 use super::mtmd_input_chunk_type::{MtmdInputChunkType, MtmdInputChunkTypeError};
 
@@ -108,6 +111,48 @@ impl MtmdInputChunk {
         let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
 
         Ok(Self { chunk, owned: true })
+    }
+
+    /// Evaluate this single chunk through the multimodal helper.
+    ///
+    /// Mirrors `MtmdInputChunks::eval_chunks` but for one chunk at a time, so
+    /// callers can interleave per-chunk decode with per-chunk bookkeeping
+    /// (token counting, marker state-machine replay) inside one loop instead
+    /// of running the helper-level all-chunks eval and a separate ingest pass.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MtmdEvalError::EvalFailure` if the underlying encode or decode
+    /// step fails.
+    pub fn eval_single(
+        &self,
+        mtmd_ctx: &MtmdContext,
+        llama_ctx: &LlamaContext,
+        start_position: llama_cpp_bindings_sys::llama_pos,
+        seq_id: llama_cpp_bindings_sys::llama_seq_id,
+        n_batch: i32,
+        logits_last: bool,
+    ) -> Result<llama_cpp_bindings_sys::llama_pos, MtmdEvalError> {
+        let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
+
+        let result = unsafe {
+            llama_cpp_bindings_sys::mtmd_helper_eval_chunk_single(
+                mtmd_ctx.context.as_ptr(),
+                llama_ctx.context.as_ptr(),
+                self.chunk.as_ptr(),
+                start_position,
+                seq_id,
+                n_batch,
+                logits_last,
+                &raw mut final_position,
+            )
+        };
+
+        if result == 0 {
+            Ok(final_position)
+        } else {
+            Err(MtmdEvalError::EvalFailure(result))
+        }
     }
 }
 

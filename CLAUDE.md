@@ -59,6 +59,10 @@ Never make assumptions or guesses about code behavior; always investigate. Alway
 - When working on tests, if you notice that the tested code can be better, you can suggest changes.
 - When running tests, always save output to a temporary file, so you won't need to re-run them to analyze it.
 
+## Quality Checklist
+
+- When dealing with tokens, classifying tokens, analyzing tokens, make sure it happens in a single pass. Do not do separate passes for the sake of performance, architect the pipeline in a way that is readable, easy to maintain, but also streamlined.
+
 ## Committing Changes
 
 - Always keep the commit messages short, human readable, descriptive. Keep commit messages as one-liners.

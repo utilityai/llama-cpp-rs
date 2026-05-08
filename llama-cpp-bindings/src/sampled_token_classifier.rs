@@ -445,22 +445,35 @@ impl<'model> SampledTokenClassifier<'model> {
         chunks: &MtmdInputChunks,
         mtmd_ctx: &MtmdContext,
         llama_ctx: &LlamaContext,
-        n_past: llama_pos,
+        start_position: llama_pos,
         seq_id: llama_seq_id,
         n_batch: i32,
         logits_last: bool,
     ) -> Result<llama_pos, EvalMultimodalChunksError> {
-        let n_past_after =
-            chunks.eval_chunks(mtmd_ctx, llama_ctx, n_past, seq_id, n_batch, logits_last)?;
+        let chunk_count = chunks.len();
+        // `start_position` stays read-only; `next_position` is the loop
+        // accumulator that walks forward chunk-by-chunk and is the function's
+        // return value. Two locals, single responsibility each.
+        let mut next_position = start_position;
 
-        for index in 0..chunks.len() {
+        for index in 0..chunk_count {
             let chunk = chunks
                 .get(index)
                 .ok_or(EvalMultimodalChunksError::ChunkOutOfBounds(index))?;
+            let logits_for_this_chunk = logits_last && index + 1 == chunk_count;
+
+            next_position = chunk.eval_single(
+                mtmd_ctx,
+                llama_ctx,
+                next_position,
+                seq_id,
+                n_batch,
+                logits_for_this_chunk,
+            )?;
             crate::ingest_prompt_chunk::ingest_prompt_chunk(self, &chunk)?;
         }
 
-        Ok(n_past_after)
+        Ok(next_position)
     }
 
     pub const fn record_prompt_tokens(&mut self, count: u64) {
