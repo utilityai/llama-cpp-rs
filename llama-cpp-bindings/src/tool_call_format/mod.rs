@@ -1,4 +1,5 @@
 pub mod bracketed_args;
+pub mod key_value_xml_tags;
 pub mod paired_quote_args;
 pub mod tool_call_format_outcome;
 pub mod xml_function_tags;
@@ -20,6 +21,9 @@ pub fn try_parse(body: &str, markers: &ToolCallMarkers) -> ToolCallFormatOutcome
         ToolCallArgsShape::BracketedJson(shape) => {
             bracketed_args::parse(body, markers, shape).map_err(Into::into)
         }
+        ToolCallArgsShape::KeyValueXmlTags(shape) => {
+            key_value_xml_tags::parse(body, markers, shape).map_err(Into::into)
+        }
         ToolCallArgsShape::PairedQuote(shape) => {
             paired_quote_args::parse(body, markers, shape).map_err(Into::into)
         }
@@ -38,6 +42,7 @@ pub fn try_parse(body: &str, markers: &ToolCallMarkers) -> ToolCallFormatOutcome
 #[cfg(test)]
 mod tests {
     use llama_cpp_bindings_types::BracketedJsonShape;
+    use llama_cpp_bindings_types::KeyValueXmlTagsShape;
     use llama_cpp_bindings_types::PairedQuoteShape;
     use llama_cpp_bindings_types::ToolCallArgsShape;
     use llama_cpp_bindings_types::ToolCallArguments;
@@ -86,6 +91,19 @@ mod tests {
         }
     }
 
+    fn glm47_markers() -> ToolCallMarkers {
+        ToolCallMarkers {
+            open: "<tool_call>".to_owned(),
+            close: "</tool_call>".to_owned(),
+            args_shape: ToolCallArgsShape::KeyValueXmlTags(KeyValueXmlTagsShape {
+                key_open: "<arg_key>".to_owned(),
+                key_close: "</arg_key>".to_owned(),
+                value_open: "<arg_value>".to_owned(),
+                value_close: "</arg_value>".to_owned(),
+            }),
+        }
+    }
+
     #[test]
     fn dispatches_to_bracketed_args_for_mistral3_shape() {
         let outcome = try_parse(
@@ -111,6 +129,26 @@ mod tests {
         let outcome = try_parse(
             "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}",
             &gemma4_markers(),
+        );
+
+        match outcome {
+            ToolCallFormatOutcome::Parsed(calls) => {
+                assert_eq!(calls.len(), 1);
+                assert_eq!(calls[0].name, "get_weather");
+                assert_eq!(
+                    calls[0].arguments,
+                    ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+                );
+            }
+            other => panic!("expected Parsed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dispatches_to_key_value_xml_tags_for_glm47_shape() {
+        let outcome = try_parse(
+            "<tool_call>get_weather<arg_key>location</arg_key><arg_value>Paris</arg_value></tool_call>",
+            &glm47_markers(),
         );
 
         match outcome {

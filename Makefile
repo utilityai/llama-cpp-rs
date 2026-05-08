@@ -21,6 +21,24 @@ QWEN3_6_35B_A3B_ENV = \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
 	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
 
+GLM4_7_FLASH_ENV = \
+	LLAMA_TEST_HF_REPO=unsloth/GLM-4.7-Flash-GGUF \
+	LLAMA_TEST_HF_MODEL=GLM-4.7-Flash-Q4_K_M.gguf \
+	LLAMA_TEST_HF_MMPROJ=mmproj-F16.gguf \
+	LLAMA_TEST_HF_EMBED_REPO=Qwen/Qwen3-Embedding-0.6B-GGUF \
+	LLAMA_TEST_HF_EMBED_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf \
+	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
+	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
+
+DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV = \
+	LLAMA_TEST_HF_REPO=unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF \
+	LLAMA_TEST_HF_MODEL=DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf \
+	LLAMA_TEST_HF_MMPROJ=mmproj-F16.gguf \
+	LLAMA_TEST_HF_EMBED_REPO=Qwen/Qwen3-Embedding-0.6B-GGUF \
+	LLAMA_TEST_HF_EMBED_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf \
+	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
+	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
+
 .PHONY: test.unit
 test.unit: clippy
 	cargo test -p llama-cpp-bindings --features $(FEATURES)
@@ -32,6 +50,14 @@ test.qwen3.5_0.8B: clippy
 .PHONY: test.qwen3.6_35b_a3b
 test.qwen3.6_35b_a3b: clippy
 	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+
+.PHONY: test.glm4_7_flash
+test.glm4_7_flash: clippy
+	$(GLM4_7_FLASH_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+
+.PHONY: test.deepseek_r1_distill_llama_8b
+test.deepseek_r1_distill_llama_8b: clippy
+	$(DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
 
 .PHONY: test.qwen3.5_0.8B.coverage.run
 test.qwen3.5_0.8B.coverage.run: clippy

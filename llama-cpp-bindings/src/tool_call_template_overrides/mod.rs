@@ -1,4 +1,5 @@
 pub mod gemma4_call_block;
+pub mod glm47_key_value_tags;
 pub mod mistral3_arrow_args;
 pub mod qwen_xml_tags;
 
@@ -6,8 +7,9 @@ use llama_cpp_bindings_types::ToolCallMarkers;
 
 #[must_use]
 pub fn detect(template: &str) -> Option<ToolCallMarkers> {
-    let detectors: [fn(&str) -> Option<ToolCallMarkers>; 3] = [
+    let detectors: [fn(&str) -> Option<ToolCallMarkers>; 4] = [
         gemma4_call_block::detect,
+        glm47_key_value_tags::detect,
         mistral3_arrow_args::detect,
         qwen_xml_tags::detect,
     ];
