@@ -1,13 +1,13 @@
 use std::num::NonZeroU32;
 
 use anyhow::Result;
+use llama_cpp_bindings::TokenUsage;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputChunkType;
 use llama_cpp_bindings::mtmd::MtmdInputChunks;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
-use llama_cpp_bindings::TokenUsage;
 use llama_cpp_bindings_tests::TestFixture;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
 

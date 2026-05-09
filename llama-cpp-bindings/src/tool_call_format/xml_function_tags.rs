@@ -40,7 +40,8 @@ fn skip_to_next_function_open<'body>(
     input: &'body str,
     function_open_prefix: &str,
 ) -> Option<&'body str> {
-    let take_result: IResult<&'body str, &'body str> = take_until(function_open_prefix).parse(input);
+    let take_result: IResult<&'body str, &'body str> =
+        take_until(function_open_prefix).parse(input);
     let (after_prefix_inclusive, _) = take_result.ok()?;
     let consume_result: IResult<&'body str, &'body str> =
         tag(function_open_prefix).parse(after_prefix_inclusive);
@@ -116,7 +117,8 @@ fn parse_one_function<'body>(
     input: &'body str,
     shape: &XmlTagsShape,
 ) -> Result<Option<(ParsedToolCall, &'body str)>, XmlFunctionTagsFailure> {
-    let Some(after_function_prefix) = skip_to_next_function_open(input, &shape.function_open_prefix)
+    let Some(after_function_prefix) =
+        skip_to_next_function_open(input, &shape.function_open_prefix)
     else {
         return Ok(None);
     };
@@ -334,5 +336,34 @@ mod tests {
         let body = "<function=f><parameter=x>1</parameter></function>";
         let parsed = parse(body, &shape).expect("must parse empty");
         assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn parses_negotiate_with_cat_reproducer_payload() {
+        let body = "<tool_call>\n\
+<function=negotiate_with_cat>\n\
+<parameter=bribe>\n\
+tuna\n\
+</parameter>\n\
+<parameter=desperation_level>\n\
+8\n\
+</parameter>\n\
+<parameter=topic>\n\
+get off the keyboard\n\
+</parameter>\n\
+</function>\n\
+</tool_call>";
+        let parsed = parse(body, &xml_shape()).expect("must parse");
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].name, "negotiate_with_cat");
+        assert_eq!(
+            parsed[0].arguments,
+            ToolCallArguments::ValidJson(json!({
+                "bribe": "tuna",
+                "desperation_level": 8,
+                "topic": "get off the keyboard",
+            })),
+        );
     }
 }

@@ -23,7 +23,9 @@ fn text_chunk_records_prompt_tokens() -> Result<()> {
     let text_chunk = (0..chunks.len())
         .filter_map(|index| chunks.get(index))
         .find(|chunk| chunk.chunk_type() == Ok(MtmdInputChunkType::Text))
-        .ok_or_else(|| anyhow::anyhow!("text-only tokenization should produce at least one text chunk"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("text-only tokenization should produce at least one text chunk")
+        })?;
 
     let n_tokens = text_chunk.n_tokens() as u64;
 

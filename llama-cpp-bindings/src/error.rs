@@ -387,10 +387,7 @@ pub enum ToolCallFormatFailure {
 #[derive(Debug, thiserror::Error)]
 pub enum BracketedArgsFailure {
     #[error("tool call '{tool_name}' arguments are not valid JSON: {message}")]
-    InvalidJsonArguments {
-        tool_name: String,
-        message: String,
-    },
+    InvalidJsonArguments { tool_name: String, message: String },
     #[error("tool call '{tool_name}' arguments truncated before JSON value completed")]
     UnterminatedArguments { tool_name: String },
 }
@@ -401,10 +398,7 @@ pub enum PairedQuoteFailure {
     #[error("empty key in tool call '{tool_name}' arguments")]
     EmptyKey { tool_name: String },
     #[error("tool call '{tool_name}' translated arguments are not valid JSON: {message}")]
-    InvalidJsonArguments {
-        tool_name: String,
-        message: String,
-    },
+    InvalidJsonArguments { tool_name: String, message: String },
     #[error("tool call '{tool_name}' has unclosed quoted value for key '{key}'")]
     UnclosedQuotedValue { tool_name: String, key: String },
     #[error("tool call '{tool_name}' arguments ended without close marker (state: {state})")]
@@ -431,9 +425,7 @@ pub enum KeyValueXmlTagsFailure {
     UnclosedFunctionBlock { expected_close: String },
     #[error("tool call function '{function_name}' has key tag with empty content")]
     EmptyKey { function_name: String },
-    #[error(
-        "tool call function '{function_name}' is missing key close tag '{expected_close}'"
-    )]
+    #[error("tool call function '{function_name}' is missing key close tag '{expected_close}'")]
     UnclosedKeyTag {
         function_name: String,
         expected_close: String,

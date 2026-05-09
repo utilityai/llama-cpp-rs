@@ -72,7 +72,8 @@ fn mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt() -> Resul
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier();
-    let n_past = classifier.eval_multimodal_chunks(&chunks, &mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past =
+        classifier.eval_multimodal_chunks(&chunks, &mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::greedy();
     let mut batch = LlamaBatch::new(2048, 1)?;

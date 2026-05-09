@@ -25,7 +25,10 @@ fn consume_optional_prefix<'body>(input: &'body str, literal: &str) -> &'body st
     }
 }
 
-fn split_at_separator<'body>(input: &'body str, separator: &str) -> Option<(&'body str, &'body str)> {
+fn split_at_separator<'body>(
+    input: &'body str,
+    separator: &str,
+) -> Option<(&'body str, &'body str)> {
     let take_result: IResult<&'body str, &'body str> = take_until(separator).parse(input);
     let (after_name, name_raw) = take_result.ok()?;
     let consume_result: IResult<&'body str, &'body str> = tag(separator).parse(after_name);

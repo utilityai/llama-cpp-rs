@@ -46,6 +46,7 @@ use crate::{
 };
 use llama_cpp_bindings_types::ParsedChatMessage;
 use llama_cpp_bindings_types::ParsedToolCall;
+use llama_cpp_bindings_types::ReasoningMarkers;
 use llama_cpp_bindings_types::ToolCallArguments;
 use llama_cpp_bindings_types::ToolCallMarkers;
 
@@ -824,6 +825,26 @@ impl LlamaModel {
         (Some(markers.open), close)
     }
 
+    /// # Errors
+    /// Returns [`MarkerDetectionError`] when the underlying FFI call fails.
+    pub fn reasoning_markers(&self) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
+        let (open, close) = invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+                self.model.as_ptr(),
+                first,
+                second,
+                error,
+            )
+        })?;
+
+        match (open, close) {
+            (Some(open), Some(close)) if !open.is_empty() && !close.is_empty() => {
+                Ok(Some(ReasoningMarkers { open, close }))
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Returns the rich tool-call marker bundle (open / separator / close /
     /// optional value-quote pair) for this model's chat template, sourced from
     /// the wrapper's per-template override registry. Returns `None` when no
@@ -897,10 +918,28 @@ impl LlamaModel {
         input: &str,
         is_partial: bool,
     ) -> Result<ParsedChatMessage, ParseChatMessageError> {
-        let mut parsed = self.parse_chat_message_via_ffi(tools_json, input, is_partial)?;
+        let tool_call_markers = self.tool_call_markers();
+        let mut parsed = match self.parse_chat_message_via_ffi(tools_json, input, is_partial) {
+            Ok(parsed) => parsed,
+            Err(ffi_error @ ParseChatMessageError::ParseException(_)) => {
+                let reasoning_markers = self.reasoning_markers().ok().flatten();
+                match recover_parsed_message_via_template_override(
+                    input,
+                    tool_call_markers.as_ref(),
+                    reasoning_markers.as_ref(),
+                )? {
+                    Some(mut recovered) => {
+                        synthesize_missing_tool_call_ids(&mut recovered.tool_calls);
+                        return Ok(recovered);
+                    }
+                    None => return Err(ffi_error),
+                }
+            }
+            Err(other) => return Err(other),
+        };
 
         if parsed.tool_calls.is_empty()
-            && let Some(markers) = self.tool_call_markers()
+            && let Some(markers) = tool_call_markers
         {
             apply_template_override_fallback(&mut parsed.tool_calls, input, &markers)?;
         }
@@ -1081,6 +1120,73 @@ fn apply_template_override_fallback(
             Err(ParseChatMessageError::TemplateOverrideFailed(failure))
         }
     }
+}
+
+fn recover_parsed_message_via_template_override(
+    input: &str,
+    tool_call_markers: Option<&ToolCallMarkers>,
+    reasoning_markers: Option<&ReasoningMarkers>,
+) -> Result<Option<ParsedChatMessage>, ParseChatMessageError> {
+    let Some(tool_call_markers) = tool_call_markers else {
+        return Ok(None);
+    };
+
+    let calls = match tool_call_format::try_parse(input, tool_call_markers) {
+        ToolCallFormatOutcome::Parsed(calls) => calls,
+        ToolCallFormatOutcome::NoMatch => return Ok(None),
+        ToolCallFormatOutcome::Failed(failure) => {
+            return Err(ParseChatMessageError::TemplateOverrideFailed(failure));
+        }
+    };
+
+    let split = split_reasoning_prefix(input, reasoning_markers, &tool_call_markers.open);
+
+    Ok(Some(ParsedChatMessage::new(
+        split.content,
+        split.reasoning,
+        calls,
+    )))
+}
+
+struct ReasoningSplit {
+    reasoning: String,
+    content: String,
+}
+
+fn split_reasoning_prefix(
+    input: &str,
+    reasoning_markers: Option<&ReasoningMarkers>,
+    tool_call_open: &str,
+) -> ReasoningSplit {
+    let content_only = || ReasoningSplit {
+        reasoning: String::new(),
+        content: prefix_before(input, tool_call_open),
+    };
+
+    let Some(reasoning_markers) = reasoning_markers else {
+        return content_only();
+    };
+    let Some(open_pos) = input.find(&reasoning_markers.open) else {
+        return content_only();
+    };
+
+    let after_open = &input[open_pos + reasoning_markers.open.len()..];
+    let Some(close_offset) = after_open.find(&reasoning_markers.close) else {
+        return content_only();
+    };
+
+    let reasoning = after_open[..close_offset].to_owned();
+    let after_close = &after_open[close_offset + reasoning_markers.close.len()..];
+
+    ReasoningSplit {
+        reasoning,
+        content: prefix_before(after_close, tool_call_open),
+    }
+}
+
+fn prefix_before(text: &str, marker: &str) -> String {
+    text.find(marker)
+        .map_or_else(|| text.to_owned(), |pos| text[..pos].to_owned())
 }
 
 fn synthesize_missing_tool_call_ids(tool_calls: &mut [ParsedToolCall]) {
@@ -1478,5 +1584,201 @@ mod ffi_helper_tests {
             MarkerDetectionError::FfiError(code) => assert!(code != 0),
             other => panic!("expected FfiError, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod recover_parsed_message_via_template_override_tests {
+    use llama_cpp_bindings_types::KeyValueXmlTagsShape;
+    use llama_cpp_bindings_types::ReasoningMarkers;
+    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::ToolCallArguments;
+    use llama_cpp_bindings_types::ToolCallMarkers;
+    use llama_cpp_bindings_types::XmlTagsShape;
+    use serde_json::json;
+
+    use super::ParseChatMessageError;
+    use super::recover_parsed_message_via_template_override;
+
+    fn glm47_tool_call_markers() -> ToolCallMarkers {
+        ToolCallMarkers {
+            open: "<tool_call>".to_owned(),
+            close: "</tool_call>".to_owned(),
+            args_shape: ToolCallArgsShape::KeyValueXmlTags(KeyValueXmlTagsShape {
+                key_open: "<arg_key>".to_owned(),
+                key_close: "</arg_key>".to_owned(),
+                value_open: "<arg_value>".to_owned(),
+                value_close: "</arg_value>".to_owned(),
+            }),
+        }
+    }
+
+    fn qwen3_tool_call_markers() -> ToolCallMarkers {
+        ToolCallMarkers {
+            open: "<tool_call>".to_owned(),
+            close: "</tool_call>".to_owned(),
+            args_shape: ToolCallArgsShape::XmlTags(XmlTagsShape {
+                function_open_prefix: "<function=".to_owned(),
+                function_close: "</function>".to_owned(),
+                parameter_open_prefix: "<parameter=".to_owned(),
+                parameter_close: "</parameter>".to_owned(),
+            }),
+        }
+    }
+
+    fn think_reasoning_markers() -> ReasoningMarkers {
+        ReasoningMarkers {
+            open: "<think>".to_owned(),
+            close: "</think>".to_owned(),
+        }
+    }
+
+    #[test]
+    fn returns_none_when_tool_call_markers_absent() {
+        let recovered = recover_parsed_message_via_template_override(
+            "<tool_call>get_weather<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>",
+            None,
+            None,
+        )
+        .expect("absent markers must not error");
+
+        assert!(recovered.is_none());
+    }
+
+    #[test]
+    fn returns_some_for_glm47_payload_without_reasoning() {
+        let recovered = recover_parsed_message_via_template_override(
+            "<tool_call>get_weather<arg_key>location</arg_key><arg_value>Paris</arg_value></tool_call>",
+            Some(&glm47_tool_call_markers()),
+            None,
+        )
+        .expect("well-formed glm47 payload must not error");
+
+        let message = recovered.expect("glm47 payload must produce Some(message)");
+        assert!(message.content.is_empty());
+        assert!(message.reasoning_content.is_empty());
+        assert_eq!(message.tool_calls.len(), 1);
+        assert_eq!(message.tool_calls[0].name, "get_weather");
+        assert_eq!(
+            message.tool_calls[0].arguments,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+        );
+    }
+
+    #[test]
+    fn returns_some_with_extracted_reasoning_for_qwen3_payload() {
+        let recovered = recover_parsed_message_via_template_override(
+            "<think>weighing options</think>\
+<tool_call><function=get_weather><parameter=location>Paris</parameter></function></tool_call>",
+            Some(&qwen3_tool_call_markers()),
+            Some(&think_reasoning_markers()),
+        )
+        .expect("payload with reasoning must not error");
+
+        let message = recovered.expect("payload must produce Some(message)");
+        assert_eq!(message.reasoning_content, "weighing options");
+        assert!(message.content.is_empty());
+        assert_eq!(message.tool_calls.len(), 1);
+        assert_eq!(message.tool_calls[0].name, "get_weather");
+    }
+
+    #[test]
+    fn returns_some_with_content_between_reasoning_and_tool_call() {
+        let recovered = recover_parsed_message_via_template_override(
+            "<think>r</think>preface text \
+<tool_call><function=get_weather><parameter=location>Paris</parameter></function></tool_call>",
+            Some(&qwen3_tool_call_markers()),
+            Some(&think_reasoning_markers()),
+        )
+        .expect("payload with content must not error");
+
+        let message = recovered.expect("payload must produce Some(message)");
+        assert_eq!(message.reasoning_content, "r");
+        assert_eq!(message.content, "preface text ");
+        assert_eq!(message.tool_calls.len(), 1);
+    }
+
+    #[test]
+    fn returns_none_when_body_lacks_open_marker() {
+        let recovered = recover_parsed_message_via_template_override(
+            "plain text without tool calls",
+            Some(&glm47_tool_call_markers()),
+            None,
+        )
+        .expect("plain text must not error");
+
+        assert!(recovered.is_none());
+    }
+
+    #[test]
+    fn returns_template_override_failed_for_malformed_body() {
+        let result = recover_parsed_message_via_template_override(
+            "<tool_call>get_weather<arg_key>location</arg_key>",
+            Some(&glm47_tool_call_markers()),
+            None,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ParseChatMessageError::TemplateOverrideFailed(_)),
+        ));
+    }
+}
+
+#[cfg(test)]
+mod split_reasoning_prefix_tests {
+    use llama_cpp_bindings_types::ReasoningMarkers;
+
+    use super::split_reasoning_prefix;
+
+    fn think_markers() -> ReasoningMarkers {
+        ReasoningMarkers {
+            open: "<think>".to_owned(),
+            close: "</think>".to_owned(),
+        }
+    }
+
+    #[test]
+    fn no_reasoning_markers_yields_empty_reasoning_and_content_before_tool_call() {
+        let split = split_reasoning_prefix("hi <tool_call>...", None, "<tool_call>");
+
+        assert!(split.reasoning.is_empty());
+        assert_eq!(split.content, "hi ");
+    }
+
+    #[test]
+    fn reasoning_markers_absent_from_input_yields_empty_reasoning() {
+        let split = split_reasoning_prefix(
+            "preface <tool_call>...",
+            Some(&think_markers()),
+            "<tool_call>",
+        );
+
+        assert!(split.reasoning.is_empty());
+        assert_eq!(split.content, "preface ");
+    }
+
+    #[test]
+    fn reasoning_open_without_close_falls_back_to_content_only() {
+        let split = split_reasoning_prefix(
+            "<think>still thinking <tool_call>...",
+            Some(&think_markers()),
+            "<tool_call>",
+        );
+
+        assert!(split.reasoning.is_empty());
+        assert_eq!(split.content, "<think>still thinking ");
+    }
+
+    #[test]
+    fn reasoning_open_close_and_tool_call_open_all_present_extracts_three_parts() {
+        let split = split_reasoning_prefix(
+            "<think>weighing</think>preamble<tool_call>...",
+            Some(&think_markers()),
+            "<tool_call>",
+        );
+
+        assert_eq!(split.reasoning, "weighing");
+        assert_eq!(split.content, "preamble");
     }
 }

@@ -64,7 +64,8 @@ fn qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt() -> Result<
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier();
-    let n_past = classifier.eval_multimodal_chunks(&chunks, &mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past =
+        classifier.eval_multimodal_chunks(&chunks, &mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::penalties(64, 1.1, 0.0, 0.0),

@@ -35,7 +35,10 @@ mod tests {
         assert_eq!(markers.open, "<tool_call>");
         assert_eq!(markers.close, "</tool_call>");
         let ToolCallArgsShape::KeyValueXmlTags(shape) = markers.args_shape else {
-            panic!("expected KeyValueXmlTags variant, got {:?}", markers.args_shape);
+            panic!(
+                "expected KeyValueXmlTags variant, got {:?}",
+                markers.args_shape
+            );
         };
         assert_eq!(shape.key_open, "<arg_key>");
         assert_eq!(shape.key_close, "</arg_key>");

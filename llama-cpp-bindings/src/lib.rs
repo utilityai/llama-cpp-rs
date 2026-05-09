@@ -64,9 +64,9 @@ pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
 pub use llama_cpp_bindings_types::{
-    BracketedJsonShape, PairedQuoteShape, ParsedChatMessage, ParsedToolCall, TokenUsage,
-    TokenUsageError, ToolCallArgsShape, ToolCallArguments, ToolCallMarkers, ToolCallValueQuote,
-    XmlTagsShape,
+    BracketedJsonShape, KeyValueXmlTagsShape, PairedQuoteShape, ParsedChatMessage, ParsedToolCall,
+    ReasoningMarkers, TokenUsage, TokenUsageError, ToolCallArgsShape, ToolCallArguments,
+    ToolCallMarkers, ToolCallValueQuote, XmlTagsShape,
 };
 pub use sampled_token::SampledToken;
 pub use sampled_token_classifier::SampledTokenClassifier;

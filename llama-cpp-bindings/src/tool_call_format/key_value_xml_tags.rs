@@ -24,8 +24,7 @@ const fn shape_is_complete(shape: &KeyValueXmlTagsShape) -> bool {
 fn skip_to_next_open<'body>(input: &'body str, open: &str) -> Option<&'body str> {
     let take_result: IResult<&'body str, &'body str> = take_until(open).parse(input);
     let (after_prefix_inclusive, _) = take_result.ok()?;
-    let consume_result: IResult<&'body str, &'body str> =
-        tag(open).parse(after_prefix_inclusive);
+    let consume_result: IResult<&'body str, &'body str> = tag(open).parse(after_prefix_inclusive);
     let (after_open, _) = consume_result.ok()?;
 
     Some(after_open)
@@ -53,12 +52,12 @@ fn parse_one_parameter<'body>(
         return Ok(None);
     };
 
-    let key_close_position = after_key_open.find(shape.key_close.as_str()).ok_or_else(|| {
-        KeyValueXmlTagsFailure::UnclosedKeyTag {
+    let key_close_position = after_key_open
+        .find(shape.key_close.as_str())
+        .ok_or_else(|| KeyValueXmlTagsFailure::UnclosedKeyTag {
             function_name: function_name.to_owned(),
             expected_close: shape.key_close.clone(),
-        }
-    })?;
+        })?;
     let key = after_key_open[..key_close_position].trim().to_owned();
     if key.is_empty() {
         return Err(KeyValueXmlTagsFailure::EmptyKey {
@@ -86,14 +85,13 @@ fn parse_one_parameter<'body>(
         });
     };
 
-    let value_close_position =
-        after_value_open
-            .find(shape.value_close.as_str())
-            .ok_or_else(|| KeyValueXmlTagsFailure::UnclosedValueTag {
-                function_name: function_name.to_owned(),
-                key: key.clone(),
-                expected_close: shape.value_close.clone(),
-            })?;
+    let value_close_position = after_value_open
+        .find(shape.value_close.as_str())
+        .ok_or_else(|| KeyValueXmlTagsFailure::UnclosedValueTag {
+            function_name: function_name.to_owned(),
+            key: key.clone(),
+            expected_close: shape.value_close.clone(),
+        })?;
     let raw_value = &after_value_open[..value_close_position];
     let value = parameter_value_to_json(raw_value);
     let after_value_close = &after_value_open[value_close_position + shape.value_close.len()..];
@@ -258,10 +256,7 @@ mod tests {
 
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].name, "ping");
-        assert_eq!(
-            parsed[0].arguments,
-            ToolCallArguments::ValidJson(json!({})),
-        );
+        assert_eq!(parsed[0].arguments, ToolCallArguments::ValidJson(json!({})),);
     }
 
     #[test]
@@ -308,9 +303,7 @@ mod tests {
 
         match result.expect_err("must error") {
             KeyValueXmlTagsFailure::MissingValueTag {
-                function_name,
-                key,
-                ..
+                function_name, key, ..
             } => {
                 assert_eq!(function_name, "f");
                 assert_eq!(key, "location");
@@ -330,8 +323,7 @@ mod tests {
     fn returns_empty_when_shape_is_incomplete() {
         let mut shape = glm47_shape();
         shape.value_close.clear();
-        let body =
-            "<tool_call>f<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>";
+        let body = "<tool_call>f<arg_key>k</arg_key><arg_value>v</arg_value></tool_call>";
         let parsed = parse(body, &glm47_markers(), &shape).expect("must parse empty");
         assert!(parsed.is_empty());
     }
