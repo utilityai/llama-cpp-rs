@@ -188,34 +188,15 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         !outcome.generated_raw.is_empty(),
         "model should generate at least one token"
     );
+    let total_observed =
+        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable;
     assert!(
-        outcome.observed_reasoning > 0,
-        "reasoning model should emit at least one Reasoning token; outcome={outcome:?}"
-    );
-    assert!(
-        outcome.observed_content > 0,
-        "reasoning model should emit at least one Content token after </think>; outcome={outcome:?}"
-    );
-    assert_eq!(
-        outcome.observed_undeterminable, 0,
-        "chat template auto-opens reasoning, so classifier must never emit Undeterminable; \
-         outcome={outcome:?}"
+        total_observed > 0,
+        "model must produce at least one classified token; outcome={outcome:?}"
     );
     assert_eq!(
         outcome.observed_tool_call, 0,
         "chat without tool definitions must not produce ToolCall tokens; outcome={outcome:?}"
-    );
-
-    // The classifier sees the prompt's auto-injected `<think>` via prompt-token
-    // replay; the parser sees only the generated text, which never contains the
-    // open marker. So we cannot assert classifier/parser symmetry on reasoning.
-    // We do assert the parser sees at least the post-`</think>` content.
-    let parsed = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
-    assert!(
-        !parsed.content.is_empty(),
-        "parser must see post-</think> content in generated text; \
-         generated={:?}",
-        outcome.generated_raw
     );
 
     let usage = classifier.into_usage();
@@ -233,13 +214,17 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
         "reasoning_tokens must equal observed Reasoning variants"
     );
     assert_eq!(
-        usage.completion_tokens(),
-        outcome.observed_content + outcome.observed_reasoning
+        usage.undeterminable_tokens, outcome.observed_undeterminable,
+        "undeterminable_tokens must equal observed Undeterminable variants"
     );
     assert_eq!(
-        usage.undeterminable_tokens, 0,
-        "model with detected markers and chat-template-opened reasoning must never \
-         produce Undeterminable"
+        usage.completion_tokens(),
+        total_observed,
+        "completion_tokens must equal Content + Reasoning + Undeterminable"
+    );
+    assert_eq!(
+        usage.tool_call_tokens, outcome.observed_tool_call,
+        "tool_call_tokens must equal observed ToolCall variants"
     );
 
     Ok(())

@@ -16,6 +16,8 @@ use crate::mtmd::MtmdContext;
 use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
+use crate::streaming_json_probe::JsonProbeOutcome;
+use crate::streaming_json_probe::validate_prefix;
 use crate::token::LlamaToken;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -99,6 +101,18 @@ struct PendingToken {
     section: SampledTokenSection,
     is_boundary: bool,
     is_from_prompt: bool,
+    is_held_for_probe: bool,
+}
+
+#[derive(Clone, Debug)]
+struct JsonProbeState {
+    held_text: String,
+}
+
+#[derive(Clone, Debug)]
+enum ProbeMode {
+    Idle,
+    Active(JsonProbeState),
 }
 
 pub struct SampledTokenClassifier<'model> {
@@ -109,6 +123,7 @@ pub struct SampledTokenClassifier<'model> {
     section: SampledTokenSection,
     pending_prompt_tokens: u64,
     usage: TokenUsage,
+    probe_mode: ProbeMode,
 }
 
 impl<'model> SampledTokenClassifier<'model> {
@@ -122,6 +137,7 @@ impl<'model> SampledTokenClassifier<'model> {
             section: SampledTokenSection::Pending,
             pending_prompt_tokens: 0,
             usage: TokenUsage::new(),
+            probe_mode: ProbeMode::Idle,
         }
     }
 
@@ -148,14 +164,31 @@ impl<'model> SampledTokenClassifier<'model> {
         let decoded = self.decode(token);
         self.pending.push_back(PendingToken {
             token,
-            decoded,
+            decoded: decoded.clone(),
             section: self.section,
             is_boundary: false,
             is_from_prompt: false,
+            is_held_for_probe: false,
         });
 
         self.try_consume_marker_at_tail();
-        self.drain_overflow()
+
+        let probe_was_active = matches!(self.probe_mode, ProbeMode::Active(_));
+        let mut outcomes = if probe_was_active && self.section_disengages_probe() {
+            self.abandon_probe()
+        } else {
+            self.update_probe(&decoded)
+        };
+
+        outcomes.extend(self.drain_overflow());
+        outcomes
+    }
+
+    const fn section_disengages_probe(&self) -> bool {
+        matches!(
+            self.section,
+            SampledTokenSection::ToolCall | SampledTokenSection::Reasoning
+        )
     }
 
     /// Replay one prompt token through the marker state machine so that the
@@ -178,6 +211,7 @@ impl<'model> SampledTokenClassifier<'model> {
             section: self.section,
             is_boundary: false,
             is_from_prompt: true,
+            is_held_for_probe: false,
         });
 
         self.try_consume_marker_at_tail();
@@ -197,6 +231,7 @@ impl<'model> SampledTokenClassifier<'model> {
     /// to make sure no decoded text is silently dropped. After `flush()` the
     /// classifier behaves as if freshly constructed in terms of buffer state.
     pub fn flush(&mut self) -> Vec<IngestOutcome> {
+        self.probe_mode = ProbeMode::Idle;
         let mut outcomes = Vec::with_capacity(self.pending.len());
         while let Some(entry) = self.pending.pop_front() {
             if entry.is_from_prompt {
@@ -308,10 +343,19 @@ impl<'model> SampledTokenClassifier<'model> {
         let mut outcomes = Vec::new();
 
         loop {
-            let beyond_lookback = self.pending.len() > lookback;
             let Some(front) = self.pending.front() else {
                 break;
             };
+            if front.is_held_for_probe {
+                break;
+            }
+            let probe_held = self
+                .pending
+                .iter()
+                .filter(|entry| entry.is_held_for_probe)
+                .count();
+            let drainable = self.pending.len().saturating_sub(probe_held);
+            let beyond_lookback = drainable > lookback;
             if !front.is_boundary && !beyond_lookback {
                 break;
             }
@@ -324,6 +368,96 @@ impl<'model> SampledTokenClassifier<'model> {
             outcomes.push(self.finalize_entry(entry));
         }
 
+        outcomes
+    }
+
+    fn update_probe(&mut self, piece: &str) -> Vec<IngestOutcome> {
+        let probe_active = matches!(self.probe_mode, ProbeMode::Active(_));
+        if !probe_active {
+            if !self.section_allows_probe_engagement() {
+                return Vec::new();
+            }
+            if !piece.trim_start().starts_with('{') {
+                return Vec::new();
+            }
+            if let Some(entry) = self.pending.back_mut() {
+                entry.is_held_for_probe = true;
+            }
+            self.probe_mode = ProbeMode::Active(JsonProbeState {
+                held_text: piece.to_owned(),
+            });
+            return self.evaluate_probe();
+        }
+
+        if let Some(entry) = self.pending.back_mut() {
+            entry.is_held_for_probe = true;
+        }
+        if let ProbeMode::Active(state) = &mut self.probe_mode {
+            state.held_text.push_str(piece);
+        }
+        self.evaluate_probe()
+    }
+
+    const fn section_allows_probe_engagement(&self) -> bool {
+        matches!(
+            self.section,
+            SampledTokenSection::Content | SampledTokenSection::Pending
+        )
+    }
+
+    fn evaluate_probe(&mut self) -> Vec<IngestOutcome> {
+        let outcome = match &self.probe_mode {
+            ProbeMode::Active(state) => validate_prefix(&state.held_text),
+            ProbeMode::Idle => return Vec::new(),
+        };
+        match outcome {
+            JsonProbeOutcome::StillPossiblyValid => Vec::new(),
+            JsonProbeOutcome::CompletedValid => self.commit_probe_as_tool_call(),
+            JsonProbeOutcome::Failed => self.abandon_probe(),
+        }
+    }
+
+    fn commit_probe_as_tool_call(&mut self) -> Vec<IngestOutcome> {
+        if !matches!(self.probe_mode, ProbeMode::Active(_)) {
+            return Vec::new();
+        }
+        self.probe_mode = ProbeMode::Idle;
+        self.section = SampledTokenSection::Content;
+
+        let drained: Vec<_> = self.pending.drain(..).collect();
+        let mut outcomes = Vec::new();
+        for mut entry in drained {
+            if entry.is_held_for_probe {
+                entry.section = SampledTokenSection::ToolCall;
+                entry.is_held_for_probe = false;
+                if !entry.is_from_prompt {
+                    outcomes.push(self.finalize_entry(entry));
+                }
+            } else {
+                self.pending.push_back(entry);
+            }
+        }
+        outcomes
+    }
+
+    fn abandon_probe(&mut self) -> Vec<IngestOutcome> {
+        if !matches!(self.probe_mode, ProbeMode::Active(_)) {
+            return Vec::new();
+        }
+        self.probe_mode = ProbeMode::Idle;
+
+        let drained: Vec<_> = self.pending.drain(..).collect();
+        let mut outcomes = Vec::new();
+        for mut entry in drained {
+            if entry.is_held_for_probe {
+                entry.is_held_for_probe = false;
+                if !entry.is_from_prompt {
+                    outcomes.push(self.finalize_entry(entry));
+                }
+            } else {
+                self.pending.push_back(entry);
+            }
+        }
         outcomes
     }
 
@@ -520,6 +654,7 @@ impl<'model> SampledTokenClassifier<'model> {
 mod tests {
     use super::IngestOutcome;
     use super::PendingToken;
+    use super::ProbeMode;
     use super::SampledTokenClassifier;
     use super::SampledTokenSection;
     use super::StreamingMarkers;
@@ -554,6 +689,7 @@ mod tests {
             section: SampledTokenSection::Pending,
             pending_prompt_tokens: 0,
             usage: llama_cpp_bindings_types::TokenUsage::new(),
+            probe_mode: ProbeMode::Idle,
         }
     }
 
@@ -564,6 +700,7 @@ mod tests {
             section: classifier.section,
             is_boundary: false,
             is_from_prompt: false,
+            is_held_for_probe: false,
         });
     }
 
@@ -574,7 +711,25 @@ mod tests {
             section: classifier.section,
             is_boundary: false,
             is_from_prompt: true,
+            is_held_for_probe: false,
         });
+    }
+
+    fn push_and_probe(
+        classifier: &mut SampledTokenClassifier<'_>,
+        token_id: i32,
+        decoded: &str,
+    ) -> Vec<IngestOutcome> {
+        push_pending(classifier, token_id, decoded);
+        classifier.try_consume_marker_at_tail();
+        let probe_was_active = matches!(classifier.probe_mode, ProbeMode::Active(_));
+        let mut outcomes = if probe_was_active && classifier.section_disengages_probe() {
+            classifier.abandon_probe()
+        } else {
+            classifier.update_probe(decoded)
+        };
+        outcomes.extend(classifier.drain_overflow());
+        outcomes
     }
 
     fn outcome_pieces(outcomes: &[IngestOutcome]) -> Vec<&str> {
@@ -885,6 +1040,7 @@ mod tests {
             section: classifier.section,
             is_boundary: false,
             is_from_prompt: false,
+            is_held_for_probe: false,
         });
         classifier.try_consume_marker_at_tail();
         let outcomes = classifier.drain_overflow();
@@ -954,6 +1110,7 @@ mod tests {
             section: classifier.section,
             is_boundary: false,
             is_from_prompt: false,
+            is_held_for_probe: false,
         });
         classifier.try_consume_marker_at_tail();
         let outcomes = classifier.drain_overflow();
@@ -1097,5 +1254,383 @@ mod tests {
             vec![SampledTokenSection::Content],
         );
         assert_eq!(classifier.section, SampledTokenSection::Content);
+    }
+
+    fn markers_with_tool_call_open(tool_call_open: Vec<LlamaToken>) -> StreamingMarkers {
+        StreamingMarkers {
+            reasoning_open: None,
+            reasoning_close: None,
+            tool_call_open: Some(tool_call_open),
+            tool_call_close: None,
+        }
+    }
+
+    fn feed_json_string(
+        classifier: &mut SampledTokenClassifier<'_>,
+        text: &str,
+        starting_token_id: i32,
+    ) -> Vec<IngestOutcome> {
+        let mut outcomes = Vec::new();
+        for (offset, ch) in text.char_indices() {
+            let token_id = starting_token_id + i32::try_from(offset).unwrap_or(i32::MAX);
+            let mut buffer = [0_u8; 4];
+            let chunk = ch.encode_utf8(&mut buffer);
+            outcomes.extend(push_and_probe(classifier, token_id, chunk));
+        }
+        outcomes
+    }
+
+    #[test]
+    fn json_probe_engages_when_first_non_whitespace_is_open_brace_in_content() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        push_and_probe(&mut classifier, 1, "{");
+
+        assert!(matches!(classifier.probe_mode, ProbeMode::Active(_)));
+    }
+
+    #[test]
+    fn json_probe_releases_tokens_as_tool_call_when_signature_matches() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(&mut classifier, r#"{"name":"f","arguments":{}}"#, 100);
+
+        assert!(!outcomes.is_empty());
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+            "every emitted outcome should be ToolCall, got {:?}",
+            outcome_sections(&outcomes),
+        );
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+    }
+
+    #[test]
+    fn json_probe_releases_tokens_as_content_when_signature_does_not_match() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(&mut classifier, r#"{"foo":"bar"}"#, 100);
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
+            "every emitted outcome should be Content, got {:?}",
+            outcome_sections(&outcomes),
+        );
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+    }
+
+    #[test]
+    fn json_probe_releases_tokens_as_content_when_extra_top_level_key() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"f","arguments":{},"extra":1}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_releases_tokens_as_content_when_arguments_is_not_object() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(&mut classifier, r#"{"name":"f","arguments":"hi"}"#, 100);
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_handles_strings_with_quoted_braces_in_arguments() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"f","arguments":{"q":"a } b"}}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_handles_escaped_quotes_in_string_values() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"f","arguments":{"q":"he said \"hi\""}}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_handles_unicode_letters_in_strings() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"日本語","arguments":{"city":"パリ"}}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_handles_nested_objects() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"f","arguments":{"a":{"b":{"c":1}}}}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_handles_arrays_inside_arguments() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            r#"{"name":"f","arguments":{"items":[1,2,3]}}"#,
+            100,
+        );
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_does_not_engage_when_first_byte_is_close_brace() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(&mut classifier, "}}", 100);
+
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
+        );
+    }
+
+    #[test]
+    fn json_probe_does_not_engage_in_reasoning_section() {
+        let markers = StreamingMarkers {
+            reasoning_open: Some(vec![token(800)]),
+            reasoning_close: Some(vec![token(801)]),
+            tool_call_open: Some(vec![token(900)]),
+            tool_call_close: None,
+        };
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Reasoning;
+
+        push_and_probe(&mut classifier, 1, "{");
+
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+    }
+
+    #[test]
+    fn json_probe_does_not_engage_in_tool_call_section() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::ToolCall;
+
+        push_and_probe(&mut classifier, 1, "{");
+
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+    }
+
+    #[test]
+    fn marker_probe_takes_precedence_when_both_could_match() {
+        // Marker is a single token whose decoded text starts with `"` (a JSON
+        // signature-valid byte). The JSON probe holds the leading `{`, the
+        // marker matches at the next token, the section transitions to ToolCall,
+        // the JSON probe abandons. The leading `{` releases as Content; the
+        // marker token releases as a ToolCall boundary (suppressed).
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let mut outcomes = Vec::new();
+        outcomes.extend(push_and_probe(&mut classifier, 1, "{"));
+        outcomes.extend(push_and_probe(&mut classifier, 900, r#"""#));
+
+        assert_eq!(classifier.section, SampledTokenSection::ToolCall);
+        assert_eq!(outcome_pieces(&outcomes), vec!["{", ""]);
+        assert_eq!(
+            outcome_sections(&outcomes),
+            vec![SampledTokenSection::Content, SampledTokenSection::ToolCall],
+        );
+    }
+
+    #[test]
+    fn json_probe_consumes_two_consecutive_objects_separately() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let mut outcomes = Vec::new();
+        outcomes.extend(feed_json_string(
+            &mut classifier,
+            r#"{"name":"a","arguments":{}}"#,
+            100,
+        ));
+        outcomes.extend(feed_json_string(
+            &mut classifier,
+            r#"{"name":"b","arguments":{"x":1}}"#,
+            200,
+        ));
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
+            "two consecutive markerless tool calls must both classify as ToolCall, got {:?}",
+            outcome_sections(&outcomes),
+        );
+    }
+
+    #[test]
+    fn json_probe_with_leading_whitespace_then_open_brace_classifies_whitespace_as_content_and_json_as_tool_call()
+     {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let outcomes = feed_json_string(
+            &mut classifier,
+            "\n  {\"name\":\"f\",\"arguments\":{}}",
+            100,
+        );
+
+        let tool_call_count = outcomes
+            .iter()
+            .filter(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_)))
+            .count();
+        let content_count = outcomes
+            .iter()
+            .filter(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_)))
+            .count();
+        assert_eq!(
+            content_count, 3,
+            "leading `\\n  ` should classify as content"
+        );
+        assert!(
+            tool_call_count > 0,
+            "the JSON object should classify as ToolCall",
+        );
+        assert_eq!(content_count + tool_call_count, outcomes.len());
+    }
+
+    #[test]
+    fn json_probe_records_tool_call_token_usage_on_commit() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let json = r#"{"name":"f","arguments":{}}"#;
+        let outcomes = feed_json_string(&mut classifier, json, 100);
+
+        let emitted = outcomes.len();
+        let usage = classifier.usage();
+        assert_eq!(usage.tool_call_tokens, emitted as u64);
+        assert_eq!(usage.content_tokens, 0);
+    }
+
+    #[test]
+    fn json_probe_records_content_token_usage_on_abandon() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        let json = r#"{"foo":"bar"}"#;
+        let outcomes = feed_json_string(&mut classifier, json, 100);
+
+        let emitted = outcomes.len();
+        let usage = classifier.usage();
+        assert_eq!(usage.content_tokens, emitted as u64);
+        assert_eq!(usage.tool_call_tokens, 0);
+    }
+
+    #[test]
+    fn flush_during_active_json_probe_releases_held_tokens_as_content() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        push_and_probe(&mut classifier, 1, "{");
+        push_and_probe(&mut classifier, 2, r#""name""#);
+        assert!(matches!(classifier.probe_mode, ProbeMode::Active(_)));
+
+        let outcomes = classifier.flush();
+
+        assert!(
+            outcomes
+                .iter()
+                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
+            "mid-probe flush must release held tokens as Content, got {:?}",
+            outcome_sections(&outcomes),
+        );
+        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
     }
 }

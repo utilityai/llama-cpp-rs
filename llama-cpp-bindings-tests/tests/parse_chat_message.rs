@@ -1,95 +1,21 @@
 use anyhow::Result;
+use anyhow::bail;
+use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings_tests::TestFixture;
-
-const QWEN_TOOLS_JSON: &str = r#"[
-    {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get the current weather for a location",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {"type": "string", "description": "The city name"}
-                },
-                "required": ["location"]
-            }
-        }
-    }
-]"#;
 
 #[test]
 fn parses_pure_content_response() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
-    let parsed = model.parse_chat_message("[]", "hello world", false)?;
+    let outcome = model.parse_chat_message("[]", "hello world", false)?;
 
+    let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
+        bail!("expected Recognized for plain content; got Unrecognized");
+    };
     assert!(parsed.tool_calls.is_empty());
     assert!(!parsed.is_empty());
     assert!(parsed.content.contains("hello world"));
-
-    Ok(())
-}
-
-#[test]
-fn parses_qwen3_tool_call_payload() -> Result<()> {
-    let fixture = TestFixture::shared();
-    let model = fixture.default_model();
-
-    let input = "<tool_call>\n<function=get_weather>\n<parameter=location>\nParis\n</parameter>\n</function>\n</tool_call>";
-    let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, false)?;
-
-    assert_eq!(
-        parsed.tool_calls.len(),
-        1,
-        "expected one tool call; got {:?}",
-        parsed.tool_calls
-    );
-    assert_eq!(parsed.tool_calls[0].name, "get_weather");
-    let location = match &parsed.tool_calls[0].arguments {
-        llama_cpp_bindings::ToolCallArguments::ValidJson(value) => value
-            .get("location")
-            .and_then(|v| v.as_str())
-            .map(str::to_owned),
-        llama_cpp_bindings::ToolCallArguments::InvalidJson(raw) => {
-            anyhow::bail!("expected ValidJson, got InvalidJson: {raw}");
-        }
-    };
-    assert_eq!(location.as_deref(), Some("Paris"));
-
-    Ok(())
-}
-
-#[test]
-fn parses_partial_tool_call_returns_pending_state() -> Result<()> {
-    let fixture = TestFixture::shared();
-    let model = fixture.default_model();
-
-    let input = "<tool_call>\n<function=get_weather>\n<parameter=lo";
-    let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, true)?;
-
-    assert!(parsed.tool_calls.is_empty() || parsed.tool_calls.len() == 1);
-
-    Ok(())
-}
-
-#[test]
-fn parses_multiple_tool_calls() -> Result<()> {
-    let fixture = TestFixture::shared();
-    let model = fixture.default_model();
-
-    let input = concat!(
-        "<tool_call>\n<function=get_weather>\n<parameter=location>\nParis\n</parameter>\n</function>\n</tool_call>",
-        "\n<tool_call>\n<function=get_weather>\n<parameter=location>\nBerlin\n</parameter>\n</function>\n</tool_call>",
-    );
-    let parsed = model.parse_chat_message(QWEN_TOOLS_JSON, input, false)?;
-
-    assert!(
-        !parsed.tool_calls.is_empty(),
-        "expected at least one tool call; got {:?}",
-        parsed.tool_calls
-    );
 
     Ok(())
 }
@@ -100,8 +26,11 @@ fn parses_reasoning_section_into_reasoning_content() -> Result<()> {
     let model = fixture.default_model();
 
     let input = "<think>step one, step two</think>\n\nactual response";
-    let parsed = model.parse_chat_message("[]", input, false)?;
+    let outcome = model.parse_chat_message("[]", input, false)?;
 
+    let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
+        bail!("expected Recognized for reasoning section; got Unrecognized");
+    };
     assert!(
         parsed.reasoning_content.contains("step") || parsed.content.contains("step"),
         "neither content nor reasoning contains 'step'; content={:?} reasoning={:?}",
@@ -117,15 +46,18 @@ fn parses_empty_input_yields_empty_message() -> Result<()> {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
-    let parsed = model.parse_chat_message("[]", "", false)?;
+    let outcome = model.parse_chat_message("[]", "", false)?;
 
+    let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
+        bail!("expected Recognized for empty input; got Unrecognized");
+    };
     assert!(parsed.tool_calls.is_empty());
 
     Ok(())
 }
 
 #[test]
-fn parses_malformed_tools_json_returns_parse_exception() {
+fn parses_malformed_tools_json_returns_tools_json_invalid_error() {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
@@ -133,12 +65,27 @@ fn parses_malformed_tools_json_returns_parse_exception() {
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ParseException(_))
+        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonInvalid(
+            _
+        ))
     ));
 }
 
 #[test]
-fn parses_with_tools_null_byte_returns_tools_serialization_error() {
+fn parses_non_array_tools_json_returns_tools_json_not_array_error() {
+    let fixture = TestFixture::shared();
+    let model = fixture.default_model();
+
+    let result = model.parse_chat_message("{\"foo\": 1}", "hello", false);
+
+    assert!(matches!(
+        result,
+        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonNotArray)
+    ));
+}
+
+#[test]
+fn parses_with_tools_null_byte_returns_tools_json_invalid_error() {
     let fixture = TestFixture::shared();
     let model = fixture.default_model();
 
@@ -146,7 +93,9 @@ fn parses_with_tools_null_byte_returns_tools_serialization_error() {
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ToolsSerialization(_))
+        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonInvalid(
+            _
+        ))
     ));
 }
 

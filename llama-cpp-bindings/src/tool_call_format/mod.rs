@@ -1,4 +1,5 @@
 pub mod bracketed_args;
+pub mod json_object;
 pub mod key_value_xml_tags;
 pub mod paired_quote_args;
 pub mod tool_call_format_outcome;
@@ -21,6 +22,7 @@ pub fn try_parse(body: &str, markers: &ToolCallMarkers) -> ToolCallFormatOutcome
         ToolCallArgsShape::BracketedJson(shape) => {
             bracketed_args::parse(body, markers, shape).map_err(Into::into)
         }
+        ToolCallArgsShape::JsonObject(shape) => json_object::parse(body, shape).map_err(Into::into),
         ToolCallArgsShape::KeyValueXmlTags(shape) => {
             key_value_xml_tags::parse(body, markers, shape).map_err(Into::into)
         }
@@ -217,5 +219,166 @@ mod tests {
             ToolCallFormatOutcome::Failed(_) => {}
             other => panic!("expected Failed, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn try_parse_returns_no_match_for_glm_input_under_qwen_markers() {
+        let glm_input = "<tool_call>get_weather\
+            <arg_key>location</arg_key>\
+            <arg_value>Paris</arg_value>\
+            </tool_call>";
+
+        match try_parse(glm_input, &qwen35_markers()) {
+            ToolCallFormatOutcome::NoMatch => {}
+            other => panic!("expected NoMatch for GLM input under Qwen markers, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn try_parse_returns_no_match_for_plain_content_under_every_known_shape() {
+        use crate::tool_call_template_overrides::known_marker_candidates;
+
+        let plain_content = "Sorry, I cannot help with that request.";
+
+        for candidate in known_marker_candidates() {
+            match try_parse(plain_content, &candidate) {
+                ToolCallFormatOutcome::NoMatch => {}
+                other => panic!(
+                    "expected NoMatch for plain content under candidate {candidate:?}, got {other:?}"
+                ),
+            }
+        }
+    }
+
+    #[test]
+    fn duck_type_resolves_qwen_xml_input_via_xml_tags_shape_first() {
+        use llama_cpp_bindings_types::ToolCallArguments;
+
+        use crate::tool_call_template_overrides::known_marker_candidates;
+
+        let qwen_input = "<tool_call>\n\
+            <function=get_weather>\n\
+            <parameter=location>\n\
+            Paris\n\
+            </parameter>\n\
+            </function>\n\
+            </tool_call>";
+
+        let mut resolved = None;
+        for candidate in known_marker_candidates() {
+            if let ToolCallFormatOutcome::Parsed(calls) = try_parse(qwen_input, &candidate) {
+                resolved = Some((candidate.args_shape, calls));
+                break;
+            }
+        }
+
+        let (args_shape, calls) =
+            resolved.expect("Qwen XML input must resolve via at least one duck-type candidate");
+        assert!(
+            matches!(args_shape, ToolCallArgsShape::XmlTags(_)),
+            "duck-type ordering must resolve Qwen XML via the XmlTags shape (most restrictive \
+             shape that requires `<function=`), got {args_shape:?}"
+        );
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "get_weather");
+        assert_eq!(
+            calls[0].arguments,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+        );
+    }
+
+    #[test]
+    fn duck_type_resolves_glm_input_via_key_value_xml_tags_shape() {
+        use llama_cpp_bindings_types::ToolCallArguments;
+
+        use crate::tool_call_template_overrides::known_marker_candidates;
+
+        let glm_input = "<tool_call>get_weather\
+            <arg_key>location</arg_key>\
+            <arg_value>Paris</arg_value>\
+            </tool_call>";
+
+        let mut resolved = None;
+        for candidate in known_marker_candidates() {
+            if let ToolCallFormatOutcome::Parsed(calls) = try_parse(glm_input, &candidate) {
+                resolved = Some((candidate.args_shape, calls));
+                break;
+            }
+        }
+
+        let (args_shape, calls) =
+            resolved.expect("GLM input must resolve via at least one duck-type candidate");
+        assert!(
+            matches!(args_shape, ToolCallArgsShape::KeyValueXmlTags(_)),
+            "GLM input must resolve via the KeyValueXmlTags shape, got {args_shape:?}"
+        );
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "get_weather");
+        assert_eq!(
+            calls[0].arguments,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+        );
+    }
+
+    #[test]
+    fn duck_type_resolves_mistral_input_via_bracketed_json_shape() {
+        use llama_cpp_bindings_types::ToolCallArguments;
+
+        use crate::tool_call_template_overrides::known_marker_candidates;
+
+        let mistral_input = r#"[TOOL_CALLS]get_weather[ARGS]{"location":"Paris"}"#;
+
+        let mut resolved = None;
+        for candidate in known_marker_candidates() {
+            if let ToolCallFormatOutcome::Parsed(calls) = try_parse(mistral_input, &candidate) {
+                resolved = Some((candidate.args_shape, calls));
+                break;
+            }
+        }
+
+        let (args_shape, calls) =
+            resolved.expect("Mistral input must resolve via at least one duck-type candidate");
+        assert!(
+            matches!(args_shape, ToolCallArgsShape::BracketedJson(_)),
+            "Mistral input must resolve via the BracketedJson shape; the candidate ordering must \
+             try BracketedJson before PairedQuote because PairedQuote's `{{` separator could \
+             greedily match Mistral's JSON args. Got {args_shape:?}"
+        );
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "get_weather");
+        assert_eq!(
+            calls[0].arguments,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+        );
+    }
+
+    #[test]
+    fn duck_type_resolves_gemma_input_via_paired_quote_shape() {
+        use llama_cpp_bindings_types::ToolCallArguments;
+
+        use crate::tool_call_template_overrides::known_marker_candidates;
+
+        let gemma_input = "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}";
+
+        let mut resolved = None;
+        for candidate in known_marker_candidates() {
+            if let ToolCallFormatOutcome::Parsed(calls) = try_parse(gemma_input, &candidate) {
+                resolved = Some((candidate.args_shape, calls));
+                break;
+            }
+        }
+
+        let (args_shape, calls) =
+            resolved.expect("Gemma input must resolve via at least one duck-type candidate");
+        assert!(
+            matches!(args_shape, ToolCallArgsShape::PairedQuote(_)),
+            "Gemma input must resolve via the PairedQuote shape, got {args_shape:?}"
+        );
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].name, "get_weather");
+        assert_eq!(
+            calls[0].arguments,
+            ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+        );
     }
 }

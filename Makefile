@@ -1,7 +1,9 @@
 FEATURES = sampler
 TEST_FEATURES =
+QWEN_CAPABLE_FEATURES = multimodal_capable,mrope_model
 CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- --test-threads=1
-CARGO_COV_LLM_FLAGS = -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),)
+CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) --features $(QWEN_CAPABLE_FEATURES) -- --test-threads=1
+CARGO_COV_LLM_FLAGS = -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) --features $(QWEN_CAPABLE_FEATURES)
 
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
@@ -24,7 +26,6 @@ QWEN3_6_35B_A3B_ENV = \
 GLM4_7_FLASH_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/GLM-4.7-Flash-GGUF \
 	LLAMA_TEST_HF_MODEL=GLM-4.7-Flash-Q4_K_M.gguf \
-	LLAMA_TEST_HF_MMPROJ=mmproj-F16.gguf \
 	LLAMA_TEST_HF_EMBED_REPO=Qwen/Qwen3-Embedding-0.6B-GGUF \
 	LLAMA_TEST_HF_EMBED_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
@@ -33,7 +34,6 @@ GLM4_7_FLASH_ENV = \
 DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF \
 	LLAMA_TEST_HF_MODEL=DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf \
-	LLAMA_TEST_HF_MMPROJ=mmproj-F16.gguf \
 	LLAMA_TEST_HF_EMBED_REPO=Qwen/Qwen3-Embedding-0.6B-GGUF \
 	LLAMA_TEST_HF_EMBED_MODEL=Qwen3-Embedding-0.6B-Q8_0.gguf \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
@@ -45,11 +45,11 @@ test.unit: clippy
 
 .PHONY: test.qwen3.5_0.8B
 test.qwen3.5_0.8B: clippy
-	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
 .PHONY: test.qwen3.6_35b_a3b
 test.qwen3.6_35b_a3b: clippy
-	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
 .PHONY: test.glm4_7_flash
 test.glm4_7_flash: clippy

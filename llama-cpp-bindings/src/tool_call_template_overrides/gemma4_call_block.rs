@@ -6,11 +6,8 @@ use llama_cpp_bindings_types::ToolCallValueQuote;
 const TEMPLATE_FINGERPRINT: &str = "'<|tool_call>call:'";
 
 #[must_use]
-pub fn detect(template: &str) -> Option<ToolCallMarkers> {
-    if !template.contains(TEMPLATE_FINGERPRINT) {
-        return None;
-    }
-    Some(ToolCallMarkers {
+pub fn markers() -> ToolCallMarkers {
+    ToolCallMarkers {
         open: "<|tool_call>call:".to_owned(),
         close: "}".to_owned(),
         args_shape: ToolCallArgsShape::PairedQuote(PairedQuoteShape {
@@ -20,7 +17,15 @@ pub fn detect(template: &str) -> Option<ToolCallMarkers> {
                 close: "<|\"|>".to_owned(),
             },
         }),
-    })
+    }
+}
+
+#[must_use]
+pub fn detect(template: &str) -> Option<ToolCallMarkers> {
+    if !template.contains(TEMPLATE_FINGERPRINT) {
+        return None;
+    }
+    Some(markers())
 }
 
 #[cfg(test)]

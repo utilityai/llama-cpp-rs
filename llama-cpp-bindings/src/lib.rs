@@ -10,6 +10,7 @@
 //! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
 
+pub mod chat_message_parse_outcome;
 pub mod context;
 pub mod error;
 pub mod extract_tool_call_markers_from_haystack;
@@ -41,9 +42,11 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
+pub mod raw_chat_message;
 pub mod sampled_token;
 pub mod sampled_token_classifier;
 pub mod sampling;
+pub mod streaming_json_probe;
 pub mod timing;
 pub mod token;
 pub mod token_type;
@@ -60,6 +63,7 @@ pub use error::{
     SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,
 };
 
+pub use chat_message_parse_outcome::ChatMessageParseOutcome;
 pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
@@ -68,6 +72,7 @@ pub use llama_cpp_bindings_types::{
     ReasoningMarkers, TokenUsage, TokenUsageError, ToolCallArgsShape, ToolCallArguments,
     ToolCallMarkers, ToolCallValueQuote, XmlTagsShape,
 };
+pub use raw_chat_message::RawChatMessage;
 pub use sampled_token::SampledToken;
 pub use sampled_token_classifier::SampledTokenClassifier;
 pub use sampled_token_classifier::SampledTokenSection;

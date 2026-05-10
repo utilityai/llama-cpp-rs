@@ -108,6 +108,7 @@ fn copy_cache_executes_without_crash() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "mrope_model")]
 #[test]
 #[serial]
 fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
@@ -129,6 +130,7 @@ fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "mrope_model")]
 #[test]
 #[serial]
 fn kv_cache_seq_div_returns_error_for_mrope_model() -> Result<()> {

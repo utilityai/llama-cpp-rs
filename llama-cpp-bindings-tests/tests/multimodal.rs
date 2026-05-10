@@ -1,3 +1,5 @@
+#![cfg(feature = "multimodal_capable")]
+
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};

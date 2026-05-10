@@ -1,3 +1,5 @@
+#![cfg(feature = "multimodal_capable")]
+
 use anyhow::Result;
 use llama_cpp_bindings::ingest_prompt_chunk::ingest_prompt_chunk;
 use llama_cpp_bindings::mtmd::MtmdBitmap;

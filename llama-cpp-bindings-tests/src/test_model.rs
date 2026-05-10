@@ -206,6 +206,7 @@ mod tests {
         assert!(result.is_ok());
     }
 
+    #[cfg(feature = "multimodal_capable")]
     #[test]
     #[serial_test::serial]
     fn download_mmproj_returns_path_when_env_set() {

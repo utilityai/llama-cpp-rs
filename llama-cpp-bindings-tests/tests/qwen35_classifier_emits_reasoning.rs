@@ -1,6 +1,8 @@
 use std::num::NonZeroU32;
 
 use anyhow::Result;
+use anyhow::bail;
+use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -82,7 +84,10 @@ fn qwen35_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()>
     .run()?;
 
     let usage = classifier.usage();
-    let parsed = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
+    let parse_outcome = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
+    let ChatMessageParseOutcome::Recognized(parsed) = parse_outcome else {
+        bail!("Qwen3.5 chat template must be recognised by the parser; got Unrecognized");
+    };
 
     assert!(
         !outcome.generated_raw.is_empty(),

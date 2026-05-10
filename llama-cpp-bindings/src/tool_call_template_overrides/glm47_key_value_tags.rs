@@ -5,11 +5,8 @@ use llama_cpp_bindings_types::ToolCallMarkers;
 const TEMPLATE_FINGERPRINT: &str = "<arg_key>";
 
 #[must_use]
-pub fn detect(template: &str) -> Option<ToolCallMarkers> {
-    if !template.contains(TEMPLATE_FINGERPRINT) {
-        return None;
-    }
-    Some(ToolCallMarkers {
+pub fn markers() -> ToolCallMarkers {
+    ToolCallMarkers {
         open: "<tool_call>".to_owned(),
         close: "</tool_call>".to_owned(),
         args_shape: ToolCallArgsShape::KeyValueXmlTags(KeyValueXmlTagsShape {
@@ -18,7 +15,15 @@ pub fn detect(template: &str) -> Option<ToolCallMarkers> {
             value_open: "<arg_value>".to_owned(),
             value_close: "</arg_value>".to_owned(),
         }),
-    })
+    }
+}
+
+#[must_use]
+pub fn detect(template: &str) -> Option<ToolCallMarkers> {
+    if !template.contains(TEMPLATE_FINGERPRINT) {
+        return None;
+    }
+    Some(markers())
 }
 
 #[cfg(test)]

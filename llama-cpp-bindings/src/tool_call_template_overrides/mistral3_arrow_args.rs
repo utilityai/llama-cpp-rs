@@ -5,17 +5,22 @@ use llama_cpp_bindings_types::ToolCallMarkers;
 const TEMPLATE_FINGERPRINT: &str = "'[ARGS]'";
 
 #[must_use]
-pub fn detect(template: &str) -> Option<ToolCallMarkers> {
-    if !template.contains(TEMPLATE_FINGERPRINT) {
-        return None;
-    }
-    Some(ToolCallMarkers {
+pub fn markers() -> ToolCallMarkers {
+    ToolCallMarkers {
         open: "[TOOL_CALLS]".to_owned(),
         close: String::new(),
         args_shape: ToolCallArgsShape::BracketedJson(BracketedJsonShape {
             name_args_separator: "[ARGS]".to_owned(),
         }),
-    })
+    }
+}
+
+#[must_use]
+pub fn detect(template: &str) -> Option<ToolCallMarkers> {
+    if !template.contains(TEMPLATE_FINGERPRINT) {
+        return None;
+    }
+    Some(markers())
 }
 
 #[cfg(test)]

@@ -359,6 +359,12 @@ pub enum ParseChatMessageError {
     /// An accessor returned bytes that were not valid UTF-8.
     #[error("ffi returned non-utf8 string: {0}")]
     StringUtf8Error(#[from] FromUtf8Error),
+    /// The caller passed a `tools_json` argument that is not valid JSON.
+    #[error("tools_json is not valid JSON: {0}")]
+    ToolsJsonInvalid(#[source] serde_json::Error),
+    /// The caller passed a `tools_json` argument that parses as JSON but is not an array.
+    #[error("tools_json must be a JSON array")]
+    ToolsJsonNotArray,
     /// Failed to serialize the tools array for the FFI call.
     #[error("could not serialize tools to JSON: {0}")]
     ToolsSerialization(String),
@@ -375,12 +381,21 @@ pub enum ParseChatMessageError {
 pub enum ToolCallFormatFailure {
     #[error("bracketed-args fallback parser: {0}")]
     BracketedArgs(#[from] BracketedArgsFailure),
+    #[error("json-object fallback parser: {0}")]
+    JsonObject(#[from] JsonObjectFailure),
     #[error("key-value-xml-tags fallback parser: {0}")]
     KeyValueXmlTags(#[from] KeyValueXmlTagsFailure),
     #[error("paired-quote fallback parser: {0}")]
     PairedQuote(#[from] PairedQuoteFailure),
     #[error("xml-function-tags fallback parser: {0}")]
     XmlFunctionTags(#[from] XmlFunctionTagsFailure),
+}
+
+/// Failures specific to the JSON-object args parser (Qwen 3 `<tool_call>{"name":..., "arguments":...}</tool_call>`).
+#[derive(Debug, thiserror::Error)]
+pub enum JsonObjectFailure {
+    #[error("tool call body has malformed JSON: {message}")]
+    InvalidJson { message: String },
 }
 
 /// Failures specific to the bracketed-JSON args parser (Mistral 3 `[TOOL_CALLS]name[ARGS]{...}`).

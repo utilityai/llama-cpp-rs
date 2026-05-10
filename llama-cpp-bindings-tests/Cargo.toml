@@ -23,6 +23,8 @@ cuda-no-vmm = ["llama-cpp-bindings/cuda-no-vmm"]
 metal = ["llama-cpp-bindings/metal"]
 vulkan = ["llama-cpp-bindings/vulkan"]
 rocm = ["llama-cpp-bindings/rocm"]
+multimodal_capable = []
+mrope_model = []
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
