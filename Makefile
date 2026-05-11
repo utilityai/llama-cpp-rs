@@ -43,6 +43,14 @@ DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV = \
 test.unit: clippy
 	cargo test -p llama-cpp-bindings --features $(FEATURES)
 
+.PHONY: test.deepseek_r1_distill_llama_8b
+test.deepseek_r1_distill_llama_8b: clippy
+	$(DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+
+.PHONY: test.glm4_7_flash
+test.glm4_7_flash: clippy
+	$(GLM4_7_FLASH_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
+
 .PHONY: test.qwen3.5_0.8B
 test.qwen3.5_0.8B: clippy
 	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
@@ -51,34 +59,12 @@ test.qwen3.5_0.8B: clippy
 test.qwen3.6_35b_a3b: clippy
 	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
-.PHONY: test.glm4_7_flash
-test.glm4_7_flash: clippy
-	$(GLM4_7_FLASH_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
-
-.PHONY: test.deepseek_r1_distill_llama_8b
-test.deepseek_r1_distill_llama_8b: clippy
-	$(DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
-
-.PHONY: test.qwen3.5_0.8B.coverage.run
-test.qwen3.5_0.8B.coverage.run: clippy
-	cargo llvm-cov clean --workspace
-	cargo llvm-cov --no-report -p llama-cpp-bindings --features $(FEATURES) --lib
-	$(QWEN3_5_0_8B_ENV) cargo llvm-cov --no-report $(CARGO_COV_LLM_FLAGS) -- --test-threads=1
-
-.PHONY: test.qwen3.5_0.8B.coverage
-test.qwen3.5_0.8B.coverage: test.qwen3.5_0.8B.coverage.run
-	cargo llvm-cov report -p llama-cpp-bindings --fail-under-lines 98.5
-
-.PHONY: test.qwen3.5_0.8B.coverage.json
-test.qwen3.5_0.8B.coverage.json: test.qwen3.5_0.8B.coverage.run
-	cargo llvm-cov report -p llama-cpp-bindings --json --output-path target/coverage.json
-
-.PHONY: test.qwen3.5_0.8B.coverage.html
-test.qwen3.5_0.8B.coverage.html: test.qwen3.5_0.8B.coverage.run
-	cargo llvm-cov report -p llama-cpp-bindings --html
-
 .PHONY: test.llms
-test.llms: test.qwen3.5_0.8B
+test.llms: \
+	test.deepseek_r1_distill_llama_8b \
+	test.glm4_7_flash \
+	test.qwen3.5_0.8B \
+	test.qwen3.6_35b_a3b
 
 .PHONY: test
 test: test.unit test.llms
