@@ -3,7 +3,6 @@ TEST_FEATURES =
 QWEN_CAPABLE_FEATURES = multimodal_capable,mrope_model
 CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- --test-threads=1
 CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) --features $(QWEN_CAPABLE_FEATURES) -- --test-threads=1
-CARGO_COV_LLM_FLAGS = -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) --features $(QWEN_CAPABLE_FEATURES)
 
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
