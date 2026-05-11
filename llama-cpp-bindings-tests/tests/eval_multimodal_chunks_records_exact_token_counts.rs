@@ -10,7 +10,7 @@ use llama_cpp_bindings::mtmd::MtmdInputChunkType;
 use llama_cpp_bindings::mtmd::MtmdInputChunks;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
 
 const PROMPT_QUESTION: &str = "What animals do you see in this image?";
@@ -48,7 +48,7 @@ fn sum_chunk_token_counts_by_type(chunks: &MtmdInputChunks) -> Result<ExpectedCh
 }
 
 fn build_multimodal_chunks_and_eval_into_usage() -> Result<(TokenUsage, ExpectedChunkTotals)> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;

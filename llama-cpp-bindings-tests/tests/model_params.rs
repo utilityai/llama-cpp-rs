@@ -5,14 +5,14 @@ use anyhow::Result;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::max_devices;
 use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::test_model;
 use serial_test::serial;
 
 #[test]
 #[serial]
 fn fit_params_succeeds_with_test_model() -> Result<()> {
-    let _fixture = TestFixture::shared();
+    let _fixture = FixtureSession::open()?;
 
     let model_path = test_model::download_model()?;
     let model_path_str = model_path

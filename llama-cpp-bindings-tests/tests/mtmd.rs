@@ -13,7 +13,7 @@ use llama_cpp_bindings::mtmd::MtmdEvalError;
 use llama_cpp_bindings::mtmd::MtmdInputChunkType;
 use llama_cpp_bindings::mtmd::MtmdInputChunks;
 use llama_cpp_bindings::mtmd::MtmdInputText;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::test_model;
 use serial_test::serial;
 
@@ -45,7 +45,7 @@ fn eval_synthetic_bitmap(
 #[test]
 #[serial]
 fn eval_chunks_returns_batch_size_exceeds_context_limit_for_huge_batch() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
@@ -69,7 +69,7 @@ fn eval_chunks_returns_batch_size_exceeds_context_limit_for_huge_batch() -> Resu
 #[test]
 #[serial]
 fn from_buffer_creates_bitmap_from_image_bytes() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let fixtures = test_model::fixtures_dir();
@@ -87,7 +87,7 @@ fn from_buffer_creates_bitmap_from_image_bytes() -> Result<()> {
 #[test]
 #[serial]
 fn from_file_with_null_byte_in_path_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
     let result = MtmdBitmap::from_file(mtmd_ctx, "path\0null");
 
@@ -99,7 +99,7 @@ fn from_file_with_null_byte_in_path_returns_error() -> Result<()> {
 #[test]
 #[serial]
 fn text_chunk_has_text_type() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -122,7 +122,7 @@ fn text_chunk_has_text_type() -> Result<()> {
 #[test]
 #[serial]
 fn text_chunk_returns_text_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -147,7 +147,7 @@ fn text_chunk_returns_text_tokens() -> Result<()> {
 #[test]
 #[serial]
 fn chunk_n_tokens_is_positive() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -170,7 +170,7 @@ fn chunk_n_tokens_is_positive() -> Result<()> {
 #[test]
 #[serial]
 fn chunk_n_positions_is_positive() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -193,7 +193,7 @@ fn chunk_n_positions_is_positive() -> Result<()> {
 #[test]
 #[serial]
 fn copy_creates_owned_duplicate() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -218,7 +218,7 @@ fn copy_creates_owned_duplicate() -> Result<()> {
 #[test]
 #[serial]
 fn text_chunk_id_returns_none() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -242,7 +242,7 @@ fn text_chunk_id_returns_none() -> Result<()> {
 #[test]
 #[serial]
 fn image_chunk_returns_none_for_text_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -271,7 +271,7 @@ fn image_chunk_returns_none_for_text_tokens() -> Result<()> {
 #[test]
 #[serial]
 fn image_chunk_id_returns_some() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -300,7 +300,7 @@ fn image_chunk_id_returns_some() -> Result<()> {
 #[test]
 #[serial]
 fn init_and_supports_vision() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     assert!(mtmd_ctx.support_vision());
@@ -311,7 +311,7 @@ fn init_and_supports_vision() -> Result<()> {
 #[test]
 #[serial]
 fn tokenize_text_with_image() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -332,7 +332,7 @@ fn tokenize_text_with_image() -> Result<()> {
 #[test]
 #[serial]
 fn eval_chunks_with_standard_image() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
@@ -364,7 +364,7 @@ fn eval_chunks_with_standard_image() -> Result<()> {
 #[test]
 #[serial]
 fn eval_chunks_with_varied_dimensions() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
@@ -386,7 +386,7 @@ fn eval_chunks_with_varied_dimensions() -> Result<()> {
 #[test]
 #[serial]
 fn decode_use_non_causal_returns_bool() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -408,7 +408,7 @@ fn decode_use_non_causal_returns_bool() -> Result<()> {
 #[test]
 #[serial]
 fn decode_use_mrope_returns_bool() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let _mrope = mtmd_ctx.decode_use_mrope();
@@ -419,7 +419,7 @@ fn decode_use_mrope_returns_bool() -> Result<()> {
 #[test]
 #[serial]
 fn support_audio_returns_bool() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let _audio = mtmd_ctx.support_audio();
@@ -430,7 +430,7 @@ fn support_audio_returns_bool() -> Result<()> {
 #[test]
 #[serial]
 fn get_audio_sample_rate_returns_option() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let _rate = mtmd_ctx.get_audio_sample_rate();
@@ -441,7 +441,7 @@ fn get_audio_sample_rate_returns_option() -> Result<()> {
 #[test]
 #[serial]
 fn encode_chunk_succeeds_for_image_chunk() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let image_data = vec![128u8; 64 * 64 * 3];
@@ -472,7 +472,7 @@ fn encode_chunk_succeeds_for_image_chunk() -> Result<()> {
 #[test]
 #[serial]
 fn tokenize_bitmap_count_mismatch_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let input_text = MtmdInputText {
@@ -492,7 +492,7 @@ fn tokenize_bitmap_count_mismatch_returns_error() -> Result<()> {
 #[test]
 #[serial]
 fn eval_chunks_with_extreme_dimensions_does_not_crash() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
@@ -526,7 +526,7 @@ fn eval_chunks_with_extreme_dimensions_does_not_crash() -> Result<()> {
 #[test]
 #[serial]
 fn init_from_file_with_null_byte_in_path_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let mtmd_params = MtmdContextParams::default();
     let result = MtmdContext::init_from_file("path\0null", model, &mtmd_params);
@@ -537,7 +537,7 @@ fn init_from_file_with_null_byte_in_path_returns_error() {
 #[test]
 #[serial]
 fn tokenize_with_null_byte_in_text_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let input_text = MtmdInputText {

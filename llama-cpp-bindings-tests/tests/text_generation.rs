@@ -10,12 +10,12 @@ use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 
 #[test]
 fn raw_prompt_completion_with_timing() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 
@@ -140,7 +140,7 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
 
 #[test]
 fn chat_inference_produces_coherent_output() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 

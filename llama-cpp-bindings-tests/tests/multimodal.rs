@@ -12,7 +12,7 @@ use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, 
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
-use llama_cpp_bindings_tests::{TestFixture, test_model};
+use llama_cpp_bindings_tests::{FixtureSession, test_model};
 
 struct ChunkTokenBreakdown {
     text: u64,
@@ -110,7 +110,7 @@ fn drive_sampling_loop(
 
 #[test]
 fn multimodal_vision_inference_produces_output() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;

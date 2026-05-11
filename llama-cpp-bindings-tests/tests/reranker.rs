@@ -5,7 +5,7 @@ use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -26,7 +26,7 @@ fn cosine_similarity(vec_a: &[f32], vec_b: &[f32]) -> f32 {
 
 #[test]
 fn reranking_produces_scores() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
 

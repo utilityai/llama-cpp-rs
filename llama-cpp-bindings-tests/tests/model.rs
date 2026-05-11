@@ -15,14 +15,14 @@ use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::model::params::LlamaModelParams;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use serial_test::serial;
 
 #[test]
 #[serial]
 fn model_loads_with_valid_metadata() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     assert!(model.n_vocab() > 0);
@@ -36,7 +36,7 @@ fn model_loads_with_valid_metadata() -> Result<()> {
 #[test]
 #[serial]
 fn special_tokens_exist() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let bos = model.token_bos();
     let eos = model.token_eos();
@@ -48,7 +48,7 @@ fn special_tokens_exist() {
 #[test]
 #[serial]
 fn str_to_token_roundtrip() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let tokens = model.str_to_token("hello world", AddBos::Never)?;
     assert!(!tokens.is_empty());
@@ -64,7 +64,7 @@ fn str_to_token_roundtrip() -> Result<()> {
 #[test]
 #[serial]
 fn chat_template_returns_non_empty() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let template = model.chat_template(None);
 
@@ -74,7 +74,7 @@ fn chat_template_returns_non_empty() {
 #[test]
 #[serial]
 fn apply_chat_template_produces_prompt() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let template = model.chat_template(None)?;
     let message = LlamaChatMessage::new("user".to_string(), "hello".to_string())?;
@@ -89,7 +89,7 @@ fn apply_chat_template_produces_prompt() -> Result<()> {
 #[test]
 #[serial]
 fn meta_count_returns_positive() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     assert!(model.meta_count() > 0);
@@ -98,7 +98,7 @@ fn meta_count_returns_positive() {
 #[test]
 #[serial]
 fn tokens_iterator_produces_valid_entries() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let mut count = 0;
 
@@ -117,7 +117,7 @@ fn tokens_iterator_produces_valid_entries() {
 #[test]
 #[serial]
 fn token_to_piece_bytes_returns_bytes_for_known_token() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let tokens = model.str_to_token("hello", AddBos::Never)?;
     let bytes = model.token_to_piece_bytes(tokens[0], 32, false, None)?;
@@ -130,7 +130,7 @@ fn token_to_piece_bytes_returns_bytes_for_known_token() -> Result<()> {
 #[test]
 #[serial]
 fn n_layer_returns_positive() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     assert!(model.n_layer()? > 0);
@@ -141,7 +141,7 @@ fn n_layer_returns_positive() -> Result<()> {
 #[test]
 #[serial]
 fn n_head_returns_positive() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     assert!(model.n_head()? > 0);
@@ -152,7 +152,7 @@ fn n_head_returns_positive() -> Result<()> {
 #[test]
 #[serial]
 fn n_head_kv_returns_positive() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     assert!(model.n_head_kv()? > 0);
@@ -163,7 +163,7 @@ fn n_head_kv_returns_positive() -> Result<()> {
 #[test]
 #[serial]
 fn is_hybrid_returns_bool_for_test_model() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let _ = model.is_hybrid();
@@ -172,7 +172,7 @@ fn is_hybrid_returns_bool_for_test_model() {
 #[test]
 #[serial]
 fn meta_key_by_index_returns_valid_key() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let key = model.meta_key_by_index(0)?;
 
@@ -184,7 +184,7 @@ fn meta_key_by_index_returns_valid_key() -> Result<()> {
 #[test]
 #[serial]
 fn meta_val_str_by_index_returns_valid_value() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let value = model.meta_val_str_by_index(0)?;
 
@@ -196,7 +196,7 @@ fn meta_val_str_by_index_returns_valid_value() -> Result<()> {
 #[test]
 #[serial]
 fn meta_key_by_index_out_of_range_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = model.meta_key_by_index(999_999);
 
@@ -206,7 +206,7 @@ fn meta_key_by_index_out_of_range_returns_error() {
 #[test]
 #[serial]
 fn meta_val_str_by_index_out_of_range_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = model.meta_val_str_by_index(999_999);
 
@@ -216,7 +216,7 @@ fn meta_val_str_by_index_out_of_range_returns_error() {
 #[test]
 #[serial]
 fn meta_val_str_returns_value_for_known_key() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let first_key = model.meta_key_by_index(0)?;
     let value = model.meta_val_str(&first_key)?;
@@ -229,7 +229,7 @@ fn meta_val_str_returns_value_for_known_key() -> Result<()> {
 #[test]
 #[serial]
 fn model_size_returns_nonzero() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     assert!(model.size() > 0);
@@ -238,7 +238,7 @@ fn model_size_returns_nonzero() {
 #[test]
 #[serial]
 fn is_recurrent_returns_false_for_transformer() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     assert!(!model.is_recurrent());
@@ -247,7 +247,7 @@ fn is_recurrent_returns_false_for_transformer() {
 #[test]
 #[serial]
 fn rope_type_does_not_panic() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let _rope_type = model.rope_type();
 }
@@ -255,7 +255,7 @@ fn rope_type_does_not_panic() {
 #[test]
 #[serial]
 fn load_model_with_invalid_path_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
     let result = LlamaModel::load_from_file(backend, "/nonexistent/model.gguf", &model_params);
@@ -269,7 +269,7 @@ fn load_model_with_invalid_path_returns_error() {
 #[test]
 #[serial]
 fn load_model_with_invalid_file_content_returns_null_result() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
     let dummy_path = std::env::temp_dir().join("llama_test_invalid_model.gguf");
@@ -290,7 +290,7 @@ fn load_model_with_non_utf8_path_returns_path_to_str_error() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
 
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
     let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
@@ -310,7 +310,7 @@ fn lora_adapter_init_with_non_utf8_path_returns_error() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
 
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
 
@@ -325,7 +325,7 @@ fn lora_adapter_init_with_non_utf8_path_returns_error() {
 #[test]
 #[serial]
 fn lora_adapter_init_with_invalid_path_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = model.lora_adapter_init("/nonexistent/path/lora.gguf");
 
@@ -338,7 +338,7 @@ fn lora_adapter_init_with_invalid_path_returns_error() {
 #[test]
 #[serial]
 fn new_context_returns_valid_context() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(256));
@@ -352,7 +352,7 @@ fn new_context_returns_valid_context() -> Result<()> {
 #[test]
 #[serial]
 fn token_nl_returns_valid_token() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let nl_token = model.token_nl();
 
@@ -362,7 +362,7 @@ fn token_nl_returns_valid_token() {
 #[test]
 #[serial]
 fn decode_start_token_returns_valid_token() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let _decode_start = model.decode_start_token();
 }
@@ -370,7 +370,7 @@ fn decode_start_token_returns_valid_token() {
 #[test]
 #[serial]
 fn token_sep_returns_valid_token() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let _sep_token = model.token_sep();
 }
@@ -378,7 +378,7 @@ fn token_sep_returns_valid_token() {
 #[test]
 #[serial]
 fn token_to_piece_handles_large_token_requiring_buffer_resize() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
 
@@ -391,7 +391,7 @@ fn token_to_piece_handles_large_token_requiring_buffer_resize() {
 #[test]
 #[serial]
 fn token_to_piece_bytes_insufficient_buffer_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let tokens = model.str_to_token("hello", AddBos::Never)?;
     let result = model.token_to_piece_bytes(tokens[0], 1, false, None);
@@ -409,7 +409,7 @@ fn token_to_piece_bytes_insufficient_buffer_returns_error() -> Result<()> {
 #[test]
 #[serial]
 fn token_to_piece_with_lstrip() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let tokens = model.str_to_token("hello", AddBos::Never)?;
@@ -428,7 +428,7 @@ fn token_to_piece_with_lstrip() -> Result<()> {
 #[test]
 #[serial]
 fn is_eog_token_classifies_reasoning_variant() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let eos = model.token_eos();
 
@@ -438,7 +438,7 @@ fn is_eog_token_classifies_reasoning_variant() {
 #[test]
 #[serial]
 fn is_eog_token_classifies_tool_call_variant() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let eos = model.token_eos();
 
@@ -448,7 +448,7 @@ fn is_eog_token_classifies_tool_call_variant() {
 #[test]
 #[serial]
 fn is_eog_token_classifies_undeterminable_variant() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let eos = model.token_eos();
 
@@ -458,7 +458,7 @@ fn is_eog_token_classifies_undeterminable_variant() {
 #[test]
 #[serial]
 fn token_to_piece_decodes_reasoning_variant() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let tokens = model.str_to_token("hi", AddBos::Never)?;
@@ -478,7 +478,7 @@ fn token_to_piece_decodes_reasoning_variant() -> Result<()> {
 #[test]
 #[serial]
 fn token_to_piece_decodes_tool_call_variant() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let tokens = model.str_to_token("hi", AddBos::Never)?;
@@ -494,7 +494,7 @@ fn token_to_piece_decodes_tool_call_variant() -> Result<()> {
 #[test]
 #[serial]
 fn token_to_piece_decodes_undeterminable_variant() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let tokens = model.str_to_token("hi", AddBos::Never)?;
@@ -514,7 +514,7 @@ fn token_to_piece_decodes_undeterminable_variant() -> Result<()> {
 #[test]
 #[serial]
 fn str_to_token_grows_buffer_when_initial_estimation_too_small() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     // A short input that tokenises to many small tokens. The initial
@@ -536,7 +536,7 @@ fn str_to_token_grows_buffer_when_initial_estimation_too_small() -> Result<()> {
 #[test]
 #[serial]
 fn n_vocab_matches_tokens_iterator_count() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let n_vocab = model.n_vocab();
     let count = model.tokens(false).count();
@@ -549,7 +549,7 @@ fn n_vocab_matches_tokens_iterator_count() -> Result<()> {
 #[test]
 #[serial]
 fn token_attr_returns_valid_attr() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let bos = model.token_bos();
     let _attr = model.token_attr(bos)?;
@@ -560,7 +560,7 @@ fn token_attr_returns_valid_attr() -> Result<()> {
 #[test]
 #[serial]
 fn vocab_type_returns_valid_type() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let _vocab_type = model.vocab_type()?;
 
@@ -570,7 +570,7 @@ fn vocab_type_returns_valid_type() -> Result<()> {
 #[test]
 #[serial]
 fn apply_chat_template_buffer_resize_with_long_messages() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let template = model.chat_template(None)?;
     let long_content = "a".repeat(2000);
@@ -586,7 +586,7 @@ fn apply_chat_template_buffer_resize_with_long_messages() -> Result<()> {
 #[test]
 #[serial]
 fn meta_val_str_with_long_value_triggers_buffer_resize() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let count = model.meta_count();
 
@@ -601,7 +601,7 @@ fn meta_val_str_with_long_value_triggers_buffer_resize() {
 #[test]
 #[serial]
 fn str_to_token_with_add_bos_never() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let tokens_with_bos = model.str_to_token("hello", AddBos::Always)?;
     let tokens_without_bos = model.str_to_token("hello", AddBos::Never)?;
@@ -614,7 +614,7 @@ fn str_to_token_with_add_bos_never() -> Result<()> {
 #[test]
 #[serial]
 fn chat_template_with_nonexistent_name_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let result = model.chat_template(Some("nonexistent_template_name_xyz"));
@@ -625,7 +625,7 @@ fn chat_template_with_nonexistent_name_returns_error() {
 #[test]
 #[serial]
 fn lora_adapter_init_with_invalid_gguf_returns_null_result() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let dummy_path = std::env::temp_dir().join("llama_test_dummy_lora.gguf");
     std::fs::write(&dummy_path, b"not a valid gguf")?;
@@ -643,7 +643,7 @@ fn lora_adapter_init_with_invalid_gguf_returns_null_result() -> Result<()> {
 fn str_to_token_with_many_tokens_triggers_buffer_resize() -> Result<()> {
     use std::fmt::Write;
 
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let many_numbers = (0..2000).fold(String::new(), |mut accumulator, number| {
         let _ = write!(accumulator, "{number} ");
@@ -660,7 +660,7 @@ fn str_to_token_with_many_tokens_triggers_buffer_resize() -> Result<()> {
 #[test]
 #[serial]
 fn rope_type_returns_valid_result_for_test_model() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let _rope_type = model.rope_type();
@@ -669,7 +669,7 @@ fn rope_type_returns_valid_result_for_test_model() {
 #[test]
 #[serial]
 fn meta_val_str_with_null_byte_in_key_returns_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = model.meta_val_str("key\0with_null");
 
@@ -679,7 +679,7 @@ fn meta_val_str_with_null_byte_in_key_returns_error() {
 #[test]
 #[serial]
 fn new_context_with_huge_ctx_returns_null_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(u32::MAX));
@@ -692,7 +692,7 @@ fn new_context_with_huge_ctx_returns_null_error() {
 #[test]
 #[serial]
 fn sample_returns_result_and_succeeds_with_valid_index() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(256));
@@ -717,7 +717,7 @@ fn sample_returns_result_and_succeeds_with_valid_index() -> Result<()> {
 #[test]
 #[serial]
 fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 
@@ -781,7 +781,7 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
 #[test]
 #[serial]
 fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 
@@ -842,7 +842,7 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
 #[test]
 #[serial]
 fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 
@@ -927,7 +927,7 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
 #[test]
 #[serial]
 fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 

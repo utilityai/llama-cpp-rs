@@ -6,13 +6,13 @@ use llama_cpp_bindings::context::kv_cache::KvCacheConversionError;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use serial_test::serial;
 
 #[test]
 #[serial]
 fn clear_kv_cache_resets_positions() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -32,7 +32,7 @@ fn clear_kv_cache_resets_positions() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_pos_max_is_non_negative_after_decode() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -51,7 +51,7 @@ fn kv_cache_seq_pos_max_is_non_negative_after_decode() -> Result<()> {
 #[test]
 #[serial]
 fn clear_kv_cache_seq_with_range() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -71,7 +71,7 @@ fn clear_kv_cache_seq_with_range() -> Result<()> {
 #[test]
 #[serial]
 fn copy_kv_cache_seq_succeeds() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -91,7 +91,7 @@ fn copy_kv_cache_seq_succeeds() -> Result<()> {
 #[test]
 #[serial]
 fn copy_cache_executes_without_crash() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -112,7 +112,7 @@ fn copy_cache_executes_without_crash() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -134,7 +134,7 @@ fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_div_returns_error_for_mrope_model() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -156,7 +156,7 @@ fn kv_cache_seq_div_returns_error_for_mrope_model() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_keep_retains_specified_sequence() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -177,7 +177,7 @@ fn kv_cache_seq_keep_retains_specified_sequence() -> Result<()> {
 #[test]
 #[serial]
 fn copy_kv_cache_seq_with_explicit_range() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -198,7 +198,7 @@ fn copy_kv_cache_seq_with_explicit_range() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_add_succeeds_on_embedding_model() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -219,7 +219,7 @@ fn kv_cache_seq_add_succeeds_on_embedding_model() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_div_succeeds_on_embedding_model() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -241,7 +241,7 @@ fn kv_cache_seq_div_succeeds_on_embedding_model() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_pos_max_returns_negative_one_for_unused_seq() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -257,7 +257,7 @@ fn kv_cache_seq_pos_max_returns_negative_one_for_unused_seq() -> Result<()> {
 #[test]
 #[serial]
 fn copy_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -276,7 +276,7 @@ fn copy_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn copy_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -295,7 +295,7 @@ fn copy_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn clear_kv_cache_seq_rejects_src_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -314,7 +314,7 @@ fn clear_kv_cache_seq_rejects_src_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn clear_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -333,7 +333,7 @@ fn clear_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn clear_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -352,7 +352,7 @@ fn clear_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_add_rejects_p0_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -371,7 +371,7 @@ fn kv_cache_seq_add_rejects_p0_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_add_rejects_p1_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -390,7 +390,7 @@ fn kv_cache_seq_add_rejects_p1_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_div_rejects_p0_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -410,7 +410,7 @@ fn kv_cache_seq_div_rejects_p0_exceeding_i32_max() -> Result<()> {
 #[test]
 #[serial]
 fn kv_cache_seq_div_rejects_p1_exceeding_i32_max() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));

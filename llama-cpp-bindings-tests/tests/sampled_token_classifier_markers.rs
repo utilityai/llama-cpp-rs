@@ -4,11 +4,11 @@ use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenSection;
 use llama_cpp_bindings::sampled_token_classifier::StreamingMarkers;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 #[test]
 fn classifier_starts_in_pending_section_for_default_fixture() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let classifier = model.sampled_token_classifier();
@@ -18,7 +18,7 @@ fn classifier_starts_in_pending_section_for_default_fixture() {
 
 #[test]
 fn classifier_construction_is_idempotent_across_calls() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let first = model.sampled_token_classifier();
@@ -30,7 +30,7 @@ fn classifier_construction_is_idempotent_across_calls() {
 
 #[test]
 fn diagnose_tool_call_synthetic_renders_runs_without_panic() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let _ = model.diagnose_tool_call_synthetic_renders()?;
@@ -40,7 +40,7 @@ fn diagnose_tool_call_synthetic_renders_runs_without_panic() -> Result<()> {
 
 #[test]
 fn ingest_with_no_markers_emits_undeterminable_with_visible_and_raw_piece() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -59,7 +59,7 @@ fn ingest_with_no_markers_emits_undeterminable_with_visible_and_raw_piece() {
 
 #[test]
 fn ingest_with_no_markers_decodes_each_token_independently() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -72,7 +72,7 @@ fn ingest_with_no_markers_decodes_each_token_independently() {
 
 #[test]
 fn ingest_prompt_token_with_no_markers_is_a_noop() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -87,7 +87,7 @@ fn ingest_prompt_token_with_no_markers_is_a_noop() {
 
 #[test]
 fn feed_prompt_to_batch_increments_pending_prompt_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -104,7 +104,7 @@ fn feed_prompt_to_batch_increments_pending_prompt_tokens() -> Result<()> {
 
 #[test]
 fn feed_prompt_sequence_to_batch_stages_all_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -121,7 +121,7 @@ fn feed_prompt_sequence_to_batch_stages_all_tokens() -> Result<()> {
 
 #[test]
 fn commit_prompt_tokens_promotes_pending_count_to_usage_and_clears() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
@@ -141,7 +141,7 @@ fn commit_prompt_tokens_promotes_pending_count_to_usage_and_clears() -> Result<(
 
 #[test]
 fn discard_pending_prompt_tokens_clears_count_without_recording_usage() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());

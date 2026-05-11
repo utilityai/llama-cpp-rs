@@ -1,11 +1,11 @@
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 #[test]
 fn parses_pure_content_response() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let outcome = model.parse_chat_message("[]", "hello world", false)?;
@@ -22,7 +22,7 @@ fn parses_pure_content_response() -> Result<()> {
 
 #[test]
 fn parses_reasoning_section_into_reasoning_content() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let input = "<think>step one, step two</think>\n\nactual response";
@@ -43,7 +43,7 @@ fn parses_reasoning_section_into_reasoning_content() -> Result<()> {
 
 #[test]
 fn parses_empty_input_yields_empty_message() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let outcome = model.parse_chat_message("[]", "", false)?;
@@ -58,7 +58,7 @@ fn parses_empty_input_yields_empty_message() -> Result<()> {
 
 #[test]
 fn parses_malformed_tools_json_returns_tools_json_invalid_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let result = model.parse_chat_message("not_a_json[}", "hello", false);
@@ -73,7 +73,7 @@ fn parses_malformed_tools_json_returns_tools_json_invalid_error() {
 
 #[test]
 fn parses_non_array_tools_json_returns_tools_json_not_array_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let result = model.parse_chat_message("{\"foo\": 1}", "hello", false);
@@ -86,7 +86,7 @@ fn parses_non_array_tools_json_returns_tools_json_not_array_error() {
 
 #[test]
 fn parses_with_tools_null_byte_returns_tools_json_invalid_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let result = model.parse_chat_message("[]\0extra", "hello", false);
@@ -101,7 +101,7 @@ fn parses_with_tools_null_byte_returns_tools_json_invalid_error() {
 
 #[test]
 fn parses_with_input_null_byte_returns_tools_serialization_error() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
 
     let result = model.parse_chat_message("[]", "hello\0world", false);

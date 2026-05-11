@@ -6,12 +6,12 @@ use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputChunkType;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
 
 #[test]
 fn text_chunk_records_prompt_tokens() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
 
@@ -60,7 +60,7 @@ fn text_chunk_records_prompt_tokens() -> Result<()> {
 
 #[test]
 fn image_chunk_records_input_image_tokens_only() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
 
@@ -117,7 +117,7 @@ fn image_chunk_records_input_image_tokens_only() -> Result<()> {
 
 #[test]
 fn text_chunk_drives_marker_state_machine_to_reasoning() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
 

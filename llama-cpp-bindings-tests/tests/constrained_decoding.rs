@@ -6,11 +6,11 @@ use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 #[test]
 fn json_schema_constrains_output() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 

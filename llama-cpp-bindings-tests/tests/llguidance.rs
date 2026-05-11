@@ -9,7 +9,7 @@ use llama_cpp_bindings::llguidance_sampler::create_llg_sampler;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings::token::LlamaToken;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use serial_test::serial;
 
 const JSON_SCHEMA: &str =
@@ -20,7 +20,7 @@ const LARK_GRAMMAR: &str = r#"start: "yes" | "no""#;
 #[test]
 #[serial]
 fn creates_sampler_with_valid_json_schema() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let sampler = create_llg_sampler(model, "json", JSON_SCHEMA)?;
 
@@ -32,7 +32,7 @@ fn creates_sampler_with_valid_json_schema() -> Result<()> {
 #[test]
 #[serial]
 fn creates_sampler_with_valid_regex_grammar() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let sampler = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
 
@@ -44,7 +44,7 @@ fn creates_sampler_with_valid_regex_grammar() -> Result<()> {
 #[test]
 #[serial]
 fn creates_sampler_with_valid_lark_grammar() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let sampler = create_llg_sampler(model, "lark", LARK_GRAMMAR)?;
 
@@ -56,7 +56,7 @@ fn creates_sampler_with_valid_lark_grammar() -> Result<()> {
 #[test]
 #[serial]
 fn returns_error_for_unknown_grammar_kind() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = create_llg_sampler(model, "not_a_real_kind", "anything");
 
@@ -66,7 +66,7 @@ fn returns_error_for_unknown_grammar_kind() {
 #[test]
 #[serial]
 fn returns_error_for_malformed_json_schema() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = create_llg_sampler(model, "json", "{this is not valid json");
 
@@ -76,7 +76,7 @@ fn returns_error_for_malformed_json_schema() {
 #[test]
 #[serial]
 fn returns_error_for_malformed_regex() {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
     let result = create_llg_sampler(model, "regex", "[invalid");
 
@@ -86,7 +86,7 @@ fn returns_error_for_malformed_regex() {
 #[test]
 #[serial]
 fn name_callback_returns_llguidance() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let sampler = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
 
@@ -102,7 +102,7 @@ fn name_callback_returns_llguidance() -> Result<()> {
 #[test]
 #[serial]
 fn reset_clears_sampler_state() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut sampler = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
 
@@ -114,7 +114,7 @@ fn reset_clears_sampler_state() -> Result<()> {
 #[test]
 #[serial]
 fn clone_via_ffi_creates_independent_sampler() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let sampler = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
 
@@ -130,7 +130,7 @@ fn clone_via_ffi_creates_independent_sampler() -> Result<()> {
 #[test]
 #[serial]
 fn samples_token_constrained_by_grammar() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
@@ -154,7 +154,7 @@ fn samples_token_constrained_by_grammar() -> Result<()> {
 #[test]
 #[serial]
 fn accept_invalid_token_id_does_not_panic() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let mut sampler = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
 
@@ -167,7 +167,7 @@ fn accept_invalid_token_id_does_not_panic() -> Result<()> {
 #[test]
 #[serial]
 fn approximate_tok_env_returns_same_arc_across_calls() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let first = model.approximate_tok_env();
@@ -181,7 +181,7 @@ fn approximate_tok_env_returns_same_arc_across_calls() -> Result<()> {
 #[test]
 #[serial]
 fn approximate_tok_env_drives_consistent_grammar_constraint() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
 
     let first = create_llg_sampler(model, "regex", REGEX_GRAMMAR)?;
@@ -196,7 +196,7 @@ fn approximate_tok_env_drives_consistent_grammar_constraint() -> Result<()> {
 #[test]
 #[serial]
 fn apply_through_chain_during_sample_does_not_panic() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));

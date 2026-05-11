@@ -9,7 +9,7 @@ use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
 
@@ -17,7 +17,7 @@ const MAX_GENERATED_TOKENS: i32 = 200;
 
 #[test]
 fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
