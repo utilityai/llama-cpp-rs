@@ -5,6 +5,7 @@ use std::slice;
 use crate::context::LlamaContext;
 use crate::token::LlamaToken;
 
+use super::image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
 use super::mtmd_context::MtmdContext;
 use super::mtmd_error::MtmdEvalError;
 use super::mtmd_error::MtmdInputChunkError;
@@ -133,6 +134,28 @@ impl MtmdInputChunk {
         n_batch: i32,
         logits_last: bool,
     ) -> Result<llama_cpp_bindings_sys::llama_pos, MtmdEvalError> {
+        let chunk_token_count = self.n_tokens();
+
+        // Image chunks are decoded as one llama_decode call inside the helper, so
+        // their token count must fit in n_batch. Otherwise the C-side
+        // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` would abort the process.
+        if matches!(self.chunk_type(), Ok(MtmdInputChunkType::Image))
+            && i64::try_from(chunk_token_count)
+                .is_ok_and(|tokens| tokens > i64::from(n_batch))
+        {
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "image token counts and n_batch are model-bounded and fit in u32"
+            )]
+            return Err(MtmdEvalError::ImageChunkExceedsBatchSize(
+                ImageChunkBatchSizeMismatch {
+                    image_tokens: chunk_token_count as u32,
+                    n_batch: n_batch as u32,
+                },
+            ));
+        }
+
         let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
 
         let result = unsafe {

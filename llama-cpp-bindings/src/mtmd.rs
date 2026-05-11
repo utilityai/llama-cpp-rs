@@ -6,6 +6,7 @@
 //! # Warning
 //! This API is experimental and subject to breaking changes.
 
+pub mod image_chunk_batch_size_mismatch;
 pub mod mtmd_bitmap;
 pub mod mtmd_context;
 pub mod mtmd_context_params;
@@ -16,6 +17,7 @@ pub mod mtmd_input_chunk_type;
 pub mod mtmd_input_chunks;
 pub mod mtmd_input_text;
 
+pub use image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
 pub use mtmd_bitmap::MtmdBitmap;
 pub use mtmd_context::MtmdContext;
 pub use mtmd_context_params::MtmdContextParams;
