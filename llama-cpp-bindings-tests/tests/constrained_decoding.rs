@@ -1,23 +1,24 @@
 use std::io::Write;
 
 use anyhow::Result;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 #[test]
 fn json_schema_constrains_output() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
 
     let prompt = "The weather in Paris is sunny and 22 degrees. Extract as JSON:\n";
 
     let ctx_params = LlamaContextParams::default();
-    let mut ctx = model.new_context(backend, ctx_params)?;
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens_list = model.str_to_token(prompt, AddBos::Always)?;
 

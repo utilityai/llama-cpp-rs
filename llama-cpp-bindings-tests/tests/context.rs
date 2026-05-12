@@ -6,24 +6,25 @@ use std::sync::atomic::AtomicBool;
 use anyhow::Result;
 use llama_cpp_bindings::DecodeError;
 use llama_cpp_bindings::LogitsError;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaLoraAdapter;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
+use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
 use llama_cpp_bindings_tests::test_model;
 use serial_test::serial;
 
 #[test]
 #[serial]
 fn context_creation_and_properties() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     assert!(context.n_ctx() > 0);
     assert!(context.n_batch() > 0);
@@ -35,11 +36,11 @@ fn context_creation_and_properties() -> Result<()> {
 #[test]
 #[serial]
 fn decode_and_get_logits() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -56,11 +57,11 @@ fn decode_and_get_logits() -> Result<()> {
 #[test]
 #[serial]
 fn timings_work() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     context.reset_timings();
     let timings = context.timings();
@@ -72,11 +73,11 @@ fn timings_work() -> Result<()> {
 #[test]
 #[serial]
 fn token_data_array_has_entries_after_decode() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -92,11 +93,11 @@ fn token_data_array_has_entries_after_decode() -> Result<()> {
 #[test]
 #[serial]
 fn get_logits_ith_returns_valid_slice() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let last_index = i32::try_from(tokens.len() - 1)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -113,11 +114,11 @@ fn get_logits_ith_returns_valid_slice() -> Result<()> {
 #[test]
 #[serial]
 fn token_data_array_ith_returns_valid_data() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let last_index = i32::try_from(tokens.len() - 1)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -137,13 +138,13 @@ fn token_data_array_ith_returns_valid_data() -> Result<()> {
 #[test]
 #[serial]
 fn embeddings_ith_returns_error_when_embeddings_disabled() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(false);
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.embeddings_ith(0);
 
@@ -155,13 +156,13 @@ fn embeddings_ith_returns_error_when_embeddings_disabled() -> Result<()> {
 #[test]
 #[serial]
 fn embeddings_seq_ith_returns_error_when_embeddings_disabled() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(false);
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.embeddings_seq_ith(0);
 
@@ -173,11 +174,11 @@ fn embeddings_seq_ith_returns_error_when_embeddings_disabled() -> Result<()> {
 #[test]
 #[serial]
 fn candidates_returns_n_vocab_entries() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -193,11 +194,11 @@ fn candidates_returns_n_vocab_entries() -> Result<()> {
 #[test]
 #[serial]
 fn debug_format_contains_struct_name() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
     let debug_output = format!("{context:?}");
 
     assert!(debug_output.contains("LlamaContext"));
@@ -208,13 +209,13 @@ fn debug_format_contains_struct_name() -> Result<()> {
 #[test]
 #[serial]
 fn decode_with_embeddings_enabled() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -229,13 +230,13 @@ fn decode_with_embeddings_enabled() -> Result<()> {
 #[test]
 #[serial]
 fn embeddings_seq_ith_returns_valid_embeddings() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -251,14 +252,14 @@ fn embeddings_seq_ith_returns_valid_embeddings() -> Result<()> {
 #[test]
 #[serial]
 fn multi_sequence_embeddings_returns_one_embedding_per_sequence() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_n_seq_max(4)
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let inputs = [
         "alpha is here",
@@ -316,14 +317,14 @@ fn multi_sequence_embeddings_returns_one_embedding_per_sequence() -> Result<()> 
 #[test]
 #[serial]
 fn embeddings_returns_distinct_values_when_reused_batch_has_extra_capacity() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_n_seq_max(4)
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let iterations = [
         [
@@ -388,13 +389,13 @@ fn embeddings_returns_distinct_values_when_reused_batch_has_extra_capacity() -> 
 #[test]
 #[serial]
 fn embeddings_ith_returns_valid_embeddings() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let last_index = i32::try_from(tokens.len() - 1)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -411,11 +412,11 @@ fn embeddings_ith_returns_valid_embeddings() -> Result<()> {
 #[test]
 #[serial]
 fn candidates_ith_returns_n_vocab_entries() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let last_index = i32::try_from(tokens.len() - 1)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -432,11 +433,11 @@ fn candidates_ith_returns_n_vocab_entries() -> Result<()> {
 #[test]
 #[serial]
 fn lora_adapter_remove_succeeds_with_no_adapters() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
     let mut adapter = LlamaLoraAdapter {
         lora_adapter: NonNull::dangling(),
     };
@@ -451,11 +452,11 @@ fn lora_adapter_remove_succeeds_with_no_adapters() -> Result<()> {
 #[test]
 #[serial]
 fn encode_on_non_encoder_model_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -470,11 +471,11 @@ fn encode_on_non_encoder_model_returns_error() -> Result<()> {
 #[test]
 #[serial]
 fn lora_adapter_set_with_dangling_pointer_succeeds_or_errors() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
     let mut adapter = LlamaLoraAdapter {
         lora_adapter: NonNull::dangling(),
     };
@@ -489,13 +490,13 @@ fn lora_adapter_set_with_dangling_pointer_succeeds_or_errors() -> Result<()> {
 #[test]
 #[serial]
 fn embeddings_ith_returns_null_embedding_error_for_non_embedding_token() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.embeddings_ith(999);
 
@@ -507,13 +508,13 @@ fn embeddings_ith_returns_null_embedding_error_for_non_embedding_token() -> Resu
 #[test]
 #[serial]
 fn embeddings_seq_ith_returns_null_embedding_error_for_invalid_seq() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -529,11 +530,11 @@ fn embeddings_seq_ith_returns_null_embedding_error_for_invalid_seq() -> Result<(
 #[test]
 #[serial]
 fn decode_empty_batch_returns_error() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let mut batch = LlamaBatch::new(512, 1)?;
 
     let result = context.decode(&mut batch);
@@ -546,15 +547,15 @@ fn decode_empty_batch_returns_error() -> Result<()> {
 #[test]
 #[serial]
 fn encode_succeeds_with_encoder_model() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model_path = test_model::download_encoder_model()?;
-    let model_params = LlamaModelParams::default();
+    let model_params = inference_model_params();
     let model = LlamaModel::load_from_file(backend, &model_path, &model_params)?;
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(512))
         .with_embeddings(true);
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(&model, backend, ctx_params)?;
     let tokens = model.str_to_token("hello", AddBos::Never)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -569,11 +570,11 @@ fn encode_succeeds_with_encoder_model() -> Result<()> {
 #[test]
 #[serial]
 fn set_abort_flag_aborts_decode() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let abort_flag = Arc::new(AtomicBool::new(true));
     context.set_abort_flag(abort_flag);
 
@@ -591,11 +592,11 @@ fn set_abort_flag_aborts_decode() -> Result<()> {
 #[test]
 #[serial]
 fn set_abort_flag_false_allows_decode() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let abort_flag = Arc::new(AtomicBool::new(false));
     context.set_abort_flag(abort_flag);
 
@@ -613,11 +614,11 @@ fn set_abort_flag_false_allows_decode() -> Result<()> {
 #[test]
 #[serial]
 fn clear_abort_callback_allows_decode_with_flag_true() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let abort_flag = Arc::new(AtomicBool::new(true));
     context.set_abort_flag(abort_flag);
     context.clear_abort_callback();
@@ -636,11 +637,11 @@ fn clear_abort_callback_allows_decode_with_flag_true() -> Result<()> {
 #[test]
 #[serial]
 fn synchronize_completes_without_panic() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     context.synchronize();
 
@@ -650,11 +651,11 @@ fn synchronize_completes_without_panic() -> Result<()> {
 #[test]
 #[serial]
 fn detach_threadpool_completes_without_panic() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     context.detach_threadpool();
 
@@ -664,11 +665,11 @@ fn detach_threadpool_completes_without_panic() -> Result<()> {
 #[test]
 #[serial]
 fn get_logits_ith_returns_token_not_initialized_for_unknown_index() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.get_logits_ith(7);
 
@@ -680,11 +681,11 @@ fn get_logits_ith_returns_token_not_initialized_for_unknown_index() -> Result<()
 #[test]
 #[serial]
 fn get_logits_ith_returns_token_index_exceeds_context_for_huge_index() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(64));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let huge_index = i32::try_from(context.n_ctx())?;
     context.mark_logits_initialized(huge_index);

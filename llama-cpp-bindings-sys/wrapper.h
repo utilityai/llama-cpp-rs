@@ -1,5 +1,7 @@
 #include "llama.cpp/include/llama.h"
 #include "llama.cpp/ggml/include/gguf.h"
+#include "wrapper_chat_parse.h"
 #include "wrapper_common.h"
 #include "wrapper_fit.h"
 #include "wrapper_reasoning.h"
+#include "wrapper_tool_calls.h"

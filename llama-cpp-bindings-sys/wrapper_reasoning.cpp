@@ -3,8 +3,10 @@
 #include "llama.cpp/common/chat-auto-parser.h"
 #include "llama.cpp/common/chat.h"
 #include "llama.cpp/include/llama.h"
+#include "marker_probes/marker_probe.h"
 
 #include <exception>
+#include <nlohmann/json.hpp>
 #include <string>
 
 namespace {
@@ -59,17 +61,62 @@ extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
 
         common_chat_template tmpl(tmpl_src, bos_token, eos_token);
 
-        autoparser::autoparser parser;
-        parser.analyze_template(tmpl);
+        std::string detected_start;
+        std::string detected_end;
+        bool detected = false;
 
-        if (parser.reasoning.mode == autoparser::reasoning_mode::NONE
-            || parser.reasoning.start.empty()
-            || parser.reasoning.end.empty()) {
+        autoparser::generation_params probe_params;
+        probe_params.add_generation_prompt = true;
+        probe_params.enable_thinking = true;
+        probe_params.is_inference = false;
+        probe_params.add_inference = false;
+        probe_params.mark_input = false;
+        probe_params.messages = nlohmann::ordered_json::array({
+            nlohmann::ordered_json{ { "role", "user" }, { "content", "ping" } },
+        });
+
+        const std::string tmpl_src_str = tmpl_src;
+        if (auto specialized = common_chat_try_specialized_template(tmpl, tmpl_src_str, probe_params)) {
+            if (specialized->supports_thinking
+                && !specialized->thinking_start_tag.empty()
+                && !specialized->thinking_end_tag.empty()) {
+                detected_start = std::move(specialized->thinking_start_tag);
+                detected_end = std::move(specialized->thinking_end_tag);
+                detected = true;
+            }
+        }
+
+        if (!detected) {
+            autoparser::autoparser parser;
+            parser.analyze_template(tmpl);
+
+            if (parser.reasoning.mode != autoparser::reasoning_mode::NONE
+                && !parser.reasoning.start.empty()
+                && !parser.reasoning.end.empty()) {
+                detected_start = std::move(parser.reasoning.start);
+                detected_end = std::move(parser.reasoning.end);
+                detected = true;
+            }
+        }
+
+        if (!detected) {
+            for (auto probe : marker_probes::registered()) {
+                auto fallback = probe(tmpl);
+                if (fallback.found) {
+                    detected_start = std::move(fallback.start);
+                    detected_end = std::move(fallback.end);
+                    detected = true;
+                    break;
+                }
+            }
+        }
+
+        if (!detected) {
             return LLAMA_RS_STATUS_OK;
         }
 
-        char * open_dup = llama_rs_dup_string(parser.reasoning.start);
-        char * close_dup = llama_rs_dup_string(parser.reasoning.end);
+        char * open_dup = llama_rs_dup_string(detected_start);
+        char * close_dup = llama_rs_dup_string(detected_end);
 
         if (!open_dup || !close_dup) {
             std::free(open_dup);
@@ -92,3 +139,4 @@ extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
         return LLAMA_RS_STATUS_EXCEPTION;
     }
 }
+

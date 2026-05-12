@@ -9,6 +9,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use crate::context::params::LlamaContextParams;
+use crate::llama_backend::LlamaBackend;
 use crate::llama_batch::LlamaBatch;
 use crate::model::{LlamaLoraAdapter, LlamaModel};
 use crate::timing::LlamaTimings;
@@ -16,7 +18,7 @@ use crate::token::LlamaToken;
 use crate::token::data::LlamaTokenData;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::{
-    DecodeError, EmbeddingsError, EncodeError, LlamaLoraAdapterRemoveError,
+    DecodeError, EmbeddingsError, EncodeError, LlamaContextLoadError, LlamaLoraAdapterRemoveError,
     LlamaLoraAdapterSetError, LogitsError,
 };
 
@@ -85,6 +87,35 @@ impl<'model> LlamaContext<'model> {
             initialized_logits: Vec::new(),
             embeddings_enabled,
         }
+    }
+
+    /// Create a new context bound to `model`.
+    ///
+    /// `_backend` is unused in the body but serves as a compile-time witness that
+    /// the global llama.cpp backend has been initialised before context creation.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaContextLoadError`] when llama.cpp fails to allocate the context.
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "LlamaContextParams may become non-trivially copyable upstream"
+    )]
+    pub fn from_model(
+        model: &'model LlamaModel,
+        _backend: &LlamaBackend,
+        params: LlamaContextParams,
+    ) -> Result<Self, LlamaContextLoadError> {
+        let context_params = params.context_params;
+        let context = unsafe {
+            llama_cpp_bindings_sys::llama_new_context_with_model(
+                model.model.as_ptr(),
+                context_params,
+            )
+        };
+        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+
+        Ok(Self::new(model, context, params.embeddings()))
     }
 
     /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to [`Self::n_ubatch`].

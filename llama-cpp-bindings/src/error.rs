@@ -4,7 +4,7 @@ use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::string::FromUtf8Error;
 
-use crate::llama_batch::BatchAddError;
+use crate::batch_add_error::BatchAddError;
 use crate::mtmd::MtmdEvalError;
 use crate::mtmd::mtmd_input_chunk_type::MtmdInputChunkTypeError;
 
@@ -333,9 +333,9 @@ pub enum ApplyChatTemplateError {
     IntConversionError(#[from] std::num::TryFromIntError),
 }
 
-/// Failed to build a [`crate::reasoning_token_classifier::ReasoningTokenClassifier`] for a model.
+/// Failed to detect tool-call diagnostic markers for a model.
 #[derive(Debug, thiserror::Error)]
-pub enum ReasoningClassifierError {
+pub enum MarkerDetectionError {
     /// llama.cpp returned an error code from the marker detection FFI call.
     #[error("ffi error {0}")]
     FfiError(i32),
@@ -345,39 +345,143 @@ pub enum ReasoningClassifierError {
     /// llama.cpp returned a marker string but its bytes were not valid UTF-8.
     #[error("ffi returned non-utf8 marker bytes: {0}")]
     MarkerUtf8Error(#[from] FromUtf8Error),
-    /// Tokenizing a detected marker string failed.
-    #[error("marker tokenization failed: {0}")]
-    MarkerTokenization(#[from] StringToTokenError),
-    /// Reading token attributes for a resolved marker token failed.
-    #[error("token attribute lookup failed: {0}")]
-    TokenAttr(#[from] crate::token_type::LlamaTokenTypeFromIntError),
-    /// The detected open-marker string did not tokenize to exactly one token.
-    #[error("open marker {marker:?} tokenized to {token_count} tokens, expected 1")]
-    OpenMarkerNotSingleToken {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-        /// The number of tokens the marker tokenized to.
-        token_count: usize,
+}
+
+/// Failed to parse a chat message via [`crate::Model::parse_chat_message`].
+#[derive(Debug, thiserror::Error)]
+pub enum ParseChatMessageError {
+    /// llama.cpp returned an error code from the parse FFI call.
+    #[error("ffi error {0}")]
+    FfiError(i32),
+    /// The C++ side threw an exception while parsing.
+    #[error("c++ exception during chat parse: {0}")]
+    ParseException(String),
+    /// An accessor returned bytes that were not valid UTF-8.
+    #[error("ffi returned non-utf8 string: {0}")]
+    StringUtf8Error(#[from] FromUtf8Error),
+    /// The caller passed a `tools_json` argument that is not valid JSON.
+    #[error("tools_json is not valid JSON: {0}")]
+    ToolsJsonInvalid(#[source] serde_json::Error),
+    /// The caller passed a `tools_json` argument that parses as JSON but is not an array.
+    #[error("tools_json must be a JSON array")]
+    ToolsJsonNotArray,
+    /// Failed to serialize the tools array for the FFI call.
+    #[error("could not serialize tools to JSON: {0}")]
+    ToolsSerialization(String),
+    /// The model has no usable chat template, so the parser cannot be built.
+    #[error("model has no chat template")]
+    NoChatTemplate,
+    /// The wrapper-side fallback parser detected a structural issue while parsing the body.
+    #[error("template-override fallback parser failed: {0}")]
+    TemplateOverrideFailed(#[from] ToolCallFormatFailure),
+}
+
+/// Top-level failure for the wrapper-side template-override parsers (one variant per supported shape).
+#[derive(Debug, thiserror::Error)]
+pub enum ToolCallFormatFailure {
+    #[error("bracketed-args fallback parser: {0}")]
+    BracketedArgs(#[from] BracketedArgsFailure),
+    #[error("json-object fallback parser: {0}")]
+    JsonObject(#[from] JsonObjectFailure),
+    #[error("key-value-xml-tags fallback parser: {0}")]
+    KeyValueXmlTags(#[from] KeyValueXmlTagsFailure),
+    #[error("paired-quote fallback parser: {0}")]
+    PairedQuote(#[from] PairedQuoteFailure),
+    #[error("xml-function-tags fallback parser: {0}")]
+    XmlFunctionTags(#[from] XmlFunctionTagsFailure),
+}
+
+/// Failures specific to the JSON-object args parser (Qwen 3 `<tool_call>{"name":..., "arguments":...}</tool_call>`).
+#[derive(Debug, thiserror::Error)]
+pub enum JsonObjectFailure {
+    #[error("tool call body has malformed JSON: {message}")]
+    InvalidJson { message: String },
+}
+
+/// Failures specific to the bracketed-JSON args parser (Mistral 3 `[TOOL_CALLS]name[ARGS]{...}`).
+#[derive(Debug, thiserror::Error)]
+pub enum BracketedArgsFailure {
+    #[error("tool call '{tool_name}' arguments are not valid JSON: {message}")]
+    InvalidJsonArguments { tool_name: String, message: String },
+    #[error("tool call '{tool_name}' arguments truncated before JSON value completed")]
+    UnterminatedArguments { tool_name: String },
+}
+
+/// Failures specific to the paired-quote args parser (Gemma 4 `<|tool_call>call:name{key:<|"|>val<|"|>}`).
+#[derive(Debug, thiserror::Error)]
+pub enum PairedQuoteFailure {
+    #[error("empty key in tool call '{tool_name}' arguments")]
+    EmptyKey { tool_name: String },
+    #[error("tool call '{tool_name}' translated arguments are not valid JSON: {message}")]
+    InvalidJsonArguments { tool_name: String, message: String },
+    #[error("tool call '{tool_name}' has unclosed quoted value for key '{key}'")]
+    UnclosedQuotedValue { tool_name: String, key: String },
+    #[error("tool call '{tool_name}' arguments ended without close marker (state: {state})")]
+    UnclosedArgumentBlock {
+        tool_name: String,
+        state: &'static str,
     },
-    /// The detected close-marker string did not tokenize to exactly one token.
-    #[error("close marker {marker:?} tokenized to {token_count} tokens, expected 1")]
-    CloseMarkerNotSingleToken {
-        /// The marker string returned by llama.cpp.
-        marker: String,
-        /// The number of tokens the marker tokenized to.
-        token_count: usize,
+    #[error(
+        "tool call '{tool_name}' has unexpected character '{character}' after value for key '{key}'"
+    )]
+    UnexpectedCharAfterValue {
+        tool_name: String,
+        key: String,
+        character: char,
     },
-    /// The detected open-marker token is not registered as a special token (Control or `UserDefined`).
-    #[error("open marker {marker:?} is not a registered special token")]
-    OpenMarkerNotSpecial {
-        /// The marker string returned by llama.cpp.
-        marker: String,
+}
+
+/// Failures specific to the key-value XML-tags parser (GLM-4.7 `<tool_call>{name}<arg_key>{k}</arg_key><arg_value>{v}</arg_value>...</tool_call>`).
+#[derive(Debug, thiserror::Error)]
+pub enum KeyValueXmlTagsFailure {
+    #[error("tool call function tag has empty name")]
+    EmptyFunctionName,
+    #[error("tool call function block is missing close tag '{expected_close}'")]
+    UnclosedFunctionBlock { expected_close: String },
+    #[error("tool call function '{function_name}' has key tag with empty content")]
+    EmptyKey { function_name: String },
+    #[error("tool call function '{function_name}' is missing key close tag '{expected_close}'")]
+    UnclosedKeyTag {
+        function_name: String,
+        expected_close: String,
     },
-    /// The detected close-marker token is not registered as a special token (Control or `UserDefined`).
-    #[error("close marker {marker:?} is not a registered special token")]
-    CloseMarkerNotSpecial {
-        /// The marker string returned by llama.cpp.
-        marker: String,
+    #[error(
+        "tool call function '{function_name}' key '{key}' is missing value open tag '{expected_open}'"
+    )]
+    MissingValueTag {
+        function_name: String,
+        key: String,
+        expected_open: String,
+    },
+    #[error(
+        "tool call function '{function_name}' key '{key}' is missing value close tag '{expected_close}'"
+    )]
+    UnclosedValueTag {
+        function_name: String,
+        key: String,
+        expected_close: String,
+    },
+}
+
+/// Failures specific to the XML function-tags parser (Qwen 3.5+ `<function=name><parameter=key>val</parameter></function>`).
+#[derive(Debug, thiserror::Error)]
+pub enum XmlFunctionTagsFailure {
+    #[error("tool call function tag has empty name")]
+    EmptyFunctionName,
+    #[error("tool call function '{function_name}' is missing close tag '{expected_close}'")]
+    UnclosedFunctionBlock {
+        function_name: String,
+        expected_close: String,
+    },
+    #[error("tool call function '{function_name}' has parameter with empty name")]
+    EmptyParameterName { function_name: String },
+    #[error(
+        "tool call function '{function_name}' parameter '{parameter_name}' is missing close tag '{expected_close}'"
+    )]
+    UnclosedParameterBlock {
+        function_name: String,
+        parameter_name: String,
+        expected_close: String,
     },
 }
 
@@ -393,21 +497,6 @@ pub enum EvalMultimodalChunksError {
     /// A chunk index that was within `chunks.len()` returned `None` from `chunks.get(index)`.
     #[error("chunk index {0} out of bounds during post-eval walk")]
     ChunkOutOfBounds(usize),
-}
-
-/// Token-usage accounting violations.
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum TokenUsageError {
-    /// Cached prompt tokens cannot exceed the recorded prompt total.
-    #[error(
-        "cached prompt tokens would reach {cached_after} but only {prompt} prompt tokens were recorded"
-    )]
-    CachedExceedsPrompt {
-        /// Running cached total after this would-be call.
-        cached_after: u64,
-        /// Currently recorded prompt-token total.
-        prompt: u64,
-    },
 }
 
 /// Failed to accept a token in a sampler.

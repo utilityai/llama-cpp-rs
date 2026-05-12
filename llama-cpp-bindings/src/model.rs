@@ -3,6 +3,12 @@ use std::ffi::{CStr, CString, c_char};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::OnceLock;
+
+use toktrie::ApproximateTokEnv;
+use toktrie::TokRxInfo;
+use toktrie::TokTrie;
 
 fn truncated_buffer_to_string(
     mut buffer: Vec<u8>,
@@ -24,19 +30,31 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
 }
 use std::ptr::{self, NonNull};
 
-use crate::context::LlamaContext;
-use crate::context::params::LlamaContextParams;
+use crate::chat_message_parse_outcome::ChatMessageParseOutcome;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
-use crate::reasoning_token_classifier::ReasoningTokenClassifier;
+use crate::llama_token_attrs::LlamaTokenAttrs;
+use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
+use crate::raw_chat_message::RawChatMessage;
+use crate::resolved_tool_call_markers::ResolvedToolCallMarkers;
 use crate::sampled_token::SampledToken;
+use crate::sampled_token_classifier::SampledTokenClassifier;
+use crate::sampled_token_classifier::StreamingMarkers;
 use crate::token::LlamaToken;
-use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, MetaValError, ReasoningClassifierError, StringToTokenError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaLoraAdapterInitError, LlamaModelLoadError,
+    MarkerDetectionError, MetaValError, ParseChatMessageError, StringToTokenError,
     TokenToStringError,
 };
+use llama_cpp_bindings_types::ParsedChatMessage;
+use llama_cpp_bindings_types::ParsedToolCall;
+use llama_cpp_bindings_types::ReasoningMarkers;
+use llama_cpp_bindings_types::ToolCallArguments;
+use llama_cpp_bindings_types::ToolCallMarkers;
+
+use crate::tool_call_format;
+use crate::tool_call_format::ToolCallFormatOutcome;
+use crate::tool_call_template_overrides;
 
 pub mod add_bos;
 pub mod llama_chat_message;
@@ -46,22 +64,31 @@ pub mod params;
 pub mod rope_type;
 pub mod split_mode;
 pub mod vocab_type;
+pub mod vocab_type_from_int_error;
 
 pub use add_bos::AddBos;
 pub use llama_chat_message::LlamaChatMessage;
 pub use llama_chat_template::LlamaChatTemplate;
 pub use llama_lora_adapter::LlamaLoraAdapter;
 pub use rope_type::RopeType;
-pub use vocab_type::{LlamaTokenTypeFromIntError, VocabType};
+pub use vocab_type::VocabType;
+pub use vocab_type_from_int_error::VocabTypeFromIntError;
 
 use params::LlamaModelParams;
 
 /// A safe wrapper around `llama_model`.
-#[derive(Debug)]
-#[repr(transparent)]
 pub struct LlamaModel {
     /// Raw pointer to the underlying `llama_model`.
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
+    tok_env: OnceLock<Arc<ApproximateTokEnv>>,
+}
+
+impl std::fmt::Debug for LlamaModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlamaModel")
+            .field("model", &self.model)
+            .finish_non_exhaustive()
+    }
 }
 
 unsafe impl Send for LlamaModel {}
@@ -133,6 +160,7 @@ impl LlamaModel {
     pub fn is_eog_token(&self, token: &SampledToken) -> bool {
         let (SampledToken::Content(LlamaToken(id))
         | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::ToolCall(LlamaToken(id))
         | SampledToken::Undeterminable(LlamaToken(id))) = *token;
 
         unsafe { llama_cpp_bindings_sys::llama_token_is_eog(self.vocab_ptr(), id) }
@@ -237,7 +265,7 @@ impl LlamaModel {
     pub fn token_attr(
         &self,
         LlamaToken(id): LlamaToken,
-    ) -> Result<LlamaTokenAttrs, crate::token_type::LlamaTokenTypeFromIntError> {
+    ) -> Result<LlamaTokenAttrs, LlamaTokenAttrsFromIntError> {
         let token_type =
             unsafe { llama_cpp_bindings_sys::llama_token_get_attr(self.vocab_ptr(), id) };
 
@@ -268,6 +296,7 @@ impl LlamaModel {
     ) -> Result<String, TokenToStringError> {
         let (SampledToken::Content(inner)
         | SampledToken::Reasoning(inner)
+        | SampledToken::ToolCall(inner)
         | SampledToken::Undeterminable(inner)) = *token;
         let bytes = match self.token_to_piece_bytes(inner, 8, special, lstrip) {
             Err(TokenToStringError::InsufficientBufferSpace(required_size)) => {
@@ -296,7 +325,6 @@ impl LlamaModel {
     /// - if the token type is unknown
     /// - the resultant token is larger than `buffer_size`.
     /// - if an integer conversion fails
-    #[allow(clippy::missing_panics_doc)]
     pub fn token_to_piece_bytes(
         &self,
         token: LlamaToken,
@@ -304,18 +332,15 @@ impl LlamaModel {
         special: bool,
         lstrip: Option<NonZeroU16>,
     ) -> Result<Vec<u8>, TokenToStringError> {
-        // SAFETY: `*` (0x2A) is never `\0`, so CString::new cannot fail here
-        let string = CString::new(vec![b'*'; buffer_size]).expect("no null");
-        let len = string.as_bytes().len();
-        let len = c_int::try_from(len)?;
-        let buf = string.into_raw();
+        let mut buffer: Vec<u8> = vec![0u8; buffer_size];
+        let buffer_len = c_int::try_from(buffer.len())?;
         let lstrip = lstrip.map_or(0, |strip_count| i32::from(strip_count.get()));
         let size = unsafe {
             llama_cpp_bindings_sys::llama_token_to_piece(
                 self.vocab_ptr(),
                 token.0,
-                buf,
-                len,
+                buffer.as_mut_ptr().cast::<c_char>(),
+                buffer_len,
                 lstrip,
                 special,
             )
@@ -327,12 +352,10 @@ impl LlamaModel {
                 Err(TokenToStringError::InsufficientBufferSpace(error_code))
             }
             size => {
-                let string = unsafe { CString::from_raw(buf) };
-                let mut bytes = string.into_bytes();
-                let len = usize::try_from(size)?;
-                bytes.truncate(len);
+                let written = usize::try_from(size)?;
+                buffer.truncate(written);
 
-                Ok(bytes)
+                Ok(buffer)
             }
         }
     }
@@ -351,7 +374,7 @@ impl LlamaModel {
     /// # Errors
     ///
     /// Returns an error if llama.cpp emits a vocab type that is not known to this library.
-    pub fn vocab_type(&self) -> Result<VocabType, LlamaTokenTypeFromIntError> {
+    pub fn vocab_type(&self) -> Result<VocabType, VocabTypeFromIntError> {
         let vocab_type = unsafe { llama_cpp_bindings_sys::llama_vocab_type(self.vocab_ptr()) };
 
         VocabType::try_from(vocab_type)
@@ -522,10 +545,8 @@ impl LlamaModel {
             Err(ChatTemplateError::MissingTemplate)
         } else {
             let chat_template_cstr = unsafe { CStr::from_ptr(result) };
-            let chat_template = CString::new(chat_template_cstr.to_bytes())
-                .expect("CStr bytes cannot contain interior null bytes");
 
-            Ok(LlamaChatTemplate(chat_template))
+            Ok(LlamaChatTemplate(chat_template_cstr.to_owned()))
         }
     }
 
@@ -567,7 +588,10 @@ impl LlamaModel {
             None => return Err(LlamaModelLoadError::NullResult),
         };
 
-        Ok(Self { model })
+        Ok(Self {
+            model,
+            tok_env: OnceLock::new(),
+        })
     }
 
     /// Initializes a lora adapter from a file.
@@ -601,32 +625,6 @@ impl LlamaModel {
         Ok(LlamaLoraAdapter {
             lora_adapter: adapter,
         })
-    }
-
-    /// Create a new context from this model.
-    ///
-    /// # Errors
-    ///
-    /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "LlamaContextParams may become non-trivially copyable upstream"
-    )]
-    pub fn new_context<'model>(
-        &'model self,
-        _: &LlamaBackend,
-        params: LlamaContextParams,
-    ) -> Result<LlamaContext<'model>, LlamaContextLoadError> {
-        let context_params = params.context_params;
-        let context = unsafe {
-            llama_cpp_bindings_sys::llama_new_context_with_model(
-                self.model.as_ptr(),
-                context_params,
-            )
-        };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
-
-        Ok(LlamaContext::new(self, context, params.embeddings()))
     }
 
     /// Apply the models chat template to some messages.
@@ -707,126 +705,542 @@ impl LlamaModel {
         truncated_buffer_to_string(buff, final_size)
     }
 
-    /// Build a [`ReasoningTokenClassifier`] for this model by detecting the model's
-    /// reasoning markers via llama.cpp's chat-template analyzer and resolving them
-    /// to single Control-attribute token ids.
+    /// Build a streaming [`SampledTokenClassifier`] for this model.
     ///
-    /// Returns an `Ok(undetermined)` classifier when the model exposes no detectable
-    /// reasoning markers — that is the canonical "this model has no reasoning" signal.
+    /// At construction the bindings detect reasoning markers (via the
+    /// autoparser, with a chunked-thinking fallback for templates that consume
+    /// thoughts via content blocks), tool-call markers, and the trailing
+    /// generation-prompt slice. The classifier then runs a state machine over
+    /// the decoded token stream — no per-model branches.
+    ///
+    /// If the model has no usable chat template the classifier is built in a
+    /// blind mode that classifies every token as
+    /// [`SampledToken::Undeterminable`].
+    pub fn sampled_token_classifier(&self) -> SampledTokenClassifier<'_> {
+        let markers = match self.streaming_markers() {
+            Ok(markers) => markers,
+            Err(detection_error) => {
+                tracing::warn!(
+                    "streaming markers detection failed; classifier will run blind: {detection_error}"
+                );
+                StreamingMarkers::default()
+            }
+        };
+
+        SampledTokenClassifier::new(self, markers)
+    }
+
+    /// Detect reasoning / tool-call markers (as token-ID sequences) and the
+    /// trailing generation-prompt slice for this model's chat template. The
+    /// returned `StreamingMarkers` carry tokenised markers — never raw strings
+    /// — so the classifier matches by `LlamaToken` equality rather than text
+    /// scanning.
+    ///
+    /// # Errors
+    /// Returns [`MarkerDetectionError`] when any underlying FFI call fails.
+    pub fn streaming_markers(&self) -> Result<StreamingMarkers, MarkerDetectionError> {
+        let (reasoning_open_str, reasoning_close_str) =
+            invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+                llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+                    self.model.as_ptr(),
+                    first,
+                    second,
+                    error,
+                )
+            })?;
+
+        let tool_call_haystack = invoke_ffi_single_string_detector(|haystack, error| unsafe {
+            llama_cpp_bindings_sys::llama_rs_compute_tool_call_haystack(
+                self.model.as_ptr(),
+                haystack,
+                error,
+            )
+        })?;
+
+        let autoparser_pair = tool_call_haystack.as_deref().and_then(
+            crate::extract_tool_call_markers_from_haystack::extract_tool_call_markers_from_haystack,
+        );
+
+        let (autoparser_open, autoparser_close) = match autoparser_pair {
+            Some(crate::tool_call_marker_pair::ToolCallMarkerPair { open, close }) => {
+                (Some(open), Some(close))
+            }
+            None => (None, None),
+        };
+
+        let resolved_tool_call_markers =
+            self.resolve_tool_call_marker_strings(autoparser_open, autoparser_close);
+
+        Ok(StreamingMarkers {
+            reasoning_open: self.tokenize_marker(reasoning_open_str.as_deref()),
+            reasoning_close: self.tokenize_marker(reasoning_close_str.as_deref()),
+            tool_call_open: self.tokenize_marker(resolved_tool_call_markers.open.as_deref()),
+            tool_call_close: self.tokenize_marker(resolved_tool_call_markers.close.as_deref()),
+        })
+    }
+
+    /// When the autoparser-driven FFI returned no tool-call markers, consult the
+    /// per-template override registry so wrapper-known templates (Gemma 4,
+    /// Mistral 3, ...) still drive the classifier.
+    fn resolve_tool_call_marker_strings(
+        &self,
+        autoparser_open: Option<String>,
+        autoparser_close: Option<String>,
+    ) -> ResolvedToolCallMarkers {
+        if autoparser_open
+            .as_deref()
+            .is_some_and(|raw| !raw.trim().is_empty())
+        {
+            return ResolvedToolCallMarkers {
+                open: autoparser_open,
+                close: autoparser_close,
+            };
+        }
+        let Some(markers) = self.tool_call_markers() else {
+            return ResolvedToolCallMarkers {
+                open: autoparser_open,
+                close: autoparser_close,
+            };
+        };
+        let close = if markers.close.is_empty() {
+            None
+        } else {
+            Some(markers.close)
+        };
+        ResolvedToolCallMarkers {
+            open: Some(markers.open),
+            close,
+        }
+    }
+
+    /// # Errors
+    /// Returns [`MarkerDetectionError`] when the underlying FFI call fails.
+    pub fn reasoning_markers(&self) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
+        let (open, close) = invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+                self.model.as_ptr(),
+                first,
+                second,
+                error,
+            )
+        })?;
+
+        match (open, close) {
+            (Some(open), Some(close)) if !open.is_empty() && !close.is_empty() => {
+                Ok(Some(ReasoningMarkers { open, close }))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the rich tool-call marker bundle (open / separator / close /
+    /// optional value-quote pair) for this model's chat template, sourced from
+    /// the wrapper's per-template override registry. Returns `None` when no
+    /// registered override matches — callers in that case fall back to
+    /// llama.cpp's autoparser via [`Self::parse_chat_message`].
+    #[must_use]
+    pub fn tool_call_markers(&self) -> Option<ToolCallMarkers> {
+        let template = match self.chat_template(None) {
+            Ok(template) => template,
+            Err(error) => {
+                tracing::debug!(
+                    "tool-call markers unavailable: chat template missing or invalid: {error}"
+                );
+                return None;
+            }
+        };
+        let template_str = match template.to_str() {
+            Ok(template_str) => template_str,
+            Err(error) => {
+                tracing::debug!(
+                    "tool-call markers unavailable: chat template is not valid UTF-8: {error}"
+                );
+                return None;
+            }
+        };
+        tool_call_template_overrides::detect(template_str)
+    }
+
+    fn tokenize_marker(&self, marker: Option<&str>) -> Option<Vec<LlamaToken>> {
+        let marker = marker?.trim();
+        if marker.is_empty() {
+            return None;
+        }
+        match self.str_to_token(marker, AddBos::Never) {
+            Ok(tokens) if !tokens.is_empty() => Some(tokens),
+            Ok(_) => None,
+            Err(tokenize_error) => {
+                tracing::debug!(
+                    "marker {marker:?} failed to tokenise; classifier will ignore it: {tokenize_error}"
+                );
+                None
+            }
+        }
+    }
+
+    /// Parse the assistant's output text into structured content, reasoning,
+    /// and tool calls.
+    ///
+    /// Two passes, in order:
+    /// 1. Duck-type the wrapper-side parsers across every known shape
+    ///    (Qwen XML, GLM key-value, Gemma paired-quote, Mistral bracketed-JSON).
+    ///    First match wins. The shapes are ordered so that more restrictive
+    ///    shapes run first, which keeps the duck-type pass safe for inputs
+    ///    that share an open marker but differ in inner structure.
+    /// 2. Delegate to llama.cpp's `common_chat_parse`. If it succeeds the
+    ///    result is `Recognized`; if it throws `ParseException` the result is
+    ///    `Unrecognized` with the raw input plus the FFI's diagnostic, so the
+    ///    caller can pass the unstructured tokens to the client.
+    ///
+    /// Empty tool-call `id` fields are filled with `call_{index}` before
+    /// returning, so callers always see well-formed identifiers.
+    ///
+    /// `tools_json` is a JSON-array string of OpenAI-style tool definitions
+    /// (use `"[]"` when no tools are in scope). `is_partial` switches between
+    /// mid-stream (lenient) and final (strict) parses for the FFI step.
     ///
     /// # Errors
     ///
-    /// Returns [`ReasoningClassifierError`] when the C++ analyzer throws, when a
-    /// detected marker does not tokenize to exactly one token, or when the resolved
-    /// token does not have the [`LlamaTokenAttr::Control`] attribute.
-    pub fn reasoning_token_classifier(
+    /// Returns [`ParseChatMessageError`] when `tools_json` is not valid JSON,
+    /// the FFI returns a non-OK status other than `ParseException`, or
+    /// accessor strings are not valid UTF-8.
+    pub fn parse_chat_message(
         &self,
-    ) -> Result<ReasoningTokenClassifier, ReasoningClassifierError> {
-        let mut out_open: *mut c_char = ptr::null_mut();
-        let mut out_close: *mut c_char = ptr::null_mut();
+        tools_json: &str,
+        input: &str,
+        is_partial: bool,
+    ) -> Result<ChatMessageParseOutcome, ParseChatMessageError> {
+        let tools_value: serde_json::Value =
+            serde_json::from_str(tools_json).map_err(ParseChatMessageError::ToolsJsonInvalid)?;
+        if !tools_value.is_array() {
+            return Err(ParseChatMessageError::ToolsJsonNotArray);
+        }
+
+        let reasoning_markers = self.reasoning_markers().ok().flatten();
+
+        for candidate in tool_call_template_overrides::known_marker_candidates() {
+            if let ToolCallFormatOutcome::Parsed(calls) =
+                tool_call_format::try_parse(input, &candidate)
+            {
+                let split =
+                    split_reasoning_prefix(input, reasoning_markers.as_ref(), &candidate.open);
+                let mut parsed = ParsedChatMessage::new(split.content, split.reasoning, calls);
+                synthesize_missing_tool_call_ids(&mut parsed.tool_calls);
+                return Ok(ChatMessageParseOutcome::Recognized(parsed));
+            }
+        }
+
+        match self.parse_chat_message_via_ffi(tools_json, input, is_partial) {
+            Ok(mut parsed) => {
+                synthesize_missing_tool_call_ids(&mut parsed.tool_calls);
+                Ok(ChatMessageParseOutcome::Recognized(parsed))
+            }
+            Err(ParseChatMessageError::ParseException(ffi_error_message)) => {
+                Ok(ChatMessageParseOutcome::Unrecognized(RawChatMessage {
+                    tools_json: tools_json.to_owned(),
+                    text: input.to_owned(),
+                    is_partial,
+                    ffi_error_message,
+                }))
+            }
+            Err(other) => Err(other),
+        }
+    }
+
+    fn parse_chat_message_via_ffi(
+        &self,
+        tools_json: &str,
+        input: &str,
+        is_partial: bool,
+    ) -> Result<ParsedChatMessage, ParseChatMessageError> {
+        let tools_cstring = CString::new(tools_json)
+            .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
+        let input_cstring = CString::new(input)
+            .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
+
+        let mut handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat = ptr::null_mut();
         let mut out_error: *mut c_char = ptr::null_mut();
 
         let status = unsafe {
-            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+            llama_cpp_bindings_sys::llama_rs_parse_chat_message(
                 self.model.as_ptr(),
-                &raw mut out_open,
-                &raw mut out_close,
+                tools_cstring.as_ptr(),
+                input_cstring.as_ptr(),
+                i32::from(is_partial),
+                &raw mut handle,
                 &raw mut out_error,
             )
         };
 
-        let parsed = (|| match status {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
-                let open_string = read_optional_owned_cstr(out_open)?;
-                let close_string = read_optional_owned_cstr(out_close)?;
-
-                Ok((open_string, close_string))
-            }
+        let parsed = match status {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => collect_parsed_chat_message(handle),
             llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
                 let message = read_optional_owned_cstr_lossy(out_error);
-
-                Err(ReasoningClassifierError::AnalyzeException(message))
+                Err(ParseChatMessageError::ParseException(message))
             }
-            other => Err(ReasoningClassifierError::FfiError(status_to_i32(other))),
-        })();
-
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_open) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-
-        let (open_string, close_string) = parsed?;
-
-        let (Some(open_marker), Some(close_marker)) = (open_string, close_string) else {
-            return Ok(ReasoningTokenClassifier::undetermined());
+            other => Err(ParseChatMessageError::FfiError(status_to_i32(other))),
         };
 
-        let open_marker = open_marker.trim();
-        let close_marker = close_marker.trim();
+        unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle) };
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
 
-        let open_token = self.resolve_open_reasoning_marker(open_marker)?;
-        let close_token = self.resolve_close_reasoning_marker(close_marker)?;
-
-        Ok(ReasoningTokenClassifier::new(open_token, close_token))
+        parsed
     }
 
-    fn resolve_open_reasoning_marker(
+    /// Render the model's chat template with the autoparser's synthetic
+    /// no-tools and with-tools inputs. Returns `(output_no_tools,
+    /// output_with_tools)`. Either side can be empty when the template throws
+    /// during rendering. Useful for debugging tool-call marker detection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MarkerDetectionError`] when the C++ analyzer throws or the FFI
+    /// returns a non-OK status.
+    pub fn diagnose_tool_call_synthetic_renders(
         &self,
-        marker: &str,
-    ) -> Result<LlamaToken, ReasoningClassifierError> {
-        let tokens = self.str_to_token(marker, AddBos::Never)?;
+    ) -> Result<(String, String), MarkerDetectionError> {
+        let (no_tools, with_tools) =
+            invoke_ffi_string_pair_detector(|first, second, error| unsafe {
+                llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
+                    self.model.as_ptr(),
+                    first,
+                    second,
+                    error,
+                )
+            })?;
 
-        if tokens.len() != 1 {
-            return Err(ReasoningClassifierError::OpenMarkerNotSingleToken {
-                marker: marker.to_string(),
-                token_count: tokens.len(),
-            });
-        }
-
-        let token = tokens[0];
-        let attrs = self.token_attr(token)?;
-
-        if !is_special_marker_attr(attrs) {
-            return Err(ReasoningClassifierError::OpenMarkerNotSpecial {
-                marker: marker.to_string(),
-            });
-        }
-
-        Ok(token)
-    }
-
-    fn resolve_close_reasoning_marker(
-        &self,
-        marker: &str,
-    ) -> Result<LlamaToken, ReasoningClassifierError> {
-        let tokens = self.str_to_token(marker, AddBos::Never)?;
-
-        if tokens.len() != 1 {
-            return Err(ReasoningClassifierError::CloseMarkerNotSingleToken {
-                marker: marker.to_string(),
-                token_count: tokens.len(),
-            });
-        }
-
-        let token = tokens[0];
-        let attrs = self.token_attr(token)?;
-
-        if !is_special_marker_attr(attrs) {
-            return Err(ReasoningClassifierError::CloseMarkerNotSpecial {
-                marker: marker.to_string(),
-            });
-        }
-
-        Ok(token)
+        Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
     }
 }
 
-fn is_special_marker_attr(attrs: LlamaTokenAttrs) -> bool {
-    attrs.contains(LlamaTokenAttr::Control) || attrs.contains(LlamaTokenAttr::UserDefined)
+impl LlamaModel {
+    /// Returns a process-cached, approximate token environment built from this model's vocabulary.
+    ///
+    /// The first call iterates the full vocabulary and constructs the trie; subsequent calls
+    /// return the cached `Arc` without further FFI work.
+    pub fn approximate_tok_env(&self) -> Arc<ApproximateTokEnv> {
+        Arc::clone(self.tok_env.get_or_init(|| build_approximate_tok_env(self)))
+    }
 }
 
-fn read_optional_owned_cstr(
-    ptr: *const c_char,
-) -> Result<Option<String>, ReasoningClassifierError> {
+fn build_approximate_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
+    let n_vocab = model.n_vocab().cast_unsigned();
+    let tok_eos = {
+        let eot = unsafe { llama_cpp_bindings_sys::llama_vocab_eot(model.vocab_ptr()) };
+        if eot == -1 {
+            model.token_eos().0.cast_unsigned()
+        } else {
+            eot.cast_unsigned()
+        }
+    };
+    let info = TokRxInfo::new(n_vocab, tok_eos);
+
+    let mut words = Vec::with_capacity(n_vocab as usize);
+
+    for token_id in 0..n_vocab.cast_signed() {
+        let token = LlamaToken(token_id);
+        let bytes = model
+            .token_to_piece_bytes(token, 32, false, None)
+            .unwrap_or_default();
+        if bytes.is_empty() {
+            let special_bytes = model
+                .token_to_piece_bytes(token, 32, true, None)
+                .unwrap_or_default();
+            if special_bytes.is_empty() {
+                words.push(vec![]);
+            } else {
+                let mut marked = Vec::with_capacity(special_bytes.len() + 1);
+                marked.push(0xFF);
+                marked.extend(special_bytes);
+                words.push(marked);
+            }
+        } else {
+            words.push(bytes);
+        }
+    }
+
+    let trie = TokTrie::from(&info, &words);
+    Arc::new(ApproximateTokEnv::new(trie))
+}
+
+fn collect_parsed_chat_message(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+) -> Result<ParsedChatMessage, ParseChatMessageError> {
+    if handle.is_null() {
+        return Ok(ParsedChatMessage::default());
+    }
+
+    let content = read_owned_cstr_for_parse(unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_content(handle)
+    })?;
+    let reasoning_content = read_owned_cstr_for_parse(unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content(handle)
+    })?;
+
+    let count = unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(handle) };
+
+    let mut tool_calls = Vec::with_capacity(count);
+    for index in 0..count {
+        let id = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_id(handle, index)
+        })?;
+        let name = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_name(handle, index)
+        })?;
+        let arguments_json = read_owned_cstr_for_parse(unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments(handle, index)
+        })?;
+
+        let arguments = ToolCallArguments::from_string(arguments_json);
+        tool_calls.push(ParsedToolCall::new(id, name, arguments));
+    }
+
+    Ok(ParsedChatMessage::new(
+        content,
+        reasoning_content,
+        tool_calls,
+    ))
+}
+
+struct ReasoningSplit {
+    reasoning: String,
+    content: String,
+}
+
+fn split_reasoning_prefix(
+    input: &str,
+    reasoning_markers: Option<&ReasoningMarkers>,
+    tool_call_open: &str,
+) -> ReasoningSplit {
+    let content_only = || ReasoningSplit {
+        reasoning: String::new(),
+        content: prefix_before(input, tool_call_open),
+    };
+
+    let Some(reasoning_markers) = reasoning_markers else {
+        return content_only();
+    };
+    let Some(open_pos) = input.find(&reasoning_markers.open) else {
+        return content_only();
+    };
+
+    let after_open = &input[open_pos + reasoning_markers.open.len()..];
+    let Some(close_offset) = after_open.find(&reasoning_markers.close) else {
+        return content_only();
+    };
+
+    let reasoning = after_open[..close_offset].to_owned();
+    let after_close = &after_open[close_offset + reasoning_markers.close.len()..];
+
+    ReasoningSplit {
+        reasoning,
+        content: prefix_before(after_close, tool_call_open),
+    }
+}
+
+fn prefix_before(text: &str, marker: &str) -> String {
+    text.find(marker)
+        .map_or_else(|| text.to_owned(), |pos| text[..pos].to_owned())
+}
+
+fn synthesize_missing_tool_call_ids(tool_calls: &mut [ParsedToolCall]) {
+    for (index, call) in tool_calls.iter_mut().enumerate() {
+        if call.id.is_empty() {
+            call.id = format!("call_{index}");
+        }
+    }
+}
+
+fn parse_single_string_status(
+    status: llama_cpp_bindings_sys::llama_rs_status,
+    out_value: *mut c_char,
+    out_error: *mut c_char,
+) -> Result<Option<String>, MarkerDetectionError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => read_optional_owned_cstr(out_value),
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+            let message = read_optional_owned_cstr_lossy(out_error);
+
+            Err(MarkerDetectionError::AnalyzeException(message))
+        }
+        other => Err(MarkerDetectionError::FfiError(status_to_i32(other))),
+    }
+}
+
+fn invoke_ffi_single_string_detector<TInvoke>(
+    invoke: TInvoke,
+) -> Result<Option<String>, MarkerDetectionError>
+where
+    TInvoke: FnOnce(*mut *mut c_char, *mut *mut c_char) -> llama_cpp_bindings_sys::llama_rs_status,
+{
+    let mut out_value: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = invoke(&raw mut out_value, &raw mut out_error);
+    let parsed = parse_single_string_status(status, out_value, out_error);
+
+    unsafe {
+        if !out_value.is_null() {
+            llama_cpp_bindings_sys::llama_rs_string_free(out_value);
+        }
+        if !out_error.is_null() {
+            llama_cpp_bindings_sys::llama_rs_string_free(out_error);
+        }
+    }
+
+    parsed
+}
+
+fn invoke_ffi_string_pair_detector<TInvoke>(
+    invoke: TInvoke,
+) -> Result<(Option<String>, Option<String>), MarkerDetectionError>
+where
+    TInvoke: FnOnce(
+        *mut *mut c_char,
+        *mut *mut c_char,
+        *mut *mut c_char,
+    ) -> llama_cpp_bindings_sys::llama_rs_status,
+{
+    let mut out_first: *mut c_char = ptr::null_mut();
+    let mut out_second: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = invoke(&raw mut out_first, &raw mut out_second, &raw mut out_error);
+
+    let parsed = (|| match status {
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
+            let first = read_optional_owned_cstr(out_first)?;
+            let second = read_optional_owned_cstr(out_second)?;
+
+            Ok((first, second))
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
+            let message = read_optional_owned_cstr_lossy(out_error);
+
+            Err(MarkerDetectionError::AnalyzeException(message))
+        }
+        other => Err(MarkerDetectionError::FfiError(status_to_i32(other))),
+    })();
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_first) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_second) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+
+    parsed
+}
+
+fn read_owned_cstr_for_parse(ptr: *mut c_char) -> Result<String, ParseChatMessageError> {
+    if ptr.is_null() {
+        return Ok(String::new());
+    }
+
+    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(ptr) };
+
+    Ok(String::from_utf8(bytes)?)
+}
+
+fn read_optional_owned_cstr(ptr: *const c_char) -> Result<Option<String>, MarkerDetectionError> {
     if ptr.is_null() {
         return Ok(None);
     }
@@ -975,5 +1389,154 @@ mod extract_meta_string_tests {
         let result = super::truncated_buffer_to_string(invalid_utf8, 3);
 
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod ffi_helper_tests {
+    use std::ffi::CString;
+    use std::ptr;
+
+    use super::invoke_ffi_single_string_detector;
+    use super::invoke_ffi_string_pair_detector;
+    use super::parse_single_string_status;
+    use super::read_optional_owned_cstr_lossy;
+    use crate::MarkerDetectionError;
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_returns_empty_for_null() {
+        let result = read_optional_owned_cstr_lossy(ptr::null());
+
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_returns_string_for_valid_pointer() {
+        let owned = CString::new("hello").expect("static literal has no nuls");
+        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
+
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn read_optional_owned_cstr_lossy_handles_invalid_utf8_via_replacement() {
+        let owned = CString::new(vec![b'a', 0xFF, b'b']).expect("no interior nul");
+        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
+
+        assert!(result.starts_with('a'));
+        assert!(result.ends_with('b'));
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_none_for_ok_with_null() {
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+
+        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_some_for_ok_with_value() {
+        let owned = CString::new("present").expect("no nul");
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+            owned.as_ptr().cast_mut(),
+            ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result.expect("OK + value returns Ok(Some)"),
+            Some("present".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_analyze_exception() {
+        let owned = CString::new("boom").expect("no nul");
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION,
+            ptr::null_mut(),
+            owned.as_ptr().cast_mut(),
+        );
+
+        match result.expect_err("EXCEPTION must yield Err") {
+            MarkerDetectionError::AnalyzeException(message) => assert_eq!(message, "boom"),
+            other => panic!("expected AnalyzeException, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_single_string_status_returns_ffi_error_for_other_status() {
+        let result = parse_single_string_status(
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        );
+
+        match result.expect_err("invalid status must yield Err") {
+            MarkerDetectionError::FfiError(_) => {}
+            other => panic!("expected FfiError, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn invoke_ffi_single_string_detector_propagates_invalid_argument_status() {
+        let result = invoke_ffi_single_string_detector(|_value, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
+        });
+
+        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
+    }
+
+    #[test]
+    fn invoke_ffi_single_string_detector_returns_none_for_ok_with_null() {
+        let result = invoke_ffi_single_string_detector(|value, _error| {
+            unsafe {
+                *value = ptr::null_mut();
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
+        });
+
+        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_propagates_invalid_argument_status() {
+        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
+        });
+
+        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_returns_pair_of_none_for_ok_with_nulls() {
+        let result = invoke_ffi_string_pair_detector(|first, second, _error| {
+            unsafe {
+                *first = ptr::null_mut();
+                *second = ptr::null_mut();
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
+        });
+
+        assert_eq!(
+            result.expect("OK with both null returns Ok((None, None))"),
+            (None, None)
+        );
+    }
+
+    #[test]
+    fn invoke_ffi_string_pair_detector_propagates_invalid_status_codes() {
+        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
+            llama_cpp_bindings_sys::LLAMA_RS_STATUS_ALLOCATION_FAILED
+        });
+
+        match result.expect_err("non-OK status yields Err") {
+            MarkerDetectionError::FfiError(code) => assert!(code != 0),
+            other => panic!("expected FfiError, got {other:?}"),
+        }
     }
 }

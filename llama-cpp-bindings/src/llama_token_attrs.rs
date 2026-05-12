@@ -1,35 +1,11 @@
-//! Utilities for working with `llama_token_type` values.
-use enumflags2::{BitFlags, bitflags};
 use std::ops::{Deref, DerefMut};
 
-/// A rust flavored equivalent of `llama_token_type`.
-#[derive(Eq, PartialEq, Debug, Clone, Copy)]
-#[bitflags]
-#[repr(u32)]
-pub enum LlamaTokenAttr {
-    /// Unknown token attribute.
-    Unknown = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_UNKNOWN as _,
-    /// Unused token attribute.
-    Unused = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_UNUSED as _,
-    /// Normal text token.
-    Normal = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_NORMAL as _,
-    /// Control token (e.g. BOS, EOS).
-    Control = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_CONTROL as _,
-    /// User-defined token.
-    UserDefined = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_USER_DEFINED as _,
-    /// Byte-level fallback token.
-    Byte = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_BYTE as _,
-    /// Token with normalized text.
-    Normalized = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_NORMALIZED as _,
-    /// Token with left-stripped whitespace.
-    LStrip = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_LSTRIP as _,
-    /// Token with right-stripped whitespace.
-    RStrip = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_RSTRIP as _,
-    /// Token representing a single word.
-    SingleWord = llama_cpp_bindings_sys::LLAMA_TOKEN_ATTR_SINGLE_WORD as _,
-}
+use enumflags2::BitFlags;
 
-/// A set of `LlamaTokenAttrs`
+use crate::llama_token_attr::LlamaTokenAttr;
+use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
+
+/// A set of [`LlamaTokenAttr`] flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaTokenAttrs(pub BitFlags<LlamaTokenAttr>);
 
@@ -48,28 +24,22 @@ impl DerefMut for LlamaTokenAttrs {
 }
 
 impl TryFrom<llama_cpp_bindings_sys::llama_token_type> for LlamaTokenAttrs {
-    type Error = LlamaTokenTypeFromIntError;
+    type Error = LlamaTokenAttrsFromIntError;
 
     fn try_from(value: llama_cpp_bindings_sys::llama_vocab_type) -> Result<Self, Self::Error> {
-        Ok(Self(BitFlags::from_bits(value as _).map_err(|e| {
-            LlamaTokenTypeFromIntError::UnknownValue(e.invalid_bits())
-        })?))
+        Ok(Self(BitFlags::from_bits(value as _).map_err(
+            |bit_flag_error| {
+                LlamaTokenAttrsFromIntError::UnknownValue(bit_flag_error.invalid_bits())
+            },
+        )?))
     }
-}
-
-/// An error type for `LlamaTokenType::try_from`.
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum LlamaTokenTypeFromIntError {
-    /// The value is not a valid `llama_token_type`.
-    #[error("Unknown Value {0}")]
-    UnknownValue(std::ffi::c_uint),
 }
 
 #[cfg(test)]
 mod tests {
     use enumflags2::BitFlags;
 
-    use super::{LlamaTokenAttr, LlamaTokenAttrs, LlamaTokenTypeFromIntError};
+    use super::{LlamaTokenAttr, LlamaTokenAttrs, LlamaTokenAttrsFromIntError};
 
     #[test]
     fn try_from_valid_single_attribute() {
@@ -99,7 +69,7 @@ mod tests {
         assert!(result.is_err());
         matches!(
             result.expect_err("should fail"),
-            LlamaTokenTypeFromIntError::UnknownValue(_)
+            LlamaTokenAttrsFromIntError::UnknownValue(_)
         );
     }
 

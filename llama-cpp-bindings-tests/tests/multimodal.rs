@@ -1,16 +1,18 @@
+#![cfg(feature = "multimodal_capable")]
+
 use std::num::NonZeroU32;
 
 use anyhow::{Context, Result};
+use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText};
-use llama_cpp_bindings::reasoning_token_classifier::ReasoningTokenClassifier;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
-use llama_cpp_bindings_tests::{TestFixture, test_model};
+use llama_cpp_bindings_tests::{FixtureSession, test_model};
 
 struct ChunkTokenBreakdown {
     text: u64,
@@ -55,7 +57,7 @@ struct SamplingTotals {
 }
 
 fn drive_sampling_loop(
-    classifier: &mut ReasoningTokenClassifier,
+    classifier: &mut SampledTokenClassifier,
     model: &LlamaModel,
     ctx: &mut LlamaContext,
     starting_position: llama_pos,
@@ -67,33 +69,40 @@ fn drive_sampling_loop(
         observed_content: 0,
         observed_reasoning: 0,
     };
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut batch = LlamaBatch::new(512, 1)?;
     let mut current_position = starting_position;
 
     for _ in 0..max_tokens {
-        let token = classifier.sample(&mut sampler, ctx, -1)?;
-        match token {
-            SampledToken::Content(_) => totals.observed_content += 1,
-            SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
-            SampledToken::Undeterminable(_) => {}
+        let (raw_token, outcomes) = classifier.sample(&mut sampler, ctx, -1)?;
+        for outcome in &outcomes {
+            totals.generated.push_str(&outcome.raw_piece);
+            match outcome.sampled_token {
+                SampledToken::Content(_) => totals.observed_content += 1,
+                SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
+                SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
+            }
         }
 
-        if model.is_eog_token(&token) {
+        let raw_as_sampled = SampledToken::Content(raw_token);
+        if model.is_eog_token(&raw_as_sampled) {
             break;
         }
 
-        let piece = model
-            .token_to_piece(&token, &mut decoder, false, None)
-            .with_context(|| "failed to convert token to piece")?;
-        totals.generated.push_str(&piece);
-
         batch.clear();
-        batch.add(&token, current_position, &[0], true)?;
+        batch.add(&raw_as_sampled, current_position, &[0], true)?;
         current_position += 1;
 
         ctx.decode(&mut batch)
             .with_context(|| "failed to decode generated token")?;
+    }
+
+    for outcome in classifier.flush() {
+        totals.generated.push_str(&outcome.raw_piece);
+        match outcome.sampled_token {
+            SampledToken::Content(_) => totals.observed_content += 1,
+            SampledToken::Reasoning(_) => totals.observed_reasoning += 1,
+            SampledToken::ToolCall(_) | SampledToken::Undeterminable(_) => {}
+        }
     }
 
     Ok(totals)
@@ -101,7 +110,7 @@ fn drive_sampling_loop(
 
 #[test]
 fn multimodal_vision_inference_produces_output() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.default_model();
     let mtmd_ctx = fixture.mtmd_context()?;
@@ -110,8 +119,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(n_ctx)
         .with_n_batch(512);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create llama context")?;
 
     assert!(
@@ -159,7 +167,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
         "vision input must produce at least one image chunk"
     );
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let n_past = classifier
         .eval_multimodal_chunks(&chunks, mtmd_ctx, &ctx, 0, 0, 512, true)
         .with_context(|| "failed to evaluate chunks")?;
@@ -168,9 +176,9 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
 
     {
         let usage = classifier.usage();
-        assert_eq!(usage.prompt_tokens(), expected.text);
-        assert_eq!(usage.input_image_tokens(), expected.image);
-        assert_eq!(usage.input_audio_tokens(), expected.audio);
+        assert_eq!(usage.prompt_tokens, expected.text);
+        assert_eq!(usage.input_image_tokens, expected.image);
+        assert_eq!(usage.input_audio_tokens, expected.audio);
     }
 
     let totals = drive_sampling_loop(&mut classifier, model, &mut ctx, n_past, 512)?;
@@ -183,11 +191,11 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), expected.text);
-    assert_eq!(usage.input_image_tokens(), expected.image);
-    assert_eq!(usage.input_audio_tokens(), expected.audio);
-    assert_eq!(usage.content_tokens(), totals.observed_content);
-    assert_eq!(usage.reasoning_tokens(), totals.observed_reasoning);
+    assert_eq!(usage.prompt_tokens, expected.text);
+    assert_eq!(usage.input_image_tokens, expected.image);
+    assert_eq!(usage.input_audio_tokens, expected.audio);
+    assert_eq!(usage.content_tokens, totals.observed_content);
+    assert_eq!(usage.reasoning_tokens, totals.observed_reasoning);
     assert_eq!(
         usage.completion_tokens(),
         totals.observed_content + totals.observed_reasoning

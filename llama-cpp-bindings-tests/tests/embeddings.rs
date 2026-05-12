@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -18,15 +19,14 @@ fn normalize(input: &[f32]) -> Vec<f32> {
 
 #[test]
 fn embedding_generation_produces_vectors() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
 
     let ctx_params = LlamaContextParams::default()
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_embeddings(true);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
@@ -40,12 +40,12 @@ fn embedding_generation_produces_vectors() -> Result<()> {
 
     let t_main_start = ggml_time_us();
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let mut batch = LlamaBatch::new(n_ctx, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), prompt_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
@@ -84,7 +84,7 @@ fn embedding_generation_produces_vectors() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), prompt_token_count);
+    assert_eq!(usage.prompt_tokens, prompt_token_count);
     assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())

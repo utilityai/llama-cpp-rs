@@ -1,5 +1,6 @@
 //! Safe wrapper around `llama_batch`.
 
+use crate::batch_add_error::BatchAddError;
 use crate::sampled_token::SampledToken;
 use crate::token::LlamaToken;
 use llama_cpp_bindings_sys::{
@@ -67,20 +68,6 @@ pub struct LlamaBatch<'tokens> {
     phantom: PhantomData<&'tokens [LlamaToken]>,
 }
 
-/// Errors that can occur when adding a token to a batch.
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-pub enum BatchAddError {
-    /// There was not enough space in the batch to add the token.
-    #[error("Insufficient Space of {0}")]
-    InsufficientSpace(usize),
-    /// Empty buffer is provided for [`LlamaBatch::get_one`]
-    #[error("Empty buffer")]
-    EmptyBuffer,
-    /// An integer value exceeded the allowed range.
-    #[error("Integer overflow: {0}")]
-    IntegerOverflow(String),
-}
-
 impl<'tokens> LlamaBatch<'tokens> {
     /// Clear the batch. This does not free the memory associated with the batch, but it does reset
     /// the number of tokens to 0.
@@ -104,6 +91,7 @@ impl<'tokens> LlamaBatch<'tokens> {
     ) -> Result<(), BatchAddError> {
         let (SampledToken::Content(LlamaToken(id))
         | SampledToken::Reasoning(LlamaToken(id))
+        | SampledToken::ToolCall(LlamaToken(id))
         | SampledToken::Undeterminable(LlamaToken(id))) = *sampled_token;
         let required = checked_n_tokens_plus_one_as_usize(self.n_tokens())?;
 
@@ -322,6 +310,44 @@ mod tests {
         let result = batch.add(&SampledToken::Content(LlamaToken::new(2)), 1, &[0], false);
 
         assert_eq!(result, Err(BatchAddError::InsufficientSpace(1)));
+    }
+
+    #[test]
+    fn add_accepts_reasoning_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(&SampledToken::Reasoning(LlamaToken::new(11)), 0, &[0], true)
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
+    }
+
+    #[test]
+    fn add_accepts_tool_call_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(&SampledToken::ToolCall(LlamaToken::new(22)), 0, &[0], true)
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
+    }
+
+    #[test]
+    fn add_accepts_undeterminable_sampled_token_variant() {
+        let mut batch = LlamaBatch::new(4, 1).unwrap();
+
+        batch
+            .add(
+                &SampledToken::Undeterminable(LlamaToken::new(33)),
+                0,
+                &[0],
+                false,
+            )
+            .unwrap();
+
+        assert_eq!(batch.n_tokens(), 1);
     }
 
     #[test]

@@ -167,6 +167,12 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn download_model_returns_path_with_env_set() {
+        if std::env::var("LLAMA_TEST_HF_REPO").is_err()
+            || std::env::var("LLAMA_TEST_HF_MODEL").is_err()
+        {
+            return;
+        }
+
         let result = super::download_model();
 
         assert!(result.is_ok());
@@ -175,6 +181,12 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn download_embedding_model_returns_path_with_env_set() {
+        if std::env::var("LLAMA_TEST_HF_EMBED_REPO").is_err()
+            || std::env::var("LLAMA_TEST_HF_EMBED_MODEL").is_err()
+        {
+            return;
+        }
+
         let result = super::download_embedding_model();
 
         assert!(result.is_ok());
@@ -183,14 +195,25 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn download_encoder_model_returns_path_with_env_set() {
+        if std::env::var("LLAMA_TEST_HF_ENCODER_REPO").is_err()
+            || std::env::var("LLAMA_TEST_HF_ENCODER_MODEL").is_err()
+        {
+            return;
+        }
+
         let result = super::download_encoder_model();
 
         assert!(result.is_ok());
     }
 
+    #[cfg(feature = "multimodal_capable")]
     #[test]
     #[serial_test::serial]
     fn download_mmproj_returns_path_when_env_set() {
+        if std::env::var("LLAMA_TEST_HF_REPO").is_err() {
+            return;
+        }
+
         let _guard = EnvVarGuard::set("LLAMA_TEST_HF_MMPROJ", "mmproj-F16.gguf");
         let result = super::download_mmproj();
 

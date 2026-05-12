@@ -1,0 +1,22 @@
+[package]
+name = "llama-cpp-bindings-types"
+description = "Shared value types for llama-cpp-bindings, free of llama.cpp/FFI dependencies"
+version = "0.5.0"
+edition.workspace = true
+license = "Apache-2.0"
+repository = "https://github.com/intentee/llama-cpp-bindings"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"

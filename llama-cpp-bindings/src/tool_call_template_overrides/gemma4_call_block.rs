@@ -1,0 +1,72 @@
+use llama_cpp_bindings_types::PairedQuoteShape;
+use llama_cpp_bindings_types::ToolCallArgsShape;
+use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::ToolCallValueQuote;
+
+pub struct Gemma4CallBlockOverride;
+
+impl Gemma4CallBlockOverride {
+    const TEMPLATE_FINGERPRINT: &'static str = "'<|tool_call>call:'";
+
+    #[must_use]
+    pub fn markers() -> ToolCallMarkers {
+        ToolCallMarkers {
+            open: "<|tool_call>call:".to_owned(),
+            close: "}".to_owned(),
+            args_shape: ToolCallArgsShape::PairedQuote(PairedQuoteShape {
+                name_args_separator: "{".to_owned(),
+                value_quote: ToolCallValueQuote {
+                    open: "<|\"|>".to_owned(),
+                    close: "<|\"|>".to_owned(),
+                },
+            }),
+        }
+    }
+
+    #[must_use]
+    pub fn detect(template: &str) -> Option<ToolCallMarkers> {
+        if !template.contains(Self::TEMPLATE_FINGERPRINT) {
+            return None;
+        }
+        Some(Self::markers())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use llama_cpp_bindings_types::ToolCallArgsShape;
+
+    use super::Gemma4CallBlockOverride;
+
+    #[test]
+    fn detects_gemma4_template_with_tool_call_call_literal() {
+        let template = "...{{- '<|tool_call>call:' + function['name'] + '{' -}}...";
+        let markers =
+            Gemma4CallBlockOverride::detect(template).expect("Gemma 4 template must be detected");
+
+        assert_eq!(markers.open, "<|tool_call>call:");
+        assert_eq!(markers.close, "}");
+        let ToolCallArgsShape::PairedQuote(shape) = markers.args_shape else {
+            panic!("expected PairedQuote variant, got {:?}", markers.args_shape);
+        };
+        assert_eq!(shape.name_args_separator, "{");
+        assert_eq!(shape.value_quote.open, "<|\"|>");
+        assert_eq!(shape.value_quote.close, "<|\"|>");
+    }
+
+    #[test]
+    fn returns_none_for_template_without_fingerprint() {
+        assert!(Gemma4CallBlockOverride::detect("just some plain template body").is_none());
+    }
+
+    #[test]
+    fn returns_none_for_empty_template() {
+        assert!(Gemma4CallBlockOverride::detect("").is_none());
+    }
+
+    #[test]
+    fn returns_none_when_fingerprint_substring_appears_without_jinja_apostrophes() {
+        let template = "doc explaining the <|tool_call>call: format in prose, not as a literal";
+        assert!(Gemma4CallBlockOverride::detect(template).is_none());
+    }
+}

@@ -19,14 +19,24 @@ fn is_cmake_file(entry: &DirEntry) -> bool {
 pub fn register_rebuild_triggers(llama_src: &Path) {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=wrapper_chat_parse.h");
+    println!("cargo:rerun-if-changed=wrapper_chat_parse.cpp");
     println!("cargo:rerun-if-changed=wrapper_common.h");
     println!("cargo:rerun-if-changed=wrapper_common.cpp");
     println!("cargo:rerun-if-changed=wrapper_fit.h");
     println!("cargo:rerun-if-changed=wrapper_fit.cpp");
     println!("cargo:rerun-if-changed=wrapper_reasoning.h");
     println!("cargo:rerun-if-changed=wrapper_reasoning.cpp");
+    println!("cargo:rerun-if-changed=wrapper_token_text.h");
+    println!("cargo:rerun-if-changed=wrapper_token_text.cpp");
+    println!("cargo:rerun-if-changed=wrapper_tool_calls.h");
+    println!("cargo:rerun-if-changed=wrapper_tool_calls.cpp");
     println!("cargo:rerun-if-changed=wrapper_utils.h");
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
+    println!("cargo:rerun-if-changed=marker_probes/marker_probe.h");
+    println!("cargo:rerun-if-changed=marker_probes/registry.cpp");
+    println!("cargo:rerun-if-changed=marker_probes/chunked_thinking.h");
+    println!("cargo:rerun-if-changed=marker_probes/chunked_thinking.cpp");
 
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");

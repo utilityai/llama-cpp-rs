@@ -1,11 +1,12 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::TestFixture;
+use llama_cpp_bindings_tests::FixtureSession;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -26,7 +27,7 @@ fn cosine_similarity(vec_a: &[f32], vec_b: &[f32]) -> f32 {
 
 #[test]
 fn reranking_produces_scores() -> Result<()> {
-    let fixture = TestFixture::shared();
+    let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
 
@@ -42,8 +43,7 @@ fn reranking_produces_scores() -> Result<()> {
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_n_seq_max(u32::try_from(document_count)?)
         .with_embeddings(true);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt_lines: Vec<String> = documents
@@ -63,7 +63,7 @@ fn reranking_produces_scores() -> Result<()> {
         bail!("one of the provided prompts exceeds the size of the context window");
     }
 
-    let mut classifier = model.reasoning_token_classifier()?;
+    let mut classifier = model.sampled_token_classifier();
     let mut batch = LlamaBatch::new(2048, i32::try_from(document_count)?)?;
     let t_main_start = ggml_time_us();
 
@@ -80,7 +80,7 @@ fn reranking_produces_scores() -> Result<()> {
     let total_token_count = u64::try_from(total_tokens)?;
 
     assert_eq!(classifier.pending_prompt_tokens(), total_token_count);
-    assert_eq!(classifier.usage().prompt_tokens(), 0);
+    assert_eq!(classifier.usage().prompt_tokens, 0);
 
     ctx.clear_kv_cache();
     ctx.decode(&mut batch)
@@ -101,7 +101,10 @@ fn reranking_produces_scores() -> Result<()> {
     let t_main_end = ggml_time_us();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "logged throughput tolerates f32 precision"
+    )]
     let tokens_per_second = total_tokens as f32 / duration.as_secs_f32();
 
     eprintln!(
@@ -131,7 +134,7 @@ fn reranking_produces_scores() -> Result<()> {
     );
 
     let usage = classifier.into_usage();
-    assert_eq!(usage.prompt_tokens(), total_token_count);
+    assert_eq!(usage.prompt_tokens, total_token_count);
     assert_eq!(usage.completion_tokens(), 0);
 
     Ok(())

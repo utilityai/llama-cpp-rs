@@ -200,6 +200,7 @@ fn configure_platform_specific(
     match target_os {
         TargetOs::Apple(_) => {
             config.define("GGML_BLAS", "OFF");
+            override_archive_commands_for_apple_ar(config);
         }
         TargetOs::Windows(WindowsVariant::Msvc) => {
             config.cflag("/w");
@@ -265,6 +266,31 @@ fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, _target_triple
 
     println!("cargo:rustc-link-lib=log");
     println!("cargo:rustc-link-lib=android");
+}
+
+/// macOS BSD ar (from cctools) does not accept GNU ar's `-D` (deterministic)
+/// flag. cmake's default archive recipe is `<CMAKE_AR> qcD …`, which produces
+/// `illegal option -- D` warnings during every static-library link.
+///
+/// We override the archive command for every language used by llama.cpp's
+/// build — C, C++, Objective-C and Objective-C++ (the latter two appear once
+/// `GGML_METAL=ON` enables the Metal backend). Plain `qc` keeps the
+/// quick-create semantics; `<CMAKE_RANLIB>` still runs as ARCHIVE_FINISH.
+fn override_archive_commands_for_apple_ar(config: &mut Config) {
+    for language in ["C", "CXX", "OBJC", "OBJCXX"] {
+        config.define(
+            format!("CMAKE_{language}_ARCHIVE_CREATE"),
+            "<CMAKE_AR> qc <TARGET> <LINK_FLAGS> <OBJECTS>",
+        );
+        config.define(
+            format!("CMAKE_{language}_ARCHIVE_APPEND"),
+            "<CMAKE_AR> q <TARGET> <LINK_FLAGS> <OBJECTS>",
+        );
+        config.define(
+            format!("CMAKE_{language}_ARCHIVE_FINISH"),
+            "<CMAKE_RANLIB> <TARGET>",
+        );
+    }
 }
 
 fn configure_android_arch_flags(config: &mut Config, abi: &str) {

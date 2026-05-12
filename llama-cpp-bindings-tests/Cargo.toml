@@ -7,15 +7,15 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
-anyhow = "1.0.102"
+anyhow = { workspace = true }
 encoding_rs = { workspace = true }
-hf-hub = "0.5.0"
-llama-cpp-bindings = { workspace = true, features = ["sampler", "llguidance"] }
+hf-hub = { workspace = true }
+llama-cpp-bindings = { workspace = true, features = ["sampler"] }
 llama-cpp-bindings-sys = { workspace = true }
-serde_json = "1.0"
-serial_test = "3"
+serde_json = { workspace = true }
+serial_test = { workspace = true }
 tracing = { workspace = true }
-tracing-subscriber = { version = "0.3", features = ["json"] }
+tracing-subscriber = { workspace = true }
 
 [features]
 cuda = ["llama-cpp-bindings/cuda"]
@@ -23,6 +23,8 @@ cuda-no-vmm = ["llama-cpp-bindings/cuda-no-vmm"]
 metal = ["llama-cpp-bindings/metal"]
 vulkan = ["llama-cpp-bindings/vulkan"]
 rocm = ["llama-cpp-bindings/rocm"]
+multimodal_capable = []
+mrope_model = []
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

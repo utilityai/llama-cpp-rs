@@ -80,7 +80,7 @@ impl MtmdBitmap {
     ///
     /// // Create a simple sine wave audio sample
     /// let audio_data: Vec<f32> = (0..100)
-    ///     .map(|i| (i as f32 * 0.1).sin())
+    ///     .map(|sample_index| (sample_index as f32 * 0.1).sin())
     ///     .collect();
     ///
     /// let bitmap = MtmdBitmap::from_audio_data(&audio_data);
@@ -283,7 +283,11 @@ mod tests {
 
     #[test]
     fn from_audio_data_creates_valid_bitmap() {
-        #[allow(clippy::cast_precision_loss)]
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "test fixture casts a small i32 (0..100) to f32 to synthesise a sine wave; \
+                      the values are well within f32's exact-representation range"
+        )]
         let audio_samples: Vec<f32> = (0..100).map(|index| (index as f32 * 0.1).sin()).collect();
         let bitmap = MtmdBitmap::from_audio_data(&audio_samples).unwrap();
 

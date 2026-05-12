@@ -10,8 +10,11 @@
 //! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
 
+pub mod batch_add_error;
+pub mod chat_message_parse_outcome;
 pub mod context;
 pub mod error;
+pub mod extract_tool_call_markers_from_haystack;
 pub mod ffi_error_reader;
 pub mod ffi_status_is_ok;
 pub mod ffi_status_to_i32;
@@ -19,13 +22,16 @@ pub mod ggml_time_us;
 pub mod gguf_context;
 pub mod gguf_context_error;
 pub mod gguf_type;
+pub mod ingest_prompt_chunk;
 pub mod json_schema_to_grammar;
 pub mod llama_backend;
 pub mod llama_backend_device;
 pub mod llama_backend_numa_strategy;
 pub mod llama_batch;
 pub mod llama_time_us;
-#[cfg(feature = "llguidance")]
+pub mod llama_token_attr;
+pub mod llama_token_attrs;
+pub mod llama_token_attrs_from_int_error;
 pub mod llguidance_sampler;
 #[cfg(feature = "dynamic-backends")]
 pub mod load_backends;
@@ -40,33 +46,45 @@ pub mod mlock_supported;
 pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
-pub mod reasoning_token_classifier;
+pub mod raw_chat_message;
+pub mod resolved_tool_call_markers;
 pub mod sampled_token;
+pub mod sampled_token_classifier;
 pub mod sampling;
+pub mod streaming_json_probe;
 pub mod timing;
 pub mod token;
-pub mod token_type;
-pub mod token_usage;
+pub mod tool_call_format;
+pub mod tool_call_marker_pair;
+pub mod tool_call_template_overrides;
 
 pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
     EvalMultimodalChunksError, GrammarError, LlamaContextLoadError, LlamaCppError,
     LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError,
-    LlamaModelLoadError, LogitsError, MetaValError, ModelParamsError, NewLlamaChatMessageError,
-    ReasoningClassifierError, Result, SampleError, SamplerAcceptError, SamplingError,
-    StringToTokenError, TokenSamplingError, TokenToStringError, TokenUsageError,
+    LlamaModelLoadError, LogitsError, MarkerDetectionError, MetaValError, ModelParamsError,
+    NewLlamaChatMessageError, ParseChatMessageError, Result, SampleError, SamplerAcceptError,
+    SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,
 };
 
+pub use chat_message_parse_outcome::ChatMessageParseOutcome;
 pub use llama_backend_device::{
     LlamaBackendDevice, LlamaBackendDeviceType, list_llama_ggml_backend_devices,
 };
-pub use reasoning_token_classifier::ReasoningTokenClassifier;
+pub use llama_cpp_bindings_types::{
+    BracketedJsonShape, KeyValueXmlTagsShape, PairedQuoteShape, ParsedChatMessage, ParsedToolCall,
+    ReasoningMarkers, TokenUsage, TokenUsageError, ToolCallArgsShape, ToolCallArguments,
+    ToolCallMarkers, ToolCallValueQuote, XmlTagsShape,
+};
+pub use raw_chat_message::RawChatMessage;
 pub use sampled_token::SampledToken;
-pub use token_usage::TokenUsage;
+pub use sampled_token_classifier::SampledTokenClassifier;
+pub use sampled_token_classifier::SampledTokenSection;
 
 pub use ffi_status_is_ok::status_is_ok;
 pub use ffi_status_to_i32::status_to_i32;
 pub use ggml_time_us::ggml_time_us;
+pub use ingest_prompt_chunk::ingest_prompt_chunk;
 pub use json_schema_to_grammar::json_schema_to_grammar;
 pub use llama_time_us::llama_time_us;
 pub use max_devices::max_devices;
