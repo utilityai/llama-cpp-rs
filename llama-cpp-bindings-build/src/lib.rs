@@ -5,6 +5,7 @@ mod bindgen_config;
 mod cmake_config;
 mod cpp_wrapper;
 mod cpp_wrapper_mtmd;
+mod glob_paths;
 mod library_asset_extraction;
 mod library_linking;
 mod library_name_extraction;

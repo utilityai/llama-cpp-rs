@@ -1,6 +1,9 @@
 use std::path::Path;
 
+use crate::glob_paths;
 use crate::target_os::TargetOs;
+
+const WRAPPER_SOURCE_PATTERNS: &[&str] = &["wrapper_*.cpp", "marker_probes/**/*.cpp"];
 
 pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
     let mut build = cc::Build::new();
@@ -8,14 +11,6 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
     build
         .cpp(true)
         .warnings(false)
-        .file("wrapper_chat_parse.cpp")
-        .file("wrapper_common.cpp")
-        .file("wrapper_fit.cpp")
-        .file("wrapper_reasoning.cpp")
-        .file("wrapper_token_text.cpp")
-        .file("wrapper_tool_calls.cpp")
-        .file("marker_probes/chunked_thinking.cpp")
-        .file("marker_probes/registry.cpp")
         .include(".")
         .include(llama_src)
         .include(llama_src.join("common"))
@@ -24,6 +19,17 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
         .include(llama_src.join("vendor"))
         .flag_if_supported("-std=c++17")
         .pic(true);
+
+    for pattern in WRAPPER_SOURCE_PATTERNS {
+        match glob_paths::collect_paths(pattern) {
+            Ok(paths) => {
+                for path in paths {
+                    build.file(&path);
+                }
+            }
+            Err(error) => panic!("cpp wrapper discovery failed: {error}"),
+        }
+    }
 
     if target_os.is_msvc() {
         build.flag("/std:c++17");

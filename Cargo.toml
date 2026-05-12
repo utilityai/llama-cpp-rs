@@ -10,6 +10,9 @@ members = [
 
 [workspace.package]
 edition = "2024"
+version = "0.6.0"
+license = "Apache-2.0"
+repository = "https://github.com/intentee/llama-cpp-bindings"
 
 [workspace.dependencies]
 anyhow = "=1.0.102"
@@ -21,10 +24,10 @@ enumflags2 = "=0.7.12"
 find_cuda_helper = "=0.2.0"
 glob = "=0.3.3"
 hf-hub = "=0.5.0"
-llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.5.0" }
-llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.5.0" }
-llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.5.0" }
-llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.5.0" }
+llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.6.0" }
+llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.6.0" }
+llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.6.0" }
+llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.6.0" }
 llguidance = "=1.7.0"
 nom = "=8.0.0"
 serde = { version = "=1.0.228", features = ["derive"] }

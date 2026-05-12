@@ -1,9 +1,9 @@
 [package]
 name = "llama-cpp-bindings-tests"
 description = "Integration tests and fixtures for llama-cpp-bindings"
-version = "0.5.0"
+version.workspace = true
 edition.workspace = true
-license = "Apache-2.0"
+license.workspace = true
 publish = false
 
 [dependencies]

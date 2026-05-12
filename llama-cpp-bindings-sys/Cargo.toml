@@ -1,22 +1,17 @@
 [package]
 name = "llama-cpp-bindings-sys"
 description = "Low level bindings to llama.cpp"
-version = "0.5.0"
+version.workspace = true
 edition.workspace = true
-license = "Apache-2.0"
-repository = "https://github.com/intentee/llama-cpp-bindings"
+license.workspace = true
+repository.workspace = true
 links = "llama"
 
 include = [
-    "wrapper.h",
-    "wrapper_common.h",
-    "wrapper_common.cpp",
-    "wrapper_fit.h",
-    "wrapper_fit.cpp",
-    "wrapper_reasoning.h",
-    "wrapper_reasoning.cpp",
-    "wrapper_utils.h",
-    "wrapper_mtmd.h",
+    "wrapper*.h",
+    "wrapper_*.cpp",
+    "marker_probes/**/*.h",
+    "marker_probes/**/*.cpp",
     "build.rs",
     "/src",
 

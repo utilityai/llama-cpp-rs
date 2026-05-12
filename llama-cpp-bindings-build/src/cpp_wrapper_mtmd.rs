@@ -1,6 +1,9 @@
 use std::path::Path;
 
+use crate::glob_paths;
 use crate::target_os::TargetOs;
+
+const MTMD_SKIP_FILES: &[&str] = &["mtmd-cli.cpp", "deprecation-warning.cpp"];
 
 pub fn compile_mtmd(llama_src: &Path, target_os: &TargetOs) {
     let mtmd_src = llama_src.join("tools/mtmd");
@@ -29,28 +32,22 @@ pub fn compile_mtmd(llama_src: &Path, target_os: &TargetOs) {
     let pattern = mtmd_src.join("**/*.cpp");
     let pattern_str = pattern.to_string_lossy();
 
-    let Ok(entries) = glob::glob(&pattern_str) else {
-        println!("cargo:warning=failed to glob mtmd sources: {pattern_str}");
-
-        return;
+    let paths = match glob_paths::collect_paths(&pattern_str) {
+        Ok(paths) => paths,
+        Err(error) => panic!("mtmd source discovery failed: {error}"),
     };
 
-    for entry in entries {
-        match entry {
-            Ok(path) => {
-                let filename = path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default();
+    for path in paths {
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default();
 
-                if filename == "mtmd-cli.cpp" || filename == "deprecation-warning.cpp" {
-                    continue;
-                }
-
-                build.file(&path);
-            }
-            Err(error) => println!("cargo:warning=mtmd glob error: {error}"),
+        if MTMD_SKIP_FILES.contains(&filename) {
+            continue;
         }
+
+        build.file(&path);
     }
 
     build.compile("mtmd");

@@ -1,10 +1,10 @@
 [package]
 name = "llama-cpp-bindings-build"
 description = "Build system for llama-cpp-bindings-sys FFI bindings"
-version = "0.5.0"
+version.workspace = true
 edition.workspace = true
-license = "Apache-2.0"
-repository = "https://github.com/intentee/llama-cpp-bindings"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 bindgen = { workspace = true }
