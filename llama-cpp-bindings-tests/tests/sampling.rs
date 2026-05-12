@@ -2,6 +2,7 @@ use std::num::NonZeroU32;
 
 use anyhow::Result;
 use llama_cpp_bindings::GrammarError;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
@@ -223,7 +224,7 @@ fn apply_runs_sampler_over_token_data_array() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("Hi", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;
@@ -243,7 +244,7 @@ fn sample_returns_token_after_decode() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
     let tokens = model.str_to_token("Hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
     batch.add_sequence(&tokens, 0, false)?;

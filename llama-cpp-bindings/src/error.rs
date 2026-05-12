@@ -4,7 +4,7 @@ use std::os::raw::c_int;
 use std::path::PathBuf;
 use std::string::FromUtf8Error;
 
-use crate::llama_batch::BatchAddError;
+use crate::batch_add_error::BatchAddError;
 use crate::mtmd::MtmdEvalError;
 use crate::mtmd::mtmd_input_chunk_type::MtmdInputChunkTypeError;
 

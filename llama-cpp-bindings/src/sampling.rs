@@ -531,10 +531,12 @@ impl LlamaSampler {
     ) -> Result<Self, GrammarError> {
         let seq_breakers: Vec<CString> = seq_breakers
             .into_iter()
-            .map(|s| CString::new(s.as_ref()))
+            .map(|seq_breaker| CString::new(seq_breaker.as_ref()))
             .collect::<Result<Vec<_>, _>>()?;
-        let mut seq_breaker_pointers: Vec<*const c_char> =
-            seq_breakers.iter().map(|s| s.as_ptr()).collect();
+        let mut seq_breaker_pointers: Vec<*const c_char> = seq_breakers
+            .iter()
+            .map(|seq_breaker| seq_breaker.as_ptr())
+            .collect();
 
         let n_ctx_train_value = model.n_ctx_train().map_err(|convert_error| {
             GrammarError::IntegerOverflow(format!(

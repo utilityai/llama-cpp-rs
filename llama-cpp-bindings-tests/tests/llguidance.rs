@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use std::sync::Arc;
 
 use anyhow::Result;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::llguidance_sampler::create_llg_sampler;
@@ -134,7 +135,7 @@ fn samples_token_constrained_by_grammar() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let prompt = "Answer yes or no:";
     let tokens = model.str_to_token(prompt, AddBos::Always)?;
@@ -200,7 +201,7 @@ fn apply_through_chain_during_sample_does_not_panic() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Answer:", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;

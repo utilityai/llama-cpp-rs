@@ -1,3 +1,5 @@
+use crate::model::vocab_type_from_int_error::VocabTypeFromIntError;
+
 /// a rusty equivalent of `llama_vocab_type`
 #[repr(u32)]
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
@@ -8,29 +10,21 @@ pub enum VocabType {
     SPM = llama_cpp_bindings_sys::LLAMA_VOCAB_TYPE_SPM as _,
 }
 
-/// There was an error converting a `llama_vocab_type` to a `VocabType`.
-#[derive(thiserror::Error, Debug, Eq, PartialEq)]
-pub enum LlamaTokenTypeFromIntError {
-    /// The value is not a valid `llama_token_type`. Contains the int value that was invalid.
-    #[error("Unknown Value {0}")]
-    UnknownValue(llama_cpp_bindings_sys::llama_vocab_type),
-}
-
 impl TryFrom<llama_cpp_bindings_sys::llama_vocab_type> for VocabType {
-    type Error = LlamaTokenTypeFromIntError;
+    type Error = VocabTypeFromIntError;
 
     fn try_from(value: llama_cpp_bindings_sys::llama_vocab_type) -> Result<Self, Self::Error> {
         match value {
             llama_cpp_bindings_sys::LLAMA_VOCAB_TYPE_BPE => Ok(Self::BPE),
             llama_cpp_bindings_sys::LLAMA_VOCAB_TYPE_SPM => Ok(Self::SPM),
-            unknown => Err(LlamaTokenTypeFromIntError::UnknownValue(unknown)),
+            unknown => Err(VocabTypeFromIntError::UnknownValue(unknown)),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{LlamaTokenTypeFromIntError, VocabType};
+    use super::{VocabType, VocabTypeFromIntError};
 
     #[test]
     fn try_from_bpe() {
@@ -50,6 +44,6 @@ mod tests {
     fn try_from_unknown_value() {
         let result = VocabType::try_from(99999);
 
-        assert_eq!(result, Err(LlamaTokenTypeFromIntError::UnknownValue(99999)));
+        assert_eq!(result, Err(VocabTypeFromIntError::UnknownValue(99999)));
     }
 }

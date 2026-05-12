@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -50,7 +51,7 @@ fn qwen36_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()>
     classifier.feed_prompt_sequence_to_batch(&mut batch, &prompt_tokens, 0, false)?;
 
     let context_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(8192));
-    let mut context = model.new_context(&backend, context_params)?;
+    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
 
     context.decode(&mut batch)?;
 

@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -25,8 +26,7 @@ fn embedding_generation_produces_vectors() -> Result<()> {
     let ctx_params = LlamaContextParams::default()
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_embeddings(true);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";

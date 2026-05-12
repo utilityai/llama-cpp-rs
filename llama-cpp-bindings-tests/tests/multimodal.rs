@@ -119,8 +119,7 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(n_ctx)
         .with_n_batch(512);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create llama context")?;
 
     assert!(

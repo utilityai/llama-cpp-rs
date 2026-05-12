@@ -1,6 +1,32 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+use thiserror::Error;
+
+const DEFAULT_ANDROID_API_LEVEL: &str = "28";
+
+#[derive(Debug, Error)]
+pub enum AndroidNdkDetectionError {
+    #[error(
+        "Android NDK not found for target {target_triple}. Set ANDROID_NDK, ANDROID_NDK_ROOT, NDK_ROOT, or CARGO_NDK_ANDROID_NDK."
+    )]
+    NdkRootNotConfigured {
+        target_triple: String,
+        #[source]
+        source: env::VarError,
+    },
+    #[error("Android NDK path does not exist: {path}")]
+    NdkRootMissing { path: PathBuf },
+    #[error("Android NDK toolchain file not found: {path}")]
+    NdkToolchainFileMissing { path: PathBuf },
+    #[error("Android NDK toolchain not found at: {path}")]
+    NdkToolchainDirectoryMissing { path: PathBuf },
+    #[error("Unsupported host platform for Android NDK")]
+    UnsupportedHostPlatform,
+    #[error("Unsupported Android target triple: {target_triple}")]
+    UnsupportedAndroidTarget { target_triple: String },
+}
+
 /// Consolidated Android NDK configuration, computed once and shared between
 /// bindgen and `CMake` configuration steps.
 #[derive(Debug)]
@@ -16,7 +42,12 @@ pub struct AndroidNdk {
 }
 
 impl AndroidNdk {
-    pub fn detect(target_triple: &str) -> Result<Self, String> {
+    /// # Errors
+    ///
+    /// Returns [`AndroidNdkDetectionError`] when the NDK installation cannot be
+    /// located, an environment variable is missing, the target triple is
+    /// unsupported, or the host platform is not supported by the NDK.
+    pub fn detect(target_triple: &str) -> Result<Self, AndroidNdkDetectionError> {
         let ndk_path = detect_ndk_path(target_triple)?;
 
         validate_ndk_installation(&ndk_path)?;
@@ -28,10 +59,9 @@ impl AndroidNdk {
         let toolchain_path = format!("{ndk_path}/toolchains/llvm/prebuilt/{host_tag}");
 
         if !Path::new(&toolchain_path).exists() {
-            return Err(format!(
-                "Android NDK toolchain not found at: {toolchain_path}\n\
-                 Please ensure you have the correct Android NDK for your platform."
-            ));
+            return Err(AndroidNdkDetectionError::NdkToolchainDirectoryMissing {
+                path: PathBuf::from(toolchain_path),
+            });
         }
 
         let sysroot = format!("{toolchain_path}/sysroot");
@@ -58,18 +88,15 @@ impl AndroidNdk {
     }
 }
 
-fn detect_ndk_path(target_triple: &str) -> Result<String, String> {
+fn detect_ndk_path(target_triple: &str) -> Result<String, AndroidNdkDetectionError> {
     env::var("ANDROID_NDK")
-        .or_else(|_| env::var("ANDROID_NDK_ROOT"))
-        .or_else(|_| env::var("NDK_ROOT"))
-        .or_else(|_| env::var("CARGO_NDK_ANDROID_NDK"))
-        .or_else(|_| detect_ndk_from_sdk())
-        .map_err(|_| {
-            format!(
-                "Android NDK not found. Please set one of: ANDROID_NDK, NDK_ROOT, ANDROID_NDK_ROOT\n\
-                 Current target: {target_triple}\n\
-                 Download from: https://developer.android.com/ndk/downloads"
-            )
+        .or_else(|_android_ndk_unset| env::var("ANDROID_NDK_ROOT"))
+        .or_else(|_android_ndk_root_unset| env::var("NDK_ROOT"))
+        .or_else(|_ndk_root_unset| env::var("CARGO_NDK_ANDROID_NDK"))
+        .or_else(|_cargo_ndk_android_ndk_unset| detect_ndk_from_sdk())
+        .map_err(|source| AndroidNdkDetectionError::NdkRootNotConfigured {
+            target_triple: target_triple.to_owned(),
+            source,
         })
 }
 
@@ -106,24 +133,21 @@ fn detect_ndk_from_sdk() -> Result<String, env::VarError> {
         .ok_or(env::VarError::NotPresent)
 }
 
-fn validate_ndk_installation(ndk_path: &str) -> Result<(), String> {
+fn validate_ndk_installation(ndk_path: &str) -> Result<(), AndroidNdkDetectionError> {
     let ndk_path = Path::new(ndk_path);
 
     if !ndk_path.exists() {
-        return Err(format!(
-            "Android NDK path does not exist: {}",
-            ndk_path.display()
-        ));
+        return Err(AndroidNdkDetectionError::NdkRootMissing {
+            path: ndk_path.to_path_buf(),
+        });
     }
 
     let toolchain_file = ndk_path.join("build/cmake/android.toolchain.cmake");
 
     if !toolchain_file.exists() {
-        return Err(format!(
-            "Android NDK toolchain file not found: {}\n\
-             This indicates an incomplete NDK installation.",
-            toolchain_file.display()
-        ));
+        return Err(AndroidNdkDetectionError::NdkToolchainFileMissing {
+            path: toolchain_file,
+        });
     }
 
     Ok(())
@@ -131,14 +155,16 @@ fn validate_ndk_installation(ndk_path: &str) -> Result<(), String> {
 
 fn detect_api_level() -> String {
     env::var("ANDROID_API_LEVEL")
-        .or_else(|_| env::var("ANDROID_PLATFORM").map(|platform| platform.replace("android-", "")))
-        .or_else(|_| {
+        .or_else(|_android_api_level_unset| {
+            env::var("ANDROID_PLATFORM").map(|platform| platform.replace("android-", ""))
+        })
+        .or_else(|_android_platform_unset| {
             env::var("CARGO_NDK_ANDROID_PLATFORM").map(|platform| platform.replace("android-", ""))
         })
-        .unwrap_or_else(|_| "28".to_string())
+        .unwrap_or_else(|_no_api_level_configured| DEFAULT_ANDROID_API_LEVEL.to_string())
 }
 
-fn detect_host_tag() -> Result<&'static str, String> {
+fn detect_host_tag() -> Result<&'static str, AndroidNdkDetectionError> {
     if cfg!(target_os = "macos") {
         Ok("darwin-x86_64")
     } else if cfg!(target_os = "linux") {
@@ -146,11 +172,11 @@ fn detect_host_tag() -> Result<&'static str, String> {
     } else if cfg!(target_os = "windows") {
         Ok("windows-x86_64")
     } else {
-        Err("Unsupported host platform for Android NDK".to_string())
+        Err(AndroidNdkDetectionError::UnsupportedHostPlatform)
     }
 }
 
-fn target_triple_to_abi(target_triple: &str) -> Result<&'static str, String> {
+fn target_triple_to_abi(target_triple: &str) -> Result<&'static str, AndroidNdkDetectionError> {
     if target_triple.contains("aarch64") {
         Ok("arm64-v8a")
     } else if target_triple.contains("armv7") {
@@ -160,14 +186,15 @@ fn target_triple_to_abi(target_triple: &str) -> Result<&'static str, String> {
     } else if target_triple.contains("i686") {
         Ok("x86")
     } else {
-        Err(format!(
-            "Unsupported Android target: {target_triple}\n\
-             Supported targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android"
-        ))
+        Err(AndroidNdkDetectionError::UnsupportedAndroidTarget {
+            target_triple: target_triple.to_owned(),
+        })
     }
 }
 
-fn target_triple_to_ndk_prefix(target_triple: &str) -> Result<&'static str, String> {
+fn target_triple_to_ndk_prefix(
+    target_triple: &str,
+) -> Result<&'static str, AndroidNdkDetectionError> {
     if target_triple.contains("aarch64") {
         Ok("aarch64-linux-android")
     } else if target_triple.contains("armv7") {
@@ -177,7 +204,9 @@ fn target_triple_to_ndk_prefix(target_triple: &str) -> Result<&'static str, Stri
     } else if target_triple.contains("i686") {
         Ok("i686-linux-android")
     } else {
-        Err(format!("Unsupported Android target: {target_triple}"))
+        Err(AndroidNdkDetectionError::UnsupportedAndroidTarget {
+            target_triple: target_triple.to_owned(),
+        })
     }
 }
 
@@ -186,11 +215,14 @@ fn find_clang_builtin_includes(toolchain_path: &str) -> Option<String> {
     let entries = std::fs::read_dir(&clang_lib_path).ok()?;
 
     let version_dir = entries.filter_map(std::result::Result::ok).find(|entry| {
-        entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
+        entry
+            .file_type()
+            .map(|file_type| file_type.is_dir())
+            .unwrap_or(false)
             && entry
                 .file_name()
                 .to_str()
-                .is_some_and(|name| name.starts_with(|ch: char| ch.is_ascii_digit()))
+                .is_some_and(|name| name.starts_with(|character: char| character.is_ascii_digit()))
     })?;
 
     let include_path = PathBuf::from(&clang_lib_path)

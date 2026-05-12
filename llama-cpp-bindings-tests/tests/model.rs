@@ -7,6 +7,7 @@ use llama_cpp_bindings::ChatTemplateError;
 use llama_cpp_bindings::LlamaLoraAdapterInitError;
 use llama_cpp_bindings::LlamaModelLoadError;
 use llama_cpp_bindings::SampledToken;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::json_schema_to_grammar;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -342,7 +343,7 @@ fn new_context_returns_valid_context() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(256));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     assert!(context.n_ctx() > 0);
 
@@ -684,7 +685,7 @@ fn new_context_with_huge_ctx_returns_null_error() {
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(u32::MAX));
 
-    let result = model.new_context(backend, ctx_params);
+    let result = LlamaContext::from_model(model, backend, ctx_params);
 
     assert!(result.is_err());
 }
@@ -696,7 +697,7 @@ fn sample_returns_result_and_succeeds_with_valid_index() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(256));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -722,7 +723,7 @@ fn grammar_sampler_constrains_output_to_yes_or_no() -> Result<()> {
     let model = fixture.default_model();
 
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let prompt = "<|im_start|>user\nIs the sky blue? Answer yes or no.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
     let tokens = model.str_to_token(prompt, AddBos::Always)?;
@@ -786,7 +787,7 @@ fn json_schema_grammar_sampler_constrains_output_to_json() -> Result<()> {
     let model = fixture.default_model();
 
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let prompt = "<|im_start|>user\nWhat is 2+2? Respond with a JSON object.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
     let tokens = model.str_to_token(prompt, AddBos::Always)?;
@@ -847,7 +848,7 @@ fn sample_with_grammar_produces_constrained_output_in_loop() -> Result<()> {
     let model = fixture.default_model();
 
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let prompt = "<|im_start|>user\nIs the sky blue? yes or no<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";
     let tokens = model.str_to_token(prompt, AddBos::Always)?;
@@ -932,7 +933,7 @@ fn sample_without_grammar_produces_multiple_tokens() -> Result<()> {
     let model = fixture.default_model();
 
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let prompt =
         "<|im_start|>user\nSay hello<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n";

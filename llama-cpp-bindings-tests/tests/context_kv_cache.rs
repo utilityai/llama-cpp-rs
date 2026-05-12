@@ -2,6 +2,7 @@ use std::num::NonZeroU8;
 use std::num::NonZeroU32;
 
 use anyhow::Result;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::kv_cache::KvCacheConversionError;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -16,7 +17,7 @@ fn clear_kv_cache_resets_positions() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -36,7 +37,7 @@ fn kv_cache_seq_pos_max_is_non_negative_after_decode() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -55,7 +56,7 @@ fn clear_kv_cache_seq_with_range() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -75,7 +76,7 @@ fn copy_kv_cache_seq_succeeds() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -95,7 +96,7 @@ fn copy_cache_executes_without_crash() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -116,7 +117,7 @@ fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -138,7 +139,7 @@ fn kv_cache_seq_div_returns_error_for_mrope_model() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -160,7 +161,7 @@ fn kv_cache_seq_keep_retains_specified_sequence() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -181,7 +182,7 @@ fn copy_kv_cache_seq_with_explicit_range() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -202,7 +203,7 @@ fn kv_cache_seq_add_succeeds_on_embedding_model() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -223,7 +224,7 @@ fn kv_cache_seq_div_succeeds_on_embedding_model() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.embedding_model()?;
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let tokens = model.str_to_token("Hello world", AddBos::Always)?;
     let mut batch = LlamaBatch::new(512, 1)?;
@@ -245,7 +246,7 @@ fn kv_cache_seq_pos_max_returns_negative_one_for_unused_seq() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let context = model.new_context(backend, ctx_params)?;
+    let context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.kv_cache_seq_pos_max(999);
 
@@ -261,7 +262,7 @@ fn copy_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.copy_kv_cache_seq(0, 1, Some(u32::MAX), None);
 
@@ -280,7 +281,7 @@ fn copy_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.copy_kv_cache_seq(0, 1, Some(0), Some(u32::MAX));
 
@@ -299,7 +300,7 @@ fn clear_kv_cache_seq_rejects_src_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.clear_kv_cache_seq(Some(u32::MAX), None, None);
 
@@ -318,7 +319,7 @@ fn clear_kv_cache_seq_rejects_p0_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.clear_kv_cache_seq(Some(0), Some(u32::MAX), None);
 
@@ -337,7 +338,7 @@ fn clear_kv_cache_seq_rejects_p1_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.clear_kv_cache_seq(Some(0), Some(0), Some(u32::MAX));
 
@@ -356,7 +357,7 @@ fn kv_cache_seq_add_rejects_p0_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.kv_cache_seq_add(0, Some(u32::MAX), None, 1);
 
@@ -375,7 +376,7 @@ fn kv_cache_seq_add_rejects_p1_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let result = context.kv_cache_seq_add(0, Some(0), Some(u32::MAX), 1);
 
@@ -394,7 +395,7 @@ fn kv_cache_seq_div_rejects_p0_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let divisor = NonZeroU8::new(2).ok_or_else(|| anyhow::anyhow!("2 is non-zero"))?;
     let result = context.kv_cache_seq_div(0, Some(u32::MAX), None, divisor);
@@ -414,7 +415,7 @@ fn kv_cache_seq_div_rejects_p1_exceeding_i32_max() -> Result<()> {
     let backend = fixture.backend();
     let model = fixture.default_model();
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(512));
-    let mut context = model.new_context(backend, ctx_params)?;
+    let mut context = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let divisor = NonZeroU8::new(2).ok_or_else(|| anyhow::anyhow!("2 is non-zero"))?;
     let result = context.kv_cache_seq_div(0, Some(0), Some(u32::MAX), divisor);

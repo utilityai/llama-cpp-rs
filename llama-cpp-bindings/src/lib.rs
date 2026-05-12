@@ -10,6 +10,7 @@
 //! - `cuda` enables CUDA gpu support.
 //! - `sampler` adds the [`context::sample::sampler`] struct for a more rusty way of sampling.
 
+pub mod batch_add_error;
 pub mod chat_message_parse_outcome;
 pub mod context;
 pub mod error;
@@ -28,6 +29,9 @@ pub mod llama_backend_device;
 pub mod llama_backend_numa_strategy;
 pub mod llama_batch;
 pub mod llama_time_us;
+pub mod llama_token_attr;
+pub mod llama_token_attrs;
+pub mod llama_token_attrs_from_int_error;
 pub mod llguidance_sampler;
 #[cfg(feature = "dynamic-backends")]
 pub mod load_backends;
@@ -43,13 +47,13 @@ pub mod mmap_supported;
 pub mod model;
 pub mod mtmd;
 pub mod raw_chat_message;
+pub mod resolved_tool_call_markers;
 pub mod sampled_token;
 pub mod sampled_token_classifier;
 pub mod sampling;
 pub mod streaming_json_probe;
 pub mod timing;
 pub mod token;
-pub mod token_type;
 pub mod tool_call_format;
 pub mod tool_call_marker_pair;
 pub mod tool_call_template_overrides;

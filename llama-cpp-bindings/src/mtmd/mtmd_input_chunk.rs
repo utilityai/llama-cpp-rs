@@ -121,10 +121,18 @@ impl MtmdInputChunk {
     /// (token counting, marker state-machine replay) inside one loop instead
     /// of running the helper-level all-chunks eval and a separate ingest pass.
     ///
+    /// Image chunks are decoded as one `llama_decode` call inside the helper,
+    /// so their token count must fit in `n_batch`. When it would not, the
+    /// binding refuses the call up front because the C-side
+    /// `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` would otherwise abort
+    /// the process.
+    ///
     /// # Errors
     ///
-    /// Returns `MtmdEvalError::EvalFailure` if the underlying encode or decode
-    /// step fails.
+    /// Returns [`MtmdEvalError::ImageChunkExceedsBatchSize`] when this is an
+    /// image chunk whose token count exceeds `n_batch`. Returns
+    /// [`MtmdEvalError::EvalFailure`] if the underlying encode or decode step
+    /// fails.
     pub fn eval_single(
         &self,
         mtmd_ctx: &MtmdContext,
@@ -136,9 +144,6 @@ impl MtmdInputChunk {
     ) -> Result<llama_cpp_bindings_sys::llama_pos, MtmdEvalError> {
         let chunk_token_count = self.n_tokens();
 
-        // Image chunks are decoded as one llama_decode call inside the helper, so
-        // their token count must fit in n_batch. Otherwise the C-side
-        // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` would abort the process.
         if matches!(self.chunk_type(), Ok(MtmdInputChunkType::Image))
             && i64::try_from(chunk_token_count).is_ok_and(|tokens| tokens > i64::from(n_batch))
         {

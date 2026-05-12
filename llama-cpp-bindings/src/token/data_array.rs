@@ -93,7 +93,10 @@ impl LlamaTokenDataArray {
         let mut c_llama_token_data_array = llama_cpp_bindings_sys::llama_token_data_array {
             data,
             size,
-            selected: self.selected.and_then(|s| s.try_into().ok()).unwrap_or(-1),
+            selected: self
+                .selected
+                .and_then(|selected_index| selected_index.try_into().ok())
+                .unwrap_or(-1),
             sorted: self.sorted,
         };
 

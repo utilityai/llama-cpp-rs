@@ -3,6 +3,7 @@
 use std::num::NonZeroU32;
 
 use anyhow::Result;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::model::LlamaModel;
@@ -35,7 +36,7 @@ fn eval_synthetic_bitmap(
     let n_positions = chunks.total_positions();
     let context_size = u32::try_from(n_positions + 256).unwrap_or(8192);
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(context_size));
-    let llama_ctx = model.new_context(backend, ctx_params)?;
+    let llama_ctx = LlamaContext::from_model(model, backend, ctx_params)?;
     let n_batch = i32::try_from(llama_ctx.n_batch())?;
     chunks.eval_chunks(mtmd_ctx, &llama_ctx, 0, 0, n_batch, false)?;
 
@@ -51,7 +52,7 @@ fn eval_chunks_returns_batch_size_exceeds_context_limit_for_huge_batch() -> Resu
     let mtmd_ctx = fixture.mtmd_context()?;
 
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(64));
-    let llama_ctx = model.new_context(backend, ctx_params)?;
+    let llama_ctx = LlamaContext::from_model(model, backend, ctx_params)?;
 
     let chunks = MtmdInputChunks::new()?;
     let huge_batch = i32::try_from(llama_ctx.n_batch() + 1)?;
@@ -352,7 +353,7 @@ fn eval_chunks_with_standard_image() -> Result<()> {
     let n_positions = chunks.total_positions();
     let context_size = u32::try_from(n_positions + 256).unwrap_or(2048);
     let ctx_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(context_size));
-    let llama_ctx = model.new_context(backend, ctx_params)?;
+    let llama_ctx = LlamaContext::from_model(model, backend, ctx_params)?;
     let n_batch = i32::try_from(llama_ctx.n_batch())?;
     let result = chunks.eval_chunks(mtmd_ctx, &llama_ctx, 0, 0, n_batch, false);
 

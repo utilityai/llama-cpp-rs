@@ -1,6 +1,7 @@
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -26,7 +27,7 @@ fn qwen36_chat_inference_emits_reasoning_when_template_auto_opens() -> Result<()
     let model = LlamaModel::load_from_file(&backend, &path, &params)?;
 
     let context_params = LlamaContextParams::default();
-    let mut context = model.new_context(&backend, context_params)?;
+    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
 
     let chat_template = model.chat_template(None)?;
     let messages = vec![LlamaChatMessage::new(

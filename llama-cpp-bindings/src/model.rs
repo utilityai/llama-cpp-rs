@@ -31,20 +31,20 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
 use std::ptr::{self, NonNull};
 
 use crate::chat_message_parse_outcome::ChatMessageParseOutcome;
-use crate::context::LlamaContext;
-use crate::context::params::LlamaContextParams;
 use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
+use crate::llama_token_attrs::LlamaTokenAttrs;
+use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
 use crate::raw_chat_message::RawChatMessage;
+use crate::resolved_tool_call_markers::ResolvedToolCallMarkers;
 use crate::sampled_token::SampledToken;
 use crate::sampled_token_classifier::SampledTokenClassifier;
 use crate::sampled_token_classifier::StreamingMarkers;
 use crate::token::LlamaToken;
-use crate::token_type::LlamaTokenAttrs;
 use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaContextLoadError, LlamaLoraAdapterInitError,
-    LlamaModelLoadError, MarkerDetectionError, MetaValError, ParseChatMessageError,
-    StringToTokenError, TokenToStringError,
+    ApplyChatTemplateError, ChatTemplateError, LlamaLoraAdapterInitError, LlamaModelLoadError,
+    MarkerDetectionError, MetaValError, ParseChatMessageError, StringToTokenError,
+    TokenToStringError,
 };
 use llama_cpp_bindings_types::ParsedChatMessage;
 use llama_cpp_bindings_types::ParsedToolCall;
@@ -64,13 +64,15 @@ pub mod params;
 pub mod rope_type;
 pub mod split_mode;
 pub mod vocab_type;
+pub mod vocab_type_from_int_error;
 
 pub use add_bos::AddBos;
 pub use llama_chat_message::LlamaChatMessage;
 pub use llama_chat_template::LlamaChatTemplate;
 pub use llama_lora_adapter::LlamaLoraAdapter;
 pub use rope_type::RopeType;
-pub use vocab_type::{LlamaTokenTypeFromIntError, VocabType};
+pub use vocab_type::VocabType;
+pub use vocab_type_from_int_error::VocabTypeFromIntError;
 
 use params::LlamaModelParams;
 
@@ -263,7 +265,7 @@ impl LlamaModel {
     pub fn token_attr(
         &self,
         LlamaToken(id): LlamaToken,
-    ) -> Result<LlamaTokenAttrs, crate::token_type::LlamaTokenTypeFromIntError> {
+    ) -> Result<LlamaTokenAttrs, LlamaTokenAttrsFromIntError> {
         let token_type =
             unsafe { llama_cpp_bindings_sys::llama_token_get_attr(self.vocab_ptr(), id) };
 
@@ -372,7 +374,7 @@ impl LlamaModel {
     /// # Errors
     ///
     /// Returns an error if llama.cpp emits a vocab type that is not known to this library.
-    pub fn vocab_type(&self) -> Result<VocabType, LlamaTokenTypeFromIntError> {
+    pub fn vocab_type(&self) -> Result<VocabType, VocabTypeFromIntError> {
         let vocab_type = unsafe { llama_cpp_bindings_sys::llama_vocab_type(self.vocab_ptr()) };
 
         VocabType::try_from(vocab_type)
@@ -625,32 +627,6 @@ impl LlamaModel {
         })
     }
 
-    /// Create a new context from this model.
-    ///
-    /// # Errors
-    ///
-    /// There is many ways this can fail. See [`LlamaContextLoadError`] for more information.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "LlamaContextParams may become non-trivially copyable upstream"
-    )]
-    pub fn new_context<'model>(
-        &'model self,
-        _: &LlamaBackend,
-        params: LlamaContextParams,
-    ) -> Result<LlamaContext<'model>, LlamaContextLoadError> {
-        let context_params = params.context_params;
-        let context = unsafe {
-            llama_cpp_bindings_sys::llama_new_context_with_model(
-                self.model.as_ptr(),
-                context_params,
-            )
-        };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
-
-        Ok(LlamaContext::new(self, context, params.embeddings()))
-    }
-
     /// Apply the models chat template to some messages.
     /// See <https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template>
     ///
@@ -792,14 +768,14 @@ impl LlamaModel {
             None => (None, None),
         };
 
-        let (effective_tool_call_open, effective_tool_call_close) =
+        let resolved_tool_call_markers =
             self.resolve_tool_call_marker_strings(autoparser_open, autoparser_close);
 
         Ok(StreamingMarkers {
             reasoning_open: self.tokenize_marker(reasoning_open_str.as_deref()),
             reasoning_close: self.tokenize_marker(reasoning_close_str.as_deref()),
-            tool_call_open: self.tokenize_marker(effective_tool_call_open.as_deref()),
-            tool_call_close: self.tokenize_marker(effective_tool_call_close.as_deref()),
+            tool_call_open: self.tokenize_marker(resolved_tool_call_markers.open.as_deref()),
+            tool_call_close: self.tokenize_marker(resolved_tool_call_markers.close.as_deref()),
         })
     }
 
@@ -810,22 +786,31 @@ impl LlamaModel {
         &self,
         autoparser_open: Option<String>,
         autoparser_close: Option<String>,
-    ) -> (Option<String>, Option<String>) {
+    ) -> ResolvedToolCallMarkers {
         if autoparser_open
             .as_deref()
             .is_some_and(|raw| !raw.trim().is_empty())
         {
-            return (autoparser_open, autoparser_close);
+            return ResolvedToolCallMarkers {
+                open: autoparser_open,
+                close: autoparser_close,
+            };
         }
         let Some(markers) = self.tool_call_markers() else {
-            return (autoparser_open, autoparser_close);
+            return ResolvedToolCallMarkers {
+                open: autoparser_open,
+                close: autoparser_close,
+            };
         };
         let close = if markers.close.is_empty() {
             None
         } else {
             Some(markers.close)
         };
-        (Some(markers.open), close)
+        ResolvedToolCallMarkers {
+            open: Some(markers.open),
+            close,
+        }
     }
 
     /// # Errors

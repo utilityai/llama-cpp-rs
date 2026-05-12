@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -42,8 +43,7 @@ fn reranking_produces_scores() -> Result<()> {
         .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
         .with_n_seq_max(u32::try_from(document_count)?)
         .with_embeddings(true);
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt_lines: Vec<String> = documents
@@ -101,7 +101,10 @@ fn reranking_produces_scores() -> Result<()> {
     let t_main_end = ggml_time_us();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
-    #[allow(clippy::cast_precision_loss)]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "logged throughput tolerates f32 precision"
+    )]
     let tokens_per_second = total_tokens as f32 / duration.as_secs_f32();
 
     eprintln!(

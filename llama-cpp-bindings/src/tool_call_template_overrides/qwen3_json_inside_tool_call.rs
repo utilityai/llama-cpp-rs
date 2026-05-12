@@ -2,42 +2,47 @@ use llama_cpp_bindings_types::JsonObjectShape;
 use llama_cpp_bindings_types::ToolCallArgsShape;
 use llama_cpp_bindings_types::ToolCallMarkers;
 
-const TEMPLATE_FINGERPRINT_OPEN: &str = "'<tool_call>\\n{\"name\": \"'";
-const TEMPLATE_FINGERPRINT_ARGS_JOIN: &str = "'\", \"arguments\": '";
+pub struct Qwen3JsonInsideToolCallOverride;
 
-#[must_use]
-pub fn markers() -> ToolCallMarkers {
-    ToolCallMarkers {
-        open: "<tool_call>".to_owned(),
-        close: "</tool_call>".to_owned(),
-        args_shape: ToolCallArgsShape::JsonObject(JsonObjectShape {
-            name_field: "name".to_owned(),
-            arguments_field: "arguments".to_owned(),
-        }),
-    }
-}
+impl Qwen3JsonInsideToolCallOverride {
+    const TEMPLATE_FINGERPRINT_OPEN: &'static str = "'<tool_call>\\n{\"name\": \"'";
+    const TEMPLATE_FINGERPRINT_ARGS_JOIN: &'static str = "'\", \"arguments\": '";
 
-#[must_use]
-pub fn detect(template: &str) -> Option<ToolCallMarkers> {
-    if !template.contains(TEMPLATE_FINGERPRINT_OPEN) {
-        return None;
+    #[must_use]
+    pub fn markers() -> ToolCallMarkers {
+        ToolCallMarkers {
+            open: "<tool_call>".to_owned(),
+            close: "</tool_call>".to_owned(),
+            args_shape: ToolCallArgsShape::JsonObject(JsonObjectShape {
+                name_field: "name".to_owned(),
+                arguments_field: "arguments".to_owned(),
+            }),
+        }
     }
-    if !template.contains(TEMPLATE_FINGERPRINT_ARGS_JOIN) {
-        return None;
+
+    #[must_use]
+    pub fn detect(template: &str) -> Option<ToolCallMarkers> {
+        if !template.contains(Self::TEMPLATE_FINGERPRINT_OPEN) {
+            return None;
+        }
+        if !template.contains(Self::TEMPLATE_FINGERPRINT_ARGS_JOIN) {
+            return None;
+        }
+        Some(Self::markers())
     }
-    Some(markers())
 }
 
 #[cfg(test)]
 mod tests {
     use llama_cpp_bindings_types::ToolCallArgsShape;
 
-    use super::detect;
+    use super::Qwen3JsonInsideToolCallOverride;
 
     #[test]
     fn detects_qwen3_json_inside_tool_call_template() {
         let template = "{{- '<tool_call>\\n{\"name\": \"' + tool_call.name + '\", \"arguments\": ' + (tool_call.arguments | tojson) + '}\\n</tool_call>' -}}";
-        let markers = detect(template).expect("Qwen 3 template must be detected");
+        let markers = Qwen3JsonInsideToolCallOverride::detect(template)
+            .expect("Qwen 3 template must be detected");
 
         assert_eq!(markers.open, "<tool_call>");
         assert_eq!(markers.close, "</tool_call>");
@@ -50,19 +55,19 @@ mod tests {
 
     #[test]
     fn returns_none_for_template_without_fingerprint() {
-        assert!(detect("just some plain template body").is_none());
+        assert!(Qwen3JsonInsideToolCallOverride::detect("just some plain template body").is_none());
     }
 
     #[test]
     fn returns_none_for_empty_template() {
-        assert!(detect("").is_none());
+        assert!(Qwen3JsonInsideToolCallOverride::detect("").is_none());
     }
 
     #[test]
     fn returns_none_when_only_open_fingerprint_present() {
         let template = "{{- '<tool_call>\\n{\"name\": \"' + tool_call.name + ...";
         assert!(
-            detect(template).is_none(),
+            Qwen3JsonInsideToolCallOverride::detect(template).is_none(),
             "open fingerprint alone must not match (Qwen3-Embedding-style false positive)",
         );
     }
@@ -70,6 +75,6 @@ mod tests {
     #[test]
     fn returns_none_when_only_args_join_fingerprint_present() {
         let template = "some text '\", \"arguments\": ' more text";
-        assert!(detect(template).is_none());
+        assert!(Qwen3JsonInsideToolCallOverride::detect(template).is_none());
     }
 }

@@ -1,5 +1,6 @@
 //! Safe wrapper around `llama_batch`.
 
+use crate::batch_add_error::BatchAddError;
 use crate::sampled_token::SampledToken;
 use crate::token::LlamaToken;
 use llama_cpp_bindings_sys::{
@@ -65,20 +66,6 @@ pub struct LlamaBatch<'tokens> {
     /// The underlying `llama_batch` from the C API.
     pub llama_batch: llama_batch,
     phantom: PhantomData<&'tokens [LlamaToken]>,
-}
-
-/// Errors that can occur when adding a token to a batch.
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-pub enum BatchAddError {
-    /// There was not enough space in the batch to add the token.
-    #[error("Insufficient Space of {0}")]
-    InsufficientSpace(usize),
-    /// Empty buffer is provided for [`LlamaBatch::get_one`]
-    #[error("Empty buffer")]
-    EmptyBuffer,
-    /// An integer value exceeded the allowed range.
-    #[error("Integer overflow: {0}")]
-    IntegerOverflow(String),
 }
 
 impl<'tokens> LlamaBatch<'tokens> {

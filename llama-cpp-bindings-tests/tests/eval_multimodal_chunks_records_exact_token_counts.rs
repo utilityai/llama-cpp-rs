@@ -4,6 +4,7 @@ use std::num::NonZeroU32;
 
 use anyhow::Result;
 use llama_cpp_bindings::TokenUsage;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputChunkType;
@@ -74,7 +75,7 @@ fn build_multimodal_chunks_and_eval_into_usage() -> Result<(TokenUsage, Expected
     let context_params = LlamaContextParams::default()
         .with_n_ctx(NonZeroU32::new(4096))
         .with_n_batch(512);
-    let context = model.new_context(backend, context_params)?;
+    let context = LlamaContext::from_model(model, backend, context_params)?;
 
     let mut classifier = model.sampled_token_classifier();
     classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;

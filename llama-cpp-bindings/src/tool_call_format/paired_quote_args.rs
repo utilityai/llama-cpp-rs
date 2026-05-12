@@ -3,10 +3,6 @@ use llama_cpp_bindings_types::ParsedToolCall;
 use llama_cpp_bindings_types::ToolCallArguments;
 use llama_cpp_bindings_types::ToolCallMarkers;
 use llama_cpp_bindings_types::ToolCallValueQuote;
-use nom::IResult;
-use nom::Parser;
-use nom::bytes::complete::tag;
-use nom::bytes::complete::take_until;
 
 use crate::error::PairedQuoteFailure;
 
@@ -16,25 +12,14 @@ enum ParseStep<'body> {
 }
 
 fn consume_optional_prefix<'body>(input: &'body str, literal: &str) -> &'body str {
-    if literal.is_empty() {
-        return input;
-    }
-    let result: IResult<&'body str, &'body str> = tag(literal).parse(input);
-    match result {
-        Ok((rest, _)) => rest,
-        Err(_) => input,
-    }
+    input.strip_prefix(literal).unwrap_or(input)
 }
 
 fn split_at_separator<'body>(
     input: &'body str,
     separator: &str,
 ) -> Option<(&'body str, &'body str)> {
-    let take_result: IResult<&'body str, &'body str> = take_until(separator).parse(input);
-    let (after_name, name_raw) = take_result.ok()?;
-    let consume_result: IResult<&'body str, &'body str> = tag(separator).parse(after_name);
-    let (after_separator, _) = consume_result.ok()?;
-
+    let (name_raw, after_separator) = input.split_once(separator)?;
     Some((name_raw, after_separator))
 }
 

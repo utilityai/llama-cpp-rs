@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
+use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
@@ -20,8 +21,7 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     let model = fixture.default_model();
 
     let ctx_params = LlamaContextParams::default();
-    let mut ctx = model
-        .new_context(backend, ctx_params)
+    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
         .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
@@ -72,16 +72,17 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     .run()?;
     let t_main_end = ggml_time_us();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
+    let total_observed =
+        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable;
 
-    #[allow(clippy::cast_precision_loss)]
-    let tokens_per_second = (outcome.observed_undeterminable as f32
-        + outcome.observed_content as f32
-        + outcome.observed_reasoning as f32)
-        / duration.as_secs_f32();
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "logged throughput tolerates f32 precision"
+    )]
+    let tokens_per_second = total_observed as f32 / duration.as_secs_f32();
 
     eprintln!(
-        "\ndecoded {} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
-        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable,
+        "\ndecoded {total_observed} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
         duration.as_secs_f32(),
     );
 
@@ -94,15 +95,6 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
         "raw prompt without tool-call markers must not produce ToolCall tokens; \
          outcome={outcome:?}"
     );
-    // The raw prompt carries no chat-template markers, so the classifier starts
-    // in Pending. The exact split between Content / Reasoning / Undeterminable
-    // depends on the model: Qwen 3.5 keeps generating raw text and never emits
-    // `<think>`, so every token is Undeterminable; Qwen 3.6 was trained to
-    // start every reply with a `<think>...</think>` block even without a
-    // chat template, so the same prompt yields a mix. Both behaviours are
-    // correct — we only assert internal consistency below.
-    let total_observed =
-        outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable;
     assert!(
         total_observed > 0,
         "model must produce at least one classified token; outcome={outcome:?}"
@@ -145,7 +137,7 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
     let model = fixture.default_model();
 
     let context_params = LlamaContextParams::default();
-    let mut context = model.new_context(backend, context_params)?;
+    let mut context = LlamaContext::from_model(model, backend, context_params)?;
 
     let chat_template = model.chat_template(None)?;
     let messages = vec![LlamaChatMessage::new(

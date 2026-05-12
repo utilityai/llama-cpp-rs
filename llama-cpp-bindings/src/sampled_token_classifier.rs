@@ -6,10 +6,10 @@ use llama_cpp_bindings_sys::llama_seq_id;
 use llama_cpp_bindings_types::TokenUsage;
 use llama_cpp_bindings_types::TokenUsageError;
 
+use crate::batch_add_error::BatchAddError;
 use crate::context::LlamaContext;
 use crate::error::EvalMultimodalChunksError;
 use crate::error::SampleError;
-use crate::llama_batch::BatchAddError;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
@@ -17,7 +17,6 @@ use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
 use crate::streaming_json_probe::JsonProbeOutcome;
-use crate::streaming_json_probe::validate_prefix;
 use crate::token::LlamaToken;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -407,7 +406,7 @@ impl<'model> SampledTokenClassifier<'model> {
 
     fn evaluate_probe(&mut self) -> Vec<IngestOutcome> {
         let outcome = match &self.probe_mode {
-            ProbeMode::Active(state) => validate_prefix(&state.held_text),
+            ProbeMode::Active(state) => JsonProbeOutcome::validate_prefix(&state.held_text),
             ProbeMode::Idle => return Vec::new(),
         };
         match outcome {
@@ -733,13 +732,16 @@ mod tests {
     }
 
     fn outcome_pieces(outcomes: &[IngestOutcome]) -> Vec<&str> {
-        outcomes.iter().map(|o| o.visible_piece.as_str()).collect()
+        outcomes
+            .iter()
+            .map(|outcome| outcome.visible_piece.as_str())
+            .collect()
     }
 
     fn outcome_sections(outcomes: &[IngestOutcome]) -> Vec<SampledTokenSection> {
         outcomes
             .iter()
-            .map(|o| match o.sampled_token {
+            .map(|outcome| match outcome.sampled_token {
                 SampledToken::Reasoning(_) => SampledTokenSection::Reasoning,
                 SampledToken::Content(_) => SampledTokenSection::Content,
                 SampledToken::ToolCall(_) => SampledTokenSection::ToolCall,
