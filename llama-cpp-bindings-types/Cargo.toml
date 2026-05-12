@@ -7,9 +7,9 @@ license = "Apache-2.0"
 repository = "https://github.com/intentee/llama-cpp-bindings"
 
 [dependencies]
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = "2"
+thiserror = { workspace = true }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
