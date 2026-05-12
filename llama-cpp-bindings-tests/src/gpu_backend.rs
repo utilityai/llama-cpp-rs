@@ -49,7 +49,7 @@ pub fn require_compiled_backends_present() -> Result<()> {
     #[cfg(feature = "cuda-no-vmm")]
     require_backend(&devices, "cuda-no-vmm", &["CUDA"])?;
     #[cfg(feature = "metal")]
-    require_backend(&devices, "metal", &["Metal"])?;
+    require_backend(&devices, "metal", &["Metal", "MTL"])?;
     #[cfg(feature = "vulkan")]
     require_backend(&devices, "vulkan", &["Vulkan"])?;
     #[cfg(feature = "rocm")]

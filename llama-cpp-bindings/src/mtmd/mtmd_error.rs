@@ -84,7 +84,7 @@ pub enum MtmdEvalError {
         context_max: u32,
     },
     /// An image chunk's token count exceeds the per-decode `n_batch` budget,
-    /// so handing it to `llama_decode` would trip the GGML_ASSERT.
+    /// so handing it to `llama_decode` would trip the `GGML_ASSERT`.
     #[error(
         "image chunk has {} tokens but n_batch is {}",
         .0.image_tokens,

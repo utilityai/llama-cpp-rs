@@ -140,8 +140,7 @@ impl MtmdInputChunk {
         // their token count must fit in n_batch. Otherwise the C-side
         // `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` would abort the process.
         if matches!(self.chunk_type(), Ok(MtmdInputChunkType::Image))
-            && i64::try_from(chunk_token_count)
-                .is_ok_and(|tokens| tokens > i64::from(n_batch))
+            && i64::try_from(chunk_token_count).is_ok_and(|tokens| tokens > i64::from(n_batch))
         {
             #[expect(
                 clippy::cast_possible_truncation,
