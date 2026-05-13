@@ -197,7 +197,7 @@ impl State {
             let level = self
                 .previous_level
                 .load(std::sync::atomic::Ordering::Acquire)
-                .cast_unsigned();
+                as llama_cpp_bindings_sys::ggml_log_level;
             tracing::warn!(
                 inferred_level = level,
                 text = text,
@@ -232,7 +232,7 @@ impl State {
         self.is_buffering
             .store(true, std::sync::atomic::Ordering::Release);
         self.previous_level
-            .store(level.cast_signed(), std::sync::atomic::Ordering::Release);
+            .store(level as i32, std::sync::atomic::Ordering::Release);
     }
 
     /// Emit a normal unbuffered log message (not the CONT log level and the text ends with a newline).
@@ -255,7 +255,7 @@ impl State {
         }
 
         self.previous_level
-            .store(level.cast_signed(), std::sync::atomic::Ordering::Release);
+            .store(level as i32, std::sync::atomic::Ordering::Release);
 
         let (text, _trailing_newline) = text.split_at(text.len() - 1);
 
@@ -295,7 +295,7 @@ impl State {
     ) {
         if level != llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT {
             self.previous_level
-                .store(level.cast_signed(), std::sync::atomic::Ordering::Release);
+                .store(level as i32, std::sync::atomic::Ordering::Release);
         }
     }
 
@@ -306,7 +306,7 @@ impl State {
         let level = if level == llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT {
             self.previous_level
                 .load(std::sync::atomic::Ordering::Relaxed)
-                .cast_unsigned()
+                as llama_cpp_bindings_sys::ggml_log_level
         } else {
             level
         };
@@ -435,7 +435,7 @@ mod tests {
 
         assert_eq!(
             stored,
-            llama_cpp_bindings_sys::GGML_LOG_LEVEL_WARN.cast_signed()
+            llama_cpp_bindings_sys::GGML_LOG_LEVEL_WARN as i32
         );
     }
 
@@ -452,7 +452,7 @@ mod tests {
 
         assert_eq!(
             stored,
-            llama_cpp_bindings_sys::GGML_LOG_LEVEL_ERROR.cast_signed()
+            llama_cpp_bindings_sys::GGML_LOG_LEVEL_ERROR as i32
         );
     }
 
