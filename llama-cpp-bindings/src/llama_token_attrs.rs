@@ -55,7 +55,7 @@ mod tests {
 
     #[test]
     fn try_from_zero_produces_empty_flags() {
-        let attrs = LlamaTokenAttrs::try_from(0u32);
+        let attrs = LlamaTokenAttrs::try_from(0);
 
         assert!(attrs.is_ok());
         assert!(attrs.expect("valid attribute").is_empty());
@@ -63,14 +63,13 @@ mod tests {
 
     #[test]
     fn try_from_invalid_bits_returns_error() {
-        let invalid_value = 0xFFFF_FFFFu32;
-        let result = LlamaTokenAttrs::try_from(invalid_value);
+        let result = LlamaTokenAttrs::try_from(!0);
 
         assert!(result.is_err());
-        matches!(
+        assert!(matches!(
             result.expect_err("should fail"),
-            LlamaTokenAttrsFromIntError::UnknownValue(_)
-        );
+            LlamaTokenAttrsFromIntError::UnknownValue(_),
+        ));
     }
 
     #[test]

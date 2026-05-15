@@ -85,7 +85,10 @@ mod tests {
     #[test]
     fn from_raw_returns_none_for_unknown() {
         assert_eq!(GgufType::from_raw(99), None);
-        assert_eq!(GgufType::from_raw(u32::MAX), None);
+        assert_eq!(
+            GgufType::from_raw(llama_cpp_bindings_sys::gguf_type::MAX),
+            None,
+        );
     }
 
     #[test]
