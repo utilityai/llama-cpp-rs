@@ -35,6 +35,7 @@ jobs:
         shell: bash
     env:
       LLAMA_DISABLE_CCACHE: '1'
+      RUST_BACKTRACE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
