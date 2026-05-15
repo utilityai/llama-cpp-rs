@@ -2,8 +2,8 @@ use std::ffi::{CStr, CString, c_char};
 use std::ptr::NonNull;
 use std::slice;
 
+use super::mtmd_bitmap_error::MtmdBitmapError;
 use super::mtmd_context::MtmdContext;
-use super::mtmd_error::MtmdBitmapError;
 
 fn cstr_ptr_to_optional_string(ptr: *const c_char) -> Option<String> {
     if ptr.is_null() {

@@ -17,81 +17,11 @@ use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
 use crate::streaming_json_probe::JsonProbeOutcome;
+use crate::streaming_markers::{MarkerKind, StreamingMarkers};
 use crate::token::LlamaToken;
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum SampledTokenSection {
-    Pending,
-    Content,
-    Reasoning,
-    ToolCall,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum MarkerKind {
-    ReasoningOpen,
-    ReasoningClose,
-    ToolCallOpen,
-    ToolCallClose,
-}
-
-/// Tokenized marker sequences (token IDs, not strings).
-///
-/// Each marker is a `Vec<LlamaToken>` of length `>= 1`; absent markers are
-/// `None`. Sequence matching at every `ingest()` is by token-ID equality,
-/// never by substring scanning of decoded text.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct StreamingMarkers {
-    pub reasoning_open: Option<Vec<LlamaToken>>,
-    pub reasoning_close: Option<Vec<LlamaToken>>,
-    pub tool_call_open: Option<Vec<LlamaToken>>,
-    pub tool_call_close: Option<Vec<LlamaToken>>,
-}
-
-impl StreamingMarkers {
-    const fn has_any(&self) -> bool {
-        self.reasoning_open.is_some()
-            || self.reasoning_close.is_some()
-            || self.tool_call_open.is_some()
-            || self.tool_call_close.is_some()
-    }
-
-    fn max_token_len(&self) -> usize {
-        [
-            self.reasoning_open.as_deref(),
-            self.reasoning_close.as_deref(),
-            self.tool_call_open.as_deref(),
-            self.tool_call_close.as_deref(),
-        ]
-        .into_iter()
-        .flatten()
-        .map(<[LlamaToken]>::len)
-        .max()
-        .unwrap_or(0)
-    }
-
-    fn lookup(&self, kind: MarkerKind) -> Option<&[LlamaToken]> {
-        match kind {
-            MarkerKind::ReasoningOpen => self.reasoning_open.as_deref(),
-            MarkerKind::ReasoningClose => self.reasoning_close.as_deref(),
-            MarkerKind::ToolCallOpen => self.tool_call_open.as_deref(),
-            MarkerKind::ToolCallClose => self.tool_call_close.as_deref(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IngestOutcome {
-    pub sampled_token: SampledToken,
-    /// Empty when the token is part of a recognised marker boundary; otherwise
-    /// the decoded UTF-8 piece. Callers should stream `visible_piece` and skip
-    /// emission when it is empty.
-    pub visible_piece: String,
-    /// Always the decoded UTF-8 piece, even for marker-boundary tokens. Useful
-    /// for accumulating the full raw model output (e.g. for downstream parser
-    /// cross-checks) without losing marker bytes.
-    pub raw_piece: String,
-}
+pub use crate::ingest_outcome::IngestOutcome;
+pub use crate::sampled_token_section::SampledTokenSection;
 
 #[derive(Clone, Debug)]
 struct PendingToken {
@@ -250,8 +180,8 @@ impl<'model> SampledTokenClassifier<'model> {
         ) {
             Ok(piece) => piece,
             Err(detokenize_error) => {
-                tracing::debug!(
-                    "token_to_piece failed during classification, dropping piece: {detokenize_error}"
+                log::debug!(
+                    "token_to_piece failed during classification, dropping piece: {detokenize_error}",
                 );
                 String::new()
             }
@@ -259,14 +189,6 @@ impl<'model> SampledTokenClassifier<'model> {
     }
 
     fn try_consume_marker_at_tail(&mut self) {
-        // Probe every marker in every section so the user-visible streams stay
-        // free of marker text even when the model misbehaves: a stray
-        // `</think>` / `<channel|>` / `[/THINK]` while in `Content` is
-        // suppressed (close markers transition to Content — a no-op when
-        // already there); a nested `<think>` while in `Reasoning` is also
-        // suppressed (open markers keep the section in Reasoning). Without
-        // this, models like Gemma 4 E4B that emit close markers without ever
-        // opening leak the literal marker text into `content_stream`.
         const PROBE_KINDS: &[MarkerKind] = &[
             MarkerKind::ReasoningOpen,
             MarkerKind::ReasoningClose,
@@ -301,15 +223,6 @@ impl<'model> SampledTokenClassifier<'model> {
             MarkerKind::ReasoningClose | MarkerKind::ToolCallClose => SampledTokenSection::Content,
             MarkerKind::ToolCallOpen => SampledTokenSection::ToolCall,
         };
-        // For open markers, the boundary tokens are classified as the destination
-        // section — they are the marker itself (`<think>` is part of reasoning,
-        // `<tool_call>` is part of the tool-call protocol). For close markers,
-        // the boundary tokens are classified as the section the model was in:
-        // a normal `</think>` while in `Reasoning` is still reasoning, but a
-        // spurious `</think>` while in `Content` (e.g. some Gemma variants
-        // re-emit close markers without ever opening) is just noise in the
-        // content section — counting it as `Reasoning` would inflate
-        // `observed_reasoning` and falsely indicate the model thought.
         let span_section = match kind {
             MarkerKind::ReasoningOpen => SampledTokenSection::Reasoning,
             MarkerKind::ToolCallOpen => SampledTokenSection::ToolCall,
@@ -584,9 +497,6 @@ impl<'model> SampledTokenClassifier<'model> {
         logits_last: bool,
     ) -> Result<llama_pos, EvalMultimodalChunksError> {
         let chunk_count = chunks.len();
-        // `start_position` stays read-only; `next_position` is the loop
-        // accumulator that walks forward chunk-by-chunk and is the function's
-        // return value. Two locals, single responsibility each.
         let mut next_position = start_position;
 
         for index in 0..chunk_count {
@@ -651,13 +561,13 @@ impl<'model> SampledTokenClassifier<'model> {
 
 #[cfg(test)]
 mod tests {
-    use super::IngestOutcome;
     use super::PendingToken;
     use super::ProbeMode;
     use super::SampledTokenClassifier;
-    use super::SampledTokenSection;
-    use super::StreamingMarkers;
+    use crate::ingest_outcome::IngestOutcome;
     use crate::sampled_token::SampledToken;
+    use crate::sampled_token_section::SampledTokenSection;
+    use crate::streaming_markers::StreamingMarkers;
     use crate::token::LlamaToken;
 
     fn token(id: i32) -> LlamaToken {
@@ -676,9 +586,6 @@ mod tests {
         }
     }
 
-    /// Builds a classifier without a real model — only safe for tests that go
-    /// through `try_consume_marker_at_tail` / `drain_overflow` directly, never
-    /// through `ingest()` (which calls `model.token_to_piece`).
     fn synthetic_classifier(markers: StreamingMarkers) -> SampledTokenClassifier<'static> {
         SampledTokenClassifier {
             model: unsafe { &*std::ptr::NonNull::<crate::model::LlamaModel>::dangling().as_ptr() },
@@ -748,24 +655,6 @@ mod tests {
                 SampledToken::Undeterminable(_) => SampledTokenSection::Pending,
             })
             .collect()
-    }
-
-    #[test]
-    fn streaming_markers_with_no_markers_reports_none() {
-        let markers = StreamingMarkers::default();
-        assert!(!markers.has_any());
-        assert_eq!(markers.max_token_len(), 0);
-    }
-
-    #[test]
-    fn streaming_markers_max_token_len_takes_longest() {
-        let markers = StreamingMarkers {
-            reasoning_open: Some(vec![token(1)]),
-            reasoning_close: Some(vec![token(2), token(3), token(4)]),
-            tool_call_open: Some(vec![token(5), token(6)]),
-            tool_call_close: None,
-        };
-        assert_eq!(markers.max_token_len(), 3);
     }
 
     #[test]
@@ -1065,7 +954,6 @@ mod tests {
         let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
         let mut classifier = synthetic_classifier(markers);
 
-        // <think> body </think> <think> body </think>
         for token_id in [100, 7, 200, 100, 8, 200] {
             push_pending_from_prompt(&mut classifier, token_id);
             classifier.try_consume_marker_at_tail();
@@ -1092,7 +980,6 @@ mod tests {
         let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
         let mut classifier = synthetic_classifier(markers);
 
-        // Closed-think prompt: <think> body </think>
         for token_id in [100, 7, 200] {
             push_pending_from_prompt(&mut classifier, token_id);
             classifier.try_consume_marker_at_tail();
@@ -1103,9 +990,6 @@ mod tests {
         assert_eq!(classifier.usage().reasoning_tokens, 0);
         assert_eq!(classifier.usage().content_tokens, 0);
 
-        // Generated content token (not from prompt): pushed with section=Content,
-        // is_from_prompt=false. drain_overflow finalises it as SampledToken::Content
-        // and increments usage.content_tokens.
         classifier.pending.push_back(PendingToken {
             token: token(50),
             decoded: "hi".to_owned(),
@@ -1130,13 +1014,6 @@ mod tests {
 
     #[test]
     fn close_marker_in_content_section_is_suppressed_as_boundary() {
-        // When a misbehaving model emits a close marker (e.g. `</think>`) while
-        // already in the Content section, the classifier must treat it as a
-        // boundary so the marker text never reaches the user-visible content
-        // stream. The boundary token is classified as Content (not Reasoning):
-        // there is no reasoning to close, the close marker is just noise in
-        // the content section. This is the architectural backstop against
-        // models that re-emit close markers without a preceding open.
         let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
         let mut classifier = synthetic_classifier(markers);
         classifier.section = SampledTokenSection::Content;
@@ -1157,17 +1034,12 @@ mod tests {
                 SampledTokenSection::Content,
             ],
         );
-        // The close marker's `visible_piece` is empty (boundary), so the
-        // user-visible content stream is "hi" + "" + "ok" = "hiok".
         assert_eq!(outcome_pieces(&outcomes), vec!["hi", "", "ok"]);
         assert_eq!(classifier.section, SampledTokenSection::Content);
     }
 
     #[test]
     fn open_marker_in_reasoning_section_is_suppressed_as_boundary() {
-        // A nested `<think>` while already in Reasoning is suppressed (so the
-        // user never sees the marker text in the reasoning stream) and the
-        // section stays Reasoning.
         let markers = markers_with(Some(vec![token(100)]), Some(vec![token(200)]));
         let mut classifier = synthetic_classifier(markers);
         classifier.section = SampledTokenSection::Reasoning;
@@ -1240,8 +1112,6 @@ mod tests {
 
     #[test]
     fn spurious_tool_call_close_in_content_section_classifies_as_content() {
-        // A `</tool_call>` while in Content (model misbehaves) is classified as
-        // Content (not ToolCall) so observed_tool_calls isn't inflated.
         let mut markers = markers_with(None, None);
         markers.tool_call_close = Some(vec![token(300)]);
         let mut classifier = synthetic_classifier(markers);
@@ -1504,11 +1374,6 @@ mod tests {
 
     #[test]
     fn marker_probe_takes_precedence_when_both_could_match() {
-        // Marker is a single token whose decoded text starts with `"` (a JSON
-        // signature-valid byte). The JSON probe holds the leading `{`, the
-        // marker matches at the next token, the section transitions to ToolCall,
-        // the JSON probe abandons. The leading `{` releases as Content; the
-        // marker token releases as a ToolCall boundary (suppressed).
         let markers = markers_with_tool_call_open(vec![token(900)]);
         let mut classifier = synthetic_classifier(markers);
         classifier.section = SampledTokenSection::Content;

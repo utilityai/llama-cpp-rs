@@ -1,14 +1,64 @@
 //! A safe wrapper around `llama_model`.
+
+pub mod add_bos;
+pub mod llama_chat_message;
+pub mod llama_chat_template;
+pub mod llama_lora_adapter;
+pub mod llama_split_mode_parse_error;
+pub mod params;
+pub mod rope_type;
+pub mod split_mode;
+pub mod vocab_type;
+pub mod vocab_type_from_int_error;
+
 use std::ffi::{CStr, CString, c_char};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
+use std::ptr;
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
 use toktrie::ApproximateTokEnv;
 use toktrie::TokRxInfo;
 use toktrie::TokTrie;
+
+use llama_cpp_bindings_types::ParsedChatMessage;
+use llama_cpp_bindings_types::ParsedToolCall;
+use llama_cpp_bindings_types::ReasoningMarkers;
+use llama_cpp_bindings_types::ToolCallArguments;
+use llama_cpp_bindings_types::ToolCallMarkers;
+
+use crate::chat_message_parse_outcome::ChatMessageParseOutcome;
+use crate::ffi_status_to_i32::status_to_i32;
+use crate::llama_backend::LlamaBackend;
+use crate::llama_token_attrs::LlamaTokenAttrs;
+use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
+use crate::raw_chat_message::RawChatMessage;
+use crate::resolved_tool_call_markers::ResolvedToolCallMarkers;
+use crate::sampled_token::SampledToken;
+use crate::sampled_token_classifier::SampledTokenClassifier;
+use crate::streaming_markers::StreamingMarkers;
+use crate::token::LlamaToken;
+use crate::tool_call_format;
+use crate::tool_call_format::ToolCallFormatOutcome;
+use crate::tool_call_template_overrides;
+use crate::{
+    ApplyChatTemplateError, ChatTemplateError, LlamaLoraAdapterInitError, LlamaModelLoadError,
+    MarkerDetectionError, MetaValError, ParseChatMessageError, StringToTokenError,
+    TokenToStringError,
+};
+
+pub use add_bos::AddBos;
+pub use llama_chat_message::LlamaChatMessage;
+pub use llama_chat_template::LlamaChatTemplate;
+pub use llama_lora_adapter::LlamaLoraAdapter;
+pub use rope_type::RopeType;
+pub use vocab_type::VocabType;
+pub use vocab_type_from_int_error::VocabTypeFromIntError;
+
+use params::LlamaModelParams;
 
 fn truncated_buffer_to_string(
     mut buffer: Vec<u8>,
@@ -28,53 +78,6 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
     let len = validate_string_length_for_tokenizer(c_string.as_bytes().len())?;
     Ok((c_string, len))
 }
-use std::ptr::{self, NonNull};
-
-use crate::chat_message_parse_outcome::ChatMessageParseOutcome;
-use crate::ffi_status_to_i32::status_to_i32;
-use crate::llama_backend::LlamaBackend;
-use crate::llama_token_attrs::LlamaTokenAttrs;
-use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
-use crate::raw_chat_message::RawChatMessage;
-use crate::resolved_tool_call_markers::ResolvedToolCallMarkers;
-use crate::sampled_token::SampledToken;
-use crate::sampled_token_classifier::SampledTokenClassifier;
-use crate::sampled_token_classifier::StreamingMarkers;
-use crate::token::LlamaToken;
-use crate::{
-    ApplyChatTemplateError, ChatTemplateError, LlamaLoraAdapterInitError, LlamaModelLoadError,
-    MarkerDetectionError, MetaValError, ParseChatMessageError, StringToTokenError,
-    TokenToStringError,
-};
-use llama_cpp_bindings_types::ParsedChatMessage;
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ReasoningMarkers;
-use llama_cpp_bindings_types::ToolCallArguments;
-use llama_cpp_bindings_types::ToolCallMarkers;
-
-use crate::tool_call_format;
-use crate::tool_call_format::ToolCallFormatOutcome;
-use crate::tool_call_template_overrides;
-
-pub mod add_bos;
-pub mod llama_chat_message;
-pub mod llama_chat_template;
-pub mod llama_lora_adapter;
-pub mod params;
-pub mod rope_type;
-pub mod split_mode;
-pub mod vocab_type;
-pub mod vocab_type_from_int_error;
-
-pub use add_bos::AddBos;
-pub use llama_chat_message::LlamaChatMessage;
-pub use llama_chat_template::LlamaChatTemplate;
-pub use llama_lora_adapter::LlamaLoraAdapter;
-pub use rope_type::RopeType;
-pub use vocab_type::VocabType;
-pub use vocab_type_from_int_error::VocabTypeFromIntError;
-
-use params::LlamaModelParams;
 
 /// A safe wrapper around `llama_model`.
 pub struct LlamaModel {
@@ -559,7 +562,6 @@ impl LlamaModel {
     /// # Panics
     ///
     /// Panics if a valid UTF-8 path somehow contains interior null bytes (should never happen).
-    #[tracing::instrument(skip_all, fields(params))]
     pub fn load_from_file(
         _: &LlamaBackend,
         path: impl AsRef<Path>,
@@ -644,7 +646,6 @@ impl LlamaModel {
     ///
     /// # Errors
     /// There are many ways this can fail. See [`ApplyChatTemplateError`] for more information.
-    #[tracing::instrument(skip_all)]
     pub fn apply_chat_template(
         &self,
         tmpl: &LlamaChatTemplate,
@@ -720,8 +721,8 @@ impl LlamaModel {
         let markers = match self.streaming_markers() {
             Ok(markers) => markers,
             Err(detection_error) => {
-                tracing::warn!(
-                    "streaming markers detection failed; classifier will run blind: {detection_error}"
+                log::warn!(
+                    "streaming markers detection failed; classifier will run blind: {detection_error}",
                 );
                 StreamingMarkers::default()
             }
@@ -843,8 +844,8 @@ impl LlamaModel {
         let template = match self.chat_template(None) {
             Ok(template) => template,
             Err(error) => {
-                tracing::debug!(
-                    "tool-call markers unavailable: chat template missing or invalid: {error}"
+                log::debug!(
+                    "tool-call markers unavailable: chat template missing or invalid: {error}",
                 );
                 return None;
             }
@@ -852,8 +853,8 @@ impl LlamaModel {
         let template_str = match template.to_str() {
             Ok(template_str) => template_str,
             Err(error) => {
-                tracing::debug!(
-                    "tool-call markers unavailable: chat template is not valid UTF-8: {error}"
+                log::debug!(
+                    "tool-call markers unavailable: chat template is not valid UTF-8: {error}",
                 );
                 return None;
             }
@@ -870,8 +871,8 @@ impl LlamaModel {
             Ok(tokens) if !tokens.is_empty() => Some(tokens),
             Ok(_) => None,
             Err(tokenize_error) => {
-                tracing::debug!(
-                    "marker {marker:?} failed to tokenise; classifier will ignore it: {tokenize_error}"
+                log::debug!(
+                    "marker {marker:?} failed to tokenise; classifier will ignore it: {tokenize_error}",
                 );
                 None
             }

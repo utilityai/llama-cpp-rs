@@ -2,8 +2,8 @@ use anyhow::Result;
 use llama_cpp_bindings::SampledToken;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
-use llama_cpp_bindings::sampled_token_classifier::SampledTokenSection;
-use llama_cpp_bindings::sampled_token_classifier::StreamingMarkers;
+use llama_cpp_bindings::sampled_token_section::SampledTokenSection;
+use llama_cpp_bindings::streaming_markers::StreamingMarkers;
 use llama_cpp_bindings_tests::FixtureSession;
 
 #[test]

@@ -3,9 +3,9 @@ use std::ptr::NonNull;
 use crate::context::LlamaContext;
 
 use super::mtmd_context::MtmdContext;
-use super::mtmd_error::MtmdEvalError;
-use super::mtmd_error::MtmdInputChunksError;
+use super::mtmd_eval_error::MtmdEvalError;
 use super::mtmd_input_chunk::MtmdInputChunk;
+use super::mtmd_input_chunks_error::MtmdInputChunksError;
 
 const fn check_eval_result(result: i32) -> Result<(), MtmdEvalError> {
     if result == 0 {

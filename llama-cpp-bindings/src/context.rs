@@ -39,10 +39,14 @@ const fn check_lora_remove_result(err_code: i32) -> Result<(), LlamaLoraAdapterR
 }
 
 pub mod kv_cache;
+pub mod kv_cache_type;
+pub mod llama_attention_type;
+pub mod llama_pooling_type;
 pub mod llama_state_seq_flags;
 pub mod load_seq_state_error;
 pub mod load_session_error;
 pub mod params;
+pub mod rope_scaling_type;
 pub mod save_seq_state_error;
 pub mod save_session_error;
 pub mod session;
@@ -465,7 +469,7 @@ impl<'model> LlamaContext<'model> {
         };
         check_lora_set_result(err_code)?;
 
-        tracing::debug!("Set lora adapter");
+        log::debug!("Set lora adapter");
         Ok(())
     }
 
@@ -491,7 +495,7 @@ impl<'model> LlamaContext<'model> {
         };
         check_lora_remove_result(err_code)?;
 
-        tracing::debug!("Remove lora adapter");
+        log::debug!("Remove lora adapter");
         Ok(())
     }
 }

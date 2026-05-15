@@ -1,9 +1,9 @@
 //! Key-value overrides for a model.
 
-use crate::model::params::LlamaModelParams;
-use crate::model::params::param_override_value::ParamOverrideValue;
-use std::ffi::{CStr, CString};
 use std::fmt::Debug;
+
+use crate::model::params::LlamaModelParams;
+use crate::model::params::kv_override_value_iterator::KvOverrideValueIterator;
 
 /// A struct implementing [`IntoIterator`] over the key-value overrides for a model.
 #[derive(Debug)]
@@ -20,52 +20,11 @@ impl KvOverrides<'_> {
 }
 
 impl<'model_params> IntoIterator for KvOverrides<'model_params> {
-    type Item = (CString, ParamOverrideValue);
+    type Item = <KvOverrideValueIterator<'model_params> as Iterator>::Item;
     type IntoIter = KvOverrideValueIterator<'model_params>;
 
     fn into_iter(self) -> Self::IntoIter {
-        KvOverrideValueIterator {
-            model_params: self.model_params,
-            current: 0,
-        }
-    }
-}
-
-/// An iterator over the key-value overrides for a model.
-#[derive(Debug)]
-pub struct KvOverrideValueIterator<'model_params> {
-    model_params: &'model_params LlamaModelParams,
-    current: usize,
-}
-
-impl Iterator for KvOverrideValueIterator<'_> {
-    type Item = (CString, ParamOverrideValue);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let overrides = self.model_params.params.kv_overrides;
-
-        if overrides.is_null() {
-            return None;
-        }
-
-        loop {
-            // SAFETY: llama.cpp guarantees the last element contains an empty key.
-            // We've checked the previous one in the last iteration, the next one
-            // should be valid or 0 (and thus safe to deref).
-            let current = unsafe { *overrides.add(self.current) };
-
-            if current.key[0] == 0 {
-                return None;
-            }
-
-            self.current += 1;
-
-            if let Ok(value) = ParamOverrideValue::try_from(&current) {
-                let key = unsafe { CStr::from_ptr(current.key.as_ptr()).to_owned() };
-
-                return Some((key, value));
-            }
-        }
+        KvOverrideValueIterator::new(self.model_params)
     }
 }
 

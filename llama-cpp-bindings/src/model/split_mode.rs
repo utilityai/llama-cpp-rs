@@ -1,3 +1,5 @@
+use crate::model::llama_split_mode_parse_error::LlamaSplitModeParseError;
+
 /// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -32,15 +34,6 @@ const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_ROW as
     reason = "the C API split mode constants are known small values that fit in i8"
 )]
 const LLAMA_SPLIT_MODE_TENSOR: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_TENSOR as i8;
-
-/// An error that occurs when unknown split mode is encountered.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LlamaSplitModeParseError {
-    /// The value that could not be parsed as a split mode.
-    pub value: i32,
-    /// Additional context about why the parse failed.
-    pub context: String,
-}
 
 /// Create a `LlamaSplitMode` from a `i32`.
 ///

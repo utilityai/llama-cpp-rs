@@ -1,7 +1,4 @@
-/// Error when converting from an unknown MTMD input chunk type value.
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
-#[error("Unknown MTMD input chunk type: {0}")]
-pub struct MtmdInputChunkTypeError(pub llama_cpp_bindings_sys::mtmd_input_chunk_type);
+use crate::mtmd::mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 
 /// Input chunk types for multimodal data
 ///
@@ -48,7 +45,7 @@ impl TryFrom<llama_cpp_bindings_sys::mtmd_input_chunk_type> for MtmdInputChunkTy
 #[cfg(test)]
 mod tests {
     use super::MtmdInputChunkType;
-    use super::MtmdInputChunkTypeError;
+    use crate::mtmd::mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 
     #[test]
     fn text_variant_converts_from_raw() {

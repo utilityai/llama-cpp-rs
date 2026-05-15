@@ -5,10 +5,12 @@ use crate::model::LlamaModel;
 
 use super::mtmd_bitmap::MtmdBitmap;
 use super::mtmd_context_params::MtmdContextParams;
-use super::mtmd_error::{MtmdEncodeError, MtmdInitError, MtmdTokenizeError};
+use super::mtmd_encode_error::MtmdEncodeError;
+use super::mtmd_init_error::MtmdInitError;
 use super::mtmd_input_chunk::MtmdInputChunk;
 use super::mtmd_input_chunks::MtmdInputChunks;
 use super::mtmd_input_text::MtmdInputText;
+use super::mtmd_tokenize_error::MtmdTokenizeError;
 
 const fn tokenize_result_to_error(result: i32) -> MtmdTokenizeError {
     match result {
