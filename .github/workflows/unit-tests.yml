@@ -9,7 +9,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  fmt:
+  formatting:
     name: formatting
     runs-on: ubuntu-latest
     steps:
@@ -17,25 +17,29 @@ jobs:
         with:
           submodules: recursive
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/install-rust-toolchain
 
       - run: make fmt.check
 
   test:
-    name: tests
-    runs-on: ubuntu-latest
+    name: tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    env:
+      LLAMA_DISABLE_CCACHE: '1'
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake libclang-dev
+      - uses: ./.github/actions/install-build-dependencies
 
-      - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: ./.github/actions/install-rust-toolchain
 
       - run: make test.unit
