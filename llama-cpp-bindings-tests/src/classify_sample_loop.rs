@@ -1,9 +1,9 @@
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
+use llama_cpp_bindings::ingest_outcome::IngestOutcome;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampled_token::SampledToken;
-use llama_cpp_bindings::sampled_token_classifier::IngestOutcome;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
 use llama_cpp_bindings::sampling::LlamaSampler;
 

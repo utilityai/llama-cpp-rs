@@ -6,6 +6,7 @@ members = [
   "llama-cpp-bindings-types",
   "llama-cpp-bindings",
   "llama-cpp-bindings-tests",
+  "llama-cpp-log-decoder",
 ]
 
 [workspace.package]
@@ -28,14 +29,13 @@ llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.6.0" }
 llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.6.0" }
 llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.6.0" }
 llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.6.0" }
+llama-cpp-log-decoder = { path = "llama-cpp-log-decoder", version = "=0.6.0" }
 llguidance = "=1.7.0"
+log = "=0.4.29"
 nom = "=8.0.0"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 serial_test = "=3.4.0"
 thiserror = "=2.0.18"
 toktrie = "=1.7.0"
-tracing = "=0.1.44"
-tracing-core = "=0.1.36"
-tracing-subscriber = { version = "=0.3.23", features = ["json"] }
 walkdir = "=2.5.0"

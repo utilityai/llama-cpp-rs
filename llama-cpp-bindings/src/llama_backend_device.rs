@@ -1,35 +1,8 @@
 use std::ffi::c_char;
 
-/// Backend device type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LlamaBackendDeviceType {
-    /// CPU device
-    Cpu,
-    /// ACCEL device
-    Accelerator,
-    /// GPU device
-    Gpu,
-    /// iGPU device
-    IntegratedGpu,
-    /// Unknown device type
-    Unknown,
-}
+use crate::llama_backend_device_type::device_type_from_raw;
 
-const fn device_type_from_raw(
-    raw_type: llama_cpp_bindings_sys::ggml_backend_dev_type,
-) -> LlamaBackendDeviceType {
-    match raw_type {
-        llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_CPU => LlamaBackendDeviceType::Cpu,
-        llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_ACCEL => {
-            LlamaBackendDeviceType::Accelerator
-        }
-        llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_GPU => LlamaBackendDeviceType::Gpu,
-        llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_IGPU => {
-            LlamaBackendDeviceType::IntegratedGpu
-        }
-        _ => LlamaBackendDeviceType::Unknown,
-    }
-}
+pub use crate::llama_backend_device_type::LlamaBackendDeviceType;
 
 /// A ggml backend device
 ///
@@ -126,29 +99,5 @@ mod tests {
         assert!(!devices.is_empty());
         assert_eq!(devices[0].index, 0);
         assert!(!devices[0].name.is_empty());
-    }
-
-    #[test]
-    fn device_type_from_raw_all_variants() {
-        use super::LlamaBackendDeviceType;
-        use super::device_type_from_raw;
-
-        assert_eq!(
-            device_type_from_raw(llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_CPU),
-            LlamaBackendDeviceType::Cpu
-        );
-        assert_eq!(
-            device_type_from_raw(llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_ACCEL),
-            LlamaBackendDeviceType::Accelerator
-        );
-        assert_eq!(
-            device_type_from_raw(llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_GPU),
-            LlamaBackendDeviceType::Gpu
-        );
-        assert_eq!(
-            device_type_from_raw(llama_cpp_bindings_sys::GGML_BACKEND_DEVICE_TYPE_IGPU),
-            LlamaBackendDeviceType::IntegratedGpu
-        );
-        assert_eq!(device_type_from_raw(9999), LlamaBackendDeviceType::Unknown);
     }
 }

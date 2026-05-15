@@ -45,7 +45,6 @@ impl LlamaBackend {
     /// ```
     /// # Errors
     /// Returns an error if the backend was already initialized.
-    #[tracing::instrument(skip_all)]
     pub fn init() -> crate::Result<Self> {
         Self::mark_init()?;
         unsafe { llama_cpp_bindings_sys::llama_backend_init() }
@@ -67,7 +66,6 @@ impl LlamaBackend {
     /// ```
     /// # Errors
     /// Returns an error if the backend was already initialized.
-    #[tracing::instrument(skip_all)]
     pub fn init_numa(strategy: NumaStrategy) -> crate::Result<Self> {
         Self::mark_init()?;
         unsafe {

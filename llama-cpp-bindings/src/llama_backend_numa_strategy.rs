@@ -1,3 +1,5 @@
+use crate::invalid_numa_strategy::InvalidNumaStrategy;
+
 /// NUMA (Non-Uniform Memory Access) thread affinity strategy for llama.cpp.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum NumaStrategy {
@@ -12,13 +14,6 @@ pub enum NumaStrategy {
     /// Mirrors memory across NUMA nodes. Currently a no-op in llama.cpp.
     Mirror,
 }
-
-/// An invalid numa strategy was provided.
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
-pub struct InvalidNumaStrategy(
-    /// The invalid numa strategy that was provided.
-    pub llama_cpp_bindings_sys::ggml_numa_strategy,
-);
 
 impl TryFrom<llama_cpp_bindings_sys::ggml_numa_strategy> for NumaStrategy {
     type Error = InvalidNumaStrategy;
@@ -49,7 +44,8 @@ impl From<NumaStrategy> for llama_cpp_bindings_sys::ggml_numa_strategy {
 
 #[cfg(test)]
 mod tests {
-    use super::{InvalidNumaStrategy, NumaStrategy};
+    use super::NumaStrategy;
+    use crate::invalid_numa_strategy::InvalidNumaStrategy;
 
     #[test]
     fn numa_from_and_to() {

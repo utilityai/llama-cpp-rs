@@ -11,17 +11,16 @@ encoding_rs = { workspace = true }
 enumflags2 = { workspace = true }
 llama-cpp-bindings-sys = { workspace = true }
 llama-cpp-bindings-types = { workspace = true }
+llama-cpp-log-decoder = { workspace = true }
 llguidance = { workspace = true }
+log = { workspace = true }
 nom = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 toktrie = { workspace = true }
-tracing = { workspace = true }
-tracing-core = { workspace = true }
 
 [dev-dependencies]
 serial_test = { workspace = true }
-tracing-subscriber = { workspace = true }
 
 [features]
 default = ["openmp", "android-shared-stdcxx"]
@@ -33,7 +32,6 @@ dynamic-backends = ["dynamic-link", "llama-cpp-bindings-sys/dynamic-backends"]
 vulkan = ["llama-cpp-bindings-sys/vulkan"]
 openmp = ["llama-cpp-bindings-sys/openmp"]
 rocm = ["llama-cpp-bindings-sys/rocm"]
-sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-bindings-sys/shared-stdcxx"]
 android-static-stdcxx = ["llama-cpp-bindings-sys/static-stdcxx"]
@@ -55,6 +53,3 @@ module_name_repetitions = "allow"
 
 # Generated FFI bindings use these patterns
 used_underscore_binding = "allow"
-
-[package.metadata.docs.rs]
-features = ["sampler"]

@@ -8,25 +8,36 @@
 
 pub mod image_chunk_batch_size_mismatch;
 pub mod mtmd_bitmap;
+pub mod mtmd_bitmap_error;
 pub mod mtmd_context;
 pub mod mtmd_context_params;
 pub mod mtmd_default_marker;
-pub mod mtmd_error;
+pub mod mtmd_encode_error;
+pub mod mtmd_eval_error;
+pub mod mtmd_init_error;
 pub mod mtmd_input_chunk;
+pub mod mtmd_input_chunk_error;
 pub mod mtmd_input_chunk_type;
+pub mod mtmd_input_chunk_type_error;
 pub mod mtmd_input_chunks;
+pub mod mtmd_input_chunks_error;
 pub mod mtmd_input_text;
+pub mod mtmd_tokenize_error;
 
 pub use image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
 pub use mtmd_bitmap::MtmdBitmap;
+pub use mtmd_bitmap_error::MtmdBitmapError;
 pub use mtmd_context::MtmdContext;
 pub use mtmd_context_params::MtmdContextParams;
 pub use mtmd_default_marker::mtmd_default_marker;
-pub use mtmd_error::{
-    MtmdBitmapError, MtmdEncodeError, MtmdEvalError, MtmdInitError, MtmdInputChunkError,
-    MtmdInputChunksError, MtmdTokenizeError,
-};
+pub use mtmd_encode_error::MtmdEncodeError;
+pub use mtmd_eval_error::MtmdEvalError;
+pub use mtmd_init_error::MtmdInitError;
 pub use mtmd_input_chunk::MtmdInputChunk;
-pub use mtmd_input_chunk_type::{MtmdInputChunkType, MtmdInputChunkTypeError};
+pub use mtmd_input_chunk_error::MtmdInputChunkError;
+pub use mtmd_input_chunk_type::MtmdInputChunkType;
+pub use mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 pub use mtmd_input_chunks::MtmdInputChunks;
+pub use mtmd_input_chunks_error::MtmdInputChunksError;
 pub use mtmd_input_text::MtmdInputText;
+pub use mtmd_tokenize_error::MtmdTokenizeError;

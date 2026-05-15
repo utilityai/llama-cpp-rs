@@ -1,4 +1,4 @@
-/// Carried by [`super::mtmd_error::MtmdEvalError::ImageChunkExceedsBatchSize`].
+/// Carried by [`super::mtmd_eval_error::MtmdEvalError::ImageChunkExceedsBatchSize`].
 ///
 /// `n_batch` is the per-decode batch budget enforced by `cparams.n_batch` in
 /// llama.cpp; `image_tokens` is the number of tokens this image chunk would

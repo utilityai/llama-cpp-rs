@@ -1,8 +1,12 @@
-FEATURES = sampler
-TEST_FEATURES =
+TEST_DEVICE ?=
 QWEN_CAPABLE_FEATURES = multimodal_capable,mrope_model
-CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- --test-threads=1
-CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --no-fail-fast -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) --features $(QWEN_CAPABLE_FEATURES) -- --test-threads=1
+
+DEVICE_FEATURE = $(if $(TEST_DEVICE),--features $(TEST_DEVICE),)
+LLM_BASE_FEATURE_FLAGS = $(DEVICE_FEATURE)
+LLM_QWEN_CAPABLE_FEATURE_FLAGS = $(DEVICE_FEATURE) --features $(QWEN_CAPABLE_FEATURES)
+
+CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
+CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
 
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
@@ -38,25 +42,40 @@ DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV = \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
 	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
 
-.PHONY: test.unit
-test.unit: clippy
-	cargo test -p llama-cpp-bindings --features $(FEATURES)
+.PHONY: clean.cmake
+clean.cmake:
+	rm -rf target/llama-cpp-cmake-build
+
+.PHONY: clippy
+clippy: clippy.core clippy.tests.base clippy.tests.qwen_capable
+
+.PHONY: clippy.core
+clippy.core:
+	cargo clippy --all-targets -p llama-cpp-log-decoder -- -D warnings
+	cargo clippy --all-targets -p llama-cpp-bindings $(DEVICE_FEATURE) -- -D warnings
+
+.PHONY: clippy.tests.base
+clippy.tests.base:
+	cargo clippy --all-targets -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- -D warnings
+
+.PHONY: clippy.tests.qwen_capable
+clippy.tests.qwen_capable:
+	cargo clippy --all-targets -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- -D warnings
+
+.PHONY: fmt
+fmt:
+	cargo fmt --all --check
+
+.PHONY: test
+test: test.unit test.llms
 
 .PHONY: test.deepseek_r1_distill_llama_8b
-test.deepseek_r1_distill_llama_8b: clippy
+test.deepseek_r1_distill_llama_8b: clippy.core clippy.tests.base
 	$(DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
 
 .PHONY: test.glm4_7_flash
-test.glm4_7_flash: clippy
+test.glm4_7_flash: clippy.core clippy.tests.base
 	$(GLM4_7_FLASH_ENV) cargo test $(CARGO_TEST_LLM_FLAGS)
-
-.PHONY: test.qwen3.5_0.8B
-test.qwen3.5_0.8B: clippy
-	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
-
-.PHONY: test.qwen3.6_35b_a3b
-test.qwen3.6_35b_a3b: clippy
-	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
 .PHONY: test.llms
 test.llms: \
@@ -65,18 +84,15 @@ test.llms: \
 	test.qwen3.5_0.8B \
 	test.qwen3.6_35b_a3b
 
-.PHONY: test
-test: test.unit test.llms
+.PHONY: test.qwen3.5_0.8B
+test.qwen3.5_0.8B: clippy.core clippy.tests.qwen_capable
+	$(QWEN3_5_0_8B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
-.PHONY: fmt
-fmt:
-	cargo fmt --all --check
+.PHONY: test.qwen3.6_35b_a3b
+test.qwen3.6_35b_a3b: clippy.core clippy.tests.qwen_capable
+	$(QWEN3_6_35B_A3B_ENV) cargo test $(CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE)
 
-.PHONY: clippy
-clippy:
-	cargo clippy --all-targets -p llama-cpp-bindings --features $(FEATURES) -- -D warnings
-	cargo clippy --all-targets -p llama-cpp-bindings-tests $(if $(TEST_FEATURES),--features $(TEST_FEATURES),) -- -D warnings
-
-.PHONY: clean.cmake
-clean.cmake:
-	rm -rf target/llama-cpp-cmake-build
+.PHONY: test.unit
+test.unit: clippy.core
+	cargo test -p llama-cpp-log-decoder
+	cargo test -p llama-cpp-bindings $(DEVICE_FEATURE)

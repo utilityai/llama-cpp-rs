@@ -96,7 +96,7 @@ fn require_backend(
 #[cfg(test)]
 mod tests {
     use llama_cpp_bindings::llama_backend_device::LlamaBackendDevice;
-    use llama_cpp_bindings::llama_backend_device::LlamaBackendDeviceType;
+    use llama_cpp_bindings::llama_backend_device_type::LlamaBackendDeviceType;
 
     use super::require_backend;
 

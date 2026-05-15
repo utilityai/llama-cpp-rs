@@ -7,9 +7,10 @@ use crate::token::LlamaToken;
 
 use super::image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
 use super::mtmd_context::MtmdContext;
-use super::mtmd_error::MtmdEvalError;
-use super::mtmd_error::MtmdInputChunkError;
-use super::mtmd_input_chunk_type::{MtmdInputChunkType, MtmdInputChunkTypeError};
+use super::mtmd_eval_error::MtmdEvalError;
+use super::mtmd_input_chunk_error::MtmdInputChunkError;
+use super::mtmd_input_chunk_type::MtmdInputChunkType;
+use super::mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 
 /// # Safety
 ///
