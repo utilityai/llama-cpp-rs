@@ -936,12 +936,12 @@ impl LlamaModel {
                 synthesize_missing_tool_call_ids(&mut parsed.tool_calls);
                 Ok(ChatMessageParseOutcome::Recognized(parsed))
             }
-            Err(ParseChatMessageError::ParseException(ffi_error_message)) => {
+            Err(ParseChatMessageError::ParseException { message }) => {
                 Ok(ChatMessageParseOutcome::Unrecognized(RawChatMessage {
                     tools_json: tools_json.to_owned(),
                     text: input.to_owned(),
                     is_partial,
-                    ffi_error_message,
+                    ffi_error_message: message,
                 }))
             }
             Err(other) => Err(other),
@@ -974,18 +974,70 @@ impl LlamaModel {
         };
 
         let parsed = match status {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => collect_parsed_chat_message(handle),
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
-                let message = read_optional_owned_cstr_lossy(out_error);
-                Err(ParseChatMessageError::ParseException(message))
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_OK => {
+                collect_parsed_chat_message(handle)
             }
-            other => Err(ParseChatMessageError::FfiError(status_to_i32(other))),
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_MODEL_ARG => {
+                Err(ParseChatMessageError::ParseNullModelArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_INPUT_ARG => {
+                Err(ParseChatMessageError::ParseNullInputArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_HANDLE_ARG => {
+                Err(ParseChatMessageError::ParseNullOutHandleArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_ERROR_ARG => {
+                Err(ParseChatMessageError::ParseNullOutErrorArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE => {
+                Err(ParseChatMessageError::ParseModelHasNoChatTemplate)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB => {
+                Err(ParseChatMessageError::ParseModelHasNoVocab)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(ParseChatMessageError::ParseErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                out_error = ptr::null_mut();
+                Err(ParseChatMessageError::ParseException { message })
+            }
+            other => unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}"),
         };
 
-        unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle) };
-        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-
-        parsed
+        let mut free_error: *mut c_char = ptr::null_mut();
+        let free_status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle, &raw mut free_error)
+        };
+        match (parsed, free_status) {
+            (Ok(value), llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_OK) => {
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+                Ok(value)
+            }
+            (Ok(_), llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_DESTRUCTOR_THREW_CXX_EXCEPTION) => {
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+                let message = unsafe {
+                    crate::ffi_error_reader::read_and_free_cpp_error(free_error)
+                };
+                Err(ParseChatMessageError::FreeDestructorThrewCxxException { message })
+            }
+            (Ok(_), llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_ERROR_STRING_ALLOCATION_FAILED) => {
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+                Err(ParseChatMessageError::FreeErrorStringAllocationFailed)
+            }
+            (Ok(_), other) => {
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(free_error) };
+                unreachable!("llama_rs_parsed_chat_free returned unrecognized status {other}")
+            }
+            (Err(parse_err), _) => {
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+                unsafe { llama_cpp_bindings_sys::llama_rs_string_free(free_error) };
+                Err(parse_err)
+            }
+        }
     }
 
     /// Render the model's chat template with the autoparser's synthetic
@@ -1071,26 +1123,15 @@ fn collect_parsed_chat_message(
         return Ok(ParsedChatMessage::default());
     }
 
-    let content = read_owned_cstr_for_parse(unsafe {
-        llama_cpp_bindings_sys::llama_rs_parsed_chat_content(handle)
-    })?;
-    let reasoning_content = read_owned_cstr_for_parse(unsafe {
-        llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content(handle)
-    })?;
-
-    let count = unsafe { llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(handle) };
+    let content = read_parsed_chat_content(handle)?;
+    let reasoning_content = read_parsed_chat_reasoning_content(handle)?;
+    let count = read_parsed_chat_tool_call_count(handle)?;
 
     let mut tool_calls = Vec::with_capacity(count);
     for index in 0..count {
-        let id = read_owned_cstr_for_parse(unsafe {
-            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_id(handle, index)
-        })?;
-        let name = read_owned_cstr_for_parse(unsafe {
-            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_name(handle, index)
-        })?;
-        let arguments_json = read_owned_cstr_for_parse(unsafe {
-            llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments(handle, index)
-        })?;
+        let id = read_parsed_chat_tool_call_id(handle, index)?;
+        let name = read_parsed_chat_tool_call_name(handle, index)?;
+        let arguments_json = read_parsed_chat_tool_call_arguments(handle, index)?;
 
         let arguments = ToolCallArguments::from_string(arguments_json);
         tool_calls.push(ParsedToolCall::new(id, name, arguments));
@@ -1101,6 +1142,260 @@ fn collect_parsed_chat_message(
         reasoning_content,
         tool_calls,
     ))
+}
+
+fn read_parsed_chat_content(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+) -> Result<String, ParseChatMessageError> {
+    let mut out_string: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_content(
+            handle,
+            &raw mut out_string,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_OK => {
+            consume_accessor_string(out_string)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ContentNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_NULL_OUT_STRING_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_content reported null out_string while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ContentErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ContentThrewCxxException { message })
+        }
+        other => unreachable!("llama_rs_parsed_chat_content returned unrecognized status {other}"),
+    }
+}
+
+fn read_parsed_chat_reasoning_content(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+) -> Result<String, ParseChatMessageError> {
+    let mut out_string: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content(
+            handle,
+            &raw mut out_string,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_OK => {
+            consume_accessor_string(out_string)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ReasoningContentNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_OUT_STRING_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_reasoning_content reported null out_string while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ReasoningContentErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ReasoningContentThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_parsed_chat_reasoning_content returned unrecognized status {other}"
+        ),
+    }
+}
+
+fn read_parsed_chat_tool_call_count(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+) -> Result<usize, ParseChatMessageError> {
+    let mut out_count: usize = 0;
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count(
+            handle,
+            &raw mut out_count,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_OK => Ok(out_count),
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ToolCallCountNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_OUT_COUNT_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_tool_call_count reported null out_count while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ToolCallCountErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ToolCallCountThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_parsed_chat_tool_call_count returned unrecognized status {other}"
+        ),
+    }
+}
+
+fn read_parsed_chat_tool_call_id(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+    index: usize,
+) -> Result<String, ParseChatMessageError> {
+    let mut out_string: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_id(
+            handle,
+            index,
+            &raw mut out_string,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_OK => {
+            consume_accessor_string(out_string)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ToolCallIdNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_OUT_STRING_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_tool_call_id reported null out_string while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_INDEX_OUT_OF_BOUNDS => {
+            Err(ParseChatMessageError::ToolCallIdIndexOutOfBounds { index })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ToolCallIdErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ToolCallIdThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_parsed_chat_tool_call_id returned unrecognized status {other}"
+        ),
+    }
+}
+
+fn read_parsed_chat_tool_call_name(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+    index: usize,
+) -> Result<String, ParseChatMessageError> {
+    let mut out_string: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_name(
+            handle,
+            index,
+            &raw mut out_string,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_OK => {
+            consume_accessor_string(out_string)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ToolCallNameNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_OUT_STRING_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_tool_call_name reported null out_string while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_INDEX_OUT_OF_BOUNDS => {
+            Err(ParseChatMessageError::ToolCallNameIndexOutOfBounds { index })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ToolCallNameErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ToolCallNameThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_parsed_chat_tool_call_name returned unrecognized status {other}"
+        ),
+    }
+}
+
+fn read_parsed_chat_tool_call_arguments(
+    handle: *mut llama_cpp_bindings_sys::llama_rs_parsed_chat,
+    index: usize,
+) -> Result<String, ParseChatMessageError> {
+    let mut out_string: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments(
+            handle,
+            index,
+            &raw mut out_string,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_OK => {
+            consume_accessor_string(out_string)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_HANDLE_ARG => {
+            Err(ParseChatMessageError::ToolCallArgumentsNullHandleArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_OUT_STRING_ARG => {
+            unreachable!(
+                "llama_rs_parsed_chat_tool_call_arguments reported null out_string while we passed a valid pointer"
+            )
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_INDEX_OUT_OF_BOUNDS => {
+            Err(ParseChatMessageError::ToolCallArgumentsIndexOutOfBounds { index })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_ERROR_STRING_ALLOCATION_FAILED => {
+            unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+            Err(ParseChatMessageError::ToolCallArgumentsErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_VENDORED_THREW_CXX_EXCEPTION => {
+            let message =
+                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(ParseChatMessageError::ToolCallArgumentsThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_parsed_chat_tool_call_arguments returned unrecognized status {other}"
+        ),
+    }
+}
+
+fn consume_accessor_string(ptr: *mut c_char) -> Result<String, ParseChatMessageError> {
+    if ptr.is_null() {
+        return Ok(String::new());
+    }
+    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(ptr) };
+    Ok(String::from_utf8(bytes)?)
 }
 
 struct ReasoningSplit {
@@ -1228,17 +1523,6 @@ where
     unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
 
     parsed
-}
-
-fn read_owned_cstr_for_parse(ptr: *mut c_char) -> Result<String, ParseChatMessageError> {
-    if ptr.is_null() {
-        return Ok(String::new());
-    }
-
-    let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
-    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(ptr) };
-
-    Ok(String::from_utf8(bytes)?)
 }
 
 fn read_optional_owned_cstr(ptr: *const c_char) -> Result<Option<String>, MarkerDetectionError> {
