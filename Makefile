@@ -5,8 +5,8 @@ DEVICE_FEATURE = $(if $(TEST_DEVICE),--features $(TEST_DEVICE),)
 LLM_BASE_FEATURE_FLAGS = $(DEVICE_FEATURE)
 LLM_QWEN_CAPABLE_FEATURE_FLAGS = $(DEVICE_FEATURE) --features $(QWEN_CAPABLE_FEATURES)
 
-CARGO_TEST_LLM_FLAGS = --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
-CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
+CARGO_TEST_LLM_FLAGS = --release --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
+CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --release --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
 
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
