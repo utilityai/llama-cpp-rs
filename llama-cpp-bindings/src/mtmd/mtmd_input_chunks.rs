@@ -11,7 +11,7 @@ const fn check_eval_result(result: i32) -> Result<(), MtmdEvalError> {
     if result == 0 {
         Ok(())
     } else {
-        Err(MtmdEvalError::EvalFailure(result))
+        Err(MtmdEvalError::VendoredReturnedNonzeroCode { code: result })
     }
 }
 
@@ -174,15 +174,14 @@ mod tests {
 
     #[test]
     fn check_eval_result_error_for_nonzero() {
+        use super::MtmdEvalError;
         use super::check_eval_result;
 
         let result = check_eval_result(7);
 
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Eval failed with code: 7")
-        );
+        assert!(matches!(
+            result,
+            Err(MtmdEvalError::VendoredReturnedNonzeroCode { code: 7 })
+        ));
     }
 }

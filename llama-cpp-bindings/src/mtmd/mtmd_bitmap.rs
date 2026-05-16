@@ -1,6 +1,9 @@
 use std::ffi::{CStr, CString, c_char};
+use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::slice;
+
+use crate::ffi_error_reader::read_and_free_cpp_error;
 
 use super::mtmd_bitmap_error::MtmdBitmapError;
 use super::mtmd_context::MtmdContext;
@@ -104,20 +107,55 @@ impl MtmdBitmap {
     ///
     /// # Errors
     ///
-    /// * `CStringError` - Path contains null bytes
-    /// * `NullResult` - File could not be loaded or processed
+    /// Returns an [`MtmdBitmapError`] variant matching the wrapper's status code.
     pub fn from_file(ctx: &MtmdContext, path: &str) -> Result<Self, MtmdBitmapError> {
         let path_cstr = CString::new(path)?;
-        let bitmap = unsafe {
-            llama_cpp_bindings_sys::mtmd_helper_bitmap_init_from_file(
+        let mut out_bitmap: *mut llama_cpp_bindings_sys::mtmd_bitmap = std::ptr::null_mut();
+        let mut out_error: *mut c_char = std::ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_mtmd_bitmap_init_from_file(
                 ctx.context.as_ptr(),
                 path_cstr.as_ptr(),
+                &raw mut out_bitmap,
+                &raw mut out_error,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-
-        Ok(Self { bitmap })
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_OK => {
+                let bitmap = NonNull::new(out_bitmap).ok_or_else(|| {
+                    MtmdBitmapError::VendoredReturnedNull {
+                        path: PathBuf::from(path),
+                    }
+                })?;
+                Ok(Self { bitmap })
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_CTX_ARG => {
+                Err(MtmdBitmapError::NullCtxArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_FNAME_ARG => {
+                Err(MtmdBitmapError::NullFnameArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_OUT_BITMAP_ARG => {
+                Err(MtmdBitmapError::NullOutBitmapArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
+                Err(MtmdBitmapError::VendoredReturnedNull {
+                    path: PathBuf::from(path),
+                })
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(MtmdBitmapError::ErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { read_and_free_cpp_error(out_error) };
+                Err(MtmdBitmapError::VendoredThrewCxxException { message })
+            }
+            other => unreachable!(
+                "llama_rs_mtmd_bitmap_init_from_file returned unrecognized status: {other}"
+            ),
+        }
     }
 
     /// Create a bitmap from a buffer containing file data.

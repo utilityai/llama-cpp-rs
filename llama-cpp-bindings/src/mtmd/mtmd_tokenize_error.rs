@@ -1,21 +1,27 @@
 use crate::mtmd::mtmd_input_chunks_error::MtmdInputChunksError;
 
-/// Errors that can occur during tokenization
 #[derive(thiserror::Error, Debug)]
 pub enum MtmdTokenizeError {
-    /// Number of bitmaps does not match number of markers in text
-    #[error("Number of bitmaps does not match number of markers")]
-    BitmapCountMismatch,
-    /// Image preprocessing error occurred
-    #[error("Image preprocessing error")]
-    ImagePreprocessingError,
-    /// Failed to create input chunks collection
+    #[error("Failed to create CString from input text: {0}")]
+    CStringError(#[from] std::ffi::NulError),
     #[error("{0}")]
     InputChunksError(#[from] MtmdInputChunksError),
-    /// Text contains characters that cannot be converted to C string
-    #[error("Failed to create CString from text: {0}")]
-    CStringError(#[from] std::ffi::NulError),
-    /// Unknown error occurred during tokenization
-    #[error("Unknown error: {0}")]
-    UnknownError(i32),
+    #[error("Wrapper received a null mtmd-context argument")]
+    NullCtxArg,
+    #[error("Wrapper received a null output-chunks argument")]
+    NullOutputArg,
+    #[error("Wrapper received a null input-text argument")]
+    NullTextArg,
+    #[error("Wrapper received a null bitmaps argument with num_bitmaps > 0")]
+    NullBitmapsArgWhenNumBitmapsNonzero,
+    #[error("mtmd_tokenize reported that the number of bitmaps does not match the number of markers in the text")]
+    BitmapCountDoesNotMatchMarkerCount,
+    #[error("mtmd_tokenize reported an image preprocessing error")]
+    ImagePreprocessingError,
+    #[error("mtmd_tokenize returned an undocumented nonzero code: {code}")]
+    VendoredReturnedUndocumentedNonzeroCode { code: i32 },
+    #[error("Wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("mtmd_tokenize threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }
