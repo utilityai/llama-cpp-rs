@@ -3,10 +3,7 @@ use crate::mtmd::image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
 #[derive(thiserror::Error, Debug)]
 pub enum MtmdEvalError {
     #[error("batch size {requested} exceeds context batch size {context_max}")]
-    BatchSizeExceedsContextLimit {
-        requested: i32,
-        context_max: u32,
-    },
+    BatchSizeExceedsContextLimit { requested: i32, context_max: u32 },
     #[error(
         "image chunk has {} tokens but n_batch is {}",
         .0.image_tokens,

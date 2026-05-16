@@ -49,9 +49,9 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String, JsonSchemaToG
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(JsonSchemaToGrammarError::VendoredThrewCxxException { message })
         }
-        other => unreachable!(
-            "llama_rs_json_schema_to_grammar returned unrecognized status {other}"
-        ),
+        other => {
+            unreachable!("llama_rs_json_schema_to_grammar returned unrecognized status {other}")
+        }
     }
 }
 

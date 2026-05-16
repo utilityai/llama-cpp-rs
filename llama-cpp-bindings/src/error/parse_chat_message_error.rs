@@ -28,7 +28,9 @@ pub enum ParseChatMessageError {
     ToolCallCountNullHandleArg,
     #[error("llama_rs_parsed_chat_tool_call_count threw a C++ exception: {message}")]
     ToolCallCountThrewCxxException { message: String },
-    #[error("llama_rs_parsed_chat_tool_call_count wrapper failed to duplicate the C++ exception string")]
+    #[error(
+        "llama_rs_parsed_chat_tool_call_count wrapper failed to duplicate the C++ exception string"
+    )]
     ToolCallCountErrorStringAllocationFailed,
     #[error("llama_rs_parsed_chat_tool_call_id called with null handle")]
     ToolCallIdNullHandleArg,
@@ -36,7 +38,9 @@ pub enum ParseChatMessageError {
     ToolCallIdIndexOutOfBounds { index: usize },
     #[error("llama_rs_parsed_chat_tool_call_id threw a C++ exception: {message}")]
     ToolCallIdThrewCxxException { message: String },
-    #[error("llama_rs_parsed_chat_tool_call_id wrapper failed to duplicate the C++ exception string")]
+    #[error(
+        "llama_rs_parsed_chat_tool_call_id wrapper failed to duplicate the C++ exception string"
+    )]
     ToolCallIdErrorStringAllocationFailed,
     #[error("llama_rs_parsed_chat_tool_call_name called with null handle")]
     ToolCallNameNullHandleArg,
@@ -44,7 +48,9 @@ pub enum ParseChatMessageError {
     ToolCallNameIndexOutOfBounds { index: usize },
     #[error("llama_rs_parsed_chat_tool_call_name threw a C++ exception: {message}")]
     ToolCallNameThrewCxxException { message: String },
-    #[error("llama_rs_parsed_chat_tool_call_name wrapper failed to duplicate the C++ exception string")]
+    #[error(
+        "llama_rs_parsed_chat_tool_call_name wrapper failed to duplicate the C++ exception string"
+    )]
     ToolCallNameErrorStringAllocationFailed,
     #[error("llama_rs_parsed_chat_tool_call_arguments called with null handle")]
     ToolCallArgumentsNullHandleArg,

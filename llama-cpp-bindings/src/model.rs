@@ -1007,7 +1007,9 @@ impl LlamaModel {
                 out_error = ptr::null_mut();
                 Err(ParseChatMessageError::ParseException { message })
             }
-            other => unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}"),
+            other => {
+                unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}")
+            }
         };
 
         let mut free_error: *mut c_char = ptr::null_mut();
@@ -1019,14 +1021,19 @@ impl LlamaModel {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
                 Ok(value)
             }
-            (Ok(_), llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_DESTRUCTOR_THREW_CXX_EXCEPTION) => {
+            (
+                Ok(_),
+                llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_DESTRUCTOR_THREW_CXX_EXCEPTION,
+            ) => {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-                let message = unsafe {
-                    crate::ffi_error_reader::read_and_free_cpp_error(free_error)
-                };
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(free_error) };
                 Err(ParseChatMessageError::FreeDestructorThrewCxxException { message })
             }
-            (Ok(_), llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_ERROR_STRING_ALLOCATION_FAILED) => {
+            (
+                Ok(_),
+                llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_ERROR_STRING_ALLOCATION_FAILED,
+            ) => {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
                 Err(ParseChatMessageError::FreeErrorStringAllocationFailed)
             }
@@ -1055,7 +1062,8 @@ impl LlamaModel {
     pub fn diagnose_tool_call_synthetic_renders(
         &self,
     ) -> Result<(String, String), MarkerDetectionError> {
-        let (no_tools, with_tools) = invoke_diagnose_tool_call_synthetic_renders(self.model.as_ptr())?;
+        let (no_tools, with_tools) =
+            invoke_diagnose_tool_call_synthetic_renders(self.model.as_ptr())?;
 
         Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
     }
@@ -1168,8 +1176,7 @@ fn read_parsed_chat_content(
             Err(ParseChatMessageError::ContentErrorStringAllocationFailed)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_VENDORED_THREW_CXX_EXCEPTION => {
-            let message =
-                unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(ParseChatMessageError::ContentThrewCxxException { message })
         }
         other => unreachable!("llama_rs_parsed_chat_content returned unrecognized status {other}"),
@@ -1804,4 +1811,3 @@ mod extract_meta_string_tests {
         assert!(result.is_err());
     }
 }
-

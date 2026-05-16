@@ -268,7 +268,8 @@ impl<'model> LlamaContext<'model> {
                 Err(DecodeError::ErrorStringAllocationFailed)
             }
             llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
                 Err(DecodeError::VendoredThrewCxxException { message })
             }
             other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
@@ -297,7 +298,9 @@ impl<'model> LlamaContext<'model> {
                     .clone_from(&batch.initialized_logits);
                 Ok(())
             }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_NULL_CTX_ARG => Err(EncodeError::NullContextArg),
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_NULL_CTX_ARG => {
+                Err(EncodeError::NullContextArg)
+            }
             llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
                 Err(EncodeError::ModelHasNoEncoder)
             }
@@ -313,7 +316,8 @@ impl<'model> LlamaContext<'model> {
                 Err(EncodeError::ErrorStringAllocationFailed)
             }
             llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
                 Err(EncodeError::VendoredThrewCxxException { message })
             }
             other => unreachable!("llama_rs_encode returned unrecognized status {other}"),

@@ -126,11 +126,10 @@ impl MtmdContext {
 
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_OK => {
-                let context = NonNull::new(out_ctx).ok_or_else(|| {
-                    MtmdInitError::VendoredReturnedNull {
+                let context =
+                    NonNull::new(out_ctx).ok_or_else(|| MtmdInitError::VendoredReturnedNull {
                         path: std::path::PathBuf::from(mmproj_path),
-                    }
-                })?;
+                    })?;
                 Ok(Self { context })
             }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_NULL_MMPROJ_PATH_ARG => {
@@ -154,9 +153,9 @@ impl MtmdContext {
                 let message = unsafe { read_and_free_cpp_error(out_error) };
                 Err(MtmdInitError::VendoredThrewCxxException { message })
             }
-            other => unreachable!(
-                "llama_rs_mtmd_init_from_file returned unrecognized status: {other}"
-            ),
+            other => {
+                unreachable!("llama_rs_mtmd_init_from_file returned unrecognized status: {other}")
+            }
         }
     }
 
