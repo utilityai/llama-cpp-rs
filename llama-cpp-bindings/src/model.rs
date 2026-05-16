@@ -218,35 +218,29 @@ impl LlamaModel {
         let (c_string, c_string_len) = cstring_with_validated_len(str)?;
         let buffer_capacity = c_int::try_from(buffer.capacity())?;
 
-        let size = unsafe {
-            llama_cpp_bindings_sys::llama_tokenize(
+        let size = invoke_rs_tokenize(
+            self.vocab_ptr(),
+            c_string.as_ptr(),
+            c_string_len,
+            buffer
+                .as_mut_ptr()
+                .cast::<llama_cpp_bindings_sys::llama_token>(),
+            buffer_capacity,
+            add_bos,
+        )?;
+
+        let size = if size.is_negative() {
+            buffer.reserve_exact(usize::try_from(-size)?);
+            invoke_rs_tokenize(
                 self.vocab_ptr(),
                 c_string.as_ptr(),
                 c_string_len,
                 buffer
                     .as_mut_ptr()
                     .cast::<llama_cpp_bindings_sys::llama_token>(),
-                buffer_capacity,
+                -size,
                 add_bos,
-                true,
-            )
-        };
-
-        let size = if size.is_negative() {
-            buffer.reserve_exact(usize::try_from(-size)?);
-            unsafe {
-                llama_cpp_bindings_sys::llama_tokenize(
-                    self.vocab_ptr(),
-                    c_string.as_ptr(),
-                    c_string_len,
-                    buffer
-                        .as_mut_ptr()
-                        .cast::<llama_cpp_bindings_sys::llama_token>(),
-                    -size,
-                    add_bos,
-                    true,
-                )
-            }
+            )?
         } else {
             size
         };
@@ -577,22 +571,52 @@ impl LlamaModel {
         }
 
         let cstr = CString::new(path_str)?;
-        let llama_model = unsafe {
-            llama_cpp_bindings_sys::llama_load_model_from_file(cstr.as_ptr(), params.params)
+        let mut out_model: *mut llama_cpp_bindings_sys::llama_model = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_load_model_from_file(
+                cstr.as_ptr(),
+                params.params,
+                &raw mut out_model,
+                &raw mut out_error,
+            )
         };
-
-        let model = match NonNull::new(llama_model) {
-            Some(ptr) => ptr,
-            None if !path.exists() => {
-                return Err(LlamaModelLoadError::FileNotFound(path.to_path_buf()));
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_OK => {
+                let model = NonNull::new(out_model)
+                    .ok_or(LlamaModelLoadError::VendoredReturnedNull)?;
+                Ok(Self {
+                    model,
+                    tok_env: OnceLock::new(),
+                })
             }
-            None => return Err(LlamaModelLoadError::NullResult),
-        };
-
-        Ok(Self {
-            model,
-            tok_env: OnceLock::new(),
-        })
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_PATH_ARG => {
+                Err(LlamaModelLoadError::NullPathArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_MODEL_ARG => {
+                Err(LlamaModelLoadError::NullOutModelArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_ERROR_ARG => {
+                Err(LlamaModelLoadError::NullOutErrorArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL => {
+                if path.exists() {
+                    Err(LlamaModelLoadError::VendoredReturnedNull)
+                } else {
+                    Err(LlamaModelLoadError::FileNotFound(path.to_path_buf()))
+                }
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(LlamaModelLoadError::ErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                Err(LlamaModelLoadError::VendoredThrewCxxException { message })
+            }
+            other => unreachable!(
+                "llama_rs_load_model_from_file returned unrecognized status {other}"
+            ),
+        }
     }
 
     /// Initializes a lora adapter from a file.
@@ -1590,6 +1614,54 @@ fn read_optional_owned_cstr(ptr: *const c_char) -> Result<Option<String>, Marker
     let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
 
     Ok(Some(String::from_utf8(bytes)?))
+}
+
+fn invoke_rs_tokenize(
+    vocab: *const llama_cpp_bindings_sys::llama_vocab,
+    text: *const c_char,
+    text_len: c_int,
+    tokens: *mut llama_cpp_bindings_sys::llama_token,
+    n_tokens_max: c_int,
+    add_bos: bool,
+) -> Result<c_int, StringToTokenError> {
+    let mut out_count: i32 = 0;
+    let mut out_error: *mut c_char = ptr::null_mut();
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_tokenize(
+            vocab,
+            text,
+            text_len,
+            tokens,
+            n_tokens_max,
+            add_bos,
+            true,
+            &raw mut out_count,
+            &raw mut out_error,
+        )
+    };
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_OK => Ok(out_count),
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_VOCAB_ARG => {
+            Err(StringToTokenError::NullVocabArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_TEXT_ARG => {
+            Err(StringToTokenError::NullTextArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_OUT_RETURNED_COUNT_ARG => {
+            Err(StringToTokenError::NullOutReturnedCountArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_OUT_ERROR_ARG => {
+            Err(StringToTokenError::NullOutErrorArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(StringToTokenError::ErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(StringToTokenError::VendoredThrewCxxException { message })
+        }
+        other => unreachable!("llama_rs_tokenize returned unrecognized status {other}"),
+    }
 }
 
 fn collect_optional_cstr_pair(

@@ -125,14 +125,49 @@ impl LlamaTokenDataArray {
         result
     }
 
-    /// Modifies the data array by applying a sampler to it
+    /// Modifies the data array by applying a sampler to it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the vendored sampler throws a C++ exception. `llama_sampler_apply` is
+    /// documented to be a pure logit transform and is not expected to throw; if it does
+    /// the failure is propagated as a panic per the crash-fast invariant.
     pub fn apply_sampler(&mut self, sampler: &LlamaSampler) {
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_bindings_sys::llama_sampler_apply(
+                let mut out_error: *mut std::os::raw::c_char = ptr::null_mut();
+                let status = llama_cpp_bindings_sys::llama_rs_sampler_apply(
                     sampler.sampler,
                     c_llama_token_data_array,
+                    &raw mut out_error,
                 );
+                match status {
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_OK => {}
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_SAMPLER_ARG => {
+                        panic!("llama_rs_sampler_apply received null sampler pointer")
+                    }
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_DATA_ARRAY_ARG => {
+                        panic!("llama_rs_sampler_apply received null data array pointer")
+                    }
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_OUT_ERROR_ARG => {
+                        panic!(
+                            "llama_rs_sampler_apply reported null out_error despite valid Rust pointer"
+                        )
+                    }
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED => {
+                        panic!(
+                            "llama_rs_sampler_apply could not allocate a Rust-owned copy of the C++ exception message"
+                        )
+                    }
+                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION => {
+                        let message =
+                            crate::ffi_error_reader::read_and_free_cpp_error(out_error);
+                        panic!("llama_rs_sampler_apply threw a C++ exception: {message}");
+                    }
+                    other => unreachable!(
+                        "llama_rs_sampler_apply returned unrecognized status {other}"
+                    ),
+                }
             });
         }
     }

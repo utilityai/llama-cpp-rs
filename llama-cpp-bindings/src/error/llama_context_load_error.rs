@@ -1,7 +1,15 @@
-/// Failed to Load context
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum LlamaContextLoadError {
-    /// llama.cpp returned null
-    #[error("null reference from llama.cpp")]
-    NullReturn,
+    #[error("llama_rs_new_context_with_model called with null model")]
+    NullModelArg,
+    #[error("llama_rs_new_context_with_model called with null out_ctx")]
+    NullOutCtxArg,
+    #[error("llama_rs_new_context_with_model called with null out_error")]
+    NullOutErrorArg,
+    #[error("llama_rs_new_context_with_model returned null")]
+    VendoredReturnedNull,
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_rs_new_context_with_model threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }

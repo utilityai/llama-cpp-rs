@@ -1,19 +1,24 @@
 use std::ffi::NulError;
 use std::path::PathBuf;
 
-/// An error that can occur when loading a model.
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum LlamaModelLoadError {
-    /// There was a null byte in a provided string and thus it could not be converted to a C string.
     #[error("null byte in string {0}")]
     NullError(#[from] NulError),
-    /// llama.cpp returned a nullptr - this could be many different causes.
-    #[error("null result from llama cpp")]
-    NullResult,
-    /// Failed to convert the path to a rust str. This means the path was not valid unicode
     #[error("failed to convert path {0} to str")]
     PathToStrError(PathBuf),
-    /// The model file does not exist at the given path.
     #[error("model file not found: {0}")]
     FileNotFound(PathBuf),
+    #[error("llama_rs_load_model_from_file called with null path")]
+    NullPathArg,
+    #[error("llama_rs_load_model_from_file called with null out_model")]
+    NullOutModelArg,
+    #[error("llama_rs_load_model_from_file called with null out_error")]
+    NullOutErrorArg,
+    #[error("llama_rs_load_model_from_file returned null (model failed to load)")]
+    VendoredReturnedNull,
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_rs_load_model_from_file threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }

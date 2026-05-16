@@ -1,6 +1,6 @@
 use std::num::NonZeroU16;
 use std::num::NonZeroU32;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use llama_cpp_bindings::ChatTemplateError;
@@ -261,15 +261,15 @@ fn load_model_with_invalid_path_returns_error() {
     let model_params = LlamaModelParams::default();
     let result = LlamaModel::load_from_file(backend, "/nonexistent/model.gguf", &model_params);
 
-    assert_eq!(
+    assert!(matches!(
         result.unwrap_err(),
-        LlamaModelLoadError::FileNotFound(PathBuf::from("/nonexistent/model.gguf"))
-    );
+        LlamaModelLoadError::FileNotFound(path) if path == Path::new("/nonexistent/model.gguf"),
+    ));
 }
 
 #[test]
 #[serial]
-fn load_model_with_invalid_file_content_returns_null_result() -> Result<()> {
+fn load_model_with_invalid_file_content_returns_vendored_returned_null() -> Result<()> {
     let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
@@ -278,7 +278,10 @@ fn load_model_with_invalid_file_content_returns_null_result() -> Result<()> {
 
     let result = LlamaModel::load_from_file(backend, &dummy_path, &model_params);
 
-    assert_eq!(result.unwrap_err(), LlamaModelLoadError::NullResult);
+    assert!(matches!(
+        result.unwrap_err(),
+        LlamaModelLoadError::VendoredReturnedNull,
+    ));
     let _ = std::fs::remove_file(&dummy_path);
 
     Ok(())

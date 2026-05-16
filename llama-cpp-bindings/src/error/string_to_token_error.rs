@@ -1,12 +1,21 @@
 use std::ffi::NulError;
 
-/// Failed to convert a string to a token sequence.
 #[derive(Debug, thiserror::Error)]
 pub enum StringToTokenError {
-    /// the string contained a null byte and thus could not be converted to a c string.
     #[error("{0}")]
     NulError(#[from] NulError),
     #[error("{0}")]
-    /// Failed to convert a provided integer to a [`c_int`].
     CIntConversionError(#[from] std::num::TryFromIntError),
+    #[error("llama_rs_tokenize called with null vocab")]
+    NullVocabArg,
+    #[error("llama_rs_tokenize called with null text")]
+    NullTextArg,
+    #[error("llama_rs_tokenize called with null out_returned_count")]
+    NullOutReturnedCountArg,
+    #[error("llama_rs_tokenize called with null out_error")]
+    NullOutErrorArg,
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_rs_tokenize threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }

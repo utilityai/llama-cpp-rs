@@ -172,6 +172,88 @@ llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
     int d,
     char ** out_error);
 
+typedef enum llama_rs_load_model_from_file_status {
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_OK = 0,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_PATH_ARG,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_MODEL_ARG,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_load_model_from_file_status;
+
+llama_rs_load_model_from_file_status llama_rs_load_model_from_file(
+    const char * path,
+    struct llama_model_params params,
+    struct llama_model ** out_model,
+    char ** out_error);
+
+typedef enum llama_rs_new_context_with_model_status {
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK = 0,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_MODEL_ARG,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_CTX_ARG,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_new_context_with_model_status;
+
+llama_rs_new_context_with_model_status llama_rs_new_context_with_model(
+    struct llama_model * model,
+    struct llama_context_params params,
+    struct llama_context ** out_ctx,
+    char ** out_error);
+
+typedef enum llama_rs_decode_status {
+    LLAMA_RS_DECODE_OK = 0,
+    LLAMA_RS_DECODE_NULL_CTX_ARG,
+    LLAMA_RS_DECODE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE,
+    LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_decode_status;
+
+llama_rs_decode_status llama_rs_decode(
+    struct llama_context * ctx,
+    struct llama_batch batch,
+    int32_t * out_vendored_return_code,
+    char ** out_error);
+
+typedef enum llama_rs_tokenize_status {
+    LLAMA_RS_TOKENIZE_OK = 0,
+    LLAMA_RS_TOKENIZE_NULL_VOCAB_ARG,
+    LLAMA_RS_TOKENIZE_NULL_TEXT_ARG,
+    LLAMA_RS_TOKENIZE_NULL_OUT_RETURNED_COUNT_ARG,
+    LLAMA_RS_TOKENIZE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_tokenize_status;
+
+llama_rs_tokenize_status llama_rs_tokenize(
+    const struct llama_vocab * vocab,
+    const char * text,
+    int32_t text_len,
+    llama_token * tokens,
+    int32_t n_tokens_max,
+    bool add_special,
+    bool parse_special,
+    int32_t * out_returned_count,
+    char ** out_error);
+
+typedef enum llama_rs_sampler_apply_status {
+    LLAMA_RS_SAMPLER_APPLY_OK = 0,
+    LLAMA_RS_SAMPLER_APPLY_NULL_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_APPLY_NULL_DATA_ARRAY_ARG,
+    LLAMA_RS_SAMPLER_APPLY_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_apply_status;
+
+llama_rs_sampler_apply_status llama_rs_sampler_apply(
+    struct llama_sampler * sampler,
+    struct llama_token_data_array * data_array,
+    char ** out_error);
+
 #ifdef __cplusplus
 }
 #endif

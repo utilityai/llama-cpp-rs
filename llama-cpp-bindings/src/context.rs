@@ -111,15 +111,45 @@ impl<'model> LlamaContext<'model> {
         params: LlamaContextParams,
     ) -> Result<Self, LlamaContextLoadError> {
         let context_params = params.context_params;
-        let context = unsafe {
-            llama_cpp_bindings_sys::llama_new_context_with_model(
+        let mut out_ctx: *mut llama_cpp_bindings_sys::llama_context = std::ptr::null_mut();
+        let mut out_error: *mut std::os::raw::c_char = std::ptr::null_mut();
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_new_context_with_model(
                 model.model.as_ptr(),
                 context_params,
+                &raw mut out_ctx,
+                &raw mut out_error,
             )
         };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
-
-        Ok(Self::new(model, context, params.embeddings()))
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK => {
+                let context = NonNull::new(out_ctx)
+                    .ok_or(LlamaContextLoadError::VendoredReturnedNull)?;
+                Ok(Self::new(model, context, params.embeddings()))
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_MODEL_ARG => {
+                Err(LlamaContextLoadError::NullModelArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_CTX_ARG => {
+                Err(LlamaContextLoadError::NullOutCtxArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_ERROR_ARG => {
+                Err(LlamaContextLoadError::NullOutErrorArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL => {
+                Err(LlamaContextLoadError::VendoredReturnedNull)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(LlamaContextLoadError::ErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                Err(LlamaContextLoadError::VendoredThrewCxxException { message })
+            }
+            other => unreachable!(
+                "llama_rs_new_context_with_model returned unrecognized status {other}"
+            ),
+        }
     }
 
     /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to [`Self::n_ubatch`].
@@ -203,22 +233,45 @@ impl<'model> LlamaContext<'model> {
     /// # Errors
     ///
     /// - `DecodeError` if the decoding failed.
-    ///
-    /// # Panics
-    ///
-    /// - the returned [`std::ffi::c_int`] from llama-cpp does not fit into a i32 (this should never happen on most systems)
     pub fn decode(&mut self, batch: &mut LlamaBatch) -> Result<(), DecodeError> {
-        let result = unsafe {
-            llama_cpp_bindings_sys::llama_decode(self.context.as_ptr(), batch.llama_batch)
+        let mut out_vendored_return_code: i32 = 0;
+        let mut out_error: *mut std::os::raw::c_char = std::ptr::null_mut();
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_decode(
+                self.context.as_ptr(),
+                batch.llama_batch,
+                &raw mut out_vendored_return_code,
+                &raw mut out_error,
+            )
         };
-
-        match NonZeroI32::new(result) {
-            None => {
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_OK => {
                 self.initialized_logits
                     .clone_from(&batch.initialized_logits);
                 Ok(())
             }
-            Some(error) => Err(DecodeError::from(error)),
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_NULL_CTX_ARG => {
+                Err(DecodeError::NullContextArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_NULL_OUT_ERROR_ARG => {
+                Err(DecodeError::NullOutErrorArg)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE => {
+                let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
+                    unreachable!(
+                        "llama_rs_decode reported a nonzero return code but the value was zero"
+                    )
+                });
+                Err(DecodeError::from(code))
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(DecodeError::ErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                Err(DecodeError::VendoredThrewCxxException { message })
+            }
+            other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
         }
     }
 
