@@ -1004,7 +1004,7 @@ mod tests {
     #[test]
     fn check_sampler_accept_status_ok() {
         let result = super::check_sampler_accept_status(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_OK,
             std::ptr::null_mut(),
         );
 
