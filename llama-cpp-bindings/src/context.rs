@@ -226,34 +226,44 @@ impl<'model> LlamaContext<'model> {
     ///
     /// # Errors
     ///
-    /// - `EncodeError` if the decoding failed.
-    ///
-    /// # Panics
-    ///
-    /// - the returned [`std::ffi::c_int`] from llama-cpp does not fit into a i32 (this should never happen on most systems)
+    /// - `EncodeError` if the encoding failed.
     pub fn encode(&mut self, batch: &mut LlamaBatch) -> Result<(), EncodeError> {
+        let mut out_vendored_return_code: i32 = 0;
+        let mut out_error: *mut std::os::raw::c_char = std::ptr::null_mut();
         let status = unsafe {
-            llama_cpp_bindings_sys::llama_rs_encode(self.context.as_ptr(), batch.llama_batch)
+            llama_cpp_bindings_sys::llama_rs_encode(
+                self.context.as_ptr(),
+                batch.llama_batch,
+                &raw mut out_vendored_return_code,
+                &raw mut out_error,
+            )
         };
-
-        self.handle_encode_result(status, batch)
-    }
-
-    fn handle_encode_result(
-        &mut self,
-        status: llama_cpp_bindings_sys::llama_rs_status,
-        batch: &mut LlamaBatch,
-    ) -> Result<(), EncodeError> {
-        if crate::status_is_ok(status) {
-            self.initialized_logits
-                .clone_from(&batch.initialized_logits);
-
-            Ok(())
-        } else {
-            Err(EncodeError::from(
-                NonZeroI32::new(crate::status_to_i32(status))
-                    .unwrap_or(NonZeroI32::new(1).expect("1 is non-zero")),
-            ))
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OK => {
+                self.initialized_logits
+                    .clone_from(&batch.initialized_logits);
+                Ok(())
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_NULL_CTX_ARG => Err(EncodeError::NullContextArg),
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
+                Err(EncodeError::ModelHasNoEncoder)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE => {
+                let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
+                    unreachable!(
+                        "llama_rs_encode reported a nonzero return code but the value was zero"
+                    )
+                });
+                Err(EncodeError::from(code))
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(EncodeError::ErrorStringAllocationFailed)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                Err(EncodeError::VendoredThrewCxxException { message })
+            }
+            other => unreachable!("llama_rs_encode returned unrecognized status {other}"),
         }
     }
 

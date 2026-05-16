@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 struct llama_model;
 struct llama_sampler;
@@ -65,23 +66,54 @@ llama_pos llama_rs_memory_seq_pos_max(
     struct llama_context * ctx,
     llama_seq_id seq_id);
 
-llama_rs_status llama_rs_encode(
-    struct llama_context * ctx,
-    struct llama_batch batch);
+typedef enum llama_rs_encode_status {
+    LLAMA_RS_ENCODE_OK = 0,
+    LLAMA_RS_ENCODE_NULL_CTX_ARG,
+    LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER,
+    LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE,
+    LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_encode_status;
 
-llama_rs_status llama_rs_memory_seq_add(
+llama_rs_encode_status llama_rs_encode(
+    struct llama_context * ctx,
+    struct llama_batch batch,
+    int32_t * out_vendored_return_code,
+    char ** out_error);
+
+typedef enum llama_rs_memory_seq_add_status {
+    LLAMA_RS_MEMORY_SEQ_ADD_OK = 0,
+    LLAMA_RS_MEMORY_SEQ_ADD_NULL_CTX_ARG,
+    LLAMA_RS_MEMORY_SEQ_ADD_INCOMPATIBLE_ROPE_TYPE,
+    LLAMA_RS_MEMORY_SEQ_ADD_NULL_MEM,
+    LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_memory_seq_add_status;
+
+llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
     struct llama_context * ctx,
     llama_seq_id seq_id,
     llama_pos p0,
     llama_pos p1,
-    llama_pos shift);
+    llama_pos shift,
+    char ** out_error);
 
-llama_rs_status llama_rs_memory_seq_div(
+typedef enum llama_rs_memory_seq_div_status {
+    LLAMA_RS_MEMORY_SEQ_DIV_OK = 0,
+    LLAMA_RS_MEMORY_SEQ_DIV_NULL_CTX_ARG,
+    LLAMA_RS_MEMORY_SEQ_DIV_INCOMPATIBLE_ROPE_TYPE,
+    LLAMA_RS_MEMORY_SEQ_DIV_NULL_MEM,
+    LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_memory_seq_div_status;
+
+llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
     struct llama_context * ctx,
     llama_seq_id seq_id,
     llama_pos p0,
     llama_pos p1,
-    int d);
+    int d,
+    char ** out_error);
 
 #ifdef __cplusplus
 }

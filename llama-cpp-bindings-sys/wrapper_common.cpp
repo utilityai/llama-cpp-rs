@@ -171,80 +171,160 @@ extern "C" llama_pos llama_rs_memory_seq_pos_max(
     if (!ctx) {
         return -1;
     }
-    auto * mem = llama_get_memory(ctx);
-    if (!mem) {
-        return -1;
-    }
-    uint32_t n_seq_max = llama_n_seq_max(ctx);
-    if (seq_id < 0 || (uint32_t) seq_id >= n_seq_max) {
-        return -1;
-    }
+    try {
+        auto * mem = llama_get_memory(ctx);
+        if (!mem) {
+            return -1;
+        }
+        uint32_t n_seq_max = llama_n_seq_max(ctx);
+        if (seq_id < 0 || (uint32_t) seq_id >= n_seq_max) {
+            return -1;
+        }
 
-    return llama_memory_seq_pos_max(mem, seq_id);
+        return llama_memory_seq_pos_max(mem, seq_id);
+    } catch (...) {
+        return -1;
+    }
 }
 
-extern "C" llama_rs_status llama_rs_encode(
+extern "C" llama_rs_encode_status llama_rs_encode(
     struct llama_context * ctx,
-    struct llama_batch batch) {
+    struct llama_batch batch,
+    int32_t * out_vendored_return_code,
+    char ** out_error) {
+    if (out_error) {
+        *out_error = nullptr;
+    }
+    if (out_vendored_return_code) {
+        *out_vendored_return_code = 0;
+    }
     if (!ctx) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+        return LLAMA_RS_ENCODE_NULL_CTX_ARG;
     }
-    const auto * model = llama_get_model(ctx);
-    if (!llama_model_has_encoder(model)) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    try {
+        const auto * model = llama_get_model(ctx);
+        if (!llama_model_has_encoder(model)) {
+            return LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER;
+        }
+        int32_t result = llama_encode(ctx, batch);
+        if (result != 0) {
+            if (out_vendored_return_code) {
+                *out_vendored_return_code = result;
+            }
+            return LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE;
+        }
+        return LLAMA_RS_ENCODE_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
+    } catch (const std::exception & err) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string(err.what());
+            if (!*out_error) {
+                return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION;
+    } catch (...) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string("unknown c++ exception");
+            if (!*out_error) {
+                return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION;
     }
-    int32_t result = llama_encode(ctx, batch);
-    if (result != 0) {
-        return LLAMA_RS_STATUS_EXCEPTION;
-    }
-
-    return LLAMA_RS_STATUS_OK;
 }
 
-extern "C" llama_rs_status llama_rs_memory_seq_add(
+extern "C" llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
     struct llama_context * ctx,
     llama_seq_id seq_id,
     llama_pos p0,
     llama_pos p1,
-    llama_pos shift) {
+    llama_pos shift,
+    char ** out_error) {
+    if (out_error) {
+        *out_error = nullptr;
+    }
     if (!ctx) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+        return LLAMA_RS_MEMORY_SEQ_ADD_NULL_CTX_ARG;
     }
-    const auto * model = llama_get_model(ctx);
-    const auto rope = llama_model_rope_type(model);
-    if (rope == LLAMA_ROPE_TYPE_MROPE || rope == LLAMA_ROPE_TYPE_VISION || rope == LLAMA_ROPE_TYPE_IMROPE) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    try {
+        const auto * model = llama_get_model(ctx);
+        const auto rope = llama_model_rope_type(model);
+        if (rope == LLAMA_ROPE_TYPE_MROPE || rope == LLAMA_ROPE_TYPE_VISION || rope == LLAMA_ROPE_TYPE_IMROPE) {
+            return LLAMA_RS_MEMORY_SEQ_ADD_INCOMPATIBLE_ROPE_TYPE;
+        }
+        auto * mem = llama_get_memory(ctx);
+        if (!mem) {
+            return LLAMA_RS_MEMORY_SEQ_ADD_NULL_MEM;
+        }
+        llama_memory_seq_add(mem, seq_id, p0, p1, shift);
+        return LLAMA_RS_MEMORY_SEQ_ADD_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
+    } catch (const std::exception & err) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string(err.what());
+            if (!*out_error) {
+                return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION;
+    } catch (...) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string("unknown c++ exception");
+            if (!*out_error) {
+                return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION;
     }
-    auto * mem = llama_get_memory(ctx);
-    if (!mem) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
-    }
-    llama_memory_seq_add(mem, seq_id, p0, p1, shift);
-
-    return LLAMA_RS_STATUS_OK;
 }
 
-extern "C" llama_rs_status llama_rs_memory_seq_div(
+extern "C" llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
     struct llama_context * ctx,
     llama_seq_id seq_id,
     llama_pos p0,
     llama_pos p1,
-    int d) {
+    int d,
+    char ** out_error) {
+    if (out_error) {
+        *out_error = nullptr;
+    }
     if (!ctx) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+        return LLAMA_RS_MEMORY_SEQ_DIV_NULL_CTX_ARG;
     }
-    const auto * model = llama_get_model(ctx);
-    const auto rope = llama_model_rope_type(model);
-    if (rope == LLAMA_ROPE_TYPE_MROPE || rope == LLAMA_ROPE_TYPE_VISION || rope == LLAMA_ROPE_TYPE_IMROPE) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    try {
+        const auto * model = llama_get_model(ctx);
+        const auto rope = llama_model_rope_type(model);
+        if (rope == LLAMA_ROPE_TYPE_MROPE || rope == LLAMA_ROPE_TYPE_VISION || rope == LLAMA_ROPE_TYPE_IMROPE) {
+            return LLAMA_RS_MEMORY_SEQ_DIV_INCOMPATIBLE_ROPE_TYPE;
+        }
+        auto * mem = llama_get_memory(ctx);
+        if (!mem) {
+            return LLAMA_RS_MEMORY_SEQ_DIV_NULL_MEM;
+        }
+        llama_memory_seq_div(mem, seq_id, p0, p1, d);
+        return LLAMA_RS_MEMORY_SEQ_DIV_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
+    } catch (const std::exception & err) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string(err.what());
+            if (!*out_error) {
+                return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION;
+    } catch (...) {
+        if (out_error) {
+            *out_error = llama_rs_dup_string("unknown c++ exception");
+            if (!*out_error) {
+                return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
+            }
+        }
+        return LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION;
     }
-    auto * mem = llama_get_memory(ctx);
-    if (!mem) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
-    }
-    llama_memory_seq_div(mem, seq_id, p0, p1, d);
-
-    return LLAMA_RS_STATUS_OK;
 }
 
 extern "C" llama_rs_status llama_rs_sampler_sample(

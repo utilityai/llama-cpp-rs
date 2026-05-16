@@ -858,8 +858,7 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(FitError::VendoredReportedError)
-                    | Err(FitError::VendoredThrewCxxException { .. })
+                Err(FitError::VendoredReportedError | FitError::VendoredThrewCxxException { .. })
             ),
             "expected VendoredReportedError or VendoredThrewCxxException, got {result:?}"
         );

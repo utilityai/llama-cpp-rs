@@ -1,27 +1,30 @@
 use std::num::NonZeroI32;
 use std::os::raw::c_int;
 
-/// Failed to decode a batch.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum EncodeError {
-    /// No kv cache slot was available.
-    #[error("Encode Error 1: NoKvCacheSlot")]
+    #[error("llama_rs_encode called with null context")]
+    NullContextArg,
+    #[error("llama_rs_encode invoked on a model that has no encoder")]
+    ModelHasNoEncoder,
+    #[error("llama_encode returned non-zero code 1: no kv cache slot was available")]
     NoKvCacheSlot,
-    /// The number of tokens in the batch was 0.
-    #[error("Encode Error -1: n_tokens == 0")]
+    #[error("llama_encode returned non-zero code -1: n_tokens == 0")]
     NTokensZero,
-    /// An unknown error occurred.
-    #[error("Encode Error {0}: unknown")]
-    Unknown(c_int),
+    #[error("llama_encode returned unrecognized non-zero code: {code}")]
+    VendoredReturnedUnrecognizedNonzeroCode { code: c_int },
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_encode threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }
 
-/// Encode a error from llama.cpp into a [`EncodeError`].
 impl From<NonZeroI32> for EncodeError {
     fn from(value: NonZeroI32) -> Self {
         match value.get() {
             1 => Self::NoKvCacheSlot,
             -1 => Self::NTokensZero,
-            error_code => Self::Unknown(error_code),
+            error_code => Self::VendoredReturnedUnrecognizedNonzeroCode { code: error_code },
         }
     }
 }
@@ -33,26 +36,26 @@ mod tests {
     use super::EncodeError;
 
     #[test]
-    fn encode_error_no_kv_cache_slot() {
+    fn no_kv_cache_slot_maps_from_code_one() {
         let error = EncodeError::from(NonZeroI32::new(1).expect("1 is non-zero"));
 
         assert_eq!(error, EncodeError::NoKvCacheSlot);
-        assert_eq!(error.to_string(), "Encode Error 1: NoKvCacheSlot");
     }
 
     #[test]
-    fn encode_error_n_tokens_zero() {
+    fn n_tokens_zero_maps_from_code_negative_one() {
         let error = EncodeError::from(NonZeroI32::new(-1).expect("-1 is non-zero"));
 
         assert_eq!(error, EncodeError::NTokensZero);
-        assert_eq!(error.to_string(), "Encode Error -1: n_tokens == 0");
     }
 
     #[test]
-    fn encode_error_unknown() {
+    fn unrecognized_code_falls_through_to_typed_variant() {
         let error = EncodeError::from(NonZeroI32::new(99).expect("99 is non-zero"));
 
-        assert_eq!(error, EncodeError::Unknown(99));
-        assert_eq!(error.to_string(), "Encode Error 99: unknown");
+        assert_eq!(
+            error,
+            EncodeError::VendoredReturnedUnrecognizedNonzeroCode { code: 99 }
+        );
     }
 }

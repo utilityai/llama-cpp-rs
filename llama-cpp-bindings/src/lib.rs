@@ -64,11 +64,12 @@ pub mod tool_call_template_overrides;
 
 pub use error::{
     ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
-    EvalMultimodalChunksError, GrammarError, LlamaContextLoadError, LlamaCppError,
-    LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError,
-    LlamaModelLoadError, LogitsError, MarkerDetectionError, MetaValError, ModelParamsError,
-    NewLlamaChatMessageError, ParseChatMessageError, Result, SampleError, SamplerAcceptError,
-    SamplingError, StringToTokenError, TokenSamplingError, TokenToStringError,
+    EvalMultimodalChunksError, GrammarError, KvCacheSeqAddError, KvCacheSeqDivError,
+    LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError, LlamaLoraAdapterRemoveError,
+    LlamaLoraAdapterSetError, LlamaModelLoadError, LogitsError, MarkerDetectionError,
+    MetaValError, ModelParamsError, NewLlamaChatMessageError, ParseChatMessageError, Result,
+    SampleError, SamplerAcceptError, SamplingError, StringToTokenError, TokenSamplingError,
+    TokenToStringError,
 };
 
 pub use chat_message_parse_outcome::ChatMessageParseOutcome;
