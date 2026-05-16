@@ -33,6 +33,7 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
 
     if target_os.is_msvc() {
         build.flag("/std:c++17");
+        build.flag("/EHsc");
     }
 
     if target_os.is_android() && cfg!(feature = "static-stdcxx") {
