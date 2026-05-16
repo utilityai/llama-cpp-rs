@@ -1,11 +1,11 @@
-/// Failed to accept a token in a sampler.
 #[derive(Debug, thiserror::Error)]
 pub enum SamplerAcceptError {
-    /// A C++ exception was thrown during accept
-    #[error("C++ exception during sampler accept: {0}")]
-    CppException(String),
-
-    /// An invalid argument was passed (null sampler or null error pointer)
-    #[error("Invalid argument passed to sampler accept")]
-    InvalidArgument,
+    #[error("llama_rs_sampler_accept called with null sampler")]
+    NullSamplerArg,
+    #[error("llama_rs_sampler_accept called with null out_error")]
+    NullOutErrorArg,
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_rs_sampler_accept threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }

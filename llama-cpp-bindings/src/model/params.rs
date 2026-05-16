@@ -707,10 +707,10 @@ mod tests {
     fn with_devices_invalid_index_returns_error() {
         let result = LlamaModelParams::default().with_devices(&[999_999]);
 
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             crate::LlamaCppError::BackendDeviceNotFound(999_999)
-        );
+        ));
     }
 
     #[test]

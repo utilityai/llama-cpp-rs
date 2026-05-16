@@ -31,7 +31,6 @@ use llama_cpp_bindings_types::ToolCallArguments;
 use llama_cpp_bindings_types::ToolCallMarkers;
 
 use crate::chat_message_parse_outcome::ChatMessageParseOutcome;
-use crate::ffi_status_to_i32::status_to_i32;
 use crate::llama_backend::LlamaBackend;
 use crate::llama_token_attrs::LlamaTokenAttrs;
 use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
@@ -741,22 +740,9 @@ impl LlamaModel {
     /// Returns [`MarkerDetectionError`] when any underlying FFI call fails.
     pub fn streaming_markers(&self) -> Result<StreamingMarkers, MarkerDetectionError> {
         let (reasoning_open_str, reasoning_close_str) =
-            invoke_ffi_string_pair_detector(|first, second, error| unsafe {
-                llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
-                    self.model.as_ptr(),
-                    first,
-                    second,
-                    error,
-                )
-            })?;
+            invoke_detect_reasoning_markers(self.model.as_ptr())?;
 
-        let tool_call_haystack = invoke_ffi_single_string_detector(|haystack, error| unsafe {
-            llama_cpp_bindings_sys::llama_rs_compute_tool_call_haystack(
-                self.model.as_ptr(),
-                haystack,
-                error,
-            )
-        })?;
+        let tool_call_haystack = invoke_compute_tool_call_haystack(self.model.as_ptr())?;
 
         let autoparser_pair = tool_call_haystack.as_deref().and_then(
             crate::extract_tool_call_markers_from_haystack::extract_tool_call_markers_from_haystack,
@@ -817,14 +803,7 @@ impl LlamaModel {
     /// # Errors
     /// Returns [`MarkerDetectionError`] when the underlying FFI call fails.
     pub fn reasoning_markers(&self) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
-        let (open, close) = invoke_ffi_string_pair_detector(|first, second, error| unsafe {
-            llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
-                self.model.as_ptr(),
-                first,
-                second,
-                error,
-            )
-        })?;
+        let (open, close) = invoke_detect_reasoning_markers(self.model.as_ptr())?;
 
         match (open, close) {
             (Some(open), Some(close)) if !open.is_empty() && !close.is_empty() => {
@@ -1052,15 +1031,7 @@ impl LlamaModel {
     pub fn diagnose_tool_call_synthetic_renders(
         &self,
     ) -> Result<(String, String), MarkerDetectionError> {
-        let (no_tools, with_tools) =
-            invoke_ffi_string_pair_detector(|first, second, error| unsafe {
-                llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
-                    self.model.as_ptr(),
-                    first,
-                    second,
-                    error,
-                )
-            })?;
+        let (no_tools, with_tools) = invoke_diagnose_tool_call_synthetic_renders(self.model.as_ptr())?;
 
         Ok((no_tools.unwrap_or_default(), with_tools.unwrap_or_default()))
     }
@@ -1447,80 +1418,166 @@ fn synthesize_missing_tool_call_ids(tool_calls: &mut [ParsedToolCall]) {
     }
 }
 
-fn parse_single_string_status(
-    status: llama_cpp_bindings_sys::llama_rs_status,
-    out_value: *mut c_char,
-    out_error: *mut c_char,
-) -> Result<Option<String>, MarkerDetectionError> {
-    match status {
-        llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => read_optional_owned_cstr(out_value),
-        llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
-            let message = read_optional_owned_cstr_lossy(out_error);
-
-            Err(MarkerDetectionError::AnalyzeException(message))
-        }
-        other => Err(MarkerDetectionError::FfiError(status_to_i32(other))),
-    }
-}
-
-fn invoke_ffi_single_string_detector<TInvoke>(
-    invoke: TInvoke,
-) -> Result<Option<String>, MarkerDetectionError>
-where
-    TInvoke: FnOnce(*mut *mut c_char, *mut *mut c_char) -> llama_cpp_bindings_sys::llama_rs_status,
-{
-    let mut out_value: *mut c_char = ptr::null_mut();
+fn invoke_detect_reasoning_markers(
+    model: *const llama_cpp_bindings_sys::llama_model,
+) -> Result<(Option<String>, Option<String>), MarkerDetectionError> {
+    let mut out_open: *mut c_char = ptr::null_mut();
+    let mut out_close: *mut c_char = ptr::null_mut();
     let mut out_error: *mut c_char = ptr::null_mut();
 
-    let status = invoke(&raw mut out_value, &raw mut out_error);
-    let parsed = parse_single_string_status(status, out_value, out_error);
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers(
+            model,
+            &raw mut out_open,
+            &raw mut out_close,
+            &raw mut out_error,
+        )
+    };
 
-    unsafe {
-        if !out_value.is_null() {
-            llama_cpp_bindings_sys::llama_rs_string_free(out_value);
+    let parsed = match status {
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_OK => {
+            collect_optional_cstr_pair(out_open, out_close)
         }
-        if !out_error.is_null() {
-            llama_cpp_bindings_sys::llama_rs_string_free(out_error);
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_MODEL_ARG => {
+            Err(MarkerDetectionError::DetectReasoningMarkersNullModelArg)
         }
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_OPEN_ARG => {
+            Err(MarkerDetectionError::DetectReasoningMarkersNullOutOpenArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_CLOSE_ARG => {
+            Err(MarkerDetectionError::DetectReasoningMarkersNullOutCloseArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_ERROR_ARG => {
+            Err(MarkerDetectionError::DetectReasoningMarkersNullOutErrorArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MarkerDetectionError::DetectReasoningMarkersErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(MarkerDetectionError::DetectReasoningMarkersVendoredThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_detect_reasoning_markers returned unrecognized status {other}"
+        ),
+    };
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_open) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
+    if !matches!(
+        parsed,
+        Err(MarkerDetectionError::DetectReasoningMarkersVendoredThrewCxxException { .. })
+    ) {
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
     }
 
     parsed
 }
 
-fn invoke_ffi_string_pair_detector<TInvoke>(
-    invoke: TInvoke,
-) -> Result<(Option<String>, Option<String>), MarkerDetectionError>
-where
-    TInvoke: FnOnce(
-        *mut *mut c_char,
-        *mut *mut c_char,
-        *mut *mut c_char,
-    ) -> llama_cpp_bindings_sys::llama_rs_status,
-{
-    let mut out_first: *mut c_char = ptr::null_mut();
-    let mut out_second: *mut c_char = ptr::null_mut();
+fn invoke_compute_tool_call_haystack(
+    model: *const llama_cpp_bindings_sys::llama_model,
+) -> Result<Option<String>, MarkerDetectionError> {
+    let mut out_haystack: *mut c_char = ptr::null_mut();
     let mut out_error: *mut c_char = ptr::null_mut();
 
-    let status = invoke(&raw mut out_first, &raw mut out_second, &raw mut out_error);
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_compute_tool_call_haystack(
+            model,
+            &raw mut out_haystack,
+            &raw mut out_error,
+        )
+    };
 
-    let parsed = (|| match status {
-        llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK => {
-            let first = read_optional_owned_cstr(out_first)?;
-            let second = read_optional_owned_cstr(out_second)?;
-
-            Ok((first, second))
+    let parsed = match status {
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK => {
+            read_optional_owned_cstr(out_haystack)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION => {
-            let message = read_optional_owned_cstr_lossy(out_error);
-
-            Err(MarkerDetectionError::AnalyzeException(message))
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_MODEL_ARG => {
+            Err(MarkerDetectionError::ComputeToolCallHaystackNullModelArg)
         }
-        other => Err(MarkerDetectionError::FfiError(status_to_i32(other))),
-    })();
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_HAYSTACK_ARG => {
+            Err(MarkerDetectionError::ComputeToolCallHaystackNullOutHaystackArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_ERROR_ARG => {
+            Err(MarkerDetectionError::ComputeToolCallHaystackNullOutErrorArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MarkerDetectionError::ComputeToolCallHaystackErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(MarkerDetectionError::ComputeToolCallHaystackVendoredThrewCxxException { message })
+        }
+        other => unreachable!(
+            "llama_rs_compute_tool_call_haystack returned unrecognized status {other}"
+        ),
+    };
 
-    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_first) };
-    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_second) };
-    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_haystack) };
+    if !matches!(
+        parsed,
+        Err(MarkerDetectionError::ComputeToolCallHaystackVendoredThrewCxxException { .. })
+    ) {
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+    }
+
+    parsed
+}
+
+fn invoke_diagnose_tool_call_synthetic_renders(
+    model: *const llama_cpp_bindings_sys::llama_model,
+) -> Result<(Option<String>, Option<String>), MarkerDetectionError> {
+    let mut out_no_tools: *mut c_char = ptr::null_mut();
+    let mut out_with_tools: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders(
+            model,
+            &raw mut out_no_tools,
+            &raw mut out_with_tools,
+            &raw mut out_error,
+        )
+    };
+
+    let parsed = match status {
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK => {
+            collect_optional_cstr_pair(out_no_tools, out_with_tools)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_MODEL_ARG => {
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullModelArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_NO_TOOLS_ARG => {
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutNoToolsArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_WITH_TOOLS_ARG => {
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutWithToolsArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_ERROR_ARG => {
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutErrorArg)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersErrorStringAllocationFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersVendoredThrewCxxException {
+                message,
+            })
+        }
+        other => unreachable!(
+            "llama_rs_diagnose_tool_call_synthetic_renders returned unrecognized status {other}"
+        ),
+    };
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_no_tools) };
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_with_tools) };
+    if !matches!(
+        parsed,
+        Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersVendoredThrewCxxException { .. })
+    ) {
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+    }
 
     parsed
 }
@@ -1535,14 +1592,13 @@ fn read_optional_owned_cstr(ptr: *const c_char) -> Result<Option<String>, Marker
     Ok(Some(String::from_utf8(bytes)?))
 }
 
-fn read_optional_owned_cstr_lossy(ptr: *const c_char) -> String {
-    if ptr.is_null() {
-        return String::new();
-    }
-
-    unsafe { CStr::from_ptr(ptr) }
-        .to_string_lossy()
-        .into_owned()
+fn collect_optional_cstr_pair(
+    first_ptr: *const c_char,
+    second_ptr: *const c_char,
+) -> Result<(Option<String>, Option<String>), MarkerDetectionError> {
+    let first = read_optional_owned_cstr(first_ptr)?;
+    let second = read_optional_owned_cstr(second_ptr)?;
+    Ok((first, second))
 }
 
 fn extract_meta_string<TCFunction>(
@@ -1677,151 +1733,3 @@ mod extract_meta_string_tests {
     }
 }
 
-#[cfg(test)]
-mod ffi_helper_tests {
-    use std::ffi::CString;
-    use std::ptr;
-
-    use super::invoke_ffi_single_string_detector;
-    use super::invoke_ffi_string_pair_detector;
-    use super::parse_single_string_status;
-    use super::read_optional_owned_cstr_lossy;
-    use crate::MarkerDetectionError;
-
-    #[test]
-    fn read_optional_owned_cstr_lossy_returns_empty_for_null() {
-        let result = read_optional_owned_cstr_lossy(ptr::null());
-
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn read_optional_owned_cstr_lossy_returns_string_for_valid_pointer() {
-        let owned = CString::new("hello").expect("static literal has no nuls");
-        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
-
-        assert_eq!(result, "hello");
-    }
-
-    #[test]
-    fn read_optional_owned_cstr_lossy_handles_invalid_utf8_via_replacement() {
-        let owned = CString::new(vec![b'a', 0xFF, b'b']).expect("no interior nul");
-        let result = read_optional_owned_cstr_lossy(owned.as_ptr());
-
-        assert!(result.starts_with('a'));
-        assert!(result.ends_with('b'));
-    }
-
-    #[test]
-    fn parse_single_string_status_returns_none_for_ok_with_null() {
-        let result = parse_single_string_status(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        );
-
-        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
-    }
-
-    #[test]
-    fn parse_single_string_status_returns_some_for_ok_with_value() {
-        let owned = CString::new("present").expect("no nul");
-        let result = parse_single_string_status(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK,
-            owned.as_ptr().cast_mut(),
-            ptr::null_mut(),
-        );
-
-        assert_eq!(
-            result.expect("OK + value returns Ok(Some)"),
-            Some("present".to_owned())
-        );
-    }
-
-    #[test]
-    fn parse_single_string_status_returns_analyze_exception() {
-        let owned = CString::new("boom").expect("no nul");
-        let result = parse_single_string_status(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_EXCEPTION,
-            ptr::null_mut(),
-            owned.as_ptr().cast_mut(),
-        );
-
-        match result.expect_err("EXCEPTION must yield Err") {
-            MarkerDetectionError::AnalyzeException(message) => assert_eq!(message, "boom"),
-            other => panic!("expected AnalyzeException, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn parse_single_string_status_returns_ffi_error_for_other_status() {
-        let result = parse_single_string_status(
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT,
-            ptr::null_mut(),
-            ptr::null_mut(),
-        );
-
-        match result.expect_err("invalid status must yield Err") {
-            MarkerDetectionError::FfiError(_) => {}
-            other => panic!("expected FfiError, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn invoke_ffi_single_string_detector_propagates_invalid_argument_status() {
-        let result = invoke_ffi_single_string_detector(|_value, _error| {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
-        });
-
-        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
-    }
-
-    #[test]
-    fn invoke_ffi_single_string_detector_returns_none_for_ok_with_null() {
-        let result = invoke_ffi_single_string_detector(|value, _error| {
-            unsafe {
-                *value = ptr::null_mut();
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
-        });
-
-        assert_eq!(result.expect("OK + null returns Ok(None)"), None);
-    }
-
-    #[test]
-    fn invoke_ffi_string_pair_detector_propagates_invalid_argument_status() {
-        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_INVALID_ARGUMENT
-        });
-
-        assert!(matches!(result, Err(MarkerDetectionError::FfiError(_))));
-    }
-
-    #[test]
-    fn invoke_ffi_string_pair_detector_returns_pair_of_none_for_ok_with_nulls() {
-        let result = invoke_ffi_string_pair_detector(|first, second, _error| {
-            unsafe {
-                *first = ptr::null_mut();
-                *second = ptr::null_mut();
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK
-        });
-
-        assert_eq!(
-            result.expect("OK with both null returns Ok((None, None))"),
-            (None, None)
-        );
-    }
-
-    #[test]
-    fn invoke_ffi_string_pair_detector_propagates_invalid_status_codes() {
-        let result = invoke_ffi_string_pair_detector(|_first, _second, _error| {
-            llama_cpp_bindings_sys::LLAMA_RS_STATUS_ALLOCATION_FAILED
-        });
-
-        match result.expect_err("non-OK status yields Err") {
-            MarkerDetectionError::FfiError(code) => assert!(code != 0),
-            other => panic!("expected FfiError, got {other:?}"),
-        }
-    }
-}

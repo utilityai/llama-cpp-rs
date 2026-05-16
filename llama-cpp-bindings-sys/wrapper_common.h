@@ -16,19 +16,47 @@ struct llama_vocab;
 extern "C" {
 #endif
 
-llama_rs_status llama_rs_json_schema_to_grammar(
+typedef enum llama_rs_json_schema_to_grammar_status {
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK = 0,
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_SCHEMA_JSON_ARG,
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_GRAMMAR_ARG,
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_json_schema_to_grammar_status;
+
+llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_grammar(
     const char * schema_json,
     bool force_gbnf,
     char ** out_grammar,
     char ** out_error);
 
-struct llama_sampler * llama_rs_sampler_init_grammar(
+typedef enum llama_rs_sampler_init_grammar_status {
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_OK = 0,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_init_grammar_status;
+
+llama_rs_sampler_init_grammar_status llama_rs_sampler_init_grammar(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
+    struct llama_sampler ** out_sampler,
     char ** out_error);
 
-struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
+typedef enum llama_rs_sampler_init_grammar_lazy_status {
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_OK = 0,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_init_grammar_lazy_status;
+
+llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_grammar_lazy(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -36,9 +64,19 @@ struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
     size_t num_trigger_words,
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
+    struct llama_sampler ** out_sampler,
     char ** out_error);
 
-struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
+typedef enum llama_rs_sampler_init_grammar_lazy_patterns_status {
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK = 0,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_init_grammar_lazy_patterns_status;
+
+llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_init_grammar_lazy_patterns(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -46,14 +84,33 @@ struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
     size_t num_trigger_patterns,
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
+    struct llama_sampler ** out_sampler,
     char ** out_error);
 
-llama_rs_status llama_rs_sampler_accept(
+typedef enum llama_rs_sampler_accept_status {
+    LLAMA_RS_SAMPLER_ACCEPT_OK = 0,
+    LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_ACCEPT_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_accept_status;
+
+llama_rs_sampler_accept_status llama_rs_sampler_accept(
     struct llama_sampler * sampler,
     llama_token token,
     char ** out_error);
 
-llama_rs_status llama_rs_sampler_sample(
+typedef enum llama_rs_sampler_sample_status {
+    LLAMA_RS_SAMPLER_SAMPLE_OK = 0,
+    LLAMA_RS_SAMPLER_SAMPLE_NULL_SAMPLER_ARG,
+    LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG,
+    LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_TOKEN_ARG,
+    LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_sampler_sample_status;
+
+llama_rs_sampler_sample_status llama_rs_sampler_sample(
     struct llama_sampler * sampler,
     struct llama_context * ctx,
     int32_t idx,

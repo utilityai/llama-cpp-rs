@@ -1,11 +1,15 @@
-/// Errors that can occur when sampling a token.
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum SampleError {
-    /// A C++ exception was thrown during sampling
-    #[error("C++ exception during sampling: {0}")]
-    CppException(String),
-
-    /// An invalid argument was passed to the sampler
-    #[error("Invalid argument passed to sampler")]
-    InvalidArgument,
+    #[error("llama_rs_sampler_sample called with null sampler")]
+    NullSamplerArg,
+    #[error("llama_rs_sampler_sample called with null context")]
+    NullCtxArg,
+    #[error("llama_rs_sampler_sample called with null out_token")]
+    NullOutTokenArg,
+    #[error("llama_rs_sampler_sample called with null out_error")]
+    NullOutErrorArg,
+    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
+    ErrorStringAllocationFailed,
+    #[error("llama_rs_sampler_sample threw a C++ exception: {message}")]
+    VendoredThrewCxxException { message: String },
 }

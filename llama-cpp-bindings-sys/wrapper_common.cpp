@@ -1,9 +1,9 @@
 #include "wrapper_common.h"
 
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <new>
 #include <string>
 #include <stdint.h>
 
@@ -14,34 +14,49 @@
 
 #include <nlohmann/json.hpp>
 
-extern "C" llama_rs_status llama_rs_json_schema_to_grammar(
+extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_grammar(
     const char * schema_json,
     bool force_gbnf,
     char ** out_grammar,
     char ** out_error) {
-    if (!schema_json || !out_grammar || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (out_grammar) {
+        *out_grammar = nullptr;
     }
-
-    *out_grammar = nullptr;
-    *out_error = nullptr;
+    if (out_error) {
+        *out_error = nullptr;
+    }
+    if (!schema_json) {
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_SCHEMA_JSON_ARG;
+    }
+    if (!out_grammar) {
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_GRAMMAR_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_ERROR_ARG;
+    }
 
     try {
         const auto schema = nlohmann::ordered_json::parse(schema_json);
         const auto grammar = json_schema_to_grammar(schema, force_gbnf);
         *out_grammar = llama_rs_dup_string(grammar);
-
-        return *out_grammar ? LLAMA_RS_STATUS_OK : LLAMA_RS_STATUS_ALLOCATION_FAILED;
+        if (!*out_grammar) {
+            return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
@@ -51,33 +66,48 @@ extern "C" void llama_rs_string_free(char * ptr) {
     }
 }
 
-extern "C" struct llama_sampler * llama_rs_sampler_init_grammar(
+extern "C" llama_rs_sampler_init_grammar_status llama_rs_sampler_init_grammar(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
+    struct llama_sampler ** out_sampler,
     char ** out_error) {
-    if (!out_error) {
-        return nullptr;
+    if (out_sampler) {
+        *out_sampler = nullptr;
     }
-
-    *out_error = nullptr;
-
+    if (out_error) {
+        *out_error = nullptr;
+    }
+    if (!out_sampler) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_ERROR_ARG;
+    }
     try {
-        return llama_sampler_init_grammar(vocab, grammar_str, grammar_root);
+        *out_sampler = llama_sampler_init_grammar(vocab, grammar_str, grammar_root);
+        if (!*out_sampler) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return nullptr;
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return nullptr;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
+extern "C" llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_grammar_lazy(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -85,13 +115,20 @@ extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
     size_t num_trigger_words,
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
+    struct llama_sampler ** out_sampler,
     char ** out_error) {
-    if (!out_error) {
-        return nullptr;
+    if (out_sampler) {
+        *out_sampler = nullptr;
     }
-
-    *out_error = nullptr;
-
+    if (out_error) {
+        *out_error = nullptr;
+    }
+    if (!out_sampler) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_ERROR_ARG;
+    }
     try {
         std::vector<std::string> trigger_patterns;
         trigger_patterns.reserve(num_trigger_words);
@@ -107,7 +144,7 @@ extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
             trigger_patterns_c.push_back(pattern.c_str());
         }
 
-        return llama_sampler_init_grammar_lazy_patterns(
+        *out_sampler = llama_sampler_init_grammar_lazy_patterns(
             vocab,
             grammar_str,
             grammar_root,
@@ -115,20 +152,28 @@ extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy(
             trigger_patterns_c.size(),
             trigger_tokens,
             num_trigger_tokens);
+        if (!*out_sampler) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return nullptr;
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return nullptr;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
+extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_init_grammar_lazy_patterns(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -136,15 +181,22 @@ extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
     size_t num_trigger_patterns,
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
+    struct llama_sampler ** out_sampler,
     char ** out_error) {
-    if (!out_error) {
-        return nullptr;
+    if (out_sampler) {
+        *out_sampler = nullptr;
     }
-
-    *out_error = nullptr;
-
+    if (out_error) {
+        *out_error = nullptr;
+    }
+    if (!out_sampler) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_ERROR_ARG;
+    }
     try {
-        return llama_sampler_init_grammar_lazy_patterns(
+        *out_sampler = llama_sampler_init_grammar_lazy_patterns(
             vocab,
             grammar_str,
             grammar_root,
@@ -152,16 +204,24 @@ extern "C" struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
             num_trigger_patterns,
             trigger_tokens,
             num_trigger_tokens);
+        if (!*out_sampler) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return nullptr;
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return nullptr;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
@@ -327,58 +387,76 @@ extern "C" llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
     }
 }
 
-extern "C" llama_rs_status llama_rs_sampler_sample(
+extern "C" llama_rs_sampler_sample_status llama_rs_sampler_sample(
     struct llama_sampler * sampler,
     struct llama_context * ctx,
     int32_t idx,
     llama_token * out_token,
     char ** out_error) {
-    if (!sampler || !ctx || !out_token || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (out_error) {
+        *out_error = nullptr;
     }
-
-    *out_error = nullptr;
-
+    if (!sampler) {
+        return LLAMA_RS_SAMPLER_SAMPLE_NULL_SAMPLER_ARG;
+    }
+    if (!ctx) {
+        return LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG;
+    }
+    if (!out_token) {
+        return LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_TOKEN_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_ERROR_ARG;
+    }
     try {
         *out_token = llama_sampler_sample(sampler, ctx, idx);
-
-        return LLAMA_RS_STATUS_OK;
+        return LLAMA_RS_SAMPLER_SAMPLE_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_status llama_rs_sampler_accept(
+extern "C" llama_rs_sampler_accept_status llama_rs_sampler_accept(
     struct llama_sampler * sampler,
     llama_token token,
     char ** out_error) {
-    if (!sampler || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (out_error) {
+        *out_error = nullptr;
     }
-
-    *out_error = nullptr;
-
+    if (!sampler) {
+        return LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_SAMPLER_ACCEPT_NULL_OUT_ERROR_ARG;
+    }
     try {
         llama_sampler_accept(sampler, token);
-
-        return LLAMA_RS_STATUS_OK;
+        return LLAMA_RS_SAMPLER_ACCEPT_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        fprintf(stderr, "%s: C++ exception: %s\n", __func__, err.what());
         *out_error = llama_rs_dup_string(err.what());
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        fprintf(stderr, "%s: unknown C++ exception\n", __func__);
-        *out_error = llama_rs_dup_string("unknown C++ exception");
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        *out_error = llama_rs_dup_string("unknown c++ exception");
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION;
     }
 }

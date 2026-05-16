@@ -7,40 +7,31 @@
 extern "C" {
 #endif
 
-/**
- * Render the model's chat template with the autoparser's standard tool-call
- * vs. plain-assistant synthetic turns and return the diff slice that surrounds
- * the tool-call payload. The returned haystack is the text that lives between
- * the model's tool-call open/close markers (with any reasoning prelude
- * stripped). Marker extraction from the haystack is performed in Rust.
- *
- * On success (LLAMA_RS_STATUS_OK):
- *   - If the model declares no tool-call markers (or an empty haystack),
- *     *out_haystack is left as nullptr.
- *   - Otherwise *out_haystack is a heap-allocated null-terminated string owned
- *     by the caller. Free via llama_rs_string_free.
- *
- * On LLAMA_RS_STATUS_EXCEPTION, *out_error is set to a heap-allocated message;
- * free via llama_rs_string_free.
- */
-llama_rs_status llama_rs_compute_tool_call_haystack(
+typedef enum llama_rs_compute_tool_call_haystack_status {
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK = 0,
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_MODEL_ARG,
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_HAYSTACK_ARG,
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_compute_tool_call_haystack_status;
+
+llama_rs_compute_tool_call_haystack_status llama_rs_compute_tool_call_haystack(
     const struct llama_model * model,
     char ** out_haystack,
     char ** out_error);
 
-/**
- * Render the model's chat template with the autoparser's standard synthetic
- * inputs (assistant_no_tools vs assistant_with_tools). Useful for diagnosing
- * why marker detection fails.
- *
- * On success (LLAMA_RS_STATUS_OK):
- *   - *out_no_tools and *out_with_tools point to heap-allocated rendered
- *     outputs (free via llama_rs_string_free). Either can be empty when the
- *     template throws during rendering.
- *
- * On LLAMA_RS_STATUS_EXCEPTION, *out_error is set.
- */
-llama_rs_status llama_rs_diagnose_tool_call_synthetic_renders(
+typedef enum llama_rs_diagnose_tool_call_synthetic_renders_status {
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK = 0,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_MODEL_ARG,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_NO_TOOLS_ARG,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_WITH_TOOLS_ARG,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_diagnose_tool_call_synthetic_renders_status;
+
+llama_rs_diagnose_tool_call_synthetic_renders_status llama_rs_diagnose_tool_call_synthetic_renders(
     const struct llama_model * model,
     char ** out_no_tools,
     char ** out_with_tools,

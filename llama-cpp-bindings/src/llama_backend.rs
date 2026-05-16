@@ -38,7 +38,7 @@ impl LlamaBackend {
     ///
     /// let backend = LlamaBackend::init()?;
     /// // the llama backend can only be initialized once
-    /// assert_eq!(Err(LlamaCppError::BackendAlreadyInitialized), LlamaBackend::init());
+    /// assert!(matches!(LlamaBackend::init(), Err(LlamaCppError::BackendAlreadyInitialized)));
     ///
     ///# Ok(())
     ///# }
@@ -161,10 +161,10 @@ mod tests {
     fn double_init_returns_error() {
         let _backend = LlamaBackend::init().unwrap();
         let second = LlamaBackend::init();
-        assert_eq!(
+        assert!(matches!(
             second.unwrap_err(),
             LlamaCppError::BackendAlreadyInitialized
-        );
+        ));
     }
 
     #[test]
