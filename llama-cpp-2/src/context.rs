@@ -203,10 +203,6 @@ impl<'model> LlamaContext<'model> {
     ///
     /// Upstream uses this staging API for MTP/speculative decoding.
     pub fn set_embeddings_pre_norm(&mut self, enabled: bool) -> Result<(), EmbeddingsError> {
-        if !self.embeddings_enabled {
-            return Err(EmbeddingsError::NotEnabled);
-        }
-
         unsafe {
             llama_cpp_sys_2::llama_rs_set_embeddings_pre_norm(self.context.as_ptr(), enabled);
         }
@@ -215,10 +211,6 @@ impl<'model> LlamaContext<'model> {
 
     /// Get the pre-norm embeddings for the last token in the context.
     pub fn embeddings_pre_norm(&self) -> Result<&[f32], EmbeddingsError> {
-        if !self.embeddings_enabled {
-            return Err(EmbeddingsError::NotEnabled);
-        }
-
         let n_embd =
             usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
 
@@ -235,10 +227,6 @@ impl<'model> LlamaContext<'model> {
 
     /// Get the pre-norm embeddings for the `i`th token in the current context.
     pub fn embeddings_pre_norm_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
-        if !self.embeddings_enabled {
-            return Err(EmbeddingsError::NotEnabled);
-        }
-
         let n_embd =
             usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
 
