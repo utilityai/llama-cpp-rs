@@ -126,9 +126,11 @@ fn main() -> Result<()> {
 
     let n_batch = tokens.len() + n_predict + draft_n + 1;
     let n_batch_u32 = u32::try_from(n_batch).with_context(|| "batch size does not fit into u32")?;
+    let n_rs_seq_u32 = u32::try_from(draft_n).with_context(|| "draft_n does not fit into u32")?;
 
     let base_ctx_params = LlamaContextParams::default()
         .with_n_ctx(ctx_size)
+        .with_n_rs_seq(n_rs_seq_u32)
         .with_n_batch(n_batch_u32)
         .with_n_ubatch(n_batch_u32);
 
@@ -141,7 +143,7 @@ fn main() -> Result<()> {
             &backend,
             base_ctx_params
                 .with_ctx_type(LlamaContextType::Mtp)
-                .with_n_rs_seq(0),
+                .with_n_rs_seq(n_rs_seq_u32),
         )
         .with_context(|| "failed to create MTP draft context")?;
 
@@ -157,22 +159,25 @@ fn main() -> Result<()> {
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut generated = 0usize;
 
+    prefill_target(&mut target, &tokens)?;
+    prefill_mtp_context(&mut draft, &target, &tokens, n_embd)?;
+
     while generated < n_predict {
-        target.clear_kv_cache();
-        draft.clear_kv_cache();
-
-        prefill_target(&mut target, &tokens)?;
-        prefill_mtp_context(&mut draft, &target, &tokens, n_embd)?;
-
+        let prefix_hidden = target.embeddings_pre_norm()?.to_vec();
         let drafted = draft_tokens(&mut draft, n_embd, tokens.len(), draft_n, eos)?;
         if drafted.is_empty() {
             break;
         }
 
-        let accepted = accept_tokens(&mut target, &drafted, tokens.len(), eos)?;
-        if accepted.is_empty() {
-            break;
-        }
+        let accepted = accept_tokens(
+            &mut target,
+            &mut draft,
+            &drafted,
+            tokens.len(),
+            eos,
+            n_embd,
+            &prefix_hidden,
+        )?;
 
         for token in &accepted {
             let piece = model
@@ -305,16 +310,26 @@ fn draft_tokens(
 
 fn accept_tokens(
     target: &mut LlamaContext,
+    draft: &mut LlamaContext,
     drafted: &[LlamaToken],
     prompt_len: usize,
-    eos: LlamaToken,
+    _eos: LlamaToken,
+    n_embd: usize,
+    prefix_hidden: &[f32],
 ) -> Result<Vec<LlamaToken>> {
     let first = greedy_token(target.get_logits());
     if drafted.first().copied() != Some(first) {
+        rollback_and_advance(
+            target,
+            draft,
+            prompt_len,
+            0,
+            first,
+            n_embd,
+            prefix_hidden,
+        )?;
         return Ok(vec![first]);
     }
-
-    let mut accepted = vec![first];
 
     let mut batch = LlamaBatch::new(drafted.len(), 1);
     for (i, token) in drafted.iter().enumerate() {
@@ -332,19 +347,88 @@ fn accept_tokens(
         .decode(&mut batch)
         .with_context(|| "target verification decode failed")?;
 
+    let mut matched = 0usize;
+    let mut extra = first;
+
     for i in 0..drafted.len() {
         let sampled = greedy_token(target.get_logits_ith(i32::try_from(i).expect("index fits")));
         if i + 1 == drafted.len() || sampled != drafted[i + 1] {
-            accepted.push(sampled);
-            break;
-        }
-        accepted.push(drafted[i + 1]);
-        if sampled == eos {
+            matched = i + 1;
+            extra = sampled;
             break;
         }
     }
 
+    let mut accepted = drafted[..matched].to_vec();
+    accepted.push(extra);
+
+    let extra_hidden = if matched == 0 {
+        prefix_hidden.to_vec()
+    } else {
+        target
+            .embeddings_pre_norm_ith(i32::try_from(matched - 1).expect("index fits into i32"))?
+            .to_vec()
+    };
+
+    rollback_and_advance(
+        target,
+        draft,
+        prompt_len,
+        matched,
+        extra,
+        n_embd,
+        &extra_hidden,
+    )?;
+
     Ok(accepted)
+}
+
+fn rollback_and_advance(
+    target: &mut LlamaContext,
+    draft: &mut LlamaContext,
+    prompt_len: usize,
+    matched: usize,
+    extra: LlamaToken,
+    n_embd: usize,
+    extra_hidden: &[f32],
+) -> Result<()> {
+    let rollback_pos =
+        u32::try_from(prompt_len + matched).with_context(|| "rollback position does not fit into u32")?;
+
+    let target_rolled_back = target
+        .clear_kv_cache_seq(Some(0), Some(rollback_pos), None)
+        .with_context(|| "failed to roll back target KV cache")?;
+    if !target_rolled_back {
+        bail!("target KV rollback failed at position {rollback_pos}");
+    }
+
+    let draft_rolled_back = draft
+        .clear_kv_cache_seq(Some(0), Some(rollback_pos), None)
+        .with_context(|| "failed to roll back MTP draft KV cache")?;
+    if !draft_rolled_back {
+        bail!("MTP draft KV rollback failed at position {rollback_pos}");
+    }
+
+    let extra_pos =
+        i32::try_from(prompt_len + matched).with_context(|| "extra token position does not fit into i32")?;
+
+    let mut target_batch = LlamaBatch::new(1, 1);
+    target_batch
+        .add(extra, extra_pos, &[0], true)
+        .map_err(anyhow::Error::from)?;
+    target
+        .decode(&mut target_batch)
+        .with_context(|| "failed to advance target with accepted token")?;
+
+    let mut draft_batch = LlamaBatch::new_with_embeddings(1, n_embd, 1);
+    draft_batch
+        .add_with_embedding(extra, extra_hidden, extra_pos, &[0], true)
+        .map_err(anyhow::Error::from)?;
+    draft
+        .decode(&mut draft_batch)
+        .with_context(|| "failed to advance MTP draft with accepted token")?;
+
+    Ok(())
 }
 
 fn greedy_token(logits: &[f32]) -> LlamaToken {
