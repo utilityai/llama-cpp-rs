@@ -4,6 +4,7 @@ members = [
   "llama-cpp-sys-2",
   "llama-cpp-2",
   "examples/embeddings",
+  "examples/mtp",
   "examples/simple",
   "examples/reranker",
   "examples/mtmd",
