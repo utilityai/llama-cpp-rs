@@ -9,6 +9,7 @@
 #include "llama.cpp/common/fit.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/include/llama.h"
+#include "llama.cpp/src/llama-ext.h"
 #include "wrapper_utils.h"
 
 #include <nlohmann/json.hpp>
@@ -205,4 +206,25 @@ extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx
         return;
     }
     common_memory_breakdown_print(ctx);
+}
+
+extern "C" void llama_rs_set_embeddings_pre_norm(struct llama_context * ctx, bool value) {
+    if (!ctx) {
+        return;
+    }
+    llama_set_embeddings_pre_norm(ctx, value);
+}
+
+extern "C" float * llama_rs_get_embeddings_pre_norm(struct llama_context * ctx) {
+    if (!ctx) {
+        return nullptr;
+    }
+    return llama_get_embeddings_pre_norm(ctx);
+}
+
+extern "C" float * llama_rs_get_embeddings_pre_norm_ith(struct llama_context * ctx, int32_t i) {
+    if (!ctx) {
+        return nullptr;
+    }
+    return llama_get_embeddings_pre_norm_ith(ctx, i);
 }

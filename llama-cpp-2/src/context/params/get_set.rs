@@ -1,7 +1,8 @@
 use std::num::NonZeroU32;
 
 use super::{
-    KvCacheType, LlamaAttentionType, LlamaContextParams, LlamaPoolingType, RopeScalingType,
+    KvCacheType, LlamaAttentionType, LlamaContextParams, LlamaContextType, LlamaPoolingType,
+    RopeScalingType,
 };
 
 impl LlamaContextParams {
@@ -128,6 +129,22 @@ impl LlamaContextParams {
         self.context_params.n_seq_max
     }
 
+    /// Set the number of recurrent-state snapshots per sequence.
+    ///
+    /// This is used by upstream recurrent-state rollback support and may be
+    /// required by speculative/MTP flows on supported models.
+    #[must_use]
+    pub fn with_n_rs_seq(mut self, n_rs_seq: u32) -> Self {
+        self.context_params.n_rs_seq = n_rs_seq;
+        self
+    }
+
+    /// Get the number of recurrent-state snapshots per sequence.
+    #[must_use]
+    pub fn n_rs_seq(&self) -> u32 {
+        self.context_params.n_rs_seq
+    }
+
     /// Set the number of threads
     ///
     /// # Examples
@@ -186,6 +203,22 @@ impl LlamaContextParams {
     #[must_use]
     pub fn n_threads_batch(&self) -> i32 {
         self.context_params.n_threads_batch
+    }
+
+    /// Set the context type.
+    ///
+    /// `LlamaContextType::Mtp` requests upstream MTP context behavior for
+    /// models that support it.
+    #[must_use]
+    pub fn with_ctx_type(mut self, ctx_type: LlamaContextType) -> Self {
+        self.context_params.ctx_type = u32::from(ctx_type);
+        self
+    }
+
+    /// Get the context type.
+    #[must_use]
+    pub fn ctx_type(&self) -> LlamaContextType {
+        LlamaContextType::from(self.context_params.ctx_type)
     }
 
     /// Set the type of rope scaling

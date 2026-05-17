@@ -84,6 +84,12 @@ enum llama_rs_params_fit_status llama_rs_params_fit(
 
 void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
 
+void llama_rs_set_embeddings_pre_norm(struct llama_context * ctx, bool value);
+
+float * llama_rs_get_embeddings_pre_norm(struct llama_context * ctx);
+
+float * llama_rs_get_embeddings_pre_norm_ith(struct llama_context * ctx, int32_t i);
+
 void llama_rs_chat_template_result_free(struct llama_rs_chat_template_result * result);
 void llama_rs_string_free(char * ptr);
 

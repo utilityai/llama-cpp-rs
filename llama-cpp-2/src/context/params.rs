@@ -122,6 +122,34 @@ impl From<LlamaAttentionType> for i32 {
     }
 }
 
+/// A rusty wrapper around `llama_context_type`.
+#[repr(i8)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum LlamaContextType {
+    /// Standard llama.cpp context behavior.
+    Default = 0,
+    /// Multi-token prediction context behavior.
+    Mtp = 1,
+}
+
+impl From<u32> for LlamaContextType {
+    fn from(value: u32) -> Self {
+        match value {
+            1 => Self::Mtp,
+            _ => Self::Default,
+        }
+    }
+}
+
+impl From<LlamaContextType> for u32 {
+    fn from(value: LlamaContextType) -> Self {
+        match value {
+            LlamaContextType::Default => 0,
+            LlamaContextType::Mtp => 1,
+        }
+    }
+}
+
 /// A rusty wrapper around `ggml_type` for KV cache types.
 #[allow(non_camel_case_types, missing_docs)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]

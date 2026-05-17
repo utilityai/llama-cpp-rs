@@ -70,6 +70,18 @@ impl<'model> LlamaContext<'model> {
         unsafe { llama_cpp_sys_2::llama_n_ctx(self.context.as_ptr()) }
     }
 
+    /// Gets the maximum number of sequences supported by this context.
+    #[must_use]
+    pub fn n_seq_max(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_n_seq_max(self.context.as_ptr()) }
+    }
+
+    /// Gets the number of recurrent-state snapshots supported by this context.
+    #[must_use]
+    pub fn n_rs_seq(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_n_rs_seq(self.context.as_ptr()) }
+    }
+
     /// Decodes the batch.
     ///
     /// # Errors
@@ -179,6 +191,60 @@ impl<'model> LlamaContext<'model> {
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_ith(self.context.as_ptr(), i);
             // Technically also possible whenever `i >= batch.n_tokens`, but no good way of checking `n_tokens` here.
+            if embedding.is_null() {
+                Err(EmbeddingsError::LogitsNotEnabled)
+            } else {
+                Ok(slice::from_raw_parts(embedding, n_embd))
+            }
+        }
+    }
+
+    /// Enable or disable extraction of hidden states before the final output norm.
+    ///
+    /// Upstream uses this staging API for MTP/speculative decoding.
+    pub fn set_embeddings_pre_norm(&mut self, enabled: bool) -> Result<(), EmbeddingsError> {
+        if !self.embeddings_enabled {
+            return Err(EmbeddingsError::NotEnabled);
+        }
+
+        unsafe {
+            llama_cpp_sys_2::llama_rs_set_embeddings_pre_norm(self.context.as_ptr(), enabled);
+        }
+        Ok(())
+    }
+
+    /// Get the pre-norm embeddings for the last token in the context.
+    pub fn embeddings_pre_norm(&self) -> Result<&[f32], EmbeddingsError> {
+        if !self.embeddings_enabled {
+            return Err(EmbeddingsError::NotEnabled);
+        }
+
+        let n_embd =
+            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
+
+        unsafe {
+            let embedding =
+                llama_cpp_sys_2::llama_rs_get_embeddings_pre_norm(self.context.as_ptr());
+            if embedding.is_null() {
+                Err(EmbeddingsError::LogitsNotEnabled)
+            } else {
+                Ok(slice::from_raw_parts(embedding, n_embd))
+            }
+        }
+    }
+
+    /// Get the pre-norm embeddings for the `i`th token in the current context.
+    pub fn embeddings_pre_norm_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
+        if !self.embeddings_enabled {
+            return Err(EmbeddingsError::NotEnabled);
+        }
+
+        let n_embd =
+            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
+
+        unsafe {
+            let embedding =
+                llama_cpp_sys_2::llama_rs_get_embeddings_pre_norm_ith(self.context.as_ptr(), i);
             if embedding.is_null() {
                 Err(EmbeddingsError::LogitsNotEnabled)
             } else {
