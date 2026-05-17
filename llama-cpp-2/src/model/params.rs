@@ -353,7 +353,7 @@ impl LlamaModelParams {
         self.params.tensor_buft_overrides = null();
 
         let status = unsafe {
-            llama_cpp_sys_2::llama_params_fit(
+            llama_cpp_sys_2::llama_rs_params_fit(
                 model_path.as_ptr(),
                 &raw mut self.params,
                 &raw mut cparams.context_params,
@@ -366,8 +366,10 @@ impl LlamaModelParams {
         };
 
         match status {
-            llama_cpp_sys_2::LLAMA_PARAMS_FIT_STATUS_SUCCESS => {}
-            llama_cpp_sys_2::LLAMA_PARAMS_FIT_STATUS_FAILURE => return Err(FitError::Failure),
+            llama_cpp_sys_2::LLAMA_RS_PARAMS_FIT_STATUS_SUCCESS => {}
+            llama_cpp_sys_2::LLAMA_RS_PARAMS_FIT_STATUS_FAILURE => {
+                return Err(FitError::Failure)
+            }
             _ => return Err(FitError::Error),
         }
 

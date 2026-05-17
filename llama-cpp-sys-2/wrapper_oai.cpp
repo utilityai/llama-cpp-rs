@@ -49,18 +49,6 @@ static std::string random_string(size_t length = 32) {
     return result;
 }
 
-static bool ends_with(const std::string & value, const std::string & suffix) {
-    return value.size() >= suffix.size()
-        && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-static bool detect_thinking_forced_open(const common_chat_params & params) {
-    return params.supports_thinking
-        && !params.thinking_start_tag.empty()
-        && !params.thinking_end_tag.empty()
-        && ends_with(params.generation_prompt, params.thinking_start_tag);
-}
-
 static void init_chat_msg(struct llama_rs_chat_msg_oaicompat * out_msg) {
     if (!out_msg) {
         return;
@@ -854,8 +842,35 @@ extern "C" llama_rs_status llama_rs_chat_msg_diff_to_oaicompat_json(
             msg_diff.tool_call_delta.id =
                 diff->tool_call_delta.id ? diff->tool_call_delta.id : "";
         }
-        auto json_delta = common_chat_msg_diff_to_json_oaicompat(msg_diff).dump();
-        *out_json = llama_rs_dup_string(json_delta);
+        json json_delta = json::object();
+        if (!msg_diff.reasoning_content_delta.empty()) {
+            json_delta["reasoning_content"] = msg_diff.reasoning_content_delta;
+        }
+        if (!msg_diff.content_delta.empty()) {
+            json_delta["content"] = msg_diff.content_delta;
+        }
+        if (msg_diff.tool_call_index != std::string::npos) {
+            json tool_call = json::object();
+            tool_call["index"] = msg_diff.tool_call_index;
+            if (!msg_diff.tool_call_delta.id.empty()) {
+                tool_call["id"] = msg_diff.tool_call_delta.id;
+                tool_call["type"] = "function";
+            }
+            if (!msg_diff.tool_call_delta.name.empty()
+                || !msg_diff.tool_call_delta.arguments.empty()) {
+                json function = json::object();
+                if (!msg_diff.tool_call_delta.name.empty()) {
+                    function["name"] = msg_diff.tool_call_delta.name;
+                }
+                if (!msg_diff.tool_call_delta.arguments.empty()) {
+                    function["arguments"] = msg_diff.tool_call_delta.arguments;
+                }
+                tool_call["function"] = std::move(function);
+            }
+            json_delta["tool_calls"] = json::array({ std::move(tool_call) });
+        }
+        auto json_delta_str = json_delta.dump();
+        *out_json = llama_rs_dup_string(json_delta_str);
         return *out_json ? LLAMA_RS_STATUS_OK : LLAMA_RS_STATUS_ALLOCATION_FAILED;
     } catch (const std::exception &) {
         return LLAMA_RS_STATUS_EXCEPTION;

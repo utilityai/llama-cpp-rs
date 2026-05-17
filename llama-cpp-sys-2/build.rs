@@ -149,6 +149,31 @@ fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
     files
 }
 
+fn extract_static_lib_names(dir: &Path, target_os: &TargetOs) -> Vec<String> {
+    let pattern = match target_os {
+        TargetOs::Windows(_) => "*.lib",
+        _ => "*.a",
+    };
+
+    let mut lib_names = Vec::new();
+    let pattern = dir.join(pattern);
+    for entry in glob(pattern.to_str().unwrap()).unwrap() {
+        match entry {
+            Ok(path) => {
+                let stem = path.file_stem().unwrap();
+                let stem_str = stem.to_str().unwrap();
+                let lib_name = stem_str.strip_prefix("lib").unwrap_or(stem_str);
+                lib_names.push(lib_name.to_string());
+            }
+            Err(e) => println!("cargo:warning=error={}", e),
+        }
+    }
+
+    lib_names.sort();
+    lib_names.dedup();
+    lib_names
+}
+
 fn macos_link_search_path() -> Option<String> {
     let output = Command::new("clang")
         .arg("--print-search-dirs")
@@ -535,6 +560,7 @@ fn main() {
     config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define("LLAMA_BUILD_COMMON", "ON");
     config.define("LLAMA_CURL", "OFF");
+    config.define("GGML_CCACHE", "OFF");
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
@@ -1029,18 +1055,27 @@ fn main() {
 
     let common_lib_dir = out_dir.join("build").join("common");
     if common_lib_dir.is_dir() {
-        println!(
-            "cargo:rustc-link-search=native={}",
-            common_lib_dir.display()
-        );
+        let mut common_lib_dirs = vec![common_lib_dir.clone()];
         let common_profile_dir = common_lib_dir.join(&profile);
         if common_profile_dir.is_dir() {
-            println!(
-                "cargo:rustc-link-search=native={}",
-                common_profile_dir.display()
-            );
+            common_lib_dirs.push(common_profile_dir);
         }
-        println!("cargo:rustc-link-lib=static=common");
+
+        let mut common_libs = Vec::new();
+        for dir in &common_lib_dirs {
+            println!("cargo:rustc-link-search=native={}", dir.display());
+            common_libs.extend(extract_static_lib_names(dir, &target_os));
+        }
+
+        if common_libs.is_empty() {
+            println!("cargo:rustc-link-lib=static=common");
+        } else {
+            common_libs.sort();
+            common_libs.dedup();
+            for lib in common_libs {
+                println!("cargo:rustc-link-lib=static={lib}");
+            }
+        }
     }
 
     if cfg!(feature = "system-ggml") {
