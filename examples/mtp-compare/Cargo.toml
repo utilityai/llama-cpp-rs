@@ -1,0 +1,20 @@
+[package]
+name = "mtp-compare"
+version = "0.1.147"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+encoding_rs = { workspace = true }
+hf-hub = { workspace = true }
+llama-cpp-2 = { path = "../../llama-cpp-2" }
+
+[features]
+cuda = ["llama-cpp-2/cuda"]
+metal = ["llama-cpp-2/metal"]
+vulkan = ["llama-cpp-2/vulkan"]
+
+[lints]
+workspace = true

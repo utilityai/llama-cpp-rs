@@ -1664,6 +1664,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mtp-compare"
+version = "0.1.147"
+dependencies = [
+ "anyhow",
+ "clap",
+ "encoding_rs",
+ "hf-hub",
+ "llama-cpp-2",
+]
+
+[[package]]
 name = "mtp-example"
 version = "0.1.147"
 dependencies = [
