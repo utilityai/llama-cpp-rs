@@ -6,6 +6,7 @@
 #include <string>
 #include <stdint.h>
 
+#include "llama.cpp/common/fit.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/include/llama.h"
 #include "wrapper_utils.h"
@@ -83,6 +84,40 @@ extern "C" void llama_rs_string_free(char * ptr) {
     if (ptr) {
         std::free(ptr);
     }
+}
+
+extern "C" enum llama_rs_params_fit_status llama_rs_params_fit(
+    const char * path_model,
+    struct llama_model_params * mparams,
+    struct llama_context_params * cparams,
+    float * tensor_split,
+    struct llama_model_tensor_buft_override * tensor_buft_overrides,
+    size_t * margins,
+    uint32_t n_ctx_min,
+    enum ggml_log_level log_level) {
+    const auto status = common_fit_params(
+        path_model,
+        mparams,
+        cparams,
+        tensor_split,
+        tensor_buft_overrides,
+        margins,
+        n_ctx_min,
+        log_level);
+
+    switch (status) {
+    case COMMON_PARAMS_FIT_STATUS_SUCCESS:
+        return LLAMA_RS_PARAMS_FIT_STATUS_SUCCESS;
+    case COMMON_PARAMS_FIT_STATUS_FAILURE:
+        return LLAMA_RS_PARAMS_FIT_STATUS_FAILURE;
+    case COMMON_PARAMS_FIT_STATUS_ERROR:
+    default:
+        return LLAMA_RS_PARAMS_FIT_STATUS_ERROR;
+    }
+}
+
+extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx) {
+    common_memory_breakdown_print(ctx);
 }
 
 extern "C" struct llama_sampler * llama_rs_sampler_init_grammar(
