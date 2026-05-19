@@ -14,3 +14,10 @@ target/
 
 # Mac stuff
 .DS_Store
+
+# Node modules (rust-coverage-check npm dependency)
+node_modules/
+
+# LLVM source-based coverage raw and merged profile artifacts
+*.profraw
+*.profdata

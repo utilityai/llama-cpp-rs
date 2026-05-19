@@ -8,6 +8,7 @@ LLM_QWEN_CAPABLE_FEATURE_FLAGS = $(DEVICE_FEATURE) --features $(QWEN_CAPABLE_FEA
 CARGO_TEST_LLM_FLAGS = --release --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
 CARGO_TEST_LLM_FLAGS_QWEN_CAPABLE = --release --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
 
+
 QWEN3_5_0_8B_ENV = \
 	LLAMA_TEST_HF_REPO=unsloth/Qwen3.5-0.8B-GGUF \
 	LLAMA_TEST_HF_MODEL=Qwen3.5-0.8B-Q4_K_M.gguf \
@@ -42,6 +43,13 @@ DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV = \
 	LLAMA_TEST_HF_ENCODER_REPO=Xiaojian9992024/t5-small-GGUF \
 	LLAMA_TEST_HF_ENCODER_MODEL=t5-small.bf16.gguf
 
+node_modules: package-lock.json
+	npm ci
+	touch node_modules
+
+package-lock.json: package.json
+	npm install --package-lock-only
+
 .PHONY: clean.cmake
 clean.cmake:
 	rm -rf target/llama-cpp-cmake-build
@@ -61,6 +69,35 @@ clippy.tests.base:
 .PHONY: clippy.tests.qwen_capable
 clippy.tests.qwen_capable:
 	cargo clippy --all-targets -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- -D warnings
+
+.PHONY: coverage
+coverage: node_modules
+	cargo llvm-cov clean --workspace
+	cargo llvm-cov --no-report -p llama-cpp-log-decoder
+	cargo llvm-cov --no-report -p llama-cpp-bindings-types
+	cargo llvm-cov --no-report -p llama-cpp-bindings --lib $(DEVICE_FEATURE)
+	$(DEEPSEEK_R1_DISTILL_LLAMA_8B_ENV) cargo llvm-cov --no-report --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
+	$(GLM4_7_FLASH_ENV) cargo llvm-cov --no-report --no-fail-fast -p llama-cpp-bindings-tests $(LLM_BASE_FEATURE_FLAGS) -- --test-threads=1
+	$(QWEN3_5_0_8B_ENV) cargo llvm-cov --no-report --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
+	$(QWEN3_6_35B_A3B_ENV) cargo llvm-cov --no-report --no-fail-fast -p llama-cpp-bindings-tests $(LLM_QWEN_CAPABLE_FEATURE_FLAGS) -- --test-threads=1
+	cargo llvm-cov report --json --output-path target/llvm-cov.json
+	cargo llvm-cov report --lcov --output-path target/lcov.info
+	cargo llvm-cov report
+	npx rust-coverage-check target/llvm-cov.json \
+		--workspace-root $(CURDIR) \
+		--gated llama-cpp-bindings=95 \
+		--gated llama-cpp-log-decoder=99 \
+		--gated llama-cpp-bindings-types=99
+
+.PHONY: coverage-clean
+coverage-clean:
+	cargo llvm-cov clean --workspace
+	rm -rf target/llvm-cov-target
+	rm -f target/llvm-cov.json target/lcov.info
+
+.PHONY: coverage-report
+coverage-report:
+	cargo llvm-cov report --html
 
 .PHONY: fmt
 fmt:

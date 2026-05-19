@@ -1,0 +1,8 @@
+{
+  "name": "llama-cpp-bindings-coverage-check",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@intentee/rust-coverage-check": "^0.2.0"
+  }
+}
