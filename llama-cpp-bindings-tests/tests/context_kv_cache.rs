@@ -5,6 +5,7 @@ use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::kv_cache::KvCacheConversionError;
 use llama_cpp_bindings::context::params::LlamaContextParams;
+use llama_cpp_bindings::error::{KvCacheSeqAddError, KvCacheSeqDivError};
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings_tests::FixtureSession;
@@ -126,7 +127,10 @@ fn kv_cache_seq_add_returns_error_for_mrope_model() -> Result<()> {
 
     let result = context.kv_cache_seq_add(0, Some(0), None, 1);
 
-    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        KvCacheSeqAddError::IncompatibleRopeType,
+    ));
 
     Ok(())
 }
@@ -149,7 +153,10 @@ fn kv_cache_seq_div_returns_error_for_mrope_model() -> Result<()> {
     let divisor = NonZeroU8::new(2).ok_or_else(|| anyhow::anyhow!("2 is non-zero"))?;
     let result = context.kv_cache_seq_div(0, Some(0), None, divisor);
 
-    assert!(result.is_err());
+    assert!(matches!(
+        result.unwrap_err(),
+        KvCacheSeqDivError::IncompatibleRopeType,
+    ));
 
     Ok(())
 }
@@ -363,7 +370,7 @@ fn kv_cache_seq_add_rejects_p0_exceeding_i32_max() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err(),
-        KvCacheConversionError::P0TooLarge(_),
+        KvCacheSeqAddError::P0TooLarge(_),
     ));
 
     Ok(())
@@ -382,7 +389,7 @@ fn kv_cache_seq_add_rejects_p1_exceeding_i32_max() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err(),
-        KvCacheConversionError::P1TooLarge(_),
+        KvCacheSeqAddError::P1TooLarge(_),
     ));
 
     Ok(())
@@ -402,7 +409,7 @@ fn kv_cache_seq_div_rejects_p0_exceeding_i32_max() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err(),
-        KvCacheConversionError::P0TooLarge(_),
+        KvCacheSeqDivError::P0TooLarge(_),
     ));
 
     Ok(())
@@ -422,7 +429,7 @@ fn kv_cache_seq_div_rejects_p1_exceeding_i32_max() -> Result<()> {
 
     assert!(matches!(
         result.unwrap_err(),
-        KvCacheConversionError::P1TooLarge(_),
+        KvCacheSeqDivError::P1TooLarge(_),
     ));
 
     Ok(())

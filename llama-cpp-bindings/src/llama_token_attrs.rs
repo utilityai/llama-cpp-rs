@@ -5,6 +5,16 @@ use enumflags2::BitFlags;
 use crate::llama_token_attr::LlamaTokenAttr;
 use crate::llama_token_attrs_from_int_error::LlamaTokenAttrsFromIntError;
 
+#[cfg(target_env = "msvc")]
+const fn llama_token_type_to_u32(value: llama_cpp_bindings_sys::llama_token_type) -> u32 {
+    value.cast_unsigned()
+}
+
+#[cfg(not(target_env = "msvc"))]
+const fn llama_token_type_to_u32(value: llama_cpp_bindings_sys::llama_token_type) -> u32 {
+    value
+}
+
 /// A set of [`LlamaTokenAttr`] flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaTokenAttrs(pub BitFlags<LlamaTokenAttr>);
@@ -27,11 +37,11 @@ impl TryFrom<llama_cpp_bindings_sys::llama_token_type> for LlamaTokenAttrs {
     type Error = LlamaTokenAttrsFromIntError;
 
     fn try_from(value: llama_cpp_bindings_sys::llama_vocab_type) -> Result<Self, Self::Error> {
-        Ok(Self(BitFlags::from_bits(value as _).map_err(
-            |bit_flag_error| {
+        Ok(Self(
+            BitFlags::from_bits(llama_token_type_to_u32(value)).map_err(|bit_flag_error| {
                 LlamaTokenAttrsFromIntError::UnknownValue(bit_flag_error.invalid_bits())
-            },
-        )?))
+            })?,
+        ))
     }
 }
 
@@ -55,7 +65,7 @@ mod tests {
 
     #[test]
     fn try_from_zero_produces_empty_flags() {
-        let attrs = LlamaTokenAttrs::try_from(0u32);
+        let attrs = LlamaTokenAttrs::try_from(0);
 
         assert!(attrs.is_ok());
         assert!(attrs.expect("valid attribute").is_empty());
@@ -63,14 +73,13 @@ mod tests {
 
     #[test]
     fn try_from_invalid_bits_returns_error() {
-        let invalid_value = 0xFFFF_FFFFu32;
-        let result = LlamaTokenAttrs::try_from(invalid_value);
+        let result = LlamaTokenAttrs::try_from(!0);
 
         assert!(result.is_err());
-        matches!(
+        assert!(matches!(
             result.expect_err("should fail"),
-            LlamaTokenAttrsFromIntError::UnknownValue(_)
-        );
+            LlamaTokenAttrsFromIntError::UnknownValue(_),
+        ));
     }
 
     #[test]

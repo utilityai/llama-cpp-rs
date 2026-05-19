@@ -133,6 +133,23 @@ fn grammar_lazy_patterns_with_null_byte_in_pattern_returns_error() -> Result<()>
 
 #[test]
 #[serial]
+fn grammar_lazy_patterns_with_malformed_regex_returns_invalid_trigger_pattern() -> Result<()> {
+    let fixture = FixtureSession::open()?;
+    let model = fixture.default_model();
+    let patterns = vec!["[".to_string()];
+    let result =
+        LlamaSampler::grammar_lazy_patterns(model, "root ::= \"hello\"", "root", &patterns, &[]);
+
+    assert!(matches!(
+        result,
+        Err(GrammarError::InvalidTriggerPattern { .. }),
+    ));
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn llguidance_method_creates_sampler() -> Result<()> {
     let fixture = FixtureSession::open()?;
     let model = fixture.default_model();

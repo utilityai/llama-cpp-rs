@@ -421,9 +421,7 @@ impl LlamaModelParams {
     ///
     /// # Errors
     ///
-    /// Returns [`FitError::Failure`] if no fitting allocation could be found, or
-    /// [`FitError::Error`] on a hard error (e.g. the model file could not be read or the C++
-    /// implementation threw an exception).
+    /// Returns one of the [`FitError`] variants matching the vendored wrapper's status code.
     pub fn fit_params(
         mut self: Pin<&mut Self>,
         model_path: &CStr,
@@ -450,6 +448,9 @@ impl LlamaModelParams {
         self.params.tensor_split = null::<f32>();
         self.params.tensor_buft_overrides = null();
 
+        let mut out_unrecognized_status_code: i32 = 0;
+        let mut out_error: *mut c_char = std::ptr::null_mut();
+
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_fit_params(
                 model_path.as_ptr(),
@@ -460,13 +461,33 @@ impl LlamaModelParams {
                 margins.as_mut_ptr(),
                 n_ctx_min,
                 log_level,
+                &raw mut out_unrecognized_status_code,
+                &raw mut out_error,
             )
         };
 
         match status {
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_STATUS_SUCCESS => {}
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_STATUS_FAILURE => return Err(FitError::Failure),
-            _ => return Err(FitError::Error),
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK => {}
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE => {
+                return Err(FitError::NoFittingMemoryLayout);
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR => {
+                return Err(FitError::Aborted);
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE => {
+                return Err(FitError::UnknownStatus {
+                    code: out_unrecognized_status_code,
+                });
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED => {
+                return Err(FitError::NotEnoughMemory);
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION => {
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                return Err(FitError::Reported { message });
+            }
+            other => unreachable!("llama_rs_fit_params returned unrecognized wrapper status: {other}"),
         }
 
         self.params.tensor_split = self.tensor_split.as_ptr();
@@ -681,10 +702,10 @@ mod tests {
     fn with_devices_invalid_index_returns_error() {
         let result = LlamaModelParams::default().with_devices(&[999_999]);
 
-        assert_eq!(
+        assert!(matches!(
             result.unwrap_err(),
             crate::LlamaCppError::BackendDeviceNotFound(999_999)
-        );
+        ));
     }
 
     #[test]
@@ -829,6 +850,9 @@ mod tests {
             llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE,
         );
 
-        assert_eq!(result, Err(FitError::Error));
+        assert!(
+            matches!(result, Err(FitError::Aborted | FitError::Reported { .. })),
+            "expected Aborted or Reported, got {result:?}"
+        );
     }
 }

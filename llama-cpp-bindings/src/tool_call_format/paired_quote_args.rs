@@ -430,4 +430,21 @@ mod tests {
             other => panic!("expected EmptyKey, got {other:?}"),
         }
     }
+
+    #[test]
+    fn rejects_args_body_without_key_colon_with_typed_failure() {
+        let result = parse(
+            "<|tool_call>call:f{noColonHere",
+            &gemma4_markers(),
+            &gemma4_shape(),
+        );
+
+        match result.expect_err("args body without colon must produce a typed failure") {
+            PairedQuoteFailure::UnclosedArgumentBlock { tool_name, state } => {
+                assert_eq!(tool_name, "f");
+                assert_eq!(state, "key");
+            }
+            other => panic!("expected UnclosedArgumentBlock, got {other:?}"),
+        }
+    }
 }

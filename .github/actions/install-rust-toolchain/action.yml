@@ -1,0 +1,11 @@
+name: install-rust-toolchain
+description: Install the pinned stable Rust toolchain (with rustfmt and clippy) and configure the cargo build cache.
+
+runs:
+  using: composite
+  steps:
+    - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+      with:
+        components: rustfmt, clippy
+
+    - uses: Swatinem/rust-cache@v2

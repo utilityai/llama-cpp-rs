@@ -1,8 +1,10 @@
 use std::ffi::CStr;
+use std::ffi::c_char;
 use std::ptr::NonNull;
 use std::slice;
 
 use crate::context::LlamaContext;
+use crate::ffi_error_reader::read_and_free_cpp_error;
 use crate::token::LlamaToken;
 
 use super::image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
@@ -107,10 +109,10 @@ impl MtmdInputChunk {
     ///
     /// # Errors
     ///
-    /// Returns `MtmdInputChunkError::NullResult` if copying fails.
+    /// Returns `MtmdInputChunkError::ChunkOperationFailed` if copying fails.
     pub fn copy(&self) -> Result<Self, MtmdInputChunkError> {
         let chunk = unsafe { llama_cpp_bindings_sys::mtmd_input_chunk_copy(self.chunk.as_ptr()) };
-        let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
+        let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::ChunkOperationFailed)?;
 
         Ok(Self { chunk, owned: true })
     }
@@ -162,9 +164,11 @@ impl MtmdInputChunk {
         }
 
         let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
+        let mut out_vendored_return_code: i32 = 0;
+        let mut out_error: *mut c_char = std::ptr::null_mut();
 
-        let result = unsafe {
-            llama_cpp_bindings_sys::mtmd_helper_eval_chunk_single(
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_mtmd_eval_chunk_single(
                 mtmd_ctx.context.as_ptr(),
                 llama_ctx.context.as_ptr(),
                 self.chunk.as_ptr(),
@@ -173,13 +177,28 @@ impl MtmdInputChunk {
                 n_batch,
                 logits_last,
                 &raw mut final_position,
+                &raw mut out_vendored_return_code,
+                &raw mut out_error,
             )
         };
 
-        if result == 0 {
-            Ok(final_position)
-        } else {
-            Err(MtmdEvalError::EvalFailure(result))
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_OK => Ok(final_position),
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_RETURNED_NONZERO_CODE => {
+                Err(MtmdEvalError::EvalFailed {
+                    code: out_vendored_return_code,
+                })
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(MtmdEvalError::NotEnoughMemory)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { read_and_free_cpp_error(out_error) };
+                Err(MtmdEvalError::Reported { message })
+            }
+            other => unreachable!(
+                "llama_rs_mtmd_eval_chunk_single returned unrecognized status: {other}"
+            ),
         }
     }
 }

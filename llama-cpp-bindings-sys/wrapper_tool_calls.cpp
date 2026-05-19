@@ -7,6 +7,7 @@
 #include "llama.cpp/include/llama.h"
 
 #include <exception>
+#include <new>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -107,7 +108,7 @@ std::string detect_tool_call_haystack(
 
 }  // namespace
 
-extern "C" llama_rs_status llama_rs_compute_tool_call_haystack(
+extern "C" llama_rs_compute_tool_call_haystack_status llama_rs_compute_tool_call_haystack(
     const struct llama_model * model,
     char ** out_haystack,
     char ** out_error) {
@@ -117,20 +118,25 @@ extern "C" llama_rs_status llama_rs_compute_tool_call_haystack(
     if (out_error) {
         *out_error = nullptr;
     }
-
-    if (!model || !out_haystack || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (!model) {
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_MODEL_ARG;
+    }
+    if (!out_haystack) {
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_HAYSTACK_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_ERROR_ARG;
     }
 
     try {
         const char * tmpl_src = llama_model_chat_template(model, nullptr);
         if (!tmpl_src) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
         const llama_vocab * vocab = llama_model_get_vocab(model);
         if (!vocab) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
         std::string bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
@@ -142,29 +148,35 @@ extern "C" llama_rs_status llama_rs_compute_tool_call_haystack(
 
         std::string haystack = detect_tool_call_haystack(tmpl, reasoning);
         if (haystack.empty()) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
         char * haystack_dup = llama_rs_dup_string(haystack);
         if (!haystack_dup) {
-            return LLAMA_RS_STATUS_ALLOCATION_FAILED;
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
         }
 
         *out_haystack = haystack_dup;
 
-        return LLAMA_RS_STATUS_OK;
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & ex) {
         *out_error = llama_rs_dup_string(std::string(ex.what()));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string(std::string("unknown c++ exception"));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_status llama_rs_diagnose_tool_call_synthetic_renders(
+extern "C" llama_rs_diagnose_tool_call_synthetic_renders_status llama_rs_diagnose_tool_call_synthetic_renders(
     const struct llama_model * model,
     char ** out_no_tools,
     char ** out_with_tools,
@@ -178,20 +190,28 @@ extern "C" llama_rs_status llama_rs_diagnose_tool_call_synthetic_renders(
     if (out_error) {
         *out_error = nullptr;
     }
-
-    if (!model || !out_no_tools || !out_with_tools || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (!model) {
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_MODEL_ARG;
+    }
+    if (!out_no_tools) {
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_NO_TOOLS_ARG;
+    }
+    if (!out_with_tools) {
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_WITH_TOOLS_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_ERROR_ARG;
     }
 
     try {
         const char * tmpl_src = llama_model_chat_template(model, nullptr);
         if (!tmpl_src) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
         }
 
         const llama_vocab * vocab = llama_model_get_vocab(model);
         if (!vocab) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
         }
 
         std::string bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
@@ -259,20 +279,26 @@ extern "C" llama_rs_status llama_rs_diagnose_tool_call_synthetic_renders(
             std::free(a_dup);
             std::free(b_dup);
 
-            return LLAMA_RS_STATUS_ALLOCATION_FAILED;
+            return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
         }
 
         *out_no_tools = a_dup;
         *out_with_tools = b_dup;
 
-        return LLAMA_RS_STATUS_OK;
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & ex) {
         *out_error = llama_rs_dup_string(std::string(ex.what()));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string(std::string("unknown c++ exception"));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION;
     }
 }

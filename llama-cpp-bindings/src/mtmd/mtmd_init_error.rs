@@ -1,10 +1,15 @@
-/// Errors that can occur when initializing MTMD context
+use std::path::PathBuf;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MtmdInitError {
-    /// Failed to create `CString` from input
-    #[error("Failed to create CString: {0}")]
+    #[error("Failed to create CString from mmproj path: {0}")]
     CStringError(#[from] std::ffi::NulError),
-    /// MTMD context initialization returned null
-    #[error("MTMD context initialization returned null")]
-    NullResult,
+    #[error("Mmproj path is not valid UTF-8: {0:?}")]
+    PathToStrError(PathBuf),
+    #[error("mmproj could not be loaded: {path:?}")]
+    Unloadable { path: PathBuf },
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }

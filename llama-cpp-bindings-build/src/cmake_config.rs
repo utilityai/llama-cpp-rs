@@ -205,6 +205,7 @@ fn configure_platform_specific(
         TargetOs::Windows(WindowsVariant::Msvc) => {
             config.cflag("/w");
             config.cxxflag("/w");
+            config.cxxflag("/EHsc");
             configure_msvc_release_workaround(config, profile);
         }
         TargetOs::Android => {

@@ -12,20 +12,19 @@ extern "C" {
 struct llama_rs_parsed_chat;
 typedef struct llama_rs_parsed_chat * llama_rs_parsed_chat_handle;
 
-/**
- * Parse a chat-completion turn from raw assistant output using llama.cpp's
- * `common_chat_parse`, driven by the model's autoparser-built peg parser.
- *
- * `tools_json` is a serialized JSON array of OpenAI-style tool definitions
- * (or empty / null when the request had no tools). `is_partial` switches
- * between mid-stream parses (partial accepts incomplete payloads) and final
- * parses (rejects malformed input).
- *
- * On success, `*out_handle` owns the parsed message; free via
- * `llama_rs_parsed_chat_free`. On failure, `*out_error` carries an
- * exception message; free via `llama_rs_string_free`.
- */
-llama_rs_status llama_rs_parse_chat_message(
+typedef enum llama_rs_parse_chat_message_status {
+    LLAMA_RS_PARSE_CHAT_MESSAGE_OK = 0,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_MODEL_ARG,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_INPUT_ARG,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_HANDLE_ARG,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parse_chat_message_status;
+
+llama_rs_parse_chat_message_status llama_rs_parse_chat_message(
     const struct llama_model * model,
     const char * tools_json,
     const char * input,
@@ -33,25 +32,99 @@ llama_rs_status llama_rs_parse_chat_message(
     llama_rs_parsed_chat_handle * out_handle,
     char ** out_error);
 
-void llama_rs_parsed_chat_free(llama_rs_parsed_chat_handle handle);
+typedef enum llama_rs_parsed_chat_free_status {
+    LLAMA_RS_PARSED_CHAT_FREE_OK = 0,
+    LLAMA_RS_PARSED_CHAT_FREE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_FREE_DESTRUCTOR_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_free_status;
 
-size_t llama_rs_parsed_chat_tool_call_count(llama_rs_parsed_chat_handle handle);
+llama_rs_parsed_chat_free_status llama_rs_parsed_chat_free(
+    llama_rs_parsed_chat_handle handle,
+    char ** out_error);
 
-/**
- * Returns a heap-allocated UTF-8 string for the i-th tool call's `id`,
- * `name`, or `arguments` field. Free with `llama_rs_string_free`. Returns
- * nullptr if `handle` is null or `index` is out of bounds.
- *
- * `arguments` is the raw JSON string emitted by the parser — the caller is
- * expected to feed it into a schema validator or hand it back to clients
- * verbatim.
- */
-char * llama_rs_parsed_chat_tool_call_id(llama_rs_parsed_chat_handle handle, size_t index);
-char * llama_rs_parsed_chat_tool_call_name(llama_rs_parsed_chat_handle handle, size_t index);
-char * llama_rs_parsed_chat_tool_call_arguments(llama_rs_parsed_chat_handle handle, size_t index);
+typedef enum llama_rs_parsed_chat_tool_call_count_status {
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_OK = 0,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_OUT_COUNT_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_tool_call_count_status;
 
-char * llama_rs_parsed_chat_content(llama_rs_parsed_chat_handle handle);
-char * llama_rs_parsed_chat_reasoning_content(llama_rs_parsed_chat_handle handle);
+llama_rs_parsed_chat_tool_call_count_status llama_rs_parsed_chat_tool_call_count(
+    llama_rs_parsed_chat_handle handle,
+    size_t * out_count,
+    char ** out_error);
+
+typedef enum llama_rs_parsed_chat_tool_call_id_status {
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_OK = 0,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_OUT_STRING_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_INDEX_OUT_OF_BOUNDS,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_tool_call_id_status;
+
+llama_rs_parsed_chat_tool_call_id_status llama_rs_parsed_chat_tool_call_id(
+    llama_rs_parsed_chat_handle handle,
+    size_t index,
+    char ** out_string,
+    char ** out_error);
+
+typedef enum llama_rs_parsed_chat_tool_call_name_status {
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_OK = 0,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_OUT_STRING_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_INDEX_OUT_OF_BOUNDS,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_tool_call_name_status;
+
+llama_rs_parsed_chat_tool_call_name_status llama_rs_parsed_chat_tool_call_name(
+    llama_rs_parsed_chat_handle handle,
+    size_t index,
+    char ** out_string,
+    char ** out_error);
+
+typedef enum llama_rs_parsed_chat_tool_call_arguments_status {
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_OK = 0,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_OUT_STRING_ARG,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_INDEX_OUT_OF_BOUNDS,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_tool_call_arguments_status;
+
+llama_rs_parsed_chat_tool_call_arguments_status llama_rs_parsed_chat_tool_call_arguments(
+    llama_rs_parsed_chat_handle handle,
+    size_t index,
+    char ** out_string,
+    char ** out_error);
+
+typedef enum llama_rs_parsed_chat_content_status {
+    LLAMA_RS_PARSED_CHAT_CONTENT_OK = 0,
+    LLAMA_RS_PARSED_CHAT_CONTENT_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_CONTENT_NULL_OUT_STRING_ARG,
+    LLAMA_RS_PARSED_CHAT_CONTENT_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_CONTENT_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_content_status;
+
+llama_rs_parsed_chat_content_status llama_rs_parsed_chat_content(
+    llama_rs_parsed_chat_handle handle,
+    char ** out_string,
+    char ** out_error);
+
+typedef enum llama_rs_parsed_chat_reasoning_content_status {
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_OK = 0,
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_HANDLE_ARG,
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_OUT_STRING_ARG,
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_parsed_chat_reasoning_content_status;
+
+llama_rs_parsed_chat_reasoning_content_status llama_rs_parsed_chat_reasoning_content(
+    llama_rs_parsed_chat_handle handle,
+    char ** out_string,
+    char ** out_error);
 
 #ifdef __cplusplus
 }

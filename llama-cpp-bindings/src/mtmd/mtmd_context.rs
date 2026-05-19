@@ -1,6 +1,8 @@
 use std::ffi::CString;
+use std::ffi::c_char;
 use std::ptr::NonNull;
 
+use crate::ffi_error_reader::read_and_free_cpp_error;
 use crate::model::LlamaModel;
 
 use super::mtmd_bitmap::MtmdBitmap;
@@ -12,19 +14,56 @@ use super::mtmd_input_chunks::MtmdInputChunks;
 use super::mtmd_input_text::MtmdInputText;
 use super::mtmd_tokenize_error::MtmdTokenizeError;
 
-const fn tokenize_result_to_error(result: i32) -> MtmdTokenizeError {
-    match result {
-        1 => MtmdTokenizeError::BitmapCountMismatch,
-        2 => MtmdTokenizeError::ImagePreprocessingError,
-        _ => MtmdTokenizeError::UnknownError(result),
+fn map_tokenize_status(
+    status: llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status,
+    undocumented_return_code: i32,
+    out_error: *mut c_char,
+) -> Result<(), MtmdTokenizeError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT => {
+            Err(MtmdTokenizeError::BitmapCountDoesNotMatchMarkerCount)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_IMAGE_PREPROCESSING_ERROR => {
+            Err(MtmdTokenizeError::MediaPreprocessingFailed)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_RETURNED_UNDOCUMENTED_NONZERO_CODE => {
+            Err(MtmdTokenizeError::UnknownStatus {
+                code: undocumented_return_code,
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MtmdTokenizeError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { read_and_free_cpp_error(out_error) };
+            Err(MtmdTokenizeError::Reported { message })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO => unreachable!("llama_rs_mtmd_tokenize NULL_BITMAPS_ARG: Rust always passes a non-null bitmaps pointer when count > 0"),
+        other => unreachable!("llama_rs_mtmd_tokenize returned unrecognized status: {other}"),
     }
 }
 
-const fn check_encode_result(result: i32) -> Result<(), MtmdEncodeError> {
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(MtmdEncodeError::EncodeFailure(result))
+fn map_encode_chunk_status(
+    status: llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status,
+    vendored_return_code: i32,
+    out_error: *mut c_char,
+) -> Result<(), MtmdEncodeError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_RETURNED_NONZERO_CODE => {
+            Err(MtmdEncodeError::EncodingFailed {
+                code: vendored_return_code,
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MtmdEncodeError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { read_and_free_cpp_error(out_error) };
+            Err(MtmdEncodeError::Reported { message })
+        }
+        other => unreachable!("llama_rs_mtmd_encode_chunk returned unrecognized status: {other}"),
     }
 }
 
@@ -46,9 +85,7 @@ impl MtmdContext {
     ///
     /// # Errors
     ///
-    /// This function will return an error if:
-    /// - The path cannot be converted to a C string
-    /// - The underlying C function returns null (indicating initialization failure)
+    /// Returns an [`MtmdInitError`] variant matching the wrapper's status code.
     pub fn init_from_file(
         mmproj_path: &str,
         text_model: &LlamaModel,
@@ -57,17 +94,42 @@ impl MtmdContext {
         let path_cstr = CString::new(mmproj_path)?;
         let ctx_params = llama_cpp_bindings_sys::mtmd_context_params::from(params);
 
-        let context = unsafe {
-            llama_cpp_bindings_sys::mtmd_init_from_file(
+        let mut out_ctx: *mut llama_cpp_bindings_sys::mtmd_context = std::ptr::null_mut();
+        let mut out_error: *mut c_char = std::ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file(
                 path_cstr.as_ptr(),
                 text_model.model.as_ptr(),
                 ctx_params,
+                &raw mut out_ctx,
+                &raw mut out_error,
             )
         };
 
-        let context = NonNull::new(context).ok_or(MtmdInitError::NullResult)?;
-
-        Ok(Self { context })
+        match status {
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_OK => {
+                let context = NonNull::new(out_ctx).ok_or_else(|| MtmdInitError::Unloadable {
+                    path: std::path::PathBuf::from(mmproj_path),
+                })?;
+                Ok(Self { context })
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
+                Err(MtmdInitError::Unloadable {
+                    path: std::path::PathBuf::from(mmproj_path),
+                })
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
+                Err(MtmdInitError::NotEnoughMemory)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+                let message = unsafe { read_and_free_cpp_error(out_error) };
+                Err(MtmdInitError::Reported { message })
+            }
+            other => {
+                unreachable!("llama_rs_mtmd_init_from_file returned unrecognized status: {other}")
+            }
+        }
     }
 
     /// Check whether non-causal attention mask is needed before `llama_decode`
@@ -117,24 +179,7 @@ impl MtmdContext {
     ///
     /// # Errors
     ///
-    /// * `BitmapCountMismatch` - Number of bitmaps doesn't match number of markers
-    /// * `ImagePreprocessingError` - Error occurred during image preprocessing
-    /// * `UnknownError` - Other tokenization error occurred
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// # use llama_cpp_bindings::mtmd::*;
-    /// # fn example(ctx: &MtmdContext, bitmap: &MtmdBitmap) -> Result<(), Box<dyn std::error::Error>> {
-    /// let text = MtmdInputText {
-    ///     text: "Here is an image: <__media__>\nDescribe it.".to_string(),
-    ///     add_special: true,
-    ///     parse_special: true,
-    /// };
-    /// let chunks = ctx.tokenize(text, &[bitmap])?;
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Returns an [`MtmdTokenizeError`] variant matching the wrapper's status code.
     pub fn tokenize(
         &self,
         text: MtmdInputText,
@@ -153,34 +198,44 @@ impl MtmdContext {
             .map(|bitmap| bitmap.bitmap.as_ptr().cast_const())
             .collect();
 
-        let result = unsafe {
-            llama_cpp_bindings_sys::mtmd_tokenize(
+        let mut out_undocumented_return_code: i32 = 0;
+        let mut out_error: *mut c_char = std::ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_mtmd_tokenize(
                 self.context.as_ptr(),
                 chunks.chunks.as_ptr(),
                 &raw const input_text,
                 bitmap_ptrs.as_ptr().cast_mut(),
                 bitmaps.len(),
+                &raw mut out_undocumented_return_code,
+                &raw mut out_error,
             )
         };
 
-        if result == 0 {
-            Ok(chunks)
-        } else {
-            Err(tokenize_result_to_error(result))
-        }
+        map_tokenize_status(status, out_undocumented_return_code, out_error)?;
+        Ok(chunks)
     }
 
     /// Encode a chunk for image/audio processing.
     ///
     /// # Errors
     ///
-    /// Returns `MtmdEncodeError::EncodeFailure` if encoding fails.
+    /// Returns an [`MtmdEncodeError`] variant matching the wrapper's status code.
     pub fn encode_chunk(&self, chunk: &MtmdInputChunk) -> Result<(), MtmdEncodeError> {
-        let result = unsafe {
-            llama_cpp_bindings_sys::mtmd_encode_chunk(self.context.as_ptr(), chunk.chunk.as_ptr())
+        let mut out_vendored_return_code: i32 = 0;
+        let mut out_error: *mut c_char = std::ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk(
+                self.context.as_ptr(),
+                chunk.chunk.as_ptr(),
+                &raw mut out_vendored_return_code,
+                &raw mut out_error,
+            )
         };
 
-        check_encode_result(result)
+        map_encode_chunk_status(status, out_vendored_return_code, out_error)
     }
 }
 
@@ -192,44 +247,86 @@ impl Drop for MtmdContext {
 
 #[cfg(test)]
 mod unit_tests {
-    use super::check_encode_result;
-    use super::tokenize_result_to_error;
+    use super::map_encode_chunk_status;
+    use super::map_tokenize_status;
+    use crate::mtmd::mtmd_encode_error::MtmdEncodeError;
+    use crate::mtmd::mtmd_tokenize_error::MtmdTokenizeError;
 
     #[test]
-    fn tokenize_result_bitmap_count_mismatch() {
-        let error = tokenize_result_to_error(1);
-
-        assert!(error.to_string().contains("does not match"));
-    }
-
-    #[test]
-    fn tokenize_result_image_preprocessing_error() {
-        let error = tokenize_result_to_error(2);
-
-        assert!(error.to_string().contains("Image preprocessing"));
-    }
-
-    #[test]
-    fn tokenize_result_unknown_error() {
-        let error = tokenize_result_to_error(42);
-
-        assert!(error.to_string().contains("Unknown error: 42"));
-    }
-
-    #[test]
-    fn check_encode_result_ok_for_zero() {
-        assert!(check_encode_result(0).is_ok());
-    }
-
-    #[test]
-    fn check_encode_result_error_for_nonzero() {
-        let result = check_encode_result(5);
-
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("Encode failed with code: 5")
+    fn tokenize_status_maps_bitmap_count_mismatch() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT,
+            0,
+            std::ptr::null_mut(),
         );
+
+        assert!(matches!(
+            result,
+            Err(MtmdTokenizeError::BitmapCountDoesNotMatchMarkerCount)
+        ));
+    }
+
+    #[test]
+    fn tokenize_status_maps_media_preprocessing_failed() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_IMAGE_PREPROCESSING_ERROR,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MtmdTokenizeError::MediaPreprocessingFailed)
+        ));
+    }
+
+    #[test]
+    fn tokenize_status_maps_unknown_status_with_value() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_RETURNED_UNDOCUMENTED_NONZERO_CODE,
+            42,
+            std::ptr::null_mut(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MtmdTokenizeError::UnknownStatus { code: 42 })
+        ));
+    }
+
+    #[test]
+    fn tokenize_status_maps_ok_to_unit() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_OK,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert!(matches!(result, Ok(())));
+    }
+
+    #[test]
+    fn encode_chunk_status_maps_ok_to_unit() {
+        let result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_OK,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert!(matches!(result, Ok(())));
+    }
+
+    #[test]
+    fn encode_chunk_status_maps_encoding_failed_with_code() {
+        let result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_RETURNED_NONZERO_CODE,
+            5,
+            std::ptr::null_mut(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MtmdEncodeError::EncodingFailed { code: 5 })
+        ));
     }
 }

@@ -313,6 +313,38 @@ mod tests {
     }
 
     #[test]
+    fn rejects_empty_key_with_typed_failure() {
+        let body = "<tool_call>f<arg_key></arg_key><arg_value>Paris</arg_value></tool_call>";
+        let result = parse(body, &glm47_markers(), &glm47_shape());
+
+        match result.expect_err("must error") {
+            KeyValueXmlTagsFailure::EmptyKey { function_name } => {
+                assert_eq!(function_name, "f");
+            }
+            other => panic!("expected EmptyKey, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejects_unclosed_value_tag_with_typed_failure() {
+        let body = "<tool_call>f<arg_key>location</arg_key><arg_value>Paris</tool_call>";
+        let result = parse(body, &glm47_markers(), &glm47_shape());
+
+        match result.expect_err("must error") {
+            KeyValueXmlTagsFailure::UnclosedValueTag {
+                function_name,
+                key,
+                expected_close,
+            } => {
+                assert_eq!(function_name, "f");
+                assert_eq!(key, "location");
+                assert_eq!(expected_close, "</arg_value>");
+            }
+            other => panic!("expected UnclosedValueTag, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn returns_empty_for_body_without_open_marker() {
         let parsed =
             parse("plain text", &glm47_markers(), &glm47_shape()).expect("must parse empty");

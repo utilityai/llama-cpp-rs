@@ -7,21 +7,17 @@
 extern "C" {
 #endif
 
-/**
- * Detect the reasoning open/close marker strings for a model by analyzing its
- * Jinja chat template via llama.cpp's autoparser.
- *
- * On success (LLAMA_RS_STATUS_OK):
- *   - If the model has detected reasoning markers, *out_open and *out_close are
- *     set to heap-allocated null-terminated strings owned by the caller. Free
- *     each via llama_rs_string_free.
- *   - If no reasoning markers were detected, *out_open and *out_close are left
- *     as nullptr.
- *
- * On LLAMA_RS_STATUS_EXCEPTION, *out_error is set to a heap-allocated message;
- * free via llama_rs_string_free.
- */
-llama_rs_status llama_rs_detect_reasoning_markers(
+typedef enum llama_rs_detect_reasoning_markers_status {
+    LLAMA_RS_DETECT_REASONING_MARKERS_OK = 0,
+    LLAMA_RS_DETECT_REASONING_MARKERS_NULL_MODEL_ARG,
+    LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_OPEN_ARG,
+    LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_CLOSE_ARG,
+    LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_detect_reasoning_markers_status;
+
+llama_rs_detect_reasoning_markers_status llama_rs_detect_reasoning_markers(
     const struct llama_model * model,
     char ** out_open,
     char ** out_close,

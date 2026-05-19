@@ -1,7 +1,9 @@
-/// Failed to Load context
-#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum LlamaContextLoadError {
-    /// llama.cpp returned null
-    #[error("null reference from llama.cpp")]
-    NullReturn,
+    #[error("context could not be constructed")]
+    Unconstructible,
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }

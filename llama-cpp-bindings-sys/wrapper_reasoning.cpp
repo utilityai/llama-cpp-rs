@@ -6,6 +6,7 @@
 #include "marker_probes/marker_probe.h"
 
 #include <exception>
+#include <new>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -26,7 +27,7 @@ std::string token_text_or_empty(const llama_vocab * vocab, llama_token token) {
 
 }  // namespace
 
-extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
+extern "C" llama_rs_detect_reasoning_markers_status llama_rs_detect_reasoning_markers(
     const struct llama_model * model,
     char ** out_open,
     char ** out_close,
@@ -40,20 +41,28 @@ extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
     if (out_error) {
         *out_error = nullptr;
     }
-
-    if (!model || !out_open || !out_close || !out_error) {
-        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    if (!model) {
+        return LLAMA_RS_DETECT_REASONING_MARKERS_NULL_MODEL_ARG;
+    }
+    if (!out_open) {
+        return LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_OPEN_ARG;
+    }
+    if (!out_close) {
+        return LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_CLOSE_ARG;
+    }
+    if (!out_error) {
+        return LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_ERROR_ARG;
     }
 
     try {
         const char * tmpl_src = llama_model_chat_template(model, nullptr);
         if (!tmpl_src) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_DETECT_REASONING_MARKERS_OK;
         }
 
         const llama_vocab * vocab = llama_model_get_vocab(model);
         if (!vocab) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_DETECT_REASONING_MARKERS_OK;
         }
 
         std::string bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
@@ -112,7 +121,7 @@ extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
         }
 
         if (!detected) {
-            return LLAMA_RS_STATUS_OK;
+            return LLAMA_RS_DETECT_REASONING_MARKERS_OK;
         }
 
         char * open_dup = llama_rs_dup_string(detected_start);
@@ -122,21 +131,27 @@ extern "C" llama_rs_status llama_rs_detect_reasoning_markers(
             std::free(open_dup);
             std::free(close_dup);
 
-            return LLAMA_RS_STATUS_ALLOCATION_FAILED;
+            return LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED;
         }
 
         *out_open = open_dup;
         *out_close = close_dup;
 
-        return LLAMA_RS_STATUS_OK;
+        return LLAMA_RS_DETECT_REASONING_MARKERS_OK;
+    } catch (const std::bad_alloc &) {
+        return LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & ex) {
         *out_error = llama_rs_dup_string(std::string(ex.what()));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string(std::string("unknown c++ exception"));
-
-        return LLAMA_RS_STATUS_EXCEPTION;
+        if (!*out_error) {
+            return LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 

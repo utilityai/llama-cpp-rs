@@ -1,16 +1,21 @@
-/// Errors that can occur when working with MTMD bitmaps
+use std::path::PathBuf;
+
 #[derive(thiserror::Error, Debug)]
 pub enum MtmdBitmapError {
-    /// Failed to create `CString` from input
-    #[error("Failed to create CString: {0}")]
+    #[error("Failed to create CString from bitmap-source path: {0}")]
     CStringError(#[from] std::ffi::NulError),
-    /// Invalid data size for bitmap
+    #[error("Bitmap-source path is not valid UTF-8: {0:?}")]
+    PathToStrError(PathBuf),
     #[error("Invalid data size for bitmap")]
     InvalidDataSize,
-    /// Image dimensions too small for processing (minimum 2x2)
     #[error("Image dimensions too small: {0}x{1} (minimum 2x2)")]
     ImageDimensionsTooSmall(u32, u32),
-    /// Bitmap creation returned null
-    #[error("Bitmap creation returned null")]
-    NullResult,
+    #[error("bitmap data could not be decoded")]
+    BitmapDecodeFailed,
+    #[error("bitmap file is unreadable: {path:?}")]
+    FileUnreadable { path: PathBuf },
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }

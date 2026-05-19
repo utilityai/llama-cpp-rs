@@ -33,6 +33,16 @@ impl LogSource {
 static LLAMA_SOURCE: OnceLock<LogSource> = OnceLock::new();
 static GGML_SOURCE: OnceLock<LogSource> = OnceLock::new();
 
+#[cfg(target_env = "msvc")]
+const fn ggml_level_to_u32(level: llama_cpp_bindings_sys::ggml_log_level) -> u32 {
+    level.cast_unsigned()
+}
+
+#[cfg(not(target_env = "msvc"))]
+const fn ggml_level_to_u32(level: llama_cpp_bindings_sys::ggml_log_level) -> u32 {
+    level
+}
+
 const fn ggml_level_to_incoming(raw: llama_cpp_bindings_sys::ggml_log_level) -> IncomingLogLevel {
     match raw {
         llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE => IncomingLogLevel::None,
@@ -41,7 +51,7 @@ const fn ggml_level_to_incoming(raw: llama_cpp_bindings_sys::ggml_log_level) -> 
         llama_cpp_bindings_sys::GGML_LOG_LEVEL_WARN => IncomingLogLevel::Warn,
         llama_cpp_bindings_sys::GGML_LOG_LEVEL_ERROR => IncomingLogLevel::Error,
         llama_cpp_bindings_sys::GGML_LOG_LEVEL_CONT => IncomingLogLevel::Cont,
-        other => IncomingLogLevel::Unknown(other),
+        other => IncomingLogLevel::Unknown(ggml_level_to_u32(other)),
     }
 }
 
