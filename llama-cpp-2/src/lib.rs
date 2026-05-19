@@ -35,6 +35,7 @@ pub mod model;
 pub mod mtmd;
 pub mod openai;
 pub mod sampling;
+pub mod speculative;
 pub mod timing;
 pub mod token;
 pub mod token_type;
