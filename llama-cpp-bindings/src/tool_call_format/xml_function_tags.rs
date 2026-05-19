@@ -274,6 +274,25 @@ mod tests {
     }
 
     #[test]
+    fn rejects_parameter_tag_missing_closing_angle_with_typed_failure() {
+        let body = "<function=f><parameter=x</function>";
+        let result = parse(body, &xml_shape());
+
+        match result.expect_err("must error") {
+            XmlFunctionTagsFailure::UnclosedParameterBlock {
+                function_name,
+                parameter_name,
+                expected_close,
+            } => {
+                assert_eq!(function_name, "f");
+                assert_eq!(parameter_name, "");
+                assert_eq!(expected_close, "</parameter>");
+            }
+            other => panic!("expected UnclosedParameterBlock, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn rejects_parameter_block_missing_close_tag_with_typed_failure() {
         let body = "<function=get_weather><parameter=location>Paris</function>";
         let result = parse(body, &xml_shape());

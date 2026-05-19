@@ -324,4 +324,73 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn feed_debug_level() {
+        let mut decoder = LogDecoder::new();
+        let result = decoder.feed(IncomingLogLevel::Debug, "trace\n");
+
+        assert_eq!(
+            result,
+            DecodeResult {
+                output: DecodeOutput::Line(LogLine {
+                    level: LogLevel::Debug,
+                    text: "trace".to_owned(),
+                }),
+                anomaly: None,
+            }
+        );
+    }
+
+    #[test]
+    fn feed_error_level() {
+        let mut decoder = LogDecoder::new();
+        let result = decoder.feed(IncomingLogLevel::Error, "boom\n");
+
+        assert_eq!(
+            result,
+            DecodeResult {
+                output: DecodeOutput::Line(LogLine {
+                    level: LogLevel::Error,
+                    text: "boom".to_owned(),
+                }),
+                anomaly: None,
+            }
+        );
+    }
+
+    #[test]
+    fn feed_orphan_cont_without_newline_buffers_text() {
+        let mut decoder = LogDecoder::new();
+        let result = decoder.feed(IncomingLogLevel::Cont, "fragment");
+
+        assert_eq!(
+            result,
+            DecodeResult {
+                output: DecodeOutput::None,
+                anomaly: Some(DecodeAnomaly::OrphanCont),
+            }
+        );
+
+        let follow_up = decoder.feed(IncomingLogLevel::Cont, " rest\n");
+        assert_eq!(
+            follow_up,
+            DecodeResult {
+                output: DecodeOutput::Line(LogLine {
+                    level: LogLevel::None,
+                    text: "fragment rest".to_owned(),
+                }),
+                anomaly: None,
+            }
+        );
+    }
+
+    #[test]
+    fn default_construction() {
+        let mut default_decoder = LogDecoder::default();
+        let new_decoder_result = LogDecoder::new().feed(IncomingLogLevel::Info, "compare\n");
+        let default_result = default_decoder.feed(IncomingLogLevel::Info, "compare\n");
+
+        assert_eq!(default_result, new_decoder_result);
+    }
 }
