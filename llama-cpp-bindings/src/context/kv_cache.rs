@@ -160,21 +160,18 @@ impl LlamaContext<'_> {
         };
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_OK => Ok(()),
-            llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_NULL_CTX_ARG => {
-                Err(KvCacheSeqAddError::NullContextArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_INCOMPATIBLE_ROPE_TYPE => {
                 Err(KvCacheSeqAddError::IncompatibleRopeType)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_NULL_MEM => {
-                Err(KvCacheSeqAddError::NullMem)
+                Err(KvCacheSeqAddError::MemoryHandleUnavailable)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(KvCacheSeqAddError::ErrorStringAllocationFailed)
+                Err(KvCacheSeqAddError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(KvCacheSeqAddError::VendoredThrewCxxException { message })
+                Err(KvCacheSeqAddError::Reported { message })
             }
             other => unreachable!("llama_rs_memory_seq_add returned unrecognized status {other}"),
         }
@@ -224,21 +221,18 @@ impl LlamaContext<'_> {
         };
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_OK => Ok(()),
-            llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_NULL_CTX_ARG => {
-                Err(KvCacheSeqDivError::NullContextArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_INCOMPATIBLE_ROPE_TYPE => {
                 Err(KvCacheSeqDivError::IncompatibleRopeType)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_NULL_MEM => {
-                Err(KvCacheSeqDivError::NullMem)
+                Err(KvCacheSeqDivError::MemoryHandleUnavailable)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(KvCacheSeqDivError::ErrorStringAllocationFailed)
+                Err(KvCacheSeqDivError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(KvCacheSeqDivError::VendoredThrewCxxException { message })
+                Err(KvCacheSeqDivError::Reported { message })
             }
             other => unreachable!("llama_rs_memory_seq_div returned unrecognized status {other}"),
         }

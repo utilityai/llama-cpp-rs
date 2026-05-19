@@ -27,27 +27,16 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String, JsonSchemaToG
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out) };
             Ok(String::from_utf8(grammar_bytes)?)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_SCHEMA_JSON_ARG => {
-            unreachable!(
-                "llama_rs_json_schema_to_grammar received null schema_json despite valid Rust CString"
-            )
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_GRAMMAR_ARG => {
-            unreachable!(
-                "llama_rs_json_schema_to_grammar reported null out_grammar despite valid Rust pointer"
-            )
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_ERROR_ARG => {
-            unreachable!(
-                "llama_rs_json_schema_to_grammar reported null out_error despite valid Rust pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(JsonSchemaToGrammarError::ErrorStringAllocationFailed)
+            Err(JsonSchemaToGrammarError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_INVALID_SCHEMA => {
+            let message = unsafe { read_and_free_cpp_error(error_ptr) };
+            Err(JsonSchemaToGrammarError::InvalidSchema { message })
         }
         llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
-            Err(JsonSchemaToGrammarError::VendoredThrewCxxException { message })
+            Err(JsonSchemaToGrammarError::Reported { message })
         }
         other => {
             unreachable!("llama_rs_json_schema_to_grammar returned unrecognized status {other}")
@@ -88,13 +77,24 @@ mod tests {
     }
 
     #[test]
-    fn invalid_json_returns_vendored_threw_cxx_exception() {
+    fn invalid_json_returns_reported() {
         let schema = "not valid json at all";
         let result = json_schema_to_grammar(schema);
 
         assert!(matches!(
             result,
-            Err(JsonSchemaToGrammarError::VendoredThrewCxxException { .. }),
+            Err(JsonSchemaToGrammarError::Reported { .. }),
         ));
+    }
+
+    #[test]
+    fn unresolved_ref_returns_invalid_schema() {
+        let schema = r##"{"$ref": "#/$defs/Missing"}"##;
+        let result = json_schema_to_grammar(schema);
+
+        assert!(
+            matches!(result, Err(JsonSchemaToGrammarError::InvalidSchema { .. })),
+            "expected InvalidSchema, got {result:?}",
+        );
     }
 }

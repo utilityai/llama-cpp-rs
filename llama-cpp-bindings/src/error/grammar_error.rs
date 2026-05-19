@@ -14,40 +14,18 @@ pub enum GrammarError {
     IntegerOverflow(String),
     #[error("llguidance error: {0}")]
     LlguidanceError(String),
-    #[error("llama_rs_sampler_init_grammar called with null out_sampler")]
-    GrammarInitNullOutSamplerArg,
-    #[error("llama_rs_sampler_init_grammar called with null out_error")]
-    GrammarInitNullOutErrorArg,
-    #[error("llama_rs_sampler_init_grammar returned null")]
-    GrammarInitVendoredReturnedNull,
-    #[error("llama_rs_sampler_init_grammar wrapper failed to duplicate the C++ exception string")]
-    GrammarInitErrorStringAllocationFailed,
-    #[error("llama_rs_sampler_init_grammar threw a C++ exception: {message}")]
-    GrammarInitVendoredThrewCxxException { message: String },
-    #[error("llama_rs_sampler_init_grammar_lazy called with null out_sampler")]
-    GrammarLazyInitNullOutSamplerArg,
-    #[error("llama_rs_sampler_init_grammar_lazy called with null out_error")]
-    GrammarLazyInitNullOutErrorArg,
-    #[error("llama_rs_sampler_init_grammar_lazy returned null")]
-    GrammarLazyInitVendoredReturnedNull,
-    #[error(
-        "llama_rs_sampler_init_grammar_lazy wrapper failed to duplicate the C++ exception string"
-    )]
-    GrammarLazyInitErrorStringAllocationFailed,
-    #[error("llama_rs_sampler_init_grammar_lazy threw a C++ exception: {message}")]
-    GrammarLazyInitVendoredThrewCxxException { message: String },
-    #[error("llama_rs_sampler_init_grammar_lazy_patterns called with null out_sampler")]
-    GrammarLazyPatternsInitNullOutSamplerArg,
-    #[error("llama_rs_sampler_init_grammar_lazy_patterns called with null out_error")]
-    GrammarLazyPatternsInitNullOutErrorArg,
-    #[error("llama_rs_sampler_init_grammar_lazy_patterns returned null")]
-    GrammarLazyPatternsInitVendoredReturnedNull,
-    #[error(
-        "llama_rs_sampler_init_grammar_lazy_patterns wrapper failed to duplicate the C++ exception string"
-    )]
-    GrammarLazyPatternsInitErrorStringAllocationFailed,
-    #[error("llama_rs_sampler_init_grammar_lazy_patterns threw a C++ exception: {message}")]
-    GrammarLazyPatternsInitVendoredThrewCxxException { message: String },
-    #[error("vendored llama_sampler_init for llguidance returned null")]
-    LlguidanceSamplerInitVendoredReturnedNull,
+    #[error("grammar is malformed")]
+    GrammarMalformed,
+    #[error("lazy grammar is malformed")]
+    LazyGrammarMalformed,
+    #[error("lazy-patterns grammar is malformed")]
+    LazyPatternsGrammarMalformed,
+    #[error("trigger pattern is not a valid regex: {message}")]
+    InvalidTriggerPattern { message: String },
+    #[error("llguidance sampler could not be created")]
+    LlguidanceSamplerUnavailable,
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }

@@ -109,10 +109,10 @@ impl MtmdInputChunk {
     ///
     /// # Errors
     ///
-    /// Returns `MtmdInputChunkError::NullResult` if copying fails.
+    /// Returns `MtmdInputChunkError::ChunkOperationFailed` if copying fails.
     pub fn copy(&self) -> Result<Self, MtmdInputChunkError> {
         let chunk = unsafe { llama_cpp_bindings_sys::mtmd_input_chunk_copy(self.chunk.as_ptr()) };
-        let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
+        let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::ChunkOperationFailed)?;
 
         Ok(Self { chunk, owned: true })
     }
@@ -184,29 +184,17 @@ impl MtmdInputChunk {
 
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_OK => Ok(final_position),
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_NULL_MTMD_CTX_ARG => {
-                Err(MtmdEvalError::NullMtmdCtxArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_NULL_LLAMA_CTX_ARG => {
-                Err(MtmdEvalError::NullLlamaCtxArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_NULL_CHUNK_ARG => {
-                Err(MtmdEvalError::NullChunkArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_NULL_OUT_NEW_N_PAST_ARG => {
-                Err(MtmdEvalError::NullOutNewNPastArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_RETURNED_NONZERO_CODE => {
-                Err(MtmdEvalError::VendoredReturnedNonzeroCode {
+                Err(MtmdEvalError::EvalFailed {
                     code: out_vendored_return_code,
                 })
             }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(MtmdEvalError::ErrorStringAllocationFailed)
+                Err(MtmdEvalError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(MtmdEvalError::VendoredThrewCxxException { message })
+                Err(MtmdEvalError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_mtmd_eval_chunk_single returned unrecognized status: {other}"

@@ -124,27 +124,18 @@ impl<'model> LlamaContext<'model> {
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK => {
                 let context = NonNull::new(out_ctx)
-                    .ok_or(LlamaContextLoadError::VendoredReturnedNull)?;
+                    .ok_or(LlamaContextLoadError::Unconstructible)?;
                 Ok(Self::new(model, context, params.embeddings()))
             }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_MODEL_ARG => {
-                Err(LlamaContextLoadError::NullModelArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_CTX_ARG => {
-                Err(LlamaContextLoadError::NullOutCtxArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_ERROR_ARG => {
-                Err(LlamaContextLoadError::NullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL => {
-                Err(LlamaContextLoadError::VendoredReturnedNull)
+                Err(LlamaContextLoadError::Unconstructible)
             }
             llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(LlamaContextLoadError::ErrorStringAllocationFailed)
+                Err(LlamaContextLoadError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(LlamaContextLoadError::VendoredThrewCxxException { message })
+                Err(LlamaContextLoadError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_new_context_with_model returned unrecognized status {other}"
@@ -250,12 +241,6 @@ impl<'model> LlamaContext<'model> {
                     .clone_from(&batch.initialized_logits);
                 Ok(())
             }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_NULL_CTX_ARG => {
-                Err(DecodeError::NullContextArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_NULL_OUT_ERROR_ARG => {
-                Err(DecodeError::NullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE => {
                 let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
                     unreachable!(
@@ -264,13 +249,19 @@ impl<'model> LlamaContext<'model> {
                 });
                 Err(DecodeError::from(code))
             }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_OUT_OF_MEMORY => {
+                Err(DecodeError::DecodeOutOfMemory)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_COMPUTE_FAILED => {
+                Err(DecodeError::ComputeFailed)
+            }
             llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(DecodeError::ErrorStringAllocationFailed)
+                Err(DecodeError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message =
                     unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(DecodeError::VendoredThrewCxxException { message })
+                Err(DecodeError::Reported { message })
             }
             other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
         }
@@ -298,9 +289,6 @@ impl<'model> LlamaContext<'model> {
                     .clone_from(&batch.initialized_logits);
                 Ok(())
             }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_NULL_CTX_ARG => {
-                Err(EncodeError::NullContextArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
                 Err(EncodeError::ModelHasNoEncoder)
             }
@@ -312,13 +300,19 @@ impl<'model> LlamaContext<'model> {
                 });
                 Err(EncodeError::from(code))
             }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OUT_OF_MEMORY => {
+                Err(EncodeError::EncodeOutOfMemory)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_COMPUTE_FAILED => {
+                Err(EncodeError::ComputeFailed)
+            }
             llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(EncodeError::ErrorStringAllocationFailed)
+                Err(EncodeError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message =
                     unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(EncodeError::VendoredThrewCxxException { message })
+                Err(EncodeError::Reported { message })
             }
             other => unreachable!("llama_rs_encode returned unrecognized status {other}"),
         }

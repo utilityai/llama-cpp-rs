@@ -18,18 +18,12 @@ fn check_sampler_accept_status(
 ) -> Result<(), SamplerAcceptError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_OK => Ok(()),
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG => {
-            Err(SamplerAcceptError::NullSamplerArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_OUT_ERROR_ARG => {
-            Err(SamplerAcceptError::NullOutErrorArg)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(SamplerAcceptError::ErrorStringAllocationFailed)
+            Err(SamplerAcceptError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
-            Err(SamplerAcceptError::VendoredThrewCxxException { message })
+            Err(SamplerAcceptError::GrammarStateCorrupted { message })
         }
         other => unreachable!("llama_rs_sampler_accept returned unrecognized status {other}"),
     }
@@ -81,24 +75,12 @@ impl LlamaSampler {
 
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_OK => Ok(LlamaToken(token)),
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_SAMPLER_ARG => {
-                Err(SampleError::NullSamplerArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG => {
-                Err(SampleError::NullCtxArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_TOKEN_ARG => {
-                Err(SampleError::NullOutTokenArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_ERROR_ARG => {
-                Err(SampleError::NullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(SampleError::ErrorStringAllocationFailed)
+                Err(SampleError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(error_ptr) };
-                Err(SampleError::VendoredThrewCxxException { message })
+                Err(SampleError::Reported { message })
             }
             other => unreachable!("llama_rs_sampler_sample returned unrecognized status {other}"),
         }
@@ -403,21 +385,15 @@ impl LlamaSampler {
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_OK => {
                 Ok(Self { sampler })
             }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG => {
-                Err(GrammarError::GrammarInitNullOutSamplerArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_ERROR_ARG => {
-                Err(GrammarError::GrammarInitNullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL => {
-                Err(GrammarError::GrammarInitVendoredReturnedNull)
+                Err(GrammarError::GrammarMalformed)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(GrammarError::GrammarInitErrorStringAllocationFailed)
+                Err(GrammarError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(error_ptr) };
-                Err(GrammarError::GrammarInitVendoredThrewCxxException { message })
+                Err(GrammarError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_sampler_init_grammar returned unrecognized status {other}"
@@ -465,21 +441,15 @@ impl LlamaSampler {
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_OK => {
                 Ok(Self { sampler })
             }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG => {
-                Err(GrammarError::GrammarLazyInitNullOutSamplerArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_ERROR_ARG => {
-                Err(GrammarError::GrammarLazyInitNullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL => {
-                Err(GrammarError::GrammarLazyInitVendoredReturnedNull)
+                Err(GrammarError::LazyGrammarMalformed)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(GrammarError::GrammarLazyInitErrorStringAllocationFailed)
+                Err(GrammarError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(error_ptr) };
-                Err(GrammarError::GrammarLazyInitVendoredThrewCxxException { message })
+                Err(GrammarError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_sampler_init_grammar_lazy returned unrecognized status {other}"
@@ -529,21 +499,19 @@ impl LlamaSampler {
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK => {
                 Ok(Self { sampler })
             }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG => {
-                Err(GrammarError::GrammarLazyPatternsInitNullOutSamplerArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_ERROR_ARG => {
-                Err(GrammarError::GrammarLazyPatternsInitNullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL => {
-                Err(GrammarError::GrammarLazyPatternsInitVendoredReturnedNull)
+                Err(GrammarError::LazyPatternsGrammarMalformed)
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(GrammarError::GrammarLazyPatternsInitErrorStringAllocationFailed)
+                Err(GrammarError::NotEnoughMemory)
+            }
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_INVALID_TRIGGER_PATTERN => {
+                let message = unsafe { read_and_free_cpp_error(error_ptr) };
+                Err(GrammarError::InvalidTriggerPattern { message })
             }
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(error_ptr) };
-                Err(GrammarError::GrammarLazyPatternsInitVendoredThrewCxxException { message })
+                Err(GrammarError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_sampler_init_grammar_lazy_patterns returned unrecognized status {other}"
@@ -1012,19 +980,6 @@ mod tests {
     }
 
     #[test]
-    fn check_sampler_accept_status_null_sampler() {
-        let result = super::check_sampler_accept_status(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG,
-            std::ptr::null_mut(),
-        );
-
-        assert!(matches!(
-            result,
-            Err(crate::SamplerAcceptError::NullSamplerArg)
-        ));
-    }
-
-    #[test]
     fn check_sampler_accept_status_exception_maps_to_typed_variant() {
         let result = super::check_sampler_accept_status(
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION,
@@ -1033,7 +988,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(crate::SamplerAcceptError::VendoredThrewCxxException { .. })
+            Err(crate::SamplerAcceptError::GrammarStateCorrupted { .. })
         ));
     }
 }

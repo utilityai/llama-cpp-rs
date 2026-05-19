@@ -4,6 +4,8 @@
 #include <cstring>
 #include <exception>
 #include <new>
+#include <regex>
+#include <stdexcept>
 #include <string>
 #include <stdint.h>
 
@@ -45,6 +47,12 @@ extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_gramma
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK;
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+    } catch (const std::invalid_argument & err) {
+        *out_error = llama_rs_dup_string(err.what());
+        if (!*out_error) {
+            return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_INVALID_SCHEMA;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
         if (!*out_error) {
@@ -210,6 +218,12 @@ extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_i
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK;
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
+    } catch (const std::regex_error & err) {
+        *out_error = llama_rs_dup_string(err.what());
+        if (!*out_error) {
+            return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
+        }
+        return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_INVALID_TRIGGER_PATTERN;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
         if (!*out_error) {
@@ -270,6 +284,12 @@ extern "C" llama_rs_encode_status llama_rs_encode(
         if (result != 0) {
             if (out_vendored_return_code) {
                 *out_vendored_return_code = result;
+            }
+            if (result == -2) {
+                return LLAMA_RS_ENCODE_OUT_OF_MEMORY;
+            }
+            if (result == -3) {
+                return LLAMA_RS_ENCODE_COMPUTE_FAILED;
             }
             return LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE;
         }
@@ -569,6 +589,12 @@ extern "C" llama_rs_decode_status llama_rs_decode(
         if (result != 0) {
             if (out_vendored_return_code) {
                 *out_vendored_return_code = result;
+            }
+            if (result == -2) {
+                return LLAMA_RS_DECODE_OUT_OF_MEMORY;
+            }
+            if (result == -3) {
+                return LLAMA_RS_DECODE_COMPUTE_FAILED;
             }
             return LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE;
         }

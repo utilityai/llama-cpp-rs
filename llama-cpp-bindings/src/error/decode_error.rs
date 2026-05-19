@@ -3,22 +3,22 @@ use std::os::raw::c_int;
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
-    #[error("llama_rs_decode called with null context")]
-    NullContextArg,
-    #[error("llama_rs_decode called with null out_error")]
-    NullOutErrorArg,
-    #[error("llama_decode returned non-zero code 1: no kv cache slot was available")]
+    #[error("no KV cache slot was available")]
     NoKvCacheSlot,
-    #[error("llama_decode returned non-zero code 2: aborted by abort callback")]
+    #[error("decode aborted by callback")]
     Aborted,
-    #[error("llama_decode returned non-zero code -1: n_tokens == 0")]
-    NTokensZero,
-    #[error("llama_decode returned unrecognized non-zero code: {code}")]
-    VendoredReturnedUnrecognizedNonzeroCode { code: c_int },
-    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
-    ErrorStringAllocationFailed,
-    #[error("llama_decode threw a C++ exception: {message}")]
-    VendoredThrewCxxException { message: String },
+    #[error("decode batch is invalid (empty, output mismatch, or initialization failure)")]
+    BatchInvalid,
+    #[error("decode ran out of memory")]
+    DecodeOutOfMemory,
+    #[error("backend compute failed during decode")]
+    ComputeFailed,
+    #[error("decode returned an unknown status code: {code}")]
+    UnknownStatus { code: c_int },
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }
 
 impl From<NonZeroI32> for DecodeError {
@@ -26,8 +26,8 @@ impl From<NonZeroI32> for DecodeError {
         match value.get() {
             1 => Self::NoKvCacheSlot,
             2 => Self::Aborted,
-            -1 => Self::NTokensZero,
-            error_code => Self::VendoredReturnedUnrecognizedNonzeroCode { code: error_code },
+            -1 => Self::BatchInvalid,
+            error_code => Self::UnknownStatus { code: error_code },
         }
     }
 }
@@ -53,19 +53,16 @@ mod tests {
     }
 
     #[test]
-    fn n_tokens_zero_maps_from_code_negative_one() {
+    fn batch_invalid_maps_from_code_negative_one() {
         let error = DecodeError::from(NonZeroI32::new(-1).expect("-1 is non-zero"));
 
-        assert_eq!(error, DecodeError::NTokensZero);
+        assert_eq!(error, DecodeError::BatchInvalid);
     }
 
     #[test]
-    fn unrecognized_code_falls_through_to_typed_variant() {
+    fn unrecognized_code_falls_through_to_unknown_status() {
         let error = DecodeError::from(NonZeroI32::new(42).expect("42 is non-zero"));
 
-        assert_eq!(
-            error,
-            DecodeError::VendoredReturnedUnrecognizedNonzeroCode { code: 42 }
-        );
+        assert_eq!(error, DecodeError::UnknownStatus { code: 42 });
     }
 }

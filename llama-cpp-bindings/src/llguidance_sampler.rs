@@ -153,7 +153,7 @@ pub fn create_llg_sampler(
     };
 
     if sampler.is_null() {
-        Err(GrammarError::LlguidanceSamplerInitVendoredReturnedNull)
+        Err(GrammarError::LlguidanceSamplerUnavailable)
     } else {
         Ok(LlamaSampler { sampler })
     }

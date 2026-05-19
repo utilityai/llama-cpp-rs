@@ -141,32 +141,9 @@ impl LlamaTokenDataArray {
                     c_llama_token_data_array,
                     &raw mut out_error,
                 );
-                match status {
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_OK => {}
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_SAMPLER_ARG => {
-                        panic!("llama_rs_sampler_apply received null sampler pointer")
-                    }
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_DATA_ARRAY_ARG => {
-                        panic!("llama_rs_sampler_apply received null data array pointer")
-                    }
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_OUT_ERROR_ARG => {
-                        panic!(
-                            "llama_rs_sampler_apply reported null out_error despite valid Rust pointer"
-                        )
-                    }
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED => {
-                        panic!(
-                            "llama_rs_sampler_apply could not allocate a Rust-owned copy of the C++ exception message"
-                        )
-                    }
-                    llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION => {
-                        let message =
-                            crate::ffi_error_reader::read_and_free_cpp_error(out_error);
-                        panic!("llama_rs_sampler_apply threw a C++ exception: {message}");
-                    }
-                    other => unreachable!(
-                        "llama_rs_sampler_apply returned unrecognized status {other}"
-                    ),
+                if status != llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_OK {
+                    let message = crate::ffi_error_reader::read_and_free_cpp_error(out_error);
+                    panic!("llama_rs_sampler_apply returned status {status}: {message}");
                 }
             });
         }

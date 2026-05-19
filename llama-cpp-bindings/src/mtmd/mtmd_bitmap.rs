@@ -65,7 +65,7 @@ impl MtmdBitmap {
 
         let bitmap = unsafe { llama_cpp_bindings_sys::mtmd_bitmap_init(nx, ny, data.as_ptr()) };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::BitmapDecodeFailed)?;
 
         Ok(Self { bitmap })
     }
@@ -94,7 +94,7 @@ impl MtmdBitmap {
             llama_cpp_bindings_sys::mtmd_bitmap_init_from_audio(data.len(), data.as_ptr())
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::BitmapDecodeFailed)?;
 
         Ok(Self { bitmap })
     }
@@ -125,32 +125,23 @@ impl MtmdBitmap {
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_OK => {
                 let bitmap = NonNull::new(out_bitmap).ok_or_else(|| {
-                    MtmdBitmapError::VendoredReturnedNull {
+                    MtmdBitmapError::FileUnreadable {
                         path: PathBuf::from(path),
                     }
                 })?;
                 Ok(Self { bitmap })
             }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_CTX_ARG => {
-                Err(MtmdBitmapError::NullCtxArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_FNAME_ARG => {
-                Err(MtmdBitmapError::NullFnameArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_OUT_BITMAP_ARG => {
-                Err(MtmdBitmapError::NullOutBitmapArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
-                Err(MtmdBitmapError::VendoredReturnedNull {
+                Err(MtmdBitmapError::FileUnreadable {
                     path: PathBuf::from(path),
                 })
             }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(MtmdBitmapError::ErrorStringAllocationFailed)
+                Err(MtmdBitmapError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(MtmdBitmapError::VendoredThrewCxxException { message })
+                Err(MtmdBitmapError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_mtmd_bitmap_init_from_file returned unrecognized status: {other}"
@@ -176,7 +167,7 @@ impl MtmdBitmap {
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::BitmapDecodeFailed)?;
 
         Ok(Self { bitmap })
     }

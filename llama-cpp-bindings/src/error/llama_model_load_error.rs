@@ -9,16 +9,10 @@ pub enum LlamaModelLoadError {
     PathToStrError(PathBuf),
     #[error("model file not found: {0}")]
     FileNotFound(PathBuf),
-    #[error("llama_rs_load_model_from_file called with null path")]
-    NullPathArg,
-    #[error("llama_rs_load_model_from_file called with null out_model")]
-    NullOutModelArg,
-    #[error("llama_rs_load_model_from_file called with null out_error")]
-    NullOutErrorArg,
-    #[error("llama_rs_load_model_from_file returned null (model failed to load)")]
-    VendoredReturnedNull,
-    #[error("wrapper failed to duplicate the C++ exception message into a Rust-owned string")]
-    ErrorStringAllocationFailed,
-    #[error("llama_rs_load_model_from_file threw a C++ exception: {message}")]
-    VendoredThrewCxxException { message: String },
+    #[error("model could not be loaded")]
+    Unloadable,
+    #[error("not enough memory")]
+    NotEnoughMemory,
+    #[error("{message}")]
+    Reported { message: String },
 }

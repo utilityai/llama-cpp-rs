@@ -269,7 +269,7 @@ fn load_model_with_invalid_path_returns_error() {
 
 #[test]
 #[serial]
-fn load_model_with_invalid_file_content_returns_vendored_returned_null() -> Result<()> {
+fn load_model_with_invalid_file_content_returns_unloadable_or_reported() -> Result<()> {
     let fixture = FixtureSession::open()?;
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
@@ -280,7 +280,7 @@ fn load_model_with_invalid_file_content_returns_vendored_returned_null() -> Resu
 
     assert!(matches!(
         result.unwrap_err(),
-        LlamaModelLoadError::VendoredReturnedNull,
+        LlamaModelLoadError::Unloadable | LlamaModelLoadError::Reported { .. },
     ));
     let _ = std::fs::remove_file(&dummy_path);
 
@@ -297,14 +297,14 @@ fn load_model_with_non_utf8_path_returns_path_to_str_error() {
     let fixture = FixtureSession::open().expect("open fixture");
     let backend = fixture.backend();
     let model_params = LlamaModelParams::default();
-    let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
+    let non_utf8_path = Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
 
     let result = LlamaModel::load_from_file(backend, non_utf8_path, &model_params);
 
-    assert_eq!(
+    assert!(matches!(
         result.unwrap_err(),
-        LlamaModelLoadError::PathToStrError(non_utf8_path.to_path_buf())
-    );
+        LlamaModelLoadError::PathToStrError(path) if path == non_utf8_path.to_path_buf()
+    ));
 }
 
 #[cfg(unix)]
@@ -316,7 +316,7 @@ fn lora_adapter_init_with_non_utf8_path_returns_error() {
 
     let fixture = FixtureSession::open().expect("open fixture");
     let model = fixture.default_model();
-    let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
+    let non_utf8_path = Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
 
     let result = model.lora_adapter_init(non_utf8_path);
 
@@ -628,7 +628,7 @@ fn chat_template_with_nonexistent_name_returns_error() {
 
 #[test]
 #[serial]
-fn lora_adapter_init_with_invalid_gguf_returns_null_result() -> Result<()> {
+fn lora_adapter_init_with_invalid_gguf_returns_unloadable() -> Result<()> {
     let fixture = FixtureSession::open()?;
     let model = fixture.default_model();
     let dummy_path = std::env::temp_dir().join("llama_test_dummy_lora.gguf");
@@ -636,7 +636,7 @@ fn lora_adapter_init_with_invalid_gguf_returns_null_result() -> Result<()> {
 
     let result = model.lora_adapter_init(&dummy_path);
 
-    assert_eq!(result.unwrap_err(), LlamaLoraAdapterInitError::NullResult);
+    assert_eq!(result.unwrap_err(), LlamaLoraAdapterInitError::Unloadable);
     let _ = std::fs::remove_file(&dummy_path);
 
     Ok(())

@@ -469,30 +469,25 @@ impl LlamaModelParams {
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK => {}
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE => {
-                return Err(FitError::VendoredReportedFailure);
+                return Err(FitError::NoFittingMemoryLayout);
             }
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR => {
-                return Err(FitError::VendoredReportedError);
+                return Err(FitError::Aborted);
             }
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE => {
-                return Err(FitError::VendoredReturnedUnrecognizedStatusCode {
+                return Err(FitError::UnknownStatus {
                     code: out_unrecognized_status_code,
                 });
             }
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED => {
-                return Err(FitError::ErrorStringAllocationFailed);
+                return Err(FitError::NotEnoughMemory);
             }
             llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe {
-                    crate::ffi_error_reader::read_and_free_cpp_error(out_error)
-                };
-                return Err(FitError::VendoredThrewCxxException { message });
+                let message =
+                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+                return Err(FitError::Reported { message });
             }
-            other => {
-                unreachable!(
-                    "llama_rs_fit_params returned unrecognized wrapper status: {other}"
-                );
-            }
+            other => unreachable!("llama_rs_fit_params returned unrecognized wrapper status: {other}"),
         }
 
         self.params.tensor_split = self.tensor_split.as_ptr();
@@ -856,11 +851,8 @@ mod tests {
         );
 
         assert!(
-            matches!(
-                result,
-                Err(FitError::VendoredReportedError | FitError::VendoredThrewCxxException { .. })
-            ),
-            "expected VendoredReportedError or VendoredThrewCxxException, got {result:?}"
+            matches!(result, Err(FitError::Aborted | FitError::Reported { .. })),
+            "expected Aborted or Reported, got {result:?}"
         );
     }
 }

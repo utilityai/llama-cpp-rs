@@ -584,34 +584,25 @@ impl LlamaModel {
         match status {
             llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_OK => {
                 let model = NonNull::new(out_model)
-                    .ok_or(LlamaModelLoadError::VendoredReturnedNull)?;
+                    .ok_or(LlamaModelLoadError::Unloadable)?;
                 Ok(Self {
                     model,
                     tok_env: OnceLock::new(),
                 })
             }
-            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_PATH_ARG => {
-                Err(LlamaModelLoadError::NullPathArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_MODEL_ARG => {
-                Err(LlamaModelLoadError::NullOutModelArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_ERROR_ARG => {
-                Err(LlamaModelLoadError::NullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL => {
                 if path.exists() {
-                    Err(LlamaModelLoadError::VendoredReturnedNull)
+                    Err(LlamaModelLoadError::Unloadable)
                 } else {
                     Err(LlamaModelLoadError::FileNotFound(path.to_path_buf()))
                 }
             }
             llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(LlamaModelLoadError::ErrorStringAllocationFailed)
+                Err(LlamaModelLoadError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(LlamaModelLoadError::VendoredThrewCxxException { message })
+                Err(LlamaModelLoadError::Reported { message })
             }
             other => unreachable!(
                 "llama_rs_load_model_from_file returned unrecognized status {other}"
@@ -644,7 +635,7 @@ impl LlamaModel {
         };
 
         let Some(adapter) = NonNull::new(raw_adapter) else {
-            return Err(LlamaLoraAdapterInitError::NullResult);
+            return Err(LlamaLoraAdapterInitError::Unloadable);
         };
 
         Ok(LlamaLoraAdapter {
@@ -939,7 +930,7 @@ impl LlamaModel {
                 synthesize_missing_tool_call_ids(&mut parsed.tool_calls);
                 Ok(ChatMessageParseOutcome::Recognized(parsed))
             }
-            Err(ParseChatMessageError::ParseException { message }) => {
+            Err(ParseChatMessageError::ParseFailed { message }) => {
                 Ok(ChatMessageParseOutcome::Unrecognized(RawChatMessage {
                     tools_json: tools_json.to_owned(),
                     text: input.to_owned(),
@@ -980,32 +971,20 @@ impl LlamaModel {
             llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_OK => {
                 collect_parsed_chat_message(handle)
             }
-            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_MODEL_ARG => {
-                Err(ParseChatMessageError::ParseNullModelArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_INPUT_ARG => {
-                Err(ParseChatMessageError::ParseNullInputArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_HANDLE_ARG => {
-                Err(ParseChatMessageError::ParseNullOutHandleArg)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_ERROR_ARG => {
-                Err(ParseChatMessageError::ParseNullOutErrorArg)
-            }
             llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE => {
-                Err(ParseChatMessageError::ParseModelHasNoChatTemplate)
+                Err(ParseChatMessageError::NoChatTemplate)
             }
             llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB => {
-                Err(ParseChatMessageError::ParseModelHasNoVocab)
+                Err(ParseChatMessageError::NoVocab)
             }
             llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(ParseChatMessageError::ParseErrorStringAllocationFailed)
+                Err(ParseChatMessageError::NotEnoughMemory)
             }
             llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_VENDORED_THREW_CXX_EXCEPTION => {
                 let message =
                     unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
                 out_error = ptr::null_mut();
-                Err(ParseChatMessageError::ParseException { message })
+                Err(ParseChatMessageError::ParseFailed { message })
             }
             other => {
                 unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}")
@@ -1028,14 +1007,14 @@ impl LlamaModel {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
                 let message =
                     unsafe { crate::ffi_error_reader::read_and_free_cpp_error(free_error) };
-                Err(ParseChatMessageError::FreeDestructorThrewCxxException { message })
+                Err(ParseChatMessageError::DestructorFailed { message })
             }
             (
                 Ok(_),
                 llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_FREE_ERROR_STRING_ALLOCATION_FAILED,
             ) => {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-                Err(ParseChatMessageError::FreeErrorStringAllocationFailed)
+                Err(ParseChatMessageError::NotEnoughMemory)
             }
             (Ok(_), other) => {
                 unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
@@ -1163,21 +1142,13 @@ fn read_parsed_chat_content(
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_OK => {
             consume_accessor_string(out_string)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ContentNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_NULL_OUT_STRING_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_content reported null out_string while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ContentErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_CONTENT_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ContentThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!("llama_rs_parsed_chat_content returned unrecognized status {other}"),
     }
@@ -1199,22 +1170,14 @@ fn read_parsed_chat_reasoning_content(
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_OK => {
             consume_accessor_string(out_string)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ReasoningContentNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_OUT_STRING_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_reasoning_content reported null out_string while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ReasoningContentErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_VENDORED_THREW_CXX_EXCEPTION => {
             let message =
                 unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ReasoningContentThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!(
             "llama_rs_parsed_chat_reasoning_content returned unrecognized status {other}"
@@ -1236,22 +1199,14 @@ fn read_parsed_chat_tool_call_count(
     };
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_OK => Ok(out_count),
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ToolCallCountNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_OUT_COUNT_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_tool_call_count reported null out_count while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ToolCallCountErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_VENDORED_THREW_CXX_EXCEPTION => {
             let message =
                 unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ToolCallCountThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!(
             "llama_rs_parsed_chat_tool_call_count returned unrecognized status {other}"
@@ -1277,25 +1232,17 @@ fn read_parsed_chat_tool_call_id(
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_OK => {
             consume_accessor_string(out_string)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ToolCallIdNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_OUT_STRING_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_tool_call_id reported null out_string while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_INDEX_OUT_OF_BOUNDS => {
             Err(ParseChatMessageError::ToolCallIdIndexOutOfBounds { index })
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ToolCallIdErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_VENDORED_THREW_CXX_EXCEPTION => {
             let message =
                 unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ToolCallIdThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!(
             "llama_rs_parsed_chat_tool_call_id returned unrecognized status {other}"
@@ -1321,25 +1268,17 @@ fn read_parsed_chat_tool_call_name(
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_OK => {
             consume_accessor_string(out_string)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ToolCallNameNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_OUT_STRING_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_tool_call_name reported null out_string while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_INDEX_OUT_OF_BOUNDS => {
             Err(ParseChatMessageError::ToolCallNameIndexOutOfBounds { index })
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ToolCallNameErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_VENDORED_THREW_CXX_EXCEPTION => {
             let message =
                 unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ToolCallNameThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!(
             "llama_rs_parsed_chat_tool_call_name returned unrecognized status {other}"
@@ -1365,25 +1304,17 @@ fn read_parsed_chat_tool_call_arguments(
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_OK => {
             consume_accessor_string(out_string)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_HANDLE_ARG => {
-            Err(ParseChatMessageError::ToolCallArgumentsNullHandleArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_OUT_STRING_ARG => {
-            unreachable!(
-                "llama_rs_parsed_chat_tool_call_arguments reported null out_string while we passed a valid pointer"
-            )
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_INDEX_OUT_OF_BOUNDS => {
             Err(ParseChatMessageError::ToolCallArgumentsIndexOutOfBounds { index })
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_ERROR_STRING_ALLOCATION_FAILED => {
             unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
-            Err(ParseChatMessageError::ToolCallArgumentsErrorStringAllocationFailed)
+            Err(ParseChatMessageError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_VENDORED_THREW_CXX_EXCEPTION => {
             let message =
                 unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(ParseChatMessageError::ToolCallArgumentsThrewCxxException { message })
+            Err(ParseChatMessageError::Reported { message })
         }
         other => unreachable!(
             "llama_rs_parsed_chat_tool_call_arguments returned unrecognized status {other}"
@@ -1469,24 +1400,12 @@ fn invoke_detect_reasoning_markers(
         llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_OK => {
             collect_optional_cstr_pair(out_open, out_close)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_MODEL_ARG => {
-            Err(MarkerDetectionError::DetectReasoningMarkersNullModelArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_OPEN_ARG => {
-            Err(MarkerDetectionError::DetectReasoningMarkersNullOutOpenArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_CLOSE_ARG => {
-            Err(MarkerDetectionError::DetectReasoningMarkersNullOutCloseArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_ERROR_ARG => {
-            Err(MarkerDetectionError::DetectReasoningMarkersNullOutErrorArg)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(MarkerDetectionError::DetectReasoningMarkersErrorStringAllocationFailed)
+            Err(MarkerDetectionError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(MarkerDetectionError::DetectReasoningMarkersVendoredThrewCxxException { message })
+            Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { message })
         }
         other => unreachable!(
             "llama_rs_detect_reasoning_markers returned unrecognized status {other}"
@@ -1497,7 +1416,7 @@ fn invoke_detect_reasoning_markers(
     unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_close) };
     if !matches!(
         parsed,
-        Err(MarkerDetectionError::DetectReasoningMarkersVendoredThrewCxxException { .. })
+        Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { .. })
     ) {
         unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
     }
@@ -1523,21 +1442,12 @@ fn invoke_compute_tool_call_haystack(
         llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK => {
             read_optional_owned_cstr(out_haystack)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_MODEL_ARG => {
-            Err(MarkerDetectionError::ComputeToolCallHaystackNullModelArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_HAYSTACK_ARG => {
-            Err(MarkerDetectionError::ComputeToolCallHaystackNullOutHaystackArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_ERROR_ARG => {
-            Err(MarkerDetectionError::ComputeToolCallHaystackNullOutErrorArg)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(MarkerDetectionError::ComputeToolCallHaystackErrorStringAllocationFailed)
+            Err(MarkerDetectionError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(MarkerDetectionError::ComputeToolCallHaystackVendoredThrewCxxException { message })
+            Err(MarkerDetectionError::ToolCallHaystackComputationFailed { message })
         }
         other => unreachable!(
             "llama_rs_compute_tool_call_haystack returned unrecognized status {other}"
@@ -1547,7 +1457,7 @@ fn invoke_compute_tool_call_haystack(
     unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_haystack) };
     if !matches!(
         parsed,
-        Err(MarkerDetectionError::ComputeToolCallHaystackVendoredThrewCxxException { .. })
+        Err(MarkerDetectionError::ToolCallHaystackComputationFailed { .. })
     ) {
         unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
     }
@@ -1575,26 +1485,12 @@ fn invoke_diagnose_tool_call_synthetic_renders(
         llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK => {
             collect_optional_cstr_pair(out_no_tools, out_with_tools)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_MODEL_ARG => {
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullModelArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_NO_TOOLS_ARG => {
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutNoToolsArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_WITH_TOOLS_ARG => {
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutWithToolsArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_ERROR_ARG => {
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersNullOutErrorArg)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersErrorStringAllocationFailed)
+            Err(MarkerDetectionError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersVendoredThrewCxxException {
-                message,
-            })
+            Err(MarkerDetectionError::ToolCallSyntheticRenderDiagnosisFailed { message })
         }
         other => unreachable!(
             "llama_rs_diagnose_tool_call_synthetic_renders returned unrecognized status {other}"
@@ -1605,7 +1501,7 @@ fn invoke_diagnose_tool_call_synthetic_renders(
     unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_with_tools) };
     if !matches!(
         parsed,
-        Err(MarkerDetectionError::DiagnoseToolCallSyntheticRendersVendoredThrewCxxException { .. })
+        Err(MarkerDetectionError::ToolCallSyntheticRenderDiagnosisFailed { .. })
     ) {
         unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
     }
@@ -1648,24 +1544,12 @@ fn invoke_rs_tokenize(
     };
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_OK => Ok(out_count),
-        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_VOCAB_ARG => {
-            Err(StringToTokenError::NullVocabArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_TEXT_ARG => {
-            Err(StringToTokenError::NullTextArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_OUT_RETURNED_COUNT_ARG => {
-            Err(StringToTokenError::NullOutReturnedCountArg)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_NULL_OUT_ERROR_ARG => {
-            Err(StringToTokenError::NullOutErrorArg)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED => {
-            Err(StringToTokenError::ErrorStringAllocationFailed)
+            Err(StringToTokenError::NotEnoughMemory)
         }
         llama_cpp_bindings_sys::LLAMA_RS_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-            Err(StringToTokenError::VendoredThrewCxxException { message })
+            Err(StringToTokenError::Reported { message })
         }
         other => unreachable!("llama_rs_tokenize returned unrecognized status {other}"),
     }
