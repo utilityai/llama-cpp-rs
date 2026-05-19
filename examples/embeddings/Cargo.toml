@@ -1,6 +1,6 @@
 [package]
 name = "embeddings"
-version = "0.1.147"
+version = "0.1.148"
 edition = "2021"
 publish = false
 
