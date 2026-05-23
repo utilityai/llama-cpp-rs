@@ -68,9 +68,8 @@ fn drive_sampling_loop(
         observed_reasoning: 0,
     };
     let mut batch = LlamaBatch::new(512, 1)?;
-    let mut current_position = starting_position;
 
-    for _ in 0..max_tokens {
+    for (current_position, _) in (starting_position..).zip(0..max_tokens) {
         let (raw_token, outcomes) = classifier.sample(&mut sampler, ctx, -1)?;
         for outcome in &outcomes {
             totals.generated.push_str(&outcome.raw_piece);
@@ -88,7 +87,6 @@ fn drive_sampling_loop(
 
         batch.clear();
         batch.add(&raw_as_sampled, current_position, &[0], true)?;
-        current_position += 1;
 
         ctx.decode(&mut batch)
             .with_context(|| "failed to decode generated token")?;

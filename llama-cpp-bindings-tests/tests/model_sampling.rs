@@ -416,9 +416,8 @@ fn sample_without_grammar_produces_multiple_tokens(fixture: &LlamaFixture<'_>) -
 
     let mut classifier = model.sampled_token_classifier();
     let mut sampled_count: u64 = 0;
-    let mut position = batch.n_tokens();
 
-    for _ in 0..5 {
+    for (position, _) in (batch.n_tokens()..).zip(0..5) {
         let (raw_token, _outcomes) = classifier.sample(&mut sampler, &context, -1)?;
         let raw_as_sampled = SampledToken::Content(raw_token);
 
@@ -430,7 +429,6 @@ fn sample_without_grammar_produces_multiple_tokens(fixture: &LlamaFixture<'_>) -
 
         batch.clear();
         batch.add(&raw_as_sampled, position, &[0], true)?;
-        position += 1;
 
         context.decode(&mut batch)?;
     }

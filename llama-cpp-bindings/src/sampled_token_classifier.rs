@@ -254,10 +254,7 @@ impl<'model> SampledTokenClassifier<'model> {
         let lookback = self.markers.max_token_len().saturating_sub(1);
         let mut outcomes = Vec::new();
 
-        loop {
-            let Some(front) = self.pending.front() else {
-                break;
-            };
+        while let Some(front) = self.pending.front() {
             if front.is_held_for_probe {
                 break;
             }
