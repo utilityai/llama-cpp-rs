@@ -179,14 +179,20 @@ mod tests {
 
     #[test]
     fn returns_failure_for_malformed_json() {
-        let result = parse(r#"{"name": "f", "arguments": {"a": }"#, &qwen3_shape());
+        let err = parse(r#"{"name": "f", "arguments": {"a": }"#, &qwen3_shape()).unwrap_err();
+        let JsonObjectFailure::InvalidJson { message } = err;
 
-        match result {
-            Err(JsonObjectFailure::InvalidJson { message }) => {
-                assert!(!message.is_empty());
-            }
-            other => panic!("expected InvalidJson, got {other:?}"),
-        }
+        assert!(!message.is_empty());
+    }
+
+    #[test]
+    fn returns_empty_when_object_is_not_a_tool_call_shape() {
+        // The body opens with `{` (so try_parse_one_object enters the JSON path) but the parsed
+        // value is a top-level non-object — the early `let Value::Object(map) = value else
+        // { return Ok(None) };` arm fires.
+        let parsed = parse("{ \"foo\": 1 }", &qwen3_shape()).expect("must parse");
+
+        assert!(parsed.is_empty());
     }
 
     #[test]

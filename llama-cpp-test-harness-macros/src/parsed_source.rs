@@ -125,7 +125,10 @@ mod tests {
     fn parses_local_path_with_one_string_arg() {
         let parsed = parse("LocalPath(\"/abs/local.gguf\")").expect("valid");
 
-        assert_eq!(parsed, ParsedSource::LocalPath("/abs/local.gguf".to_owned()));
+        assert_eq!(
+            parsed,
+            ParsedSource::LocalPath("/abs/local.gguf".to_owned())
+        );
     }
 
     #[test]
@@ -198,7 +201,10 @@ mod tests {
     fn unparseable_input_returns_err() {
         let result = parse("@&^!");
 
-        assert!(result.is_err(), "garbage input must fail to parse as syn::Expr");
+        assert!(
+            result.is_err(),
+            "garbage input must fail to parse as syn::Expr"
+        );
     }
 
     #[test]

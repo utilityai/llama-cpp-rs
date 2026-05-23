@@ -49,7 +49,9 @@ mod tests {
     fn resolve_path_for_local_path_returns_the_literal_path() {
         let source = ModelSource::LocalPath("/abs/example.gguf");
 
-        let resolved = source.resolve_path().expect("LocalPath resolve is infallible");
+        let resolved = source
+            .resolve_path()
+            .expect("LocalPath resolve is infallible");
 
         assert_eq!(resolved, PathBuf::from("/abs/example.gguf"));
     }

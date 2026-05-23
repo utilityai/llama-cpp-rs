@@ -757,8 +757,27 @@ impl Drop for LlamaSampler {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+    use std::mem::Discriminant;
+
     use super::LlamaSampler;
     use crate::GrammarError;
+
+    fn nul_error() -> std::ffi::NulError {
+        CString::new(b"a\0b".to_vec()).unwrap_err()
+    }
+
+    fn root_not_found_disc() -> Discriminant<GrammarError> {
+        std::mem::discriminant(&GrammarError::RootNotFound)
+    }
+
+    fn grammar_null_bytes_disc() -> Discriminant<GrammarError> {
+        std::mem::discriminant(&GrammarError::GrammarNullBytes(nul_error()))
+    }
+
+    fn trigger_word_null_bytes_disc() -> Discriminant<GrammarError> {
+        std::mem::discriminant(&GrammarError::TriggerWordNullBytes(nul_error()))
+    }
 
     #[test]
     fn sanitize_grammar_strings_valid() {
@@ -769,29 +788,24 @@ mod tests {
 
     #[test]
     fn sanitize_grammar_strings_root_not_found() {
-        let result = LlamaSampler::sanitize_grammar_strings("expr ::= \"hello\"", "root");
+        let err = LlamaSampler::sanitize_grammar_strings("expr ::= \"hello\"", "root").unwrap_err();
 
-        assert!(matches!(result.err(), Some(GrammarError::RootNotFound)));
+        assert_eq!(std::mem::discriminant(&err), root_not_found_disc());
     }
 
     #[test]
     fn sanitize_grammar_strings_null_byte_in_grammar() {
-        let result = LlamaSampler::sanitize_grammar_strings("root ::= \"\0\"", "root");
+        let err = LlamaSampler::sanitize_grammar_strings("root ::= \"\0\"", "root").unwrap_err();
 
-        assert!(matches!(
-            result.err(),
-            Some(GrammarError::GrammarNullBytes(_))
-        ));
+        assert_eq!(std::mem::discriminant(&err), grammar_null_bytes_disc());
     }
 
     #[test]
     fn sanitize_grammar_strings_null_byte_in_root() {
-        let result = LlamaSampler::sanitize_grammar_strings("ro\0ot ::= \"hello\"", "ro\0ot");
+        let err =
+            LlamaSampler::sanitize_grammar_strings("ro\0ot ::= \"hello\"", "ro\0ot").unwrap_err();
 
-        assert!(matches!(
-            result.err(),
-            Some(GrammarError::GrammarNullBytes(_))
-        ));
+        assert_eq!(std::mem::discriminant(&err), grammar_null_bytes_disc());
     }
 
     #[test]
@@ -815,12 +829,9 @@ mod tests {
     #[test]
     fn sanitize_trigger_words_null_byte() {
         let words: Vec<&[u8]> = vec![b"hel\0lo"];
-        let result = LlamaSampler::sanitize_trigger_words(words);
+        let err = LlamaSampler::sanitize_trigger_words(words).unwrap_err();
 
-        assert!(matches!(
-            result.err(),
-            Some(GrammarError::TriggerWordNullBytes(_))
-        ));
+        assert_eq!(std::mem::discriminant(&err), trigger_word_null_bytes_disc());
     }
 
     #[test]
@@ -844,12 +855,9 @@ mod tests {
     #[test]
     fn sanitize_trigger_patterns_null_byte() {
         let patterns = vec!["hel\0lo".to_string()];
-        let result = LlamaSampler::sanitize_trigger_patterns(&patterns);
+        let err = LlamaSampler::sanitize_trigger_patterns(&patterns).unwrap_err();
 
-        assert!(matches!(
-            result.err(),
-            Some(GrammarError::GrammarNullBytes(_))
-        ));
+        assert_eq!(std::mem::discriminant(&err), grammar_null_bytes_disc());
     }
 
     #[test]
@@ -981,14 +989,16 @@ mod tests {
 
     #[test]
     fn check_sampler_accept_status_exception_maps_to_typed_variant() {
-        let result = super::check_sampler_accept_status(
+        let err = super::check_sampler_accept_status(
             llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
-        );
+        )
+        .unwrap_err();
+        let grammar_state_corrupted_disc =
+            std::mem::discriminant(&crate::SamplerAcceptError::GrammarStateCorrupted {
+                message: String::new(),
+            });
 
-        assert!(matches!(
-            result,
-            Err(crate::SamplerAcceptError::GrammarStateCorrupted { .. })
-        ));
+        assert_eq!(std::mem::discriminant(&err), grammar_state_corrupted_disc);
     }
 }

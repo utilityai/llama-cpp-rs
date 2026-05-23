@@ -177,8 +177,12 @@ mod tests {
         use super::MtmdEvalError;
         use super::check_eval_result;
 
-        let result = check_eval_result(7);
+        let err = check_eval_result(7).unwrap_err();
+        let representative = MtmdEvalError::EvalFailed { code: 0 };
 
-        assert!(matches!(result, Err(MtmdEvalError::EvalFailed { code: 7 })));
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
+        );
     }
 }

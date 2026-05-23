@@ -278,9 +278,7 @@ fn is_recurrent_returns_false_for_transformer(fixture: &LlamaFixture<'_>) -> Res
     n_batch = 128,
     n_ubatch = 64,
 )]
-fn is_hybrid_returns_false_for_non_hybrid_default_models(
-    fixture: &LlamaFixture<'_>,
-) -> Result<()> {
+fn is_hybrid_returns_false_for_non_hybrid_default_models(fixture: &LlamaFixture<'_>) -> Result<()> {
     assert!(
         !fixture.model.is_hybrid(),
         "DeepSeek-R1-Distill-Llama-8B and GLM-4.7-Flash are pure transformers, not hybrid; got is_hybrid=true"

@@ -28,12 +28,7 @@ mod tests {
     #[test]
     fn known_marker_candidates_returns_one_per_registered_shape() {
         let candidates = known_marker_candidates();
-        assert_eq!(
-            candidates.len(),
-            5,
-            "expected exactly five registered shapes, got {}",
-            candidates.len()
-        );
+        assert_eq!(candidates.len(), 5);
 
         let shape_discriminants: HashSet<&'static str> = candidates
             .iter()
