@@ -1,31 +1,17 @@
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const MISTRAL3_REPO: &str = "unsloth/Ministral-3-14B-Reasoning-2512-GGUF";
-const MISTRAL3_FILE: &str = "Ministral-3-14B-Reasoning-2512-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const MAX_GENERATED_TOKENS: i32 = 768;
 
-// Mistral 3 Reasoning's chat template wraps thoughts in `[THINK]...[/THINK]` and
-// relies on a fine-tuned default system prompt to make the model emit them.
-// Unlike Qwen3.5/3.6, Mistral does not pre-inject `[THINK]` into the generation
-// prompt — the model itself emits the open marker as its first generated token.
-// We craft the prompt manually rather than going through the legacy chat-template
-// engine to keep the test independent of jinja-engine quirks.
 const MISTRAL3_THINKING_PROMPT: &str = "\
 [SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\n\
 First draft your thinking process (inner monologue) until you arrive at a response. \
@@ -39,14 +25,20 @@ to the user.[/THINK]Here, provide a self-contained response.[/SYSTEM_PROMPT]\
 
 const FORBIDDEN_MARKERS: &[&str] = &["[THINK]", "[/THINK]"];
 
-#[test]
-fn mistral3_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(MISTRAL3_REPO, MISTRAL3_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Ministral-3-14B-Reasoning-2512-GGUF", "Ministral-3-14B-Reasoning-2512-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 8192,
+    n_batch = 2048,
+    n_ubatch = 512,
+)]
+fn mistral3_classifier_emits_reasoning_for_thinking_prompt(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
     let mut classifier = model.sampled_token_classifier();
     let prompt_tokens = model.str_to_token(MISTRAL3_THINKING_PROMPT, AddBos::Always)?;
@@ -55,8 +47,11 @@ fn mistral3_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
     let mut batch = LlamaBatch::new(2048, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &prompt_tokens, 0, false)?;
 
-    let context_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(8192));
-    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     context.decode(&mut batch)?;
 
@@ -66,7 +61,7 @@ fn mistral3_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
     let mut sampler = LlamaSampler::greedy();
     let initial_position = batch.n_tokens();
     let outcome = ClassifySampleLoop {
-        model: &model,
+        model,
         classifier: &mut classifier,
         sampler: &mut sampler,
         context: &mut context,
@@ -82,65 +77,25 @@ fn mistral3_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
         bail!("Mistral 3 chat template must be recognised by the parser; got Unrecognized");
     };
 
-    assert!(
-        !outcome.generated_raw.is_empty(),
-        "Mistral 3 must generate at least one token"
-    );
-    assert!(
-        outcome.observed_reasoning > 0,
-        "Mistral 3 classifier must emit at least one Reasoning token when the model \
-         opens a [THINK] block; outcome={outcome:?}",
-    );
-    assert!(
-        usage.reasoning_tokens > 0,
-        "Mistral 3 usage.reasoning_tokens must be non-zero when the model emits a \
-         [THINK] block; usage was {usage:?}"
-    );
-    assert_eq!(
-        outcome.observed_undeterminable, 0,
-        "Mistral 3: prompt-token replay must transition the section before generation, \
-         so no Undeterminable tokens may be emitted; outcome={outcome:?}"
-    );
-    assert_eq!(
-        usage.undeterminable_tokens, 0,
-        "Mistral 3: usage.undeterminable_tokens must be zero; usage={usage:?}"
-    );
+    assert!(!outcome.generated_raw.is_empty());
+    assert!(outcome.observed_reasoning > 0);
+    assert!(usage.reasoning_tokens > 0);
+    assert_eq!(outcome.observed_undeterminable, 0);
+    assert_eq!(usage.undeterminable_tokens, 0);
     assert_eq!(
         usage.completion_tokens(),
         outcome.observed_content + outcome.observed_reasoning,
-        "Mistral 3: completion tokens must equal observed Content + Reasoning"
     );
-    assert!(
-        !parsed.reasoning_content.is_empty(),
-        "Mistral 3 must close its reasoning block within {MAX_GENERATED_TOKENS} tokens; \
-         increase the budget or pick a more direct prompt. generated={:?}",
-        outcome.generated_raw,
-    );
-    assert_eq!(
-        outcome.reasoning_stream, parsed.reasoning_content,
-        "Mistral 3: per-token reasoning stream must equal parser-side reasoning_content \
-         (any difference means a marker leaked into the user-visible stream)",
-    );
-    assert_eq!(
-        outcome.content_stream, parsed.content,
-        "Mistral 3: per-token content stream must equal parser-side content \
-         (any difference means a marker leaked into the user-visible stream)",
-    );
+    assert!(!parsed.reasoning_content.is_empty());
+    assert_eq!(outcome.reasoning_stream, parsed.reasoning_content);
+    assert_eq!(outcome.content_stream, parsed.content);
 
     for forbidden in FORBIDDEN_MARKERS {
-        assert!(
-            !outcome.reasoning_stream.contains(forbidden),
-            "Mistral 3: reasoning_stream leaked marker {forbidden:?}; \
-             reasoning_stream={:?}",
-            outcome.reasoning_stream
-        );
-        assert!(
-            !outcome.content_stream.contains(forbidden),
-            "Mistral 3: content_stream leaked marker {forbidden:?}; \
-             content_stream={:?}",
-            outcome.content_stream
-        );
+        assert!(!outcome.reasoning_stream.contains(forbidden));
+        assert!(!outcome.content_stream.contains(forbidden));
     }
 
     Ok(())
 }
+
+llama_tests_main!();

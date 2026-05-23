@@ -1,19 +1,29 @@
-#![cfg(feature = "multimodal_capable")]
-
 use anyhow::Result;
 use llama_cpp_bindings::ingest_prompt_chunk::ingest_prompt_chunk;
 use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputChunkType;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
-use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-#[test]
-fn text_chunk_records_prompt_tokens() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let model = fixture.default_model();
-    let mtmd_ctx = fixture.mtmd_context()?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 2048,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
+)]
+fn text_chunk_records_prompt_tokens(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let mtmd_ctx = fixture
+        .mtmd_context
+        .expect("mmproj_file declared in attribute");
 
     let input_text = MtmdInputText {
         text: "hello world".to_owned(),
@@ -29,7 +39,7 @@ fn text_chunk_records_prompt_tokens() -> Result<()> {
             anyhow::anyhow!("text-only tokenization should produce at least one text chunk")
         })?;
 
-    let n_tokens = text_chunk.n_tokens() as u64;
+    let n_tokens = u64::try_from(text_chunk.n_tokens())?;
 
     let mut classifier = model.sampled_token_classifier();
 
@@ -58,11 +68,21 @@ fn text_chunk_records_prompt_tokens() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn image_chunk_records_input_image_tokens_only() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let model = fixture.default_model();
-    let mtmd_ctx = fixture.mtmd_context()?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 2048,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
+)]
+fn image_chunk_records_input_image_tokens_only(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let mtmd_ctx = fixture
+        .mtmd_context
+        .expect("mmproj_file declared in attribute");
 
     let image_path = fixtures_dir().join("llamas.jpg");
     let image_path_str = image_path
@@ -83,7 +103,7 @@ fn image_chunk_records_input_image_tokens_only() -> Result<()> {
         .find(|chunk| chunk.chunk_type() == Ok(MtmdInputChunkType::Image))
         .ok_or_else(|| anyhow::anyhow!("multimodal tokenization should produce an image chunk"))?;
 
-    let n_tokens = image_chunk.n_tokens() as u64;
+    let n_tokens = u64::try_from(image_chunk.n_tokens())?;
     if n_tokens == 0 {
         anyhow::bail!("image chunk should report at least one token");
     }
@@ -115,11 +135,21 @@ fn image_chunk_records_input_image_tokens_only() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn text_chunk_drives_marker_state_machine_to_reasoning() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let model = fixture.default_model();
-    let mtmd_ctx = fixture.mtmd_context()?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 2048,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
+)]
+fn text_chunk_drives_marker_state_machine_to_reasoning(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let mtmd_ctx = fixture
+        .mtmd_context
+        .expect("mmproj_file declared in attribute");
 
     let input_text = MtmdInputText {
         text: "<|im_start|>user\nHi<|im_end|>\n<|im_start|>assistant\n<think>\n".to_owned(),
@@ -147,3 +177,5 @@ fn text_chunk_drives_marker_state_machine_to_reasoning() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

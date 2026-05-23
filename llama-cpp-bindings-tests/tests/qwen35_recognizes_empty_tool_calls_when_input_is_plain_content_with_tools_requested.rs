@@ -1,14 +1,9 @@
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const QWEN35_REPO: &str = "unsloth/Qwen3.5-0.8B-GGUF";
-const QWEN35_FILE: &str = "Qwen3.5-0.8B-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const TOOLS_JSON: &str = r#"[
     {
@@ -29,17 +24,21 @@ const TOOLS_JSON: &str = r#"[
 
 const PLAIN_CONTENT: &str = "Sorry, I cannot help with that.";
 
-#[test]
-fn qwen35_recognizes_empty_tool_calls_when_input_is_plain_content_with_tools_requested()
--> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(QWEN35_REPO, QWEN35_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, PLAIN_CONTENT, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn qwen35_recognizes_empty_tool_calls_when_input_is_plain_content_with_tools_requested(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let outcome = fixture
+        .model
+        .parse_chat_message(TOOLS_JSON, PLAIN_CONTENT, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!(
@@ -55,3 +54,5 @@ fn qwen35_recognizes_empty_tool_calls_when_input_is_plain_content_with_tools_req
 
     Ok(())
 }
+
+llama_tests_main!();

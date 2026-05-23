@@ -1,32 +1,52 @@
-#![cfg(feature = "multimodal_capable")]
-
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_bindings_tests::test_model::fixtures_dir;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const MAX_GENERATED_TOKENS: i32 = 200;
 
-#[test]
-fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.default_model();
-    let mtmd_ctx = fixture.mtmd_context()?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 4096,
+    n_batch = 512,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 4096,
+    n_batch = 512,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "mmproj-F16.gguf"),
+)]
+fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
+    let mtmd_ctx = fixture
+        .mtmd_context
+        .expect("mmproj_file declared in attribute");
 
-    let context_params = LlamaContextParams::default()
-        .with_n_ctx(NonZeroU32::new(4096))
-        .with_n_batch(512);
-    let mut context = LlamaContext::from_model(model, backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     let image_path = fixtures_dir().join("llamas.jpg");
     let image_path_str = image_path
@@ -87,3 +107,5 @@ fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt() -> Result<
 
     Ok(())
 }
+
+llama_tests_main!();

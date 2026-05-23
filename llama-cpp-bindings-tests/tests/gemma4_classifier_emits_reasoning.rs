@@ -1,44 +1,35 @@
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const GEMMA4_REPO: &str = "unsloth/gemma-4-E4B-it-GGUF";
-const GEMMA4_FILE: &str = "gemma-4-E4B-it-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const MAX_GENERATED_TOKENS: i32 = 1500;
 
-// Gemma 4 uses asymmetric reasoning markers: `<|channel>thought` opens
-// the thinking block and `<channel|>` closes it. We pre-inject the
-// `<|channel>thought\n` opener at the model turn so the classifier sees
-// the marker via prompt-token replay and starts generation in `Reasoning`,
-// matching the behaviour of Qwen3.5/3.6's auto-injected `<think>\n`.
 const GEMMA4_THINKING_PROMPT: &str = "\
 <bos><start_of_turn>user\nReply with the single word: four. Do not explain.<end_of_turn>\n\
 <start_of_turn>model\n<|channel>thought\n";
 
 const FORBIDDEN_MARKERS: &[&str] = &["<|channel>thought", "<channel|>"];
 
-#[test]
-fn gemma4_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(GEMMA4_REPO, GEMMA4_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/gemma-4-E4B-it-GGUF", "gemma-4-E4B-it-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 8192,
+    n_batch = 2048,
+    n_ubatch = 512,
+)]
+fn gemma4_classifier_emits_reasoning_for_thinking_prompt(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
     let mut classifier = model.sampled_token_classifier();
     let prompt_tokens = model.str_to_token(GEMMA4_THINKING_PROMPT, AddBos::Never)?;
@@ -47,8 +38,11 @@ fn gemma4_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
     let mut batch = LlamaBatch::new(2048, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &prompt_tokens, 0, false)?;
 
-    let context_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(8192));
-    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     context.decode(&mut batch)?;
 
@@ -58,7 +52,7 @@ fn gemma4_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
     let mut sampler = LlamaSampler::greedy();
     let initial_position = batch.n_tokens();
     let outcome = ClassifySampleLoop {
-        model: &model,
+        model,
         classifier: &mut classifier,
         sampler: &mut sampler,
         context: &mut context,
@@ -109,13 +103,6 @@ fn gemma4_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
         outcome.generated_raw,
     );
 
-    // Gemma 4 goes through llama.cpp's specialized-template path, which leaves the
-    // raw `<|channel>thought` prefix in `parsed.reasoning_content` rather than
-    // stripping it like the differential autoparser does for Qwen3-family. So the
-    // parser-equality cross-check would require a per-template carve-out — instead,
-    // rely on the FORBIDDEN_MARKERS substring check below: the streams the user
-    // actually sees must not contain marker text, regardless of what the parser
-    // chose to keep.
     for forbidden in FORBIDDEN_MARKERS {
         assert!(
             !outcome.reasoning_stream.contains(forbidden),
@@ -133,3 +120,5 @@ fn gemma4_classifier_emits_reasoning_for_thinking_prompt() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

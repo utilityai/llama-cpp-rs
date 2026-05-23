@@ -1,18 +1,16 @@
-#![cfg(feature = "multimodal_capable")]
-
-use std::num::NonZeroU32;
-
 use anyhow::{Context, Result};
 use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText};
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
-use llama_cpp_bindings_tests::{FixtureSession, test_model};
+use llama_cpp_bindings_tests::test_model;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 struct ChunkTokenBreakdown {
     text: u64,
@@ -108,19 +106,28 @@ fn drive_sampling_loop(
     Ok(totals)
 }
 
-#[test]
-fn multimodal_vision_inference_produces_output() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.default_model();
-    let mtmd_ctx = fixture.mtmd_context()?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 4096,
+    n_batch = 512,
+    n_ubatch = 512,
+    mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
+)]
+fn multimodal_vision_inference_produces_output(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let mtmd_ctx = fixture
+        .mtmd_context
+        .expect("mmproj_file declared in attribute");
 
-    let n_ctx = NonZeroU32::new(4096);
-    let ctx_params = LlamaContextParams::default()
-        .with_n_ctx(n_ctx)
-        .with_n_batch(512);
-    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
-        .with_context(|| "unable to create llama context")?;
+    let mut ctx = LlamaContext::from_model(
+        model,
+        fixture.backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )
+    .with_context(|| "unable to create llama context")?;
 
     assert!(
         mtmd_ctx.support_vision(),
@@ -203,3 +210,5 @@ fn multimodal_vision_inference_produces_output() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

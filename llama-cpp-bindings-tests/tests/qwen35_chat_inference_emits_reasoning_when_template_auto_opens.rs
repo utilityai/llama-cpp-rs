@@ -2,32 +2,35 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaChatMessage;
-use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-const QWEN35_REPO: &str = "unsloth/Qwen3.5-0.8B-GGUF";
-const QWEN35_FILE: &str = "Qwen3.5-0.8B-Q4_K_M.gguf";
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 2048,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+fn qwen35_chat_inference_emits_reasoning_when_template_auto_opens(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
-#[test]
-fn qwen35_chat_inference_emits_reasoning_when_template_auto_opens() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(QWEN35_REPO, QWEN35_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let context_params = LlamaContextParams::default();
-    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     let chat_template = model.chat_template(None)?;
     let messages = vec![LlamaChatMessage::new(
@@ -51,7 +54,7 @@ fn qwen35_chat_inference_emits_reasoning_when_template_auto_opens() -> Result<()
     let mut sampler = LlamaSampler::greedy();
     let initial_position = batch.n_tokens();
     let outcome = ClassifySampleLoop {
-        model: &model,
+        model,
         classifier: &mut classifier,
         sampler: &mut sampler,
         context: &mut context,
@@ -61,52 +64,24 @@ fn qwen35_chat_inference_emits_reasoning_when_template_auto_opens() -> Result<()
     }
     .run()?;
 
-    assert!(
-        !outcome.generated_raw.is_empty(),
-        "Qwen3.5 must generate at least one token"
-    );
-    assert!(
-        outcome.observed_reasoning > 0,
-        "Qwen3.5 chat template auto-opens reasoning, so the classifier must emit at \
-         least one Reasoning token; outcome={outcome:?}"
-    );
-    assert!(
-        outcome.observed_content > 0,
-        "Qwen3.5 must emit at least one Content token after </think>; outcome={outcome:?}"
-    );
-    assert_eq!(
-        outcome.observed_undeterminable, 0,
-        "Qwen3.5 chat template auto-opens reasoning, so the classifier must never emit \
-         Undeterminable; outcome={outcome:?}"
-    );
-    assert_eq!(
-        outcome.observed_tool_call, 0,
-        "chat without tool definitions must not produce ToolCall tokens; outcome={outcome:?}"
-    );
+    assert!(!outcome.generated_raw.is_empty());
+    assert!(outcome.observed_reasoning > 0);
+    assert!(outcome.observed_content > 0);
+    assert_eq!(outcome.observed_undeterminable, 0);
+    assert_eq!(outcome.observed_tool_call, 0);
 
     let parse_outcome = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
     let ChatMessageParseOutcome::Recognized(parsed) = parse_outcome else {
         bail!("Qwen3.5 chat template must be recognised by the parser; got Unrecognized");
     };
-    assert!(
-        !parsed.content.is_empty(),
-        "parser must see post-</think> content in generated text; generated={:?}",
-        outcome.generated_raw
-    );
+    assert!(!parsed.content.is_empty());
 
     let usage = classifier.into_usage();
-    assert_eq!(
-        usage.prompt_tokens, prompt_token_count,
-        "prompt_tokens must equal the tokenizer's prompt length"
-    );
-    assert_eq!(
-        usage.reasoning_tokens, outcome.observed_reasoning,
-        "reasoning_tokens must equal observed Reasoning variants"
-    );
-    assert_eq!(
-        usage.undeterminable_tokens, 0,
-        "Qwen3.5 with auto-opening reasoning must never produce Undeterminable"
-    );
+    assert_eq!(usage.prompt_tokens, prompt_token_count);
+    assert_eq!(usage.reasoning_tokens, outcome.observed_reasoning);
+    assert_eq!(usage.undeterminable_tokens, 0);
 
     Ok(())
 }
+
+llama_tests_main!();

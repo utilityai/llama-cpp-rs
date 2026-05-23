@@ -4,25 +4,62 @@ use std::time::Duration;
 use anyhow::Context as _;
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::FixtureSession;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-#[test]
-fn raw_prompt_completion_with_timing() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.default_model();
-
-    let ctx_params = LlamaContextParams::default();
-    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
-        .with_context(|| "unable to create context")?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+fn raw_prompt_completion_with_timing(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
+    let mut ctx = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )
+    .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
     let max_generated_tokens: i32 = 64;
@@ -130,14 +167,50 @@ fn raw_prompt_completion_with_timing() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn chat_inference_produces_coherent_output() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.default_model();
-
-    let context_params = LlamaContextParams::default();
-    let mut context = LlamaContext::from_model(model, backend, context_params)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 2048,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 2048,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 2048,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 2048,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+fn chat_inference_produces_coherent_output(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     let chat_template = model.chat_template(None)?;
     let messages = vec![LlamaChatMessage::new(
@@ -221,3 +294,5 @@ fn chat_inference_produces_coherent_output() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

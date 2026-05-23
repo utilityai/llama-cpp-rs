@@ -7,6 +7,8 @@ members = [
   "llama-cpp-bindings",
   "llama-cpp-bindings-tests",
   "llama-cpp-log-decoder",
+  "llama-cpp-test-harness",
+  "llama-cpp-test-harness-macros",
 ]
 
 [workspace.package]
@@ -25,17 +27,25 @@ enumflags2 = "=0.7.12"
 find_cuda_helper = "=0.2.0"
 glob = "=0.3.3"
 hf-hub = "=0.5.0"
+inventory = "=0.3.24"
+libtest-mimic = "=0.8.2"
 llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.7.0" }
 llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.7.0" }
 llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.7.0" }
 llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.7.0" }
 llama-cpp-log-decoder = { path = "llama-cpp-log-decoder", version = "=0.7.0" }
+llama-cpp-test-harness = { path = "llama-cpp-test-harness", version = "=0.7.0" }
+llama-cpp-test-harness-macros = { path = "llama-cpp-test-harness-macros", version = "=0.7.0" }
 llguidance = "=1.7.0"
 log = "=0.4.29"
 nom = "=8.0.0"
+proc-macro2 = "=1.0.106"
+quote = "=1.0.45"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 serial_test = "=3.4.0"
+syn = { version = "=2.0.117", features = ["full"] }
 thiserror = "=2.0.18"
 toktrie = "=1.7.0"
+trybuild = "=1.0.116"
 walkdir = "=2.5.0"

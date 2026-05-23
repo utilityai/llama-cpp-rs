@@ -1,32 +1,17 @@
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-const GLM47_REPO: &str = "unsloth/GLM-4.7-Flash-GGUF";
-const GLM47_FILE: &str = "GLM-4.7-Flash-Q4_K_M.gguf";
-
-// Budget tuned so the close marker reliably emits — enough thinking space for a
-// concise question. The companion prompt is intentionally direct so the model
-// finishes thinking quickly and emits </think>.
 const MAX_GENERATED_TOKENS: i32 = 1500;
 
-// GLM-4.7-Flash uses `<think>...</think>` reasoning markers (same lexical form
-// as Qwen3.5/3.6) and `<|user|>` / `<|assistant|>` role tokens. The prompt
-// ends inside an open `<think>` block so generation resumes in the reasoning
-// section, mirroring how the chat template renders when reasoning is enabled.
 const GLM47_THINKING_PROMPT: &str = "\
 <|user|>
 What is 2 + 2?
@@ -36,14 +21,20 @@ What is 2 + 2?
 
 const FORBIDDEN_MARKERS: &[&str] = &["<think>", "</think>"];
 
-#[test]
-fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(GLM47_REPO, GLM47_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 8192,
+    n_batch = 2048,
+    n_ubatch = 512,
+)]
+fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
     let mut classifier = model.sampled_token_classifier();
     let prompt_tokens = model.str_to_token(GLM47_THINKING_PROMPT, AddBos::Never)?;
@@ -52,8 +43,11 @@ fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()> 
     let mut batch = LlamaBatch::new(2048, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &prompt_tokens, 0, false)?;
 
-    let context_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(8192));
-    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     context.decode(&mut batch)?;
 
@@ -70,7 +64,7 @@ fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()> 
     ]);
     let initial_position = batch.n_tokens();
     let outcome = ClassifySampleLoop {
-        model: &model,
+        model,
         classifier: &mut classifier,
         sampler: &mut sampler,
         context: &mut context,
@@ -86,33 +80,14 @@ fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()> 
         bail!("GLM-4.7 chat template must be recognised by the parser; got Unrecognized");
     };
 
-    assert!(
-        !outcome.generated_raw.is_empty(),
-        "GLM-4.7: must generate at least one token"
-    );
-    assert!(
-        outcome.observed_reasoning > 0,
-        "GLM-4.7: classifier must emit at least one Reasoning token when the prompt \
-         opens a <think> block; outcome={outcome:?}",
-    );
-    assert!(
-        usage.reasoning_tokens > 0,
-        "GLM-4.7: usage.reasoning_tokens must be non-zero when the prompt opens a \
-         <think> block; usage was {usage:?}"
-    );
-    assert_eq!(
-        outcome.observed_undeterminable, 0,
-        "GLM-4.7: prompt-token replay must move section to Reasoning before generation, \
-         so no Undeterminable tokens may be emitted; outcome={outcome:?}"
-    );
-    assert_eq!(
-        usage.undeterminable_tokens, 0,
-        "GLM-4.7: usage.undeterminable_tokens must be zero; usage={usage:?}"
-    );
+    assert!(!outcome.generated_raw.is_empty());
+    assert!(outcome.observed_reasoning > 0);
+    assert!(usage.reasoning_tokens > 0);
+    assert_eq!(outcome.observed_undeterminable, 0);
+    assert_eq!(usage.undeterminable_tokens, 0);
     assert_eq!(
         usage.completion_tokens(),
-        outcome.observed_content + outcome.observed_reasoning,
-        "GLM-4.7: completion tokens must equal observed Content + Reasoning"
+        outcome.observed_content + outcome.observed_reasoning
     );
 
     if parsed.reasoning_content.is_empty() {
@@ -121,32 +96,16 @@ fn glm47_classifier_emits_reasoning_for_thinking_enabled_prompt() -> Result<()> 
              skipping strict parser-equality assertions"
         );
     } else {
-        assert_eq!(
-            outcome.reasoning_stream, parsed.reasoning_content,
-            "GLM-4.7: per-token reasoning stream must equal parser-side reasoning_content \
-             (any difference means a marker leaked into the user-visible stream)",
-        );
-        assert_eq!(
-            outcome.content_stream, parsed.content,
-            "GLM-4.7: per-token content stream must equal parser-side content \
-             (any difference means a marker leaked into the user-visible stream)",
-        );
+        assert_eq!(outcome.reasoning_stream, parsed.reasoning_content);
+        assert_eq!(outcome.content_stream, parsed.content);
     }
 
     for forbidden in FORBIDDEN_MARKERS {
-        assert!(
-            !outcome.reasoning_stream.contains(forbidden),
-            "GLM-4.7: reasoning_stream leaked marker {forbidden:?}; \
-             reasoning_stream={:?}",
-            outcome.reasoning_stream
-        );
-        assert!(
-            !outcome.content_stream.contains(forbidden),
-            "GLM-4.7: content_stream leaked marker {forbidden:?}; \
-             content_stream={:?}",
-            outcome.content_stream
-        );
+        assert!(!outcome.reasoning_stream.contains(forbidden));
+        assert!(!outcome.content_stream.contains(forbidden));
     }
 
     Ok(())
 }
+
+llama_tests_main!();

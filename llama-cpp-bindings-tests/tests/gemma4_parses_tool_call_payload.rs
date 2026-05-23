@@ -2,14 +2,9 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ToolCallArguments;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const GEMMA4_REPO: &str = "unsloth/gemma-4-E4B-it-GGUF";
-const GEMMA4_FILE: &str = "gemma-4-E4B-it-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const TOOLS_JSON: &str = r#"[
     {
@@ -31,16 +26,20 @@ const TOOLS_JSON: &str = r#"[
 const GEMMA4_PAIRED_QUOTE_PAYLOAD: &str =
     "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}";
 
-#[test]
-fn gemma4_parses_tool_call_payload() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(GEMMA4_REPO, GEMMA4_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, GEMMA4_PAIRED_QUOTE_PAYLOAD, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/gemma-4-E4B-it-GGUF", "gemma-4-E4B-it-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn gemma4_parses_tool_call_payload(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome =
+        fixture
+            .model
+            .parse_chat_message(TOOLS_JSON, GEMMA4_PAIRED_QUOTE_PAYLOAD, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!("expected Recognized for Gemma 4 PairedQuote on a Gemma-4 model; got Unrecognized");
@@ -65,3 +64,5 @@ fn gemma4_parses_tool_call_payload() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();
