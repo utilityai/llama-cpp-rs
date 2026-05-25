@@ -58,7 +58,7 @@ test.harness: clippy
 	cargo test -p llama-cpp-test-harness-macros -p llama-cpp-test-harness $(DEVICE_FEATURE)
 
 .PHONY: test.llms
-test.llms: clippy test.harness
+test.llms: clippy test.harness test.unit
 	cargo test --no-fail-fast -p llama-cpp-bindings-tests $(DEVICE_FEATURE)
 
 .PHONY: test.unit
