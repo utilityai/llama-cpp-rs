@@ -2,14 +2,9 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ToolCallArguments;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const GLM47_REPO: &str = "unsloth/GLM-4.7-Flash-GGUF";
-const GLM47_FILE: &str = "GLM-4.7-Flash-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const TOOLS_JSON: &str = r#"[
     {
@@ -33,28 +28,26 @@ const GLM47_KEY_VALUE_PAYLOAD: &str = "<tool_call>get_weather\
 <arg_value>Paris</arg_value>\
 </tool_call>";
 
-#[test]
-fn glm47_parses_tool_call_payload() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(GLM47_REPO, GLM47_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, GLM47_KEY_VALUE_PAYLOAD, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn glm47_parses_tool_call_payload(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome = fixture
+        .model
+        .parse_chat_message(TOOLS_JSON, GLM47_KEY_VALUE_PAYLOAD, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!(
             "expected Recognized for GLM-4.7 key-value tags on a GLM-4.7-Flash model; got Unrecognized"
         );
     };
-    assert_eq!(
-        parsed.tool_calls.len(),
-        1,
-        "expected one tool call; got {:?}",
-        parsed.tool_calls
-    );
+    assert_eq!(parsed.tool_calls.len(), 1);
     assert_eq!(parsed.tool_calls[0].name, "get_weather");
     let location = match &parsed.tool_calls[0].arguments {
         ToolCallArguments::ValidJson(value) => value
@@ -69,3 +62,5 @@ fn glm47_parses_tool_call_payload() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

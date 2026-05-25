@@ -33,12 +33,12 @@ struct PendingToken {
     is_held_for_probe: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct JsonProbeState {
     held_text: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum ProbeMode {
     Idle,
     Active(JsonProbeState),
@@ -254,10 +254,7 @@ impl<'model> SampledTokenClassifier<'model> {
         let lookback = self.markers.max_token_len().saturating_sub(1);
         let mut outcomes = Vec::new();
 
-        loop {
-            let Some(front) = self.pending.front() else {
-                break;
-            };
+        while let Some(front) = self.pending.front() {
             if front.is_held_for_probe {
                 break;
             }
@@ -937,10 +934,10 @@ mod tests {
         let outcomes = classifier.drain_overflow();
 
         assert_eq!(outcomes.len(), 1);
-        assert!(matches!(
-            outcomes[0].sampled_token,
-            SampledToken::Reasoning(_)
-        ));
+        assert_eq!(
+            std::mem::discriminant(&outcomes[0].sampled_token),
+            std::mem::discriminant(&SampledToken::Reasoning(LlamaToken::new(0)))
+        );
         assert_eq!(outcomes[0].visible_piece, "");
         assert_eq!(outcomes[0].raw_piece, "k>");
 
@@ -1002,10 +999,10 @@ mod tests {
         let outcomes = classifier.drain_overflow();
 
         assert_eq!(outcomes.len(), 1);
-        assert!(matches!(
-            outcomes[0].sampled_token,
-            SampledToken::Content(_)
-        ));
+        assert_eq!(
+            std::mem::discriminant(&outcomes[0].sampled_token),
+            std::mem::discriminant(&SampledToken::Content(LlamaToken::new(0)))
+        );
         assert_eq!(outcomes[0].visible_piece, "hi");
         assert_eq!(classifier.usage().content_tokens, 1);
         assert_eq!(classifier.usage().reasoning_tokens, 0);
@@ -1160,7 +1157,7 @@ mod tests {
 
         push_and_probe(&mut classifier, 1, "{");
 
-        assert!(matches!(classifier.probe_mode, ProbeMode::Active(_)));
+        assert_ne!(classifier.probe_mode, ProbeMode::Idle);
     }
 
     #[test]
@@ -1179,7 +1176,7 @@ mod tests {
             "every emitted outcome should be ToolCall, got {:?}",
             outcome_sections(&outcomes),
         );
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 
     #[test]
@@ -1197,7 +1194,7 @@ mod tests {
             "every emitted outcome should be Content, got {:?}",
             outcome_sections(&outcomes),
         );
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 
     #[test]
@@ -1337,7 +1334,7 @@ mod tests {
 
         let outcomes = feed_json_string(&mut classifier, "}}", 100);
 
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
         assert!(
             outcomes
                 .iter()
@@ -1358,7 +1355,7 @@ mod tests {
 
         push_and_probe(&mut classifier, 1, "{");
 
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 
     #[test]
@@ -1369,7 +1366,7 @@ mod tests {
 
         push_and_probe(&mut classifier, 1, "{");
 
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 
     #[test]
@@ -1487,7 +1484,7 @@ mod tests {
 
         push_and_probe(&mut classifier, 1, "{");
         push_and_probe(&mut classifier, 2, r#""name""#);
-        assert!(matches!(classifier.probe_mode, ProbeMode::Active(_)));
+        assert_ne!(classifier.probe_mode, ProbeMode::Idle);
 
         let outcomes = classifier.flush();
 
@@ -1498,6 +1495,6 @@ mod tests {
             "mid-probe flush must release held tokens as Content, got {:?}",
             outcome_sections(&outcomes),
         );
-        assert!(matches!(classifier.probe_mode, ProbeMode::Idle));
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 }

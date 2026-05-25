@@ -160,11 +160,28 @@ mod tests {
     #[serial]
     fn double_init_returns_error() {
         let _backend = LlamaBackend::init().unwrap();
-        let second = LlamaBackend::init();
-        assert!(matches!(
-            second.unwrap_err(),
-            LlamaCppError::BackendAlreadyInitialized
-        ));
+        let second_err = LlamaBackend::init().unwrap_err();
+
+        assert_eq!(
+            std::mem::discriminant(&second_err),
+            std::mem::discriminant(&LlamaCppError::BackendAlreadyInitialized),
+            "expected BackendAlreadyInitialized, got {second_err:?}"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn init_numa_returns_error_when_backend_already_initialized() {
+        use crate::llama_backend_numa_strategy::NumaStrategy;
+
+        let _backend = LlamaBackend::init().unwrap();
+        let second_err = LlamaBackend::init_numa(NumaStrategy::Disabled).unwrap_err();
+
+        assert_eq!(
+            std::mem::discriminant(&second_err),
+            std::mem::discriminant(&LlamaCppError::BackendAlreadyInitialized),
+            "expected BackendAlreadyInitialized, got {second_err:?}"
+        );
     }
 
     #[test]

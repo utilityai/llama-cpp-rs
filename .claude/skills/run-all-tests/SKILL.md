@@ -26,19 +26,6 @@ echo "Device: $DEVICE"
 
 ## Step 2: run the suites
 
-Sequentially, from the workspace root. 
-
-Copy this checklist and tick each item as the suite completes:
-
-```
-Test progress:
-- [ ] make test.unit
-- [ ] make test.qwen3.5_0.8B
-- [ ] make test.qwen3.6_35b_a3b
-- [ ] make test.glm4_7_flash
-- [ ] make test.deepseek_r1_distill_llama_8b
-```
-
 Translate `$DEVICE` into the value the Makefile expects. `TEST_DEVICE` holds **only** the backend name (`cuda` / `metal` / `vulkan` / `rocm`), or empty for CPU since there is no `cpu` feature:
 
 ```bash
@@ -48,20 +35,11 @@ Translate `$DEVICE` into the value the Makefile expects. `TEST_DEVICE` holds **o
 Then run exactly:
 
 ```bash
-make test.unit TEST_DEVICE="$FEAT"
-make test.qwen3.5_0.8B TEST_DEVICE="$FEAT"
-make test.qwen3.6_35b_a3b TEST_DEVICE="$FEAT"
-make test.glm4_7_flash TEST_DEVICE="$FEAT"
-make test.deepseek_r1_distill_llama_8b TEST_DEVICE="$FEAT"
+make test.llms TEST_DEVICE="$FEAT"
 ```
-
-The Makefile's `$(if $(TEST_DEVICE),--features $(TEST_DEVICE),)` already skips the `--features` flag when `$FEAT` is empty, so the CPU path needs no further special-casing.
-
-Do not run `make test.llms` or `make test`. Those bundle every LLM suite into one cargo invocation, which loses per-suite failure attribution and breaks the checklist above.
 
 ## Step 3: rules during the run
 
-- **Serialize GPU suites.** When `$DEVICE` is `cuda` or `metal`, run test suites sequentially to avoid device contention.
 - **Per-test 30 s budget.** Flag any individual test that exceeds 30 s wall-clock. That is a real bug — production or test — not flakiness.
 
 ## Step 4: report

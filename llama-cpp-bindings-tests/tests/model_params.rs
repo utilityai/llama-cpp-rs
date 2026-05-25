@@ -1,3 +1,8 @@
+#![expect(
+    clippy::similar_names,
+    reason = "model_path_str and model_path_cstr are both genuinely needed; renaming would not improve clarity"
+)]
+
 use std::ffi::CString;
 use std::pin::pin;
 
@@ -5,17 +10,49 @@ use anyhow::Result;
 use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::max_devices;
 use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_bindings_tests::FixtureSession;
-use llama_cpp_bindings_tests::test_model;
-use serial_test::serial;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-#[test]
-#[serial]
-fn fit_params_succeeds_with_test_model() -> Result<()> {
-    let _fixture = FixtureSession::open()?;
-
-    let model_path = test_model::download_model()?;
-    let model_path_str = model_path
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn fit_params_succeeds_with_test_model(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model_path_str = fixture
+        .model_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("model path is not valid UTF-8"))?;
     let model_path_cstr = CString::new(model_path_str)?;
@@ -37,3 +74,5 @@ fn fit_params_succeeds_with_test_model() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

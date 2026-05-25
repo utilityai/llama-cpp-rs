@@ -13,6 +13,7 @@ use crate::gguf_type::GgufType;
 ///
 /// Opens a GGUF file in metadata-only mode (`no_alloc = true`), allowing
 /// inspection of key-value pairs and tensor metadata without loading tensor data.
+#[derive(Debug)]
 pub struct GgufContext {
     context: NonNull<llama_cpp_bindings_sys::gguf_context>,
 }
@@ -169,14 +170,36 @@ impl Drop for GgufContext {
 
 #[cfg(test)]
 mod tests {
+    use std::ffi::CString;
+    use std::mem::Discriminant;
+    use std::path::PathBuf;
+
     use super::GgufContext;
     use crate::gguf_context_error::GgufContextError;
     use crate::gguf_type::GgufType;
 
-    fn fixture_path() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    fn fixture_path() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("fixtures")
             .join("ggml-vocab-bert-bge.gguf")
+    }
+
+    fn init_failed_disc() -> Discriminant<GgufContextError> {
+        std::mem::discriminant(&GgufContextError::InitFailed(PathBuf::new()))
+    }
+
+    fn key_not_found_disc() -> Discriminant<GgufContextError> {
+        std::mem::discriminant(&GgufContextError::KeyNotFound { key: String::new() })
+    }
+
+    fn nul_error_disc() -> Discriminant<GgufContextError> {
+        let nul_err = CString::new(b"a\0b".to_vec()).unwrap_err();
+        std::mem::discriminant(&GgufContextError::NulError(nul_err))
+    }
+
+    #[cfg(unix)]
+    fn path_to_str_error_disc() -> Discriminant<GgufContextError> {
+        std::mem::discriminant(&GgufContextError::PathToStrError(PathBuf::new()))
     }
 
     #[test]
@@ -188,9 +211,9 @@ mod tests {
 
     #[test]
     fn from_file_nonexistent_returns_init_failed() {
-        let result = GgufContext::from_file("/nonexistent/file.gguf");
+        let err = GgufContext::from_file("/nonexistent/file.gguf").unwrap_err();
 
-        assert!(matches!(result, Err(GgufContextError::InitFailed(_))));
+        assert_eq!(std::mem::discriminant(&err), init_failed_disc());
     }
 
     #[test]
@@ -219,9 +242,9 @@ mod tests {
     #[test]
     fn find_key_returns_error_for_missing_key() {
         let context = GgufContext::from_file(fixture_path()).unwrap();
-        let result = context.find_key("nonexistent.key");
+        let err = context.find_key("nonexistent.key").unwrap_err();
 
-        assert!(matches!(result, Err(GgufContextError::KeyNotFound { .. })));
+        assert_eq!(std::mem::discriminant(&err), key_not_found_disc());
     }
 
     #[test]
@@ -258,24 +281,24 @@ mod tests {
         use std::os::unix::ffi::OsStrExt;
 
         let non_utf8_path = std::path::Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
-        let result = GgufContext::from_file(non_utf8_path);
+        let err = GgufContext::from_file(non_utf8_path).unwrap_err();
 
-        assert!(matches!(result, Err(GgufContextError::PathToStrError(_))));
+        assert_eq!(std::mem::discriminant(&err), path_to_str_error_disc());
     }
 
     #[test]
     fn from_file_with_null_byte_in_path_returns_error() {
-        let result = GgufContext::from_file("/tmp/foo\0bar.gguf");
+        let err = GgufContext::from_file("/tmp/foo\0bar.gguf").unwrap_err();
 
-        assert!(matches!(result, Err(GgufContextError::NulError(_))));
+        assert_eq!(std::mem::discriminant(&err), nul_error_disc());
     }
 
     #[test]
     fn find_key_with_null_byte_in_key_returns_error() {
         let context = GgufContext::from_file(fixture_path()).unwrap();
-        let result = context.find_key("foo\0bar");
+        let err = context.find_key("foo\0bar").unwrap_err();
 
-        assert!(matches!(result, Err(GgufContextError::NulError(_))));
+        assert_eq!(std::mem::discriminant(&err), nul_error_disc());
     }
 
     #[test]
@@ -290,7 +313,7 @@ mod tests {
     }
 
     struct SyntheticGgufFile {
-        path: std::path::PathBuf,
+        path: PathBuf,
     }
 
     impl SyntheticGgufFile {

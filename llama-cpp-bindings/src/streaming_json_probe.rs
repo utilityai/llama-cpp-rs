@@ -446,4 +446,14 @@ mod tests {
             JsonProbeOutcome::Failed,
         );
     }
+
+    #[test]
+    fn syntactically_malformed_object_is_failed() {
+        // Input starts with `{` (passes the cheap prefix check) but cannot parse — the syntax
+        // error path classifies as `Category::Syntax`, surfacing the `Failed` arm.
+        assert_eq!(
+            JsonProbeOutcome::validate_prefix("{,}"),
+            JsonProbeOutcome::Failed,
+        );
+    }
 }

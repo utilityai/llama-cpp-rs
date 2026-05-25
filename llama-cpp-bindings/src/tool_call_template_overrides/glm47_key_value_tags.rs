@@ -32,6 +32,7 @@ impl Glm47KeyValueTagsOverride {
 
 #[cfg(test)]
 mod tests {
+    use llama_cpp_bindings_types::KeyValueXmlTagsShape;
     use llama_cpp_bindings_types::ToolCallArgsShape;
 
     use super::Glm47KeyValueTagsOverride;
@@ -44,16 +45,15 @@ mod tests {
 
         assert_eq!(markers.open, "<tool_call>");
         assert_eq!(markers.close, "</tool_call>");
-        let ToolCallArgsShape::KeyValueXmlTags(shape) = markers.args_shape else {
-            panic!(
-                "expected KeyValueXmlTags variant, got {:?}",
-                markers.args_shape
-            );
-        };
-        assert_eq!(shape.key_open, "<arg_key>");
-        assert_eq!(shape.key_close, "</arg_key>");
-        assert_eq!(shape.value_open, "<arg_value>");
-        assert_eq!(shape.value_close, "</arg_value>");
+        assert_eq!(
+            markers.args_shape,
+            ToolCallArgsShape::KeyValueXmlTags(KeyValueXmlTagsShape {
+                key_open: "<arg_key>".to_owned(),
+                key_close: "</arg_key>".to_owned(),
+                value_open: "<arg_value>".to_owned(),
+                value_close: "</arg_value>".to_owned(),
+            })
+        );
     }
 
     #[test]

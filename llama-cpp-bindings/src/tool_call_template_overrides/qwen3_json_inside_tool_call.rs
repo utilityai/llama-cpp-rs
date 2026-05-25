@@ -34,6 +34,7 @@ impl Qwen3JsonInsideToolCallOverride {
 
 #[cfg(test)]
 mod tests {
+    use llama_cpp_bindings_types::JsonObjectShape;
     use llama_cpp_bindings_types::ToolCallArgsShape;
 
     use super::Qwen3JsonInsideToolCallOverride;
@@ -46,11 +47,13 @@ mod tests {
 
         assert_eq!(markers.open, "<tool_call>");
         assert_eq!(markers.close, "</tool_call>");
-        let ToolCallArgsShape::JsonObject(shape) = markers.args_shape else {
-            panic!("expected JsonObject variant, got {:?}", markers.args_shape);
-        };
-        assert_eq!(shape.name_field, "name");
-        assert_eq!(shape.arguments_field, "arguments");
+        assert_eq!(
+            markers.args_shape,
+            ToolCallArgsShape::JsonObject(JsonObjectShape {
+                name_field: "name".to_owned(),
+                arguments_field: "arguments".to_owned(),
+            })
+        );
     }
 
     #[test]

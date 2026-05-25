@@ -33,6 +33,7 @@ impl QwenXmlTagsOverride {
 #[cfg(test)]
 mod tests {
     use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::XmlTagsShape;
 
     use super::QwenXmlTagsOverride;
 
@@ -44,13 +45,15 @@ mod tests {
 
         assert_eq!(markers.open, "<tool_call>");
         assert_eq!(markers.close, "</tool_call>");
-        let ToolCallArgsShape::XmlTags(shape) = markers.args_shape else {
-            panic!("expected XmlTags variant, got {:?}", markers.args_shape);
-        };
-        assert_eq!(shape.function_open_prefix, "<function=");
-        assert_eq!(shape.function_close, "</function>");
-        assert_eq!(shape.parameter_open_prefix, "<parameter=");
-        assert_eq!(shape.parameter_close, "</parameter>");
+        assert_eq!(
+            markers.args_shape,
+            ToolCallArgsShape::XmlTags(XmlTagsShape {
+                function_open_prefix: "<function=".to_owned(),
+                function_close: "</function>".to_owned(),
+                parameter_open_prefix: "<parameter=".to_owned(),
+                parameter_close: "</parameter>".to_owned(),
+            })
+        );
     }
 
     #[test]

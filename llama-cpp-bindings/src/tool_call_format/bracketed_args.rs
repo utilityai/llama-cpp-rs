@@ -199,14 +199,59 @@ mod tests {
         );
 
         let failure = result.expect_err("malformed JSON must produce a typed failure");
-        match failure {
-            BracketedArgsFailure::InvalidJsonArguments { tool_name, .. } => {
-                assert_eq!(tool_name, "get_weather");
-            }
-            other @ BracketedArgsFailure::UnterminatedArguments { .. } => {
-                panic!("expected InvalidJsonArguments, got {other:?}")
-            }
-        }
+        let BracketedArgsFailure::InvalidJsonArguments { tool_name, .. } = failure else {
+            unreachable!("input was syntactically malformed JSON, never truncated")
+        };
+
+        assert_eq!(tool_name, "get_weather");
+    }
+
+    #[test]
+    fn rejects_truncated_json_arguments_with_unterminated_failure() {
+        // serde_json's iterator returns None when the deserializer has no token to start from.
+        // Constructing such an input requires whitespace-only input after the separator — the
+        // iterator finds nothing parseable and yields None, surfacing the Unterminated arm.
+        let failure = parse(
+            "[TOOL_CALLS]get_weather[ARGS]   ",
+            &mistral3_markers(),
+            &mistral3_shape(),
+        )
+        .expect_err("truncated arguments must produce a typed failure");
+        let BracketedArgsFailure::UnterminatedArguments { tool_name } = failure else {
+            unreachable!("input had only whitespace after [ARGS]; iterator yields None")
+        };
+
+        assert_eq!(tool_name, "get_weather");
+    }
+
+    #[test]
+    fn returns_empty_vec_for_separator_with_only_whitespace_name() {
+        // `get_weather` is replaced with whitespace before the separator, so `name.trim()` is
+        // empty and the parser returns `ParseStep::Done` — covers the empty-name early return.
+        let parsed = parse(
+            "[TOOL_CALLS]   [ARGS]{\"x\":1}",
+            &mistral3_markers(),
+            &mistral3_shape(),
+        )
+        .expect("whitespace-name input must parse");
+
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn returns_empty_vec_when_shape_has_empty_separator() {
+        // When `name_args_separator` is empty, `parse` short-circuits to `Vec::new()` —
+        // covers the early-return guard.
+        let mut shape = mistral3_shape();
+        shape.name_args_separator.clear();
+        let parsed = parse(
+            "[TOOL_CALLS]get_weather[ARGS]{\"x\":1}",
+            &mistral3_markers(),
+            &shape,
+        )
+        .expect("empty-separator shape must parse");
+
+        assert!(parsed.is_empty());
     }
 
     #[test]

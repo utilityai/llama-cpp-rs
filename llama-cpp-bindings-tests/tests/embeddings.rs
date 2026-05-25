@@ -2,11 +2,12 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::FixtureSession;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -17,17 +18,26 @@ fn normalize(input: &[f32]) -> Vec<f32> {
     input.iter().map(|&value| value / magnitude).collect()
 }
 
-#[test]
-fn embedding_generation_produces_vectors() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.embedding_model()?;
+#[llama_test(
+    model_source = HuggingFace("Qwen/Qwen3-Embedding-0.6B-GGUF", "Qwen3-Embedding-0.6B-Q8_0.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 2048,
+    n_ubatch = 512,
+    n_threads_batch = 8,
+    embeddings = true,
+)]
+fn embedding_generation_produces_vectors(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
 
-    let ctx_params = LlamaContextParams::default()
-        .with_n_threads_batch(std::thread::available_parallelism()?.get().try_into()?)
-        .with_embeddings(true);
-    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)
-        .with_context(|| "unable to create context")?;
+    let mut ctx = LlamaContext::from_model(
+        model,
+        fixture.backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )
+    .with_context(|| "unable to create context")?;
 
     let prompt = "Hello my name is";
     let tokens = model
@@ -89,3 +99,5 @@ fn embedding_generation_produces_vectors() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

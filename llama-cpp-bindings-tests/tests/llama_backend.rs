@@ -1,18 +1,30 @@
-use anyhow::Result;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::test_model;
-use serial_test::serial;
+#![expect(
+    clippy::unnecessary_wraps,
+    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
+)]
 
-#[test]
-#[serial]
-fn void_logs_suppresses_output() -> Result<()> {
-    let mut backend = LlamaBackend::init()?;
-    backend.void_logs();
-    let model_path = test_model::download_model()?;
-    let model_params = inference_model_params();
-    let _model = LlamaModel::load_from_file(&backend, model_path, &model_params)?;
+use anyhow::Result;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
+
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+    void_logs = true,
+)]
+fn void_logs_suppresses_output(fixture: &LlamaFixture<'_>) -> Result<()> {
+    assert!(
+        fixture.model.n_vocab() > 0,
+        "model must load successfully even when void_logs has been called before init"
+    );
 
     Ok(())
 }
+
+llama_tests_main!();

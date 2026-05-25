@@ -22,8 +22,9 @@ pub fn detect(template: &str) -> Option<ToolCallMarkers> {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::ToolCallArgsShape;
-
+    use super::Gemma4CallBlockOverride;
+    use super::Mistral3ArrowArgsOverride;
+    use super::QwenXmlTagsOverride;
     use super::detect;
 
     #[test]
@@ -31,11 +32,7 @@ mod tests {
         let template = "{{- '<|tool_call>call:' + function['name'] + '{' -}}";
         let markers = detect(template).expect("must dispatch to Gemma 4");
 
-        assert_eq!(markers.open, "<|tool_call>call:");
-        assert!(matches!(
-            markers.args_shape,
-            ToolCallArgsShape::PairedQuote(_)
-        ));
+        assert_eq!(markers, Gemma4CallBlockOverride::markers());
     }
 
     #[test]
@@ -43,11 +40,7 @@ mod tests {
         let template = "{{- name + '[ARGS]' + arguments }}";
         let markers = detect(template).expect("must dispatch to Mistral 3");
 
-        assert_eq!(markers.open, "[TOOL_CALLS]");
-        assert!(matches!(
-            markers.args_shape,
-            ToolCallArgsShape::BracketedJson(_)
-        ));
+        assert_eq!(markers, Mistral3ArrowArgsOverride::markers());
     }
 
     #[test]
@@ -55,8 +48,7 @@ mod tests {
         let template = "{{- '<tool_call>\\n<function=' + tool_call.name + '>\\n' }}";
         let markers = detect(template).expect("must dispatch to Qwen XML tags");
 
-        assert_eq!(markers.open, "<tool_call>");
-        assert!(matches!(markers.args_shape, ToolCallArgsShape::XmlTags(_)));
+        assert_eq!(markers, QwenXmlTagsOverride::markers());
     }
 
     #[test]

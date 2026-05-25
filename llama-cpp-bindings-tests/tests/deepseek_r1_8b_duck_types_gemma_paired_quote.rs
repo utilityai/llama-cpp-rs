@@ -2,14 +2,9 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ToolCallArguments;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const DEEPSEEK_R1_8B_REPO: &str = "unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF";
-const DEEPSEEK_R1_8B_FILE: &str = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const TOOLS_JSON: &str = r#"[
     {
@@ -30,16 +25,20 @@ const TOOLS_JSON: &str = r#"[
 
 const GEMMA_PAIRED_QUOTE_PAYLOAD: &str = "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}";
 
-#[test]
-fn deepseek_r1_8b_duck_types_gemma_paired_quote() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(DEEPSEEK_R1_8B_REPO, DEEPSEEK_R1_8B_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, GEMMA_PAIRED_QUOTE_PAYLOAD, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn deepseek_r1_8b_duck_types_gemma_paired_quote(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome =
+        fixture
+            .model
+            .parse_chat_message(TOOLS_JSON, GEMMA_PAIRED_QUOTE_PAYLOAD, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!(
@@ -67,3 +66,5 @@ fn deepseek_r1_8b_duck_types_gemma_paired_quote() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

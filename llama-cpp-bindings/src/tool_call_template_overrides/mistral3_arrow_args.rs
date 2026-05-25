@@ -29,6 +29,7 @@ impl Mistral3ArrowArgsOverride {
 
 #[cfg(test)]
 mod tests {
+    use llama_cpp_bindings_types::BracketedJsonShape;
     use llama_cpp_bindings_types::ToolCallArgsShape;
 
     use super::Mistral3ArrowArgsOverride;
@@ -41,13 +42,12 @@ mod tests {
 
         assert_eq!(markers.open, "[TOOL_CALLS]");
         assert!(markers.close.is_empty());
-        let ToolCallArgsShape::BracketedJson(shape) = markers.args_shape else {
-            panic!(
-                "expected BracketedJson variant, got {:?}",
-                markers.args_shape
-            );
-        };
-        assert_eq!(shape.name_args_separator, "[ARGS]");
+        assert_eq!(
+            markers.args_shape,
+            ToolCallArgsShape::BracketedJson(BracketedJsonShape {
+                name_args_separator: "[ARGS]".to_owned(),
+            })
+        );
     }
 
     #[test]

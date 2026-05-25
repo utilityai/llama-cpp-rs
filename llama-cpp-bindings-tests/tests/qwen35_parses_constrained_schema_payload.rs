@@ -2,16 +2,11 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ToolCallArguments;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 use serde_json::Value;
 use serde_json::json;
-
-const QWEN35_REPO: &str = "unsloth/Qwen3.5-0.8B-GGUF";
-const QWEN35_FILE: &str = "Qwen3.5-0.8B-Q4_K_M.gguf";
 
 const NEGOTIATE_WITH_CAT_TOOLS_JSON: &str = r#"[
     {
@@ -68,16 +63,17 @@ fn arguments_as_json(arguments: &ToolCallArguments) -> Result<&Value> {
     }
 }
 
-#[test]
-fn qwen35_parses_constrained_schema_payload() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(QWEN35_REPO, QWEN35_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    let outcome = model.parse_chat_message(
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn qwen35_parses_constrained_schema_payload(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome = fixture.model.parse_chat_message(
         NEGOTIATE_WITH_CAT_TOOLS_JSON,
         NEGOTIATE_WITH_CAT_INPUT,
         false,
@@ -90,12 +86,7 @@ fn qwen35_parses_constrained_schema_payload() -> Result<()> {
         );
     };
 
-    assert_eq!(
-        parsed.tool_calls.len(),
-        1,
-        "expected exactly one parsed tool call; got {:?}",
-        parsed.tool_calls
-    );
+    assert_eq!(parsed.tool_calls.len(), 1);
     assert_eq!(parsed.tool_calls[0].name, "negotiate_with_cat");
     assert_eq!(parsed.tool_calls[0].id, "call_0");
     assert_eq!(
@@ -109,3 +100,5 @@ fn qwen35_parses_constrained_schema_payload() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

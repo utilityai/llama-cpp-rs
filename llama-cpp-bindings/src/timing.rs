@@ -138,7 +138,7 @@ fn write_timings(timings: &LlamaTimings, writer: &mut dyn std::fmt::Write) -> st
             1e3 / timings.t_eval_ms() * f64::from(timings.n_eval())
         )?;
     } else {
-        writeln!(writer, "eval time = {:.2} ms / 0 runs", timings.t_eval_ms(),)?;
+        writeln!(writer, "eval time = {:.2} ms / 0 runs", timings.t_eval_ms())?;
     }
 
     Ok(())

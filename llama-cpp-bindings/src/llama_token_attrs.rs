@@ -73,13 +73,13 @@ mod tests {
 
     #[test]
     fn try_from_invalid_bits_returns_error() {
-        let result = LlamaTokenAttrs::try_from(!0);
+        let err = LlamaTokenAttrs::try_from(!0).unwrap_err();
+        let LlamaTokenAttrsFromIntError::UnknownValue(invalid_bits) = err;
 
-        assert!(result.is_err());
-        assert!(matches!(
-            result.expect_err("should fail"),
-            LlamaTokenAttrsFromIntError::UnknownValue(_),
-        ));
+        assert!(
+            invalid_bits > 0,
+            "passing !0 must produce at least one unknown bit"
+        );
     }
 
     #[test]

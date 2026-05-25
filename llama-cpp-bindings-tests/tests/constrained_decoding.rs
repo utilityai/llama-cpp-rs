@@ -2,23 +2,61 @@ use std::io::Write;
 
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampling::LlamaSampler;
-use llama_cpp_bindings_tests::FixtureSession;
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
-#[test]
-fn json_schema_constrains_output() -> Result<()> {
-    let fixture = FixtureSession::open()?;
-    let backend = fixture.backend();
-    let model = fixture.default_model();
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 512,
+    n_ubatch = 128,
+)]
+fn json_schema_constrains_output(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
     let prompt = "The weather in Paris is sunny and 22 degrees. Extract as JSON:\n";
 
-    let ctx_params = LlamaContextParams::default();
-    let mut ctx = LlamaContext::from_model(model, backend, ctx_params)?;
+    let mut ctx = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     let tokens_list = model.str_to_token(prompt, AddBos::Always)?;
 
@@ -77,14 +115,10 @@ fn json_schema_constrains_output() -> Result<()> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("model produced no JSON value"))??;
 
-    assert!(
-        parsed.get("city").is_some(),
-        "constrained output should contain 'city' field"
-    );
-    assert!(
-        parsed.get("temperature").is_some(),
-        "constrained output should contain 'temperature' field"
-    );
+    assert!(parsed.get("city").is_some());
+    assert!(parsed.get("temperature").is_some());
 
     Ok(())
 }
+
+llama_tests_main!();

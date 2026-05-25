@@ -59,13 +59,18 @@ mod tests {
 
     #[test]
     fn null_byte_returns_schema_contains_nul_byte_error() {
-        let schema = "{\x00}";
-        let result = json_schema_to_grammar(schema);
+        use std::ffi::CString;
 
-        assert!(matches!(
-            result,
-            Err(JsonSchemaToGrammarError::SchemaContainsNulByte(_)),
-        ));
+        let schema = "{\x00}";
+        let err = json_schema_to_grammar(schema).unwrap_err();
+        let representative = JsonSchemaToGrammarError::SchemaContainsNulByte(
+            CString::new(b"a\0b".to_vec()).unwrap_err(),
+        );
+
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
+        );
     }
 
     #[test]
@@ -79,22 +84,28 @@ mod tests {
     #[test]
     fn invalid_json_returns_reported() {
         let schema = "not valid json at all";
-        let result = json_schema_to_grammar(schema);
+        let err = json_schema_to_grammar(schema).unwrap_err();
+        let representative = JsonSchemaToGrammarError::Reported {
+            message: String::new(),
+        };
 
-        assert!(matches!(
-            result,
-            Err(JsonSchemaToGrammarError::Reported { .. }),
-        ));
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
+        );
     }
 
     #[test]
     fn unresolved_ref_returns_invalid_schema() {
         let schema = r##"{"$ref": "#/$defs/Missing"}"##;
-        let result = json_schema_to_grammar(schema);
+        let err = json_schema_to_grammar(schema).unwrap_err();
+        let representative = JsonSchemaToGrammarError::InvalidSchema {
+            message: String::new(),
+        };
 
-        assert!(
-            matches!(result, Err(JsonSchemaToGrammarError::InvalidSchema { .. })),
-            "expected InvalidSchema, got {result:?}",
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
         );
     }
 }

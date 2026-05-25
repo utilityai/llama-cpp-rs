@@ -2,14 +2,9 @@ use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ToolCallArguments;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
-use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const QWEN35_REPO: &str = "unsloth/Qwen3.5-0.8B-GGUF";
-const QWEN35_FILE: &str = "Qwen3.5-0.8B-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const TOOLS_JSON: &str = r#"[
     {
@@ -53,31 +48,24 @@ Berlin\n\
 </function>\n\
 </tool_call>";
 
-fn load_qwen35() -> Result<(LlamaBackend, LlamaModel)> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-    let path = download_file_from(QWEN35_REPO, QWEN35_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
-
-    Ok((backend, model))
-}
-
-#[test]
-fn qwen35_parses_tool_call_payload() -> Result<()> {
-    let (_backend, model) = load_qwen35()?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, QWEN_XML_PAYLOAD, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn qwen35_parses_tool_call_payload(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome = fixture
+        .model
+        .parse_chat_message(TOOLS_JSON, QWEN_XML_PAYLOAD, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!("expected Recognized for Qwen XML on a Qwen-3.5 model; got Unrecognized");
     };
-    assert_eq!(
-        parsed.tool_calls.len(),
-        1,
-        "expected one tool call; got {:?}",
-        parsed.tool_calls
-    );
+    assert_eq!(parsed.tool_calls.len(), 1);
     assert_eq!(parsed.tool_calls[0].name, "get_weather");
     let location = match &parsed.tool_calls[0].arguments {
         ToolCallArguments::ValidJson(value) => value
@@ -93,11 +81,19 @@ fn qwen35_parses_tool_call_payload() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn qwen35_parses_partial_tool_call_returns_pending_state() -> Result<()> {
-    let (_backend, model) = load_qwen35()?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, PARTIAL_QWEN_XML_PAYLOAD, true)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn qwen35_parses_partial_tool_call_returns_pending_state(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome = fixture
+        .model
+        .parse_chat_message(TOOLS_JSON, PARTIAL_QWEN_XML_PAYLOAD, true)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!("expected Recognized for partial Qwen XML on a Qwen-3.5 model; got Unrecognized");
@@ -107,11 +103,19 @@ fn qwen35_parses_partial_tool_call_returns_pending_state() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn qwen35_parses_multiple_tool_calls() -> Result<()> {
-    let (_backend, model) = load_qwen35()?;
-
-    let outcome = model.parse_chat_message(TOOLS_JSON, TWO_QWEN_XML_PAYLOADS, false)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+fn qwen35_parses_multiple_tool_calls(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let outcome = fixture
+        .model
+        .parse_chat_message(TOOLS_JSON, TWO_QWEN_XML_PAYLOADS, false)?;
 
     let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
         bail!(
@@ -126,3 +130,5 @@ fn qwen35_parses_multiple_tool_calls() -> Result<()> {
 
     Ok(())
 }
+
+llama_tests_main!();

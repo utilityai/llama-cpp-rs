@@ -201,26 +201,28 @@ mod tests {
     }
 
     #[test]
-    fn record_cached_below_prompt_succeeds_and_accumulates() -> Result<(), TokenUsageError> {
+    fn record_cached_below_prompt_succeeds_and_accumulates() {
         let mut usage = TokenUsage::new();
         usage.record_prompt_tokens(10);
-        usage.record_cached_prompt_tokens(3)?;
-        usage.record_cached_prompt_tokens(4)?;
+        usage
+            .record_cached_prompt_tokens(3)
+            .expect("3 cached <= 10 prompt is valid");
+        usage
+            .record_cached_prompt_tokens(4)
+            .expect("3+4 cached <= 10 prompt is valid");
 
         assert_eq!(usage.cached_prompt_tokens, 7);
-
-        Ok(())
     }
 
     #[test]
-    fn record_cached_equal_to_prompt_succeeds() -> Result<(), TokenUsageError> {
+    fn record_cached_equal_to_prompt_succeeds() {
         let mut usage = TokenUsage::new();
         usage.record_prompt_tokens(5);
-        usage.record_cached_prompt_tokens(5)?;
+        usage
+            .record_cached_prompt_tokens(5)
+            .expect("5 cached == 5 prompt is valid (boundary)");
 
         assert_eq!(usage.cached_prompt_tokens, 5);
-
-        Ok(())
     }
 
     #[test]
@@ -333,10 +335,11 @@ mod tests {
     }
 
     #[test]
-    fn add_combines_field_by_field() -> Result<(), TokenUsageError> {
+    fn add_combines_field_by_field() {
         let mut left = TokenUsage::new();
         left.record_prompt_tokens(2);
-        left.record_cached_prompt_tokens(1)?;
+        left.record_cached_prompt_tokens(1)
+            .expect("1 cached <= 2 prompt is valid");
         left.record_content_token();
         left.record_reasoning_token();
         left.record_tool_call_token();
@@ -344,7 +347,9 @@ mod tests {
 
         let mut right = TokenUsage::new();
         right.record_prompt_tokens(5);
-        right.record_cached_prompt_tokens(2)?;
+        right
+            .record_cached_prompt_tokens(2)
+            .expect("2 cached <= 5 prompt is valid");
         right.record_content_token();
         right.record_tool_call_token();
 
@@ -356,8 +361,6 @@ mod tests {
         assert_eq!(combined.reasoning_tokens, 1);
         assert_eq!(combined.tool_call_tokens, 2);
         assert_eq!(combined.undeterminable_tokens, 1);
-
-        Ok(())
     }
 
     #[test]

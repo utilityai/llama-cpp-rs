@@ -34,13 +34,19 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn load_backends_from_path_returns_path_null_byte_for_embedded_null() {
+        use std::ffi::CString;
         use std::ffi::OsStr;
         use std::os::unix::ffi::OsStrExt;
 
         let path = PathBuf::from(OsStr::from_bytes(b"/tmp/foo\0bar"));
-        let result = load_backends_from_path(&path);
+        let err = load_backends_from_path(&path).unwrap_err();
+        let representative =
+            LoadBackendsError::PathNullByte(CString::new(b"a\0b".to_vec()).unwrap_err());
 
-        assert!(matches!(result, Err(LoadBackendsError::PathNullByte(_))));
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
+        );
     }
 
     #[test]
@@ -50,8 +56,12 @@ mod tests {
         use std::os::unix::ffi::OsStrExt;
 
         let path = PathBuf::from(OsStr::from_bytes(b"/tmp/\xff\xfe"));
-        let result = load_backends_from_path(&path);
+        let err = load_backends_from_path(&path).unwrap_err();
+        let representative = LoadBackendsError::PathNotUtf8(PathBuf::new());
 
-        assert!(matches!(result, Err(LoadBackendsError::PathNotUtf8(_))));
+        assert_eq!(
+            std::mem::discriminant(&err),
+            std::mem::discriminant(&representative)
+        );
     }
 }

@@ -53,6 +53,14 @@ fn create_base_builder(llama_src: &Path) -> bindgen::Builder {
         .allowlist_type("llama_rs_.*")
         .allowlist_function("mtmd_.*")
         .allowlist_type("mtmd_.*")
+        .blocklist_function("ggml_fopen")
+        .blocklist_function("gguf_init_from_file_ptr")
+        .blocklist_function("gguf_write_to_file_ptr")
+        .blocklist_function("llama_model_load_from_file_ptr")
+        .blocklist_type("FILE")
+        .blocklist_type("_IO_.*")
+        .blocklist_type("_iobuf")
+        .blocklist_type("__BindgenBitfieldUnit")
         .prepend_enum_name(false)
 }
 

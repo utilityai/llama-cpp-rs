@@ -40,18 +40,25 @@ mod tests {
 
     #[test]
     fn detects_gemma4_template_with_tool_call_call_literal() {
+        use llama_cpp_bindings_types::PairedQuoteShape;
+        use llama_cpp_bindings_types::ToolCallValueQuote;
+
         let template = "...{{- '<|tool_call>call:' + function['name'] + '{' -}}...";
         let markers =
             Gemma4CallBlockOverride::detect(template).expect("Gemma 4 template must be detected");
 
         assert_eq!(markers.open, "<|tool_call>call:");
         assert_eq!(markers.close, "}");
-        let ToolCallArgsShape::PairedQuote(shape) = markers.args_shape else {
-            panic!("expected PairedQuote variant, got {:?}", markers.args_shape);
-        };
-        assert_eq!(shape.name_args_separator, "{");
-        assert_eq!(shape.value_quote.open, "<|\"|>");
-        assert_eq!(shape.value_quote.close, "<|\"|>");
+        assert_eq!(
+            markers.args_shape,
+            ToolCallArgsShape::PairedQuote(PairedQuoteShape {
+                name_args_separator: "{".to_owned(),
+                value_quote: ToolCallValueQuote {
+                    open: "<|\"|>".to_owned(),
+                    close: "<|\"|>".to_owned(),
+                },
+            })
+        );
     }
 
     #[test]

@@ -1,11 +1,12 @@
 //! See [llama-cpp-bindings](https://crates.io/crates/llama-cpp-bindings) for a documented and safe API.
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-#![allow(unpredictable_function_pointer_comparisons)]
-#![allow(unnecessary_transmutes)]
-#![allow(clippy::missing_safety_doc)]
-#![allow(clippy::ptr_offset_with_cast)]
+#![expect(
+    non_camel_case_types,
+    reason = "bindgen emits C struct and enum names verbatim and they don't follow Rust naming"
+)]
+#![expect(
+    unpredictable_function_pointer_comparisons,
+    reason = "bindgen-generated FFI function pointers are opaque and the lint cannot reason about them"
+)]
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));

@@ -1,28 +1,15 @@
-use std::num::NonZeroU32;
-
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::context::params::LlamaContextParams;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_bindings_tests::gpu_backend::inference_model_params;
-use llama_cpp_bindings_tests::gpu_backend::require_compiled_backends_present;
-use llama_cpp_bindings_tests::test_model::download_file_from;
-
-const DEEPSEEK_R1_8B_REPO: &str = "unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF";
-const DEEPSEEK_R1_8B_FILE: &str = "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf";
+use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_tests_main;
 
 const MAX_GENERATED_TOKENS: i32 = 200;
 
-// DeepSeek-R1-Distill-Llama-8B has no native thinking-disabled mode in its
-// chat template (R1 is a pure reasoner). This prompt manually closes the
-// `<think>` block before generation so the classifier starts in CONTENT —
-// verifies the "spurious close in content section" path with this model's
-// tokenizer and still produces zero Reasoning tokens.
 const DEEPSEEK_R1_8B_THINKING_DISABLED_PROMPT: &str = "\
 <｜User｜>What is 2 + 2?<｜Assistant｜><think>
 
@@ -32,14 +19,20 @@ const DEEPSEEK_R1_8B_THINKING_DISABLED_PROMPT: &str = "\
 
 const FORBIDDEN_MARKERS: &[&str] = &["<think>", "</think>"];
 
-#[test]
-fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt() -> Result<()> {
-    let backend = LlamaBackend::init()?;
-    require_compiled_backends_present()?;
-
-    let path = download_file_from(DEEPSEEK_R1_8B_REPO, DEEPSEEK_R1_8B_FILE)?;
-    let params = inference_model_params();
-    let model = LlamaModel::load_from_file(&backend, &path, &params)?;
+#[llama_test(
+    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 8192,
+    n_batch = 2048,
+    n_ubatch = 512,
+)]
+fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt(
+    fixture: &LlamaFixture<'_>,
+) -> Result<()> {
+    let model = fixture.model;
+    let backend = fixture.backend;
 
     let mut classifier = model.sampled_token_classifier();
     let prompt_tokens =
@@ -49,8 +42,11 @@ fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_promp
     let mut batch = LlamaBatch::new(2048, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &prompt_tokens, 0, false)?;
 
-    let context_params = LlamaContextParams::default().with_n_ctx(NonZeroU32::new(8192));
-    let mut context = LlamaContext::from_model(&model, &backend, context_params)?;
+    let mut context = LlamaContext::from_model(
+        model,
+        backend,
+        (*fixture.context_params).into_llama_context_params(),
+    )?;
 
     context.decode(&mut batch)?;
 
@@ -67,7 +63,7 @@ fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_promp
     ]);
     let initial_position = batch.n_tokens();
     let outcome = ClassifySampleLoop {
-        model: &model,
+        model,
         classifier: &mut classifier,
         sampler: &mut sampler,
         context: &mut context,
@@ -126,3 +122,5 @@ fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_promp
 
     Ok(())
 }
+
+llama_tests_main!();
