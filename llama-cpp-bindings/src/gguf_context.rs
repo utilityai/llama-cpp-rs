@@ -197,6 +197,7 @@ mod tests {
         std::mem::discriminant(&GgufContextError::NulError(nul_err))
     }
 
+    #[cfg(unix)]
     fn path_to_str_error_disc() -> Discriminant<GgufContextError> {
         std::mem::discriminant(&GgufContextError::PathToStrError(PathBuf::new()))
     }
