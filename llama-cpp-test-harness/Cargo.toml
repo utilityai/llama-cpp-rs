@@ -13,6 +13,7 @@ inventory = { workspace = true }
 libtest-mimic = { workspace = true }
 llama-cpp-bindings = { workspace = true }
 llama-cpp-test-harness-macros = { workspace = true }
+thiserror = { workspace = true }
 
 [features]
 cuda = ["llama-cpp-bindings/cuda"]

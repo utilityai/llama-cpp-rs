@@ -15,135 +15,19 @@ llama-cpp-test-harness = { workspace = true }
 serde_json = { workspace = true }
 
 [[test]]
-name = "context"
+name = "backend_initialization"
 harness = false
 
 [[test]]
-name = "llama_backend"
+name = "chat_template_and_message_parsing"
 harness = false
 
 [[test]]
-name = "context_kv_cache"
+name = "embedding_and_encoder"
 harness = false
 
 [[test]]
-name = "deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_duck_types_gemma_paired_quote"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_duck_types_glm_key_value_tags"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_duck_types_mistral_bracketed_json"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_duck_types_qwen_xml"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_recognizes_empty_tool_calls_when_input_is_plain_content_with_tools_requested"
-harness = false
-
-[[test]]
-name = "deepseek_r1_8b_recognizes_empty_tool_calls_when_tools_not_requested"
-harness = false
-
-[[test]]
-name = "context_session"
-harness = false
-
-[[test]]
-name = "embeddings"
-harness = false
-
-[[test]]
-name = "gemma4_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "gemma4_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt"
-harness = false
-
-[[test]]
-name = "gemma4_parses_tool_call_payload"
-harness = false
-
-[[test]]
-name = "gemma4_template_override_returns_full_markers"
-harness = false
-
-[[test]]
-name = "glm47_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "glm47_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "glm47_parses_tool_call_payload"
-harness = false
-
-[[test]]
-name = "glm47_template_override_returns_full_markers"
-harness = false
-
-[[test]]
-name = "mistral3_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "mistral3_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt"
-harness = false
-
-[[test]]
-name = "mistral3_parses_tool_call_payload"
-harness = false
-
-[[test]]
-name = "eval_multimodal_chunks_records_exact_token_counts"
-harness = false
-
-[[test]]
-name = "ingest_prompt_chunk"
-harness = false
-
-[[test]]
-name = "llguidance"
-harness = false
-
-[[test]]
-name = "model_chat_template"
-harness = false
-
-[[test]]
-name = "model_context_creation"
-harness = false
-
-[[test]]
-name = "model_helpers"
-harness = false
-
-[[test]]
-name = "model_params"
+name = "kv_cache_and_session"
 harness = false
 
 [[test]]
@@ -151,127 +35,19 @@ name = "model_loading_errors"
 harness = false
 
 [[test]]
-name = "model_lora_adapter_errors"
+name = "multimodal_vision"
 harness = false
 
 [[test]]
-name = "model_metadata_kv"
+name = "reasoning_markers_and_tool_calls"
 harness = false
 
 [[test]]
-name = "model_properties"
+name = "sampling_and_constrained_decoding"
 harness = false
 
 [[test]]
-name = "model_sampling"
-harness = false
-
-[[test]]
-name = "model_special_tokens"
-harness = false
-
-[[test]]
-name = "model_str_to_token"
-harness = false
-
-[[test]]
-name = "model_token_to_piece"
-harness = false
-
-[[test]]
-name = "model_tokens_iterator"
-harness = false
-
-[[test]]
-name = "mtmd_bitmap"
-harness = false
-
-[[test]]
-name = "mtmd_chunk_operations"
-harness = false
-
-[[test]]
-name = "mtmd_chunk_structure"
-harness = false
-
-[[test]]
-name = "mtmd_context"
-harness = false
-
-[[test]]
-name = "mtmd_evaluation"
-harness = false
-
-[[test]]
-name = "mtmd_tokenization"
-harness = false
-
-[[test]]
-name = "multimodal"
-harness = false
-
-[[test]]
-name = "parse_chat_message"
-harness = false
-
-[[test]]
-name = "qwen35_chat_inference_emits_reasoning_when_template_auto_opens"
-harness = false
-
-[[test]]
-name = "qwen35_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "qwen35_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt"
-harness = false
-
-[[test]]
-name = "qwen35_parses_constrained_schema_payload"
-harness = false
-
-[[test]]
-name = "qwen35_parses_tool_call_payload"
-harness = false
-
-[[test]]
-name = "qwen35_recognizes_empty_tool_calls_when_input_is_plain_content_with_tools_requested"
-harness = false
-
-[[test]]
-name = "qwen36_chat_inference_emits_reasoning_when_template_auto_opens"
-harness = false
-
-[[test]]
-name = "qwen36_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt"
-harness = false
-
-[[test]]
-name = "qwen36_classifier_emits_reasoning"
-harness = false
-
-[[test]]
-name = "qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt"
-harness = false
-
-[[test]]
-name = "reranker"
-harness = false
-
-[[test]]
-name = "sampled_token_classifier_markers"
-harness = false
-
-[[test]]
-name = "sampling"
-harness = false
-
-[[test]]
-name = "text_generation"
+name = "vocabulary_and_metadata"
 harness = false
 
 [features]

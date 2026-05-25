@@ -16,10 +16,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use libtest_mimic::Arguments;
 use libtest_mimic::Conclusion;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 
-use crate::deterministic_arguments::deterministic_arguments_from_cli;
 use crate::execution_phase::ExecutionPhase;
 use crate::llama_test_registration::LlamaTestRegistration;
 
@@ -65,13 +65,12 @@ impl ExecutionPlan {
     }
 
     #[must_use]
-    pub fn run(&self, backend: &Arc<LlamaBackend>) -> Vec<Conclusion> {
-        let arguments = deterministic_arguments_from_cli();
+    pub fn run(&self, backend: &Arc<LlamaBackend>, arguments: &Arguments) -> Vec<Conclusion> {
         let total = self.phases.len();
         let mut conclusions = Vec::with_capacity(total);
         for (index, phase) in self.phases.iter().enumerate() {
             phase.print_header(index, total);
-            conclusions.push(phase.run(backend, &arguments));
+            conclusions.push(phase.run(backend, arguments));
         }
         conclusions
     }

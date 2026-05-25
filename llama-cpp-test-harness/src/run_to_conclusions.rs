@@ -4,6 +4,7 @@ use libtest_mimic::Conclusion;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 
 use crate::execution_plan::ExecutionPlan;
+use crate::parse_harness_arguments::parse_harness_arguments;
 
 /// Runs every registered test against its declared model and returns one [`Conclusion`] per phase.
 ///
@@ -13,10 +14,15 @@ use crate::execution_plan::ExecutionPlan;
 ///
 /// # Panics
 ///
-/// Panics if [`LlamaBackend::init`] fails. The harness is meaningless without a backend; a
-/// crash is the loudest possible failure signal.
+/// Panics if [`LlamaBackend::init`] fails or if the CLI arguments conflict with the harness's
+/// single-thread requirement. The harness is meaningless without a backend or with conflicting
+/// thread-count flags; a crash is the loudest possible failure signal.
 #[must_use]
 pub fn run_to_conclusions() -> Vec<Conclusion> {
+    let arguments = match parse_harness_arguments() {
+        Ok(arguments) => arguments,
+        Err(error) => panic!("llama-cpp-test-harness: {error}"),
+    };
     let mut backend = match LlamaBackend::init() {
         Ok(backend) => backend,
         Err(error) => panic!("llama-cpp-test-harness: backend init failed: {error}"),
@@ -26,7 +32,7 @@ pub fn run_to_conclusions() -> Vec<Conclusion> {
         backend.void_logs();
     }
     let backend = Arc::new(backend);
-    plan.run(&backend)
+    plan.run(&backend, &arguments)
 }
 
 #[cfg(test)]
