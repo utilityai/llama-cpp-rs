@@ -1,11 +1,13 @@
 ---
-name: run-all-tests
-description: Runs every test suite in the workspace on the fastest available device. Use when the user asks to run the tests, run all the tests, run the full test suite, or check that everything still passes.
+name: run-coverage
+description: Runs code coverage checker on the fastest available device. Use when the user asks to run the coverage, or to check the code coverage.
 ---
 
-# Running all tests
+# Checking the code coverage
 
-Run every test suite in the workspace, picking the fastest compiled device backend for the host. 
+Run every instrumented test suite in the workspace, picking the fastest compiled device backend for the host, then make sure everything is within required limits.
+
+Makefile is the source of truth for the gated values, and the code coverage setup.
 
 ## Step 1: detect the device
 
@@ -35,14 +37,11 @@ Translate `$DEVICE` into the value the Makefile expects. `TEST_DEVICE` holds **o
 Then run exactly:
 
 ```bash
-make test.llms TEST_DEVICE="$FEAT"
+make coverage TEST_DEVICE="$FEAT"
 ```
-
-## Step 3: rules during the run
-
-- **Per-test 30 s budget.** Flag any individual test that exceeds 30 s wall-clock. That is a real bug — production or test — not flakiness.
 
 ## Step 4: report
 
-After all suites finish, sum up the results in an actionable report.
+After all suites finish, sum up the results in an actionable report. Make sure all code coverage gates are met.
+
 
