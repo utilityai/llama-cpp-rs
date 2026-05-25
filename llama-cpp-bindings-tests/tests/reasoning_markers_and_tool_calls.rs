@@ -208,9 +208,7 @@ mod deepseek_r1_8b_classifier_emits_reasoning {
         let usage = classifier.usage();
         let parse_outcome = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
         let ChatMessageParseOutcome::Recognized(parsed) = parse_outcome else {
-            bail!(
-                "DeepSeek-R1-8B chat template must be recognised by the parser; got Unrecognized"
-            );
+            bail!("DeepSeek-R1-8B chat template must be recognised; got Unrecognized");
         };
 
         assert!(
