@@ -8,10 +8,10 @@
 //! See the workspace README and `tests/` directory for usage examples.
 
 pub mod context_params;
-pub mod deterministic_arguments;
 pub mod download_model;
 pub mod execution_phase;
 pub mod execution_plan;
+pub mod harness_arguments_error;
 pub mod llama_fixture;
 pub mod llama_test_fn;
 pub mod llama_test_registration;
@@ -21,6 +21,7 @@ pub mod mmproj_source;
 pub mod model_load_params;
 pub mod model_source;
 pub mod no_op;
+pub mod parse_harness_arguments;
 pub mod phase_state;
 pub mod run;
 pub mod run_to_conclusions;

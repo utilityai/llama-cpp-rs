@@ -5,6 +5,7 @@ use libtest_mimic::Conclusion;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 
 use crate::execution_plan::ExecutionPlan;
+use crate::parse_harness_arguments::parse_harness_arguments;
 
 fn aggregate_exit_code(conclusions: &[Conclusion]) -> ExitCode {
     if conclusions.iter().any(Conclusion::has_failed) {
@@ -16,6 +17,13 @@ fn aggregate_exit_code(conclusions: &[Conclusion]) -> ExitCode {
 
 #[must_use]
 pub fn run() -> ExitCode {
+    let arguments = match parse_harness_arguments() {
+        Ok(arguments) => arguments,
+        Err(error) => {
+            eprintln!("llama-cpp-test-harness: {error}");
+            return ExitCode::from(2);
+        }
+    };
     let mut backend = match LlamaBackend::init() {
         Ok(backend) => backend,
         Err(error) => {
@@ -28,7 +36,7 @@ pub fn run() -> ExitCode {
         backend.void_logs();
     }
     let backend = Arc::new(backend);
-    aggregate_exit_code(&plan.run(&backend))
+    aggregate_exit_code(&plan.run(&backend, &arguments))
 }
 
 #[cfg(test)]

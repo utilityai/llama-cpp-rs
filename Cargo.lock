@@ -1234,6 +1234,7 @@ dependencies = [
  "libtest-mimic",
  "llama-cpp-bindings",
  "llama-cpp-test-harness-macros",
+ "thiserror",
 ]
 
 [[package]]
