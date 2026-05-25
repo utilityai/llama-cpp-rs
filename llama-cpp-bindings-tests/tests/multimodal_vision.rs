@@ -198,7 +198,9 @@ mod mtmd_chunk_operations {
         n_ubatch = 64,
         mmproj_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "mmproj-F16.gguf"),
     )]
-    fn decode_use_non_causal_returns_bool_for_image_chunk(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn decode_use_non_causal_returns_bool_for_image_chunk(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mtmd_ctx = fixture
             .mtmd_context
             .expect("mmproj_file declared in attribute");
@@ -530,7 +532,9 @@ mod mtmd_context {
         n_ubatch = 64,
         mmproj_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "mmproj-F16.gguf"),
     )]
-    fn init_from_file_with_null_byte_in_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn init_from_file_with_null_byte_in_path_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mtmd_params = MtmdContextParams::default();
         let result = MtmdContext::init_from_file("path\0null", fixture.model, &mtmd_params);
 
@@ -620,7 +624,9 @@ mod mtmd_context {
         n_ubatch = 64,
         mmproj_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "mmproj-F16.gguf"),
     )]
-    fn get_audio_sample_rate_is_none_for_vision_only_mmproj(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn get_audio_sample_rate_is_none_for_vision_only_mmproj(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mtmd_ctx = fixture
             .mtmd_context
             .expect("mmproj_file declared in attribute");
@@ -840,7 +846,9 @@ mod mtmd_evaluation {
         n_ubatch = 512,
         mmproj_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "mmproj-F16.gguf"),
     )]
-    fn eval_chunks_with_extreme_dimensions_does_not_crash(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn eval_chunks_with_extreme_dimensions_does_not_crash(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let extreme_dimensions: [(u32, u32); 6] = [
             (1, 1),
             (7, 13),
@@ -995,7 +1003,9 @@ mod multimodal {
     use llama_cpp_bindings::context::LlamaContext;
     use llama_cpp_bindings::llama_batch::LlamaBatch;
     use llama_cpp_bindings::model::{LlamaChatMessage, LlamaModel};
-    use llama_cpp_bindings::mtmd::{MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText};
+    use llama_cpp_bindings::mtmd::{
+        MtmdBitmap, MtmdInputChunkType, MtmdInputChunks, MtmdInputText,
+    };
     use llama_cpp_bindings::sampled_token::SampledToken;
     use llama_cpp_bindings::sampling::LlamaSampler;
     use llama_cpp_bindings_sys::llama_pos;
@@ -1489,7 +1499,9 @@ mod ingest_prompt_chunk {
         let image_chunk = (0..chunks.len())
             .filter_map(|index| chunks.get(index))
             .find(|chunk| chunk.chunk_type() == Ok(MtmdInputChunkType::Image))
-            .ok_or_else(|| anyhow::anyhow!("multimodal tokenization should produce an image chunk"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!("multimodal tokenization should produce an image chunk")
+            })?;
 
         let n_tokens = u64::try_from(image_chunk.n_tokens())?;
         if n_tokens == 0 {
@@ -1533,7 +1545,9 @@ mod ingest_prompt_chunk {
         n_ubatch = 512,
         mmproj_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "mmproj-F16.gguf"),
     )]
-    fn text_chunk_drives_marker_state_machine_to_reasoning(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn text_chunk_drives_marker_state_machine_to_reasoning(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let mtmd_ctx = fixture
             .mtmd_context
@@ -1627,7 +1641,8 @@ mod gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt {
         let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
         let mut classifier = model.sampled_token_classifier();
-        let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+        let n_past =
+            classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
         let mut sampler = LlamaSampler::chain_simple([
             LlamaSampler::penalties(64, 1.1, 0.0, 0.0),
@@ -1736,7 +1751,8 @@ mod mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt {
         let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
         let mut classifier = model.sampled_token_classifier();
-        let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+        let n_past =
+            classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
         let mut sampler = LlamaSampler::greedy();
         let mut batch = LlamaBatch::new(2048, 1)?;
@@ -1839,7 +1855,8 @@ mod qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt {
         let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
         let mut classifier = model.sampled_token_classifier();
-        let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+        let n_past =
+            classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
         let mut sampler = LlamaSampler::chain_simple([
             LlamaSampler::penalties(64, 1.1, 0.0, 0.0),
@@ -1940,7 +1957,8 @@ mod qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt {
         let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
         let mut classifier = model.sampled_token_classifier();
-        let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+        let n_past =
+            classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
         let mut sampler = LlamaSampler::chain_simple([
             LlamaSampler::penalties(64, 1.1, 0.0, 0.0),

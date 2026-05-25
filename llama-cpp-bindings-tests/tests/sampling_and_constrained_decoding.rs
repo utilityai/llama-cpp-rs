@@ -48,7 +48,9 @@ mod model_sampling {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn sample_returns_result_and_succeeds_with_valid_index(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn sample_returns_result_and_succeeds_with_valid_index(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let mut context = LlamaContext::from_model(
             model,
@@ -63,7 +65,8 @@ mod model_sampling {
 
         context.decode(&mut batch)?;
 
-        let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
+        let mut sampler =
+            LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
         let result = sampler.sample(&context, batch.n_tokens() - 1);
 
@@ -205,7 +208,9 @@ mod model_sampling {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn json_schema_grammar_sampler_constrains_output_to_json(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn json_schema_grammar_sampler_constrains_output_to_json(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let mut context = LlamaContext::from_model(
             model,
@@ -414,7 +419,8 @@ mod model_sampling {
 
         context.decode(&mut batch)?;
 
-        let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
+        let mut sampler =
+            LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
 
         let mut classifier = model.sampled_token_classifier();
         let mut sampled_count: u64 = 0;
@@ -783,7 +789,9 @@ mod sampling {
         n_batch = 2048,
         n_ubatch = 512,
     )]
-    fn with_tokens_returns_self_after_accepting_each_token(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn with_tokens_returns_self_after_accepting_each_token(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let sampler = LlamaSampler::chain_simple([LlamaSampler::greedy()]);
         let tokens = [fixture.model.token_bos(), fixture.model.token_eos()];
 
@@ -872,7 +880,8 @@ mod sampling {
         let mut batch = LlamaBatch::new(512, 1)?;
         batch.add_sequence(&tokens, 0, false)?;
         context.decode(&mut batch)?;
-        let mut sampler = LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
+        let mut sampler =
+            LlamaSampler::chain_simple([LlamaSampler::temp(0.8), LlamaSampler::greedy()]);
         let result = sampler.sample(&context, batch.n_tokens() - 1);
 
         assert!(result.is_ok());
@@ -2085,7 +2094,9 @@ mod sampled_token_classifier_markers {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn classifier_construction_is_idempotent_across_calls(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn classifier_construction_is_idempotent_across_calls(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let first = fixture.model.sampled_token_classifier();
         let second = fixture.model.sampled_token_classifier();
 
@@ -2283,7 +2294,9 @@ mod sampled_token_classifier_markers {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn feed_prompt_to_batch_increments_pending_prompt_tokens(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn feed_prompt_to_batch_increments_pending_prompt_tokens(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let mut classifier = SampledTokenClassifier::new(model, StreamingMarkers::default());
         let mut batch = LlamaBatch::new(8, 1)?;

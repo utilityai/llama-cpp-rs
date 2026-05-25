@@ -125,7 +125,6 @@ mod context {
     // Group A: default Qwen model, embeddings=false. Most context tests fall here.
     // =========================================================================================
 
-
     #[llama_test(
         model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
         n_gpu_layers = 999,
@@ -295,7 +294,9 @@ mod context {
         n_batch = 2048,
         n_ubatch = 512,
     )]
-    fn embeddings_ith_returns_error_when_embeddings_disabled(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn embeddings_ith_returns_error_when_embeddings_disabled(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let context = LlamaContext::from_model(
             fixture.model,
             fixture.backend,
@@ -744,7 +745,9 @@ mod context_kv_cache {
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
 
-    fn build_context<'context>(fixture: &'context LlamaFixture<'_>) -> Result<LlamaContext<'context>> {
+    fn build_context<'context>(
+        fixture: &'context LlamaFixture<'_>,
+    ) -> Result<LlamaContext<'context>> {
         Ok(LlamaContext::from_model(
             fixture.model,
             fixture.backend,
@@ -752,14 +755,16 @@ mod context_kv_cache {
         )?)
     }
 
-    fn decode_hello_world(fixture: &LlamaFixture<'_>, context: &mut LlamaContext<'_>) -> Result<()> {
+    fn decode_hello_world(
+        fixture: &LlamaFixture<'_>,
+        context: &mut LlamaContext<'_>,
+    ) -> Result<()> {
         let tokens = fixture.model.str_to_token("Hello world", AddBos::Always)?;
         let mut batch = LlamaBatch::new(512, 1)?;
         batch.add_sequence(&tokens, 0, false)?;
         context.decode(&mut batch)?;
         Ok(())
     }
-
 
     #[llama_test(
         model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -1658,7 +1663,9 @@ mod context_session {
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
 
-    fn build_context<'context>(fixture: &'context LlamaFixture<'_>) -> Result<LlamaContext<'context>> {
+    fn build_context<'context>(
+        fixture: &'context LlamaFixture<'_>,
+    ) -> Result<LlamaContext<'context>> {
         Ok(LlamaContext::from_model(
             fixture.model,
             fixture.backend,
@@ -1913,7 +1920,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_load_file_with_nonexistent_file_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_load_file_with_nonexistent_file_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mut context = build_context(fixture)?;
 
         let result = context.state_load_file("/nonexistent/session.bin", 512);
@@ -2103,7 +2112,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_load_file_with_zero_max_tokens_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_load_file_with_zero_max_tokens_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mut context = build_context(fixture)?;
 
         let tokens = fixture.model.str_to_token("Hello world", AddBos::Always)?;
@@ -2438,7 +2449,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_seq_save_file_with_non_utf8_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_seq_save_file_with_non_utf8_path_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         use std::ffi::OsStr;
         use std::os::unix::ffi::OsStrExt;
 
@@ -2489,7 +2502,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_seq_load_file_with_non_utf8_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_seq_load_file_with_non_utf8_path_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         use std::ffi::OsStr;
         use std::os::unix::ffi::OsStrExt;
 
@@ -2539,7 +2554,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_save_file_with_null_byte_in_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_save_file_with_null_byte_in_path_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let context = build_context(fixture)?;
 
         let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
@@ -2586,7 +2603,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_load_file_with_null_byte_in_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_load_file_with_null_byte_in_path_returns_error(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let mut context = build_context(fixture)?;
 
         let path_with_null = std::path::Path::new("/tmp/foo\0bar.bin");
@@ -2787,7 +2806,9 @@ mod context_session {
         n_batch = 512,
         n_ubatch = 128,
     )]
-    fn state_seq_get_data_ext_and_set_data_ext_round_trip(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn state_seq_get_data_ext_and_set_data_ext_round_trip(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         use llama_cpp_bindings::context::llama_state_seq_flags::LlamaStateSeqFlags;
 
         let mut context = build_context(fixture)?;

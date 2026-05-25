@@ -208,7 +208,9 @@ mod deepseek_r1_8b_classifier_emits_reasoning {
         let usage = classifier.usage();
         let parse_outcome = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
         let ChatMessageParseOutcome::Recognized(parsed) = parse_outcome else {
-            bail!("DeepSeek-R1-8B chat template must be recognised by the parser; got Unrecognized");
+            bail!(
+                "DeepSeek-R1-8B chat template must be recognised by the parser; got Unrecognized"
+            );
         };
 
         assert!(
@@ -302,7 +304,8 @@ mod deepseek_r1_8b_duck_types_gemma_paired_quote {
         }
     ]"#;
 
-    const GEMMA_PAIRED_QUOTE_PAYLOAD: &str = "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}";
+    const GEMMA_PAIRED_QUOTE_PAYLOAD: &str =
+        "<|tool_call>call:get_weather{location:<|\"|>Paris<|\"|>}";
 
     #[llama_test(
         model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -444,7 +447,8 @@ mod deepseek_r1_8b_duck_types_mistral_bracketed_json {
         }
     ]"#;
 
-    const MISTRAL_BRACKETED_JSON_PAYLOAD: &str = r#"[TOOL_CALLS]get_weather[ARGS]{"location":"Paris"}"#;
+    const MISTRAL_BRACKETED_JSON_PAYLOAD: &str =
+        r#"[TOOL_CALLS]get_weather[ARGS]{"location":"Paris"}"#;
 
     #[llama_test(
         model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -804,7 +808,9 @@ mod gemma4_classifier_emits_reasoning {
         n_batch = 2048,
         n_ubatch = 512,
     )]
-    fn gemma4_classifier_emits_reasoning_for_thinking_prompt(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn gemma4_classifier_emits_reasoning_for_thinking_prompt(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let backend = fixture.backend;
 
@@ -943,7 +949,9 @@ mod gemma4_parses_tool_call_payload {
                 .parse_chat_message(TOOLS_JSON, GEMMA4_PAIRED_QUOTE_PAYLOAD, false)?;
 
         let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
-            bail!("expected Recognized for Gemma 4 PairedQuote on a Gemma-4 model; got Unrecognized");
+            bail!(
+                "expected Recognized for Gemma 4 PairedQuote on a Gemma-4 model; got Unrecognized"
+            );
         };
         assert_eq!(
             parsed.tool_calls.len(),
@@ -1261,9 +1269,10 @@ mod glm47_parses_tool_call_payload {
         n_ubatch = 64,
     )]
     fn glm47_parses_tool_call_payload(fixture: &LlamaFixture<'_>) -> Result<()> {
-        let outcome = fixture
-            .model
-            .parse_chat_message(TOOLS_JSON, GLM47_KEY_VALUE_PAYLOAD, false)?;
+        let outcome =
+            fixture
+                .model
+                .parse_chat_message(TOOLS_JSON, GLM47_KEY_VALUE_PAYLOAD, false)?;
 
         let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
             bail!(
@@ -1369,7 +1378,8 @@ mod mistral3_classifier_does_not_emit_reasoning_for_thinking_disabled_prompt {
         let backend = fixture.backend;
 
         let mut classifier = model.sampled_token_classifier();
-        let prompt_tokens = model.str_to_token(MISTRAL3_THINKING_DISABLED_PROMPT, AddBos::Always)?;
+        let prompt_tokens =
+            model.str_to_token(MISTRAL3_THINKING_DISABLED_PROMPT, AddBos::Always)?;
         let prompt_token_count = u64::try_from(prompt_tokens.len())?;
 
         let mut batch = LlamaBatch::new(2048, 1)?;
@@ -2072,10 +2082,13 @@ mod qwen35_parses_tool_call_payload {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn qwen35_parses_partial_tool_call_returns_pending_state(fixture: &LlamaFixture<'_>) -> Result<()> {
-        let outcome = fixture
-            .model
-            .parse_chat_message(TOOLS_JSON, PARTIAL_QWEN_XML_PAYLOAD, true)?;
+    fn qwen35_parses_partial_tool_call_returns_pending_state(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
+        let outcome =
+            fixture
+                .model
+                .parse_chat_message(TOOLS_JSON, PARTIAL_QWEN_XML_PAYLOAD, true)?;
 
         let ChatMessageParseOutcome::Recognized(parsed) = outcome else {
             bail!("expected Recognized for partial Qwen XML on a Qwen-3.5 model; got Unrecognized");
@@ -2447,7 +2460,9 @@ mod qwen36_classifier_emits_reasoning {
         );
 
         if parsed.reasoning_content.is_empty() {
-            eprintln!("Qwen3.6 parser returned empty reasoning_content — relying on FORBIDDEN_MARKERS");
+            eprintln!(
+                "Qwen3.6 parser returned empty reasoning_content — relying on FORBIDDEN_MARKERS"
+            );
         } else {
             assert_eq!(outcome.reasoning_stream, parsed.reasoning_content);
             assert_eq!(outcome.content_stream, parsed.content);

@@ -280,7 +280,9 @@ mod model_properties {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn is_hybrid_returns_false_for_non_hybrid_default_models(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn is_hybrid_returns_false_for_non_hybrid_default_models(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         assert!(
             !fixture.model.is_hybrid(),
             "DeepSeek-R1-Distill-Llama-8B and GLM-4.7-Flash are pure transformers, not hybrid; got is_hybrid=true"
@@ -720,7 +722,9 @@ mod model_metadata_kv {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn meta_val_str_with_long_value_triggers_buffer_resize(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn meta_val_str_with_long_value_triggers_buffer_resize(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let count = model.meta_count();
 
@@ -847,7 +851,8 @@ mod model_params {
             llama_cpp_bindings_sys::GGML_LOG_LEVEL_NONE,
         );
 
-        let fit = result.map_err(|fit_error| anyhow::anyhow!("fit_params failed: {fit_error:?}"))?;
+        let fit =
+            result.map_err(|fit_error| anyhow::anyhow!("fit_params failed: {fit_error:?}"))?;
         assert!(fit.n_ctx > 0);
 
         Ok(())
@@ -1429,7 +1434,9 @@ mod model_str_to_token {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn str_to_token_with_many_tokens_triggers_buffer_resize(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn str_to_token_with_many_tokens_triggers_buffer_resize(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         use std::fmt::Write;
 
         let many_numbers = (0..2000).fold(String::new(), |mut accumulator, number| {
@@ -1495,7 +1502,9 @@ mod model_token_to_piece {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn token_to_piece_bytes_returns_bytes_for_known_token(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn token_to_piece_bytes_returns_bytes_for_known_token(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let tokens = model.str_to_token("hello", AddBos::Never)?;
         let bytes = model.token_to_piece_bytes(tokens[0], 32, false, None)?;
@@ -1547,7 +1556,8 @@ mod model_token_to_piece {
         let mut decoder = encoding_rs::UTF_8.new_decoder();
 
         for (token, _) in model.tokens(true).take(200) {
-            let result = model.token_to_piece(&SampledToken::Content(token), &mut decoder, true, None);
+            let result =
+                model.token_to_piece(&SampledToken::Content(token), &mut decoder, true, None);
             assert!(result.is_ok());
         }
         Ok(())
@@ -1927,7 +1937,6 @@ mod model_helpers {
     use anyhow::Result;
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
-
 
     #[llama_test(
         model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),

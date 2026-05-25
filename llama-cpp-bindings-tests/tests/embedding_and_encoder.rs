@@ -262,24 +262,19 @@ mod reranker {
 }
 
 mod context_embedding_and_encoder {
-    
-    
-    
 
     use anyhow::Result;
-    
-    
+
     use llama_cpp_bindings::context::LlamaContext;
     use llama_cpp_bindings::llama_batch::LlamaBatch;
     use llama_cpp_bindings::model::AddBos;
-    
+
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
 
     // =========================================================================================
     // Group A: default Qwen model, embeddings=false. Most context tests fall here.
     // =========================================================================================
-
 
     #[llama_test(
         model_source = HuggingFace("Qwen/Qwen3-Embedding-0.6B-GGUF", "Qwen3-Embedding-0.6B-Q8_0.gguf"),
@@ -569,15 +564,15 @@ mod context_kv_cache_embedding {
 
     use anyhow::Result;
     use llama_cpp_bindings::context::LlamaContext;
-    
-    
-    
+
     use llama_cpp_bindings::llama_batch::LlamaBatch;
     use llama_cpp_bindings::model::AddBos;
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
 
-    fn build_context<'context>(fixture: &'context LlamaFixture<'_>) -> Result<LlamaContext<'context>> {
+    fn build_context<'context>(
+        fixture: &'context LlamaFixture<'_>,
+    ) -> Result<LlamaContext<'context>> {
         Ok(LlamaContext::from_model(
             fixture.model,
             fixture.backend,
@@ -585,14 +580,16 @@ mod context_kv_cache_embedding {
         )?)
     }
 
-    fn decode_hello_world(fixture: &LlamaFixture<'_>, context: &mut LlamaContext<'_>) -> Result<()> {
+    fn decode_hello_world(
+        fixture: &LlamaFixture<'_>,
+        context: &mut LlamaContext<'_>,
+    ) -> Result<()> {
         let tokens = fixture.model.str_to_token("Hello world", AddBos::Always)?;
         let mut batch = LlamaBatch::new(512, 1)?;
         batch.add_sequence(&tokens, 0, false)?;
         context.decode(&mut batch)?;
         Ok(())
     }
-
 
     #[llama_test(
         model_source = HuggingFace("Qwen/Qwen3-Embedding-0.6B-GGUF", "Qwen3-Embedding-0.6B-Q8_0.gguf"),
@@ -648,7 +645,6 @@ mod model_helpers_embedding {
     use llama_cpp_test_harness::LlamaFixture;
     use llama_cpp_test_harness::llama_test;
 
-
     #[llama_test(
         model_source = HuggingFace("Qwen/Qwen3-Embedding-0.6B-GGUF", "Qwen3-Embedding-0.6B-Q8_0.gguf"),
         n_gpu_layers = 999,
@@ -658,7 +654,9 @@ mod model_helpers_embedding {
         n_batch = 512,
         n_ubatch = 128
     )]
-    fn embedding_model_tool_call_markers_call_does_not_panic(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn embedding_model_tool_call_markers_call_does_not_panic(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let _markers = fixture.model.tool_call_markers();
 
         Ok(())

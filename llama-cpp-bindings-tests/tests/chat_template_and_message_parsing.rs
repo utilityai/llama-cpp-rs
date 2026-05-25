@@ -137,7 +137,9 @@ mod model_chat_template {
         n_batch = 128,
         n_ubatch = 64,
     )]
-    fn apply_chat_template_buffer_resize_with_long_messages(fixture: &LlamaFixture<'_>) -> Result<()> {
+    fn apply_chat_template_buffer_resize_with_long_messages(
+        fixture: &LlamaFixture<'_>,
+    ) -> Result<()> {
         let model = fixture.model;
         let template = model.chat_template(None)?;
         let long_content = "a".repeat(2000);
