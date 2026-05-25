@@ -1,5 +1,3 @@
-//! Build system for llama-cpp-bindings-sys FFI bindings to llama.cpp.
-
 mod android_ndk;
 mod bindgen_config;
 mod cmake_config;
@@ -30,7 +28,6 @@ macro_rules! debug_log {
     };
 }
 
-/// Shared state passed between build phases.
 #[derive(Debug)]
 pub struct BuildContext {
     pub out_dir: PathBuf,
@@ -124,9 +121,6 @@ fn set_cmake_parallelism() {
     }
 }
 
-/// Main entry point for the llama.cpp build system.
-///
-/// Call this from `build.rs` in `llama-cpp-bindings-sys`.
 pub fn build() {
     let context = BuildContext::detect();
 

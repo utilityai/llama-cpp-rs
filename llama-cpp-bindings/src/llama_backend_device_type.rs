@@ -1,15 +1,9 @@
-/// Backend device type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlamaBackendDeviceType {
-    /// CPU device
     Cpu,
-    /// ACCEL device
     Accelerator,
-    /// GPU device
     Gpu,
-    /// iGPU device
     IntegratedGpu,
-    /// Unknown device type
     Unknown,
 }
 

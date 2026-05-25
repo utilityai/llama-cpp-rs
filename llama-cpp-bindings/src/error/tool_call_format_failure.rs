@@ -4,7 +4,6 @@ use crate::error::key_value_xml_tags_failure::KeyValueXmlTagsFailure;
 use crate::error::paired_quote_failure::PairedQuoteFailure;
 use crate::error::xml_function_tags_failure::XmlFunctionTagsFailure;
 
-/// Top-level failure for the wrapper-side template-override parsers (one variant per supported shape).
 #[derive(Debug, thiserror::Error)]
 pub enum ToolCallFormatFailure {
     #[error("bracketed-args fallback parser: {0}")]

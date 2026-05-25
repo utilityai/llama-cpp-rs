@@ -1,4 +1,3 @@
-/// Failures specific to the XML function-tags parser (Qwen 3.5+ `<function=name><parameter=key>val</parameter></function>`).
 #[derive(Debug, thiserror::Error)]
 pub enum XmlFunctionTagsFailure {
     #[error("tool call function tag has empty name")]

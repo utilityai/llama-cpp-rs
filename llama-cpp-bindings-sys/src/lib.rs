@@ -1,5 +1,3 @@
-//! See [llama-cpp-bindings](https://crates.io/crates/llama-cpp-bindings) for a documented and safe API.
-
 #![expect(
     non_camel_case_types,
     reason = "bindgen emits C struct and enum names verbatim and they don't follow Rust naming"

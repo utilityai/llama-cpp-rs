@@ -70,5 +70,4 @@ pub use token_to_string_error::TokenToStringError;
 pub use tool_call_format_failure::ToolCallFormatFailure;
 pub use xml_function_tags_failure::XmlFunctionTagsFailure;
 
-/// A failable result from a llama.cpp function.
 pub type Result<TValue> = std::result::Result<TValue, LlamaCppError>;

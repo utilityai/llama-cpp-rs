@@ -1,23 +1,14 @@
-/// A rusty wrapper around `LLAMA_POOLING_TYPE`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LlamaPoolingType {
-    /// The pooling type is unspecified
     Unspecified = -1,
-    /// No pooling
     None = 0,
-    /// Mean pooling
     Mean = 1,
-    /// CLS pooling
     Cls = 2,
-    /// Last pooling
     Last = 3,
-    /// Rank pooling
     Rank = 4,
 }
 
-/// Create a `LlamaPoolingType` from a `c_int` - returns `LlamaPoolingType::Unspecified` if
-/// the value is not recognized.
 impl From<i32> for LlamaPoolingType {
     fn from(value: i32) -> Self {
         match value {
@@ -31,7 +22,6 @@ impl From<i32> for LlamaPoolingType {
     }
 }
 
-/// Create a `c_int` from a `LlamaPoolingType`.
 impl From<LlamaPoolingType> for i32 {
     fn from(value: LlamaPoolingType) -> Self {
         match value {

@@ -1,22 +1,3 @@
-//! Identity of one model-load operation.
-//!
-//! Two registrations with different [`LoadKey`]s require separate model loads. Two registrations
-//! with identical [`LoadKey`]s share one load — even if every other attribute (such as
-//! [`crate::ContextParams`]) differs.
-//!
-//! # What forces a model reload
-//!
-//! Only the fields of [`LoadKey`]: the model source ([`crate::ModelSource`]), the mmproj source
-//! (optional [`crate::MmprojSource`]), and the [`crate::ModelLoadParams`] (`n_gpu_layers`,
-//! `use_mmap`, `use_mlock`).
-//!
-//! # What is runtime-flexible
-//!
-//! Every `LlamaContextParams` setter (`n_ctx`, `n_batch`, `n_ubatch`, `n_seq_max`,
-//! `n_threads_batch`, `embeddings`, and the further setters not yet surfaced in the attribute
-//! schema). The harness builds a fresh `LlamaContext` per trial from `fixture.context_params`,
-//! so differences here never reload the model.
-
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -38,9 +19,6 @@ pub struct LoadKey {
 }
 
 impl LoadKey {
-    /// Downloads (or resolves) the model and optional mmproj, loads them, and returns the live
-    /// [`PhaseState`] that the harness keeps alive for the duration of the phase.
-    ///
     /// # Errors
     ///
     /// Returns an error if any of: source resolution fails, loading the model into llama.cpp
@@ -139,12 +117,7 @@ mod tests {
         assert_ne!(baseline(), other);
     }
 
-    // The next three tests exercise the three error-propagation paths inside
-    // `load_phase_state` — model load failure, mmproj download failure, and mmproj load failure.
-    // Each constructs a LoadKey whose resolution succeeds (so the path is computed) but whose
-    // subsequent load step deliberately fails, then asserts the appropriate `Err` propagates.
     //
-    // They share BACKEND_INIT_GATE because `LlamaBackend::init` is once-per-process.
 
     use std::sync::Arc;
 
@@ -152,9 +125,6 @@ mod tests {
 
     use crate::test_backend_gate::BACKEND_INIT_GATE;
 
-    /// Path to the workspace `Cargo.toml`, which exists at test time but isn't a valid GGUF and
-    /// isn't a valid mmproj — perfect for exercising the `load_from_file` / `init_from_file`
-    /// error arms in `load_phase_state`.
     const NON_GGUF_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
 
     #[test]

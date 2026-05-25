@@ -15,34 +15,17 @@ const fn check_eval_result(result: i32) -> Result<(), MtmdEvalError> {
     }
 }
 
-/// Safe wrapper around `mtmd_input_chunks`.
-///
-/// This is a collection of input chunks created from tokenizing text and media.
-/// The chunks represent the tokenized input that can be processed by the model,
-/// with text chunks containing tokens and media chunks containing embeddings.
 #[derive(Debug)]
 pub struct MtmdInputChunks {
-    /// Raw pointer to the underlying `mtmd_input_chunks`.
     pub chunks: NonNull<llama_cpp_bindings_sys::mtmd_input_chunks>,
 }
 
 impl MtmdInputChunks {
-    /// Create a new empty input chunks collection.
-    ///
     /// # Errors
     ///
     /// Returns `MtmdInputChunksError::ChunksCreationFailed` if the underlying llama.cpp function
     /// returns null.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// use llama_cpp_bindings::mtmd::MtmdInputChunks;
-    ///
-    /// let chunks = MtmdInputChunks::new().unwrap();
-    /// assert_eq!(chunks.len(), 0);
-    /// assert!(chunks.is_empty());
-    /// ```
     pub fn new() -> Result<Self, MtmdInputChunksError> {
         let chunks = unsafe { llama_cpp_bindings_sys::mtmd_input_chunks_init() };
         let chunks = NonNull::new(chunks).ok_or(MtmdInputChunksError::ChunksCreationFailed)?;
@@ -50,19 +33,16 @@ impl MtmdInputChunks {
         Ok(Self { chunks })
     }
 
-    /// Get the number of chunks
     #[must_use]
     pub fn len(&self) -> usize {
         unsafe { llama_cpp_bindings_sys::mtmd_input_chunks_size(self.chunks.as_ptr()) }
     }
 
-    /// Check if chunks collection is empty
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Get a chunk by index
     #[must_use]
     pub fn get(&self, index: usize) -> Option<MtmdInputChunk> {
         if index >= self.len() {
@@ -78,20 +58,16 @@ impl MtmdInputChunks {
         })
     }
 
-    /// Get total number of tokens across all chunks.
     #[must_use]
     pub fn total_tokens(&self) -> usize {
         unsafe { llama_cpp_bindings_sys::mtmd_helper_get_n_tokens(self.chunks.as_ptr()) }
     }
 
-    /// Get total position count across all chunks.
     #[must_use]
     pub fn total_positions(&self) -> i32 {
         unsafe { llama_cpp_bindings_sys::mtmd_helper_get_n_pos(self.chunks.as_ptr()) }
     }
 
-    /// Evaluate chunks using the multimodal context and LLAMA context.
-    ///
     /// # Errors
     ///
     /// Returns `MtmdEvalError::EvalFailure` if any encoding or decoding operation fails.
@@ -113,11 +89,6 @@ impl MtmdInputChunks {
             });
         }
 
-        // mtmd_helper_eval_chunks overwrites `*new_n_past` at the end of its
-        // chunk loop (mtmd-helper.cpp:413), so any seed would be fine — but
-        // we mirror the per-chunk wrapper's `start_position` / `final_position`
-        // shape here for parity, keeping the read-only input and write-only
-        // output strictly separated.
         let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
 
         let result = unsafe {

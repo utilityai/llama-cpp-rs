@@ -869,8 +869,6 @@ mod tests {
 
     #[test]
     fn unparseable_attribute_token_stream_is_rejected() {
-        // `Punctuated::parse_terminated` rejects input that can't be split into Meta items by
-        // commas; passing a stray symbol surfaces that `?` Err arm in `ParsedArgs::parse`.
         let result = parse("@&^!");
 
         assert!(

@@ -1,20 +1,14 @@
 use crate::model::params::unknown_kv_override_tag::UnknownKvOverrideTag;
 
-/// An override value for a model parameter.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ParamOverrideValue {
-    /// A boolean value
     Bool(bool),
-    /// A float value
     Float(f64),
-    /// A integer value
     Int(i64),
-    /// A string value
     Str([std::os::raw::c_char; 128]),
 }
 
 impl ParamOverrideValue {
-    /// Returns the FFI tag corresponding to this override value variant.
     #[must_use]
     pub const fn tag(&self) -> llama_cpp_bindings_sys::llama_model_kv_override_type {
         match self {
@@ -25,7 +19,6 @@ impl ParamOverrideValue {
         }
     }
 
-    /// Returns the FFI union value for this override.
     #[must_use]
     pub const fn value(&self) -> llama_cpp_bindings_sys::llama_model_kv_override__bindgen_ty_1 {
         match self {

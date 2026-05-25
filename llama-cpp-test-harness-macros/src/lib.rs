@@ -1,9 +1,3 @@
-//! Procedural macros for `llama-cpp-test-harness`.
-//!
-//! Provides the `#[llama_test(...)]` attribute that declaratively binds a test function to a
-//! specific GGUF model and inference parameter set. The macro emits the original function plus
-//! an `inventory::submit!` block that registers the test with the harness runtime.
-
 mod expand;
 mod parsed_args;
 mod parsed_context_params;
@@ -22,9 +16,6 @@ fn dispatch(attribute: TokenStream2, item: TokenStream2) -> TokenStream2 {
     }
 }
 
-/// Registers a function as a llama-cpp test with explicit model + inference parameters.
-///
-/// See the `llama-cpp-test-harness` crate for the full attribute schema and usage.
 #[proc_macro_attribute]
 pub fn llama_test(attribute: TokenStream, item: TokenStream) -> TokenStream {
     dispatch(attribute.into(), item.into()).into()

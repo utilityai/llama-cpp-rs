@@ -12,10 +12,6 @@ use llama_cpp_test_harness::llama_test;
 use llama_cpp_test_harness::no_op;
 use llama_cpp_test_harness::run_to_conclusions;
 
-// Phase A: small Qwen text model, three trials sharing the exact same attribute tuple.
-// Two of these pass, one bails — exercising both branches of trial-body dispatch on the same
-// loaded model.
-
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
     n_gpu_layers = 999,
@@ -59,8 +55,6 @@ fn phase_a_intentionally_failing_trial(_fixture: &LlamaFixture<'_>) -> Result<()
     bail!("intentional failure to exercise the trial-failure dispatch path");
 }
 
-// Phase B: distinct model (smaller embedding GGUF). Two trials share this key.
-
 #[llama_test(
     model_source = HuggingFace("Qwen/Qwen3-Embedding-0.6B-GGUF", "Qwen3-Embedding-0.6B-Q8_0.gguf"),
     n_gpu_layers = 999,
@@ -89,13 +83,7 @@ fn phase_b_second_passing_trial(fixture: &LlamaFixture<'_>) -> Result<()> {
     Ok(())
 }
 
-// Phase C: intentionally invalid HF repo. The phase-setup path fails to download the model,
-// which routes the trial through `failing_trials` (one failed trial per registration).
 //
-// The trial function is shared with an additional Phase A registration so that the function
-// itself is exercised at least once (Phase A's setup succeeds and dispatches into the body).
-// Phase C's setup fails before reaching the body, but the registration still exercises the
-// `failing_trials` path in `ExecutionPhase::run`.
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
@@ -136,15 +124,9 @@ fn phase_b_second_passing_trial(fixture: &LlamaFixture<'_>) -> Result<()> {
     mmproj_source = LocalPath("/nonexistent/llama-cpp-test-harness/no-such-mmproj.gguf"),
 )]
 fn shared_setup_failure_and_phase_a_trial(fixture: &LlamaFixture<'_>) -> Result<()> {
-    // Phase A reaches the body and verifies the fixture is wired up; the failure phases
-    // (Phase C model download, mmproj download, mmproj load) never reach it.
     assert!(fixture.model_path.exists());
     Ok(())
 }
-
-// Phase D: same text model as Phase A but with mmproj — exercises the multimodal-load path
-// in LoadKey::load_phase_state. Distinct LoadKey (mmproj_file differs) → distinct phase +
-// distinct model load.
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),

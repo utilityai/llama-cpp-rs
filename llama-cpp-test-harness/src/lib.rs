@@ -1,16 +1,8 @@
-//! Declarative, deterministic, phase-batched integration-test harness for `llama-cpp-bindings`.
-//!
-//! Tests tag their functions with `#[llama_test(model_source = HuggingFace("…", "…"), …)]`
-//! (or `model_source = LocalPath("…")` for a local GGUF). The harness groups tests with
-//! identical [`LoadKey`]s into [`ExecutionPhase`]s, loads each phase's model exactly once, and
-//! runs every test in the phase sequentially against the shared [`LlamaFixture`].
-//!
-//! See the workspace README and `tests/` directory for usage examples.
-
 pub mod context_params;
 pub mod download_model;
 pub mod execution_phase;
 pub mod execution_plan;
+pub mod fixtures_dir;
 pub mod harness_arguments_error;
 pub mod llama_fixture;
 pub mod llama_test_fn;

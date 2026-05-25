@@ -1,5 +1,3 @@
-//! A safe wrapper around `llama_model_params`.
-
 use crate::LlamaCppError;
 use crate::context::params::LlamaContextParams;
 use crate::error::{FitError, ModelParamsError};
@@ -18,15 +16,9 @@ pub mod kv_overrides;
 pub mod param_override_value;
 pub mod unknown_kv_override_tag;
 
-/// The maximum number of devices supported.
-///
-/// The real maximum number of devices is the lesser one of this value and the value returned by
-/// `llama_cpp_bindings::max_devices()`.
 pub const LLAMA_CPP_MAX_DEVICES: usize = 16;
 
-/// A safe wrapper around `llama_model_params`.
 pub struct LlamaModelParams {
-    /// The underlying `llama_model_params` from the C API.
     pub params: llama_cpp_bindings_sys::llama_model_params,
     kv_overrides: Vec<llama_cpp_bindings_sys::llama_model_kv_override>,
     buft_overrides: Vec<llama_cpp_bindings_sys::llama_model_tensor_buft_override>,
@@ -50,47 +42,15 @@ impl Debug for LlamaModelParams {
 }
 
 impl LlamaModelParams {
-    /// See [`KvOverrides`]
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use llama_cpp_bindings::model::params::LlamaModelParams;
-    /// let params = Box::pin(LlamaModelParams::default());
-    /// let kv_overrides = params.kv_overrides();
-    /// let count = kv_overrides.into_iter().count();
-    /// assert_eq!(count, 0);
-    /// ```
     #[must_use]
     pub const fn kv_overrides(&self) -> KvOverrides<'_> {
         KvOverrides::new(self)
     }
 
-    /// Appends a key-value override to the model parameters. It must be pinned as this creates a self-referential struct.
-    ///
     /// # Errors
     /// Returns [`ModelParamsError`] if the internal override vector has no available slot,
     /// the slot is not empty, or the key contains invalid characters.
     ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use std::ffi::{CStr, CString};
-    /// use std::pin::pin;
-    /// # use llama_cpp_bindings::model::params::LlamaModelParams;
-    /// # use llama_cpp_bindings::model::params::param_override_value::ParamOverrideValue;
-    /// let mut params = pin!(LlamaModelParams::default());
-    /// let key = CString::new("key").expect("CString::new failed");
-    /// params.as_mut().append_kv_override(&key, ParamOverrideValue::Int(50)).unwrap();
-    ///
-    /// let kv_overrides = params.kv_overrides().into_iter().collect::<Vec<_>>();
-    /// assert_eq!(kv_overrides.len(), 1);
-    ///
-    /// let (k, v) = &kv_overrides[0];
-    /// assert_eq!(v, &ParamOverrideValue::Int(50));
-    ///
-    /// assert_eq!(k.to_bytes(), b"key", "expected key to be 'key', was {:?}", k);
-    /// ```
     pub fn append_kv_override(
         mut self: Pin<&mut Self>,
         key: &CStr,
@@ -122,10 +82,6 @@ impl LlamaModelParams {
         Ok(())
     }
 
-    /// Pushes the trailing zero-tag sentinel onto `kv_overrides` and refreshes
-    /// `params.kv_overrides`. The cached pointer is nulled before [`Vec::push`]
-    /// so that a relocation-induced panic never leaves a dangling pointer in
-    /// `params`.
     fn push_kv_override_terminator(mut self: Pin<&mut Self>) {
         self.params.kv_overrides = null();
 
@@ -143,8 +99,6 @@ impl LlamaModelParams {
 }
 
 impl LlamaModelParams {
-    /// Adds buffer type overrides to move all mixture-of-experts layers to CPU.
-    ///
     /// # Errors
     /// Returns [`ModelParamsError`] if the internal override vector has no available slot,
     /// the slot is not empty, or the key contains invalid characters.
@@ -152,9 +106,6 @@ impl LlamaModelParams {
         self.add_cpu_buft_override(c"\\.ffn_(up|down|gate)_(ch|)exps")
     }
 
-    /// Appends a buffer type override to the model parameters, to move layers matching pattern to CPU.
-    /// It must be pinned as this creates a self-referential struct.
-    ///
     /// # Errors
     /// Returns [`ModelParamsError`] if the internal override vector has no available slot,
     /// the slot is not empty, or the key contains invalid characters.
@@ -188,10 +139,6 @@ impl LlamaModelParams {
         Ok(())
     }
 
-    /// Pushes the trailing null-pattern sentinel onto `buft_overrides` and
-    /// refreshes `params.tensor_buft_overrides`. The cached pointer is nulled
-    /// before [`Vec::push`] so that a relocation-induced panic never leaves a
-    /// dangling pointer in `params`.
     fn push_buft_override_terminator(mut self: Pin<&mut Self>) {
         self.params.tensor_buft_overrides = null();
 
@@ -206,45 +153,37 @@ impl LlamaModelParams {
 }
 
 impl LlamaModelParams {
-    /// Get the number of layers to offload to the GPU.
     #[must_use]
     pub const fn n_gpu_layers(&self) -> i32 {
         self.params.n_gpu_layers
     }
 
-    /// The GPU that is used for scratch and small tensors
     #[must_use]
     pub const fn main_gpu(&self) -> i32 {
         self.params.main_gpu
     }
 
-    /// only load the vocabulary, no weights
     #[must_use]
     pub const fn vocab_only(&self) -> bool {
         self.params.vocab_only
     }
 
-    /// use mmap if possible
     #[must_use]
     pub const fn use_mmap(&self) -> bool {
         self.params.use_mmap
     }
 
-    /// force system to keep model in RAM
     #[must_use]
     pub const fn use_mlock(&self) -> bool {
         self.params.use_mlock
     }
 
-    /// get the split mode
-    ///
     /// # Errors
     /// Returns `LlamaSplitModeParseError` if the unknown split mode is encountered.
     pub fn split_mode(&self) -> Result<LlamaSplitMode, LlamaSplitModeParseError> {
         LlamaSplitMode::try_from(self.params.split_mode)
     }
 
-    /// get the devices
     #[must_use]
     pub fn devices(&self) -> Vec<usize> {
         let mut backend_devices = Vec::new();
@@ -270,13 +209,6 @@ impl LlamaModelParams {
         devices
     }
 
-    /// sets the number of gpu layers to offload to the GPU.
-    /// ```
-    /// # use llama_cpp_bindings::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::default();
-    /// let params = params.with_n_gpu_layers(1);
-    /// assert_eq!(params.n_gpu_layers(), 1);
-    /// ```
     #[must_use]
     pub fn with_n_gpu_layers(mut self, n_gpu_layers: u32) -> Self {
         let n_gpu_layers = i32::try_from(n_gpu_layers).unwrap_or(i32::MAX);
@@ -284,54 +216,29 @@ impl LlamaModelParams {
         self
     }
 
-    /// sets the main GPU
-    ///
-    /// To enable this option, you must set `split_mode` to `LlamaSplitMode::None` to enable single GPU mode.
     #[must_use]
     pub const fn with_main_gpu(mut self, main_gpu: i32) -> Self {
         self.params.main_gpu = main_gpu;
         self
     }
 
-    /// sets `vocab_only`
     #[must_use]
     pub const fn with_vocab_only(mut self, vocab_only: bool) -> Self {
         self.params.vocab_only = vocab_only;
         self
     }
 
-    /// sets `use_mmap`
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use llama_cpp_bindings::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::default().with_use_mmap(false);
-    /// assert!(!params.use_mmap());
-    /// ```
     #[must_use]
     pub const fn with_use_mmap(mut self, use_mmap: bool) -> Self {
         self.params.use_mmap = use_mmap;
         self
     }
 
-    /// Get `no_alloc`
     #[must_use]
     pub const fn no_alloc(&self) -> bool {
         self.params.no_alloc
     }
 
-    /// Set `no_alloc`. When enabled, tensor data is not allocated.
-    /// Incompatible with `use_mmap`, so enabling this also disables mmap.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use llama_cpp_bindings::model::params::LlamaModelParams;
-    /// let params = LlamaModelParams::default().with_no_alloc(true);
-    /// assert!(params.no_alloc());
-    /// assert!(!params.use_mmap());
-    /// ```
     #[must_use]
     pub const fn with_no_alloc(mut self, no_alloc: bool) -> Self {
         self.params.no_alloc = no_alloc;
@@ -341,28 +248,18 @@ impl LlamaModelParams {
         self
     }
 
-    /// sets `use_mlock`
     #[must_use]
     pub const fn with_use_mlock(mut self, use_mlock: bool) -> Self {
         self.params.use_mlock = use_mlock;
         self
     }
 
-    /// sets `split_mode`
     #[must_use]
     pub fn with_split_mode(mut self, split_mode: LlamaSplitMode) -> Self {
         self.params.split_mode = split_mode.into();
         self
     }
 
-    /// sets `devices`
-    ///
-    /// The devices are specified as indices that correspond to the ggml backend device indices.
-    ///
-    /// The maximum number of devices is 16.
-    ///
-    /// You don't need to specify CPU or ACCEL devices.
-    ///
     /// # Errors
     /// Returns `LlamaCppError::BackendDeviceNotFound` if any device index is invalid.
     pub fn with_devices(mut self, devices: &[usize]) -> Result<Self, LlamaCppError> {
@@ -387,38 +284,6 @@ impl LlamaModelParams {
 }
 
 impl LlamaModelParams {
-    /// Automatically fit model and context parameters to available device memory.
-    ///
-    /// Wraps llama.cpp's `common_fit_params`. Given a model path, available per-device memory
-    /// margins, and a minimum context size, it fills in `n_gpu_layers`, `tensor_split`, and
-    /// `tensor_buft_overrides` to fit the model to the available VRAM, and may reduce
-    /// `cparams.n_ctx` if needed. On success the model and context params are updated in place.
-    ///
-    /// # Requirements
-    ///
-    /// Per the C API docstring, only parameters that still hold their default value are
-    /// modified. In practice this means:
-    /// - `n_gpu_layers` must be at its default (`-1`). Do not call
-    ///   [`with_n_gpu_layers`](Self::with_n_gpu_layers) before this.
-    /// - No `tensor_buft_overrides` may be set. Do not call
-    ///   [`add_cpu_buft_override`](Self::add_cpu_buft_override) or
-    ///   [`add_cpu_moe_override`](Self::add_cpu_moe_override) before this.
-    /// - `cparams.n_ctx` is only auto-selected if it is `0`; otherwise it is left alone.
-    ///
-    /// # Arguments
-    ///
-    /// - `model_path` — path to the GGUF model file as a C string.
-    /// - `context_params` — context parameters; `n_ctx` may be modified (see above).
-    /// - `margins` — memory margin per device in bytes. Must have at least
-    ///   `crate::max_devices()` elements.
-    /// - `n_ctx_min` — minimum context size to preserve when reducing memory usage.
-    /// - `log_level` — minimum log level for fitting output; lower levels go to the debug log.
-    ///
-    /// # Thread safety
-    ///
-    /// This function is **not** thread safe: the underlying C call mutates the global
-    /// llama logger state.
-    ///
     /// # Errors
     ///
     /// Returns one of the [`FitError`] variants matching the vendored wrapper's status code.
@@ -499,19 +364,6 @@ impl LlamaModelParams {
     }
 }
 
-/// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
-/// ```
-/// # use llama_cpp_bindings::model::params::LlamaModelParams;
-/// use llama_cpp_bindings::model::split_mode::LlamaSplitMode;
-/// let params = LlamaModelParams::default();
-/// assert_eq!(params.n_gpu_layers(), -1, "n_gpu_layers should be -1");
-/// assert_eq!(params.main_gpu(), 0, "main_gpu should be 0");
-/// assert_eq!(params.vocab_only(), false, "vocab_only should be false");
-/// assert_eq!(params.use_mmap(), true, "use_mmap should be true");
-/// assert_eq!(params.use_mlock(), false, "use_mlock should be false");
-/// assert_eq!(params.split_mode(), Ok(LlamaSplitMode::Layer), "split_mode should be LAYER");
-/// assert_eq!(params.devices().len(), 0, "devices should be empty");
-/// ```
 impl Default for LlamaModelParams {
     fn default() -> Self {
         let default_params = unsafe { llama_cpp_bindings_sys::llama_model_default_params() };

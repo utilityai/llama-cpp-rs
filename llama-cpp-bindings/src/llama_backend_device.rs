@@ -4,26 +4,14 @@ use crate::llama_backend_device_type::device_type_from_raw;
 
 pub use crate::llama_backend_device_type::LlamaBackendDeviceType;
 
-/// A ggml backend device
-///
-/// The index is can be used from `LlamaModelParams::with_devices` to select specific devices.
 #[derive(Debug, Clone)]
 pub struct LlamaBackendDevice {
-    /// The index of the device
-    ///
-    /// The index is can be used from `LlamaModelParams::with_devices` to select specific devices.
     pub index: usize,
-    /// The name of the device (e.g. "Vulkan0")
     pub name: String,
-    /// A description of the device (e.g. "NVIDIA `GeForce` RTX 3080")
     pub description: String,
-    /// The backend of the device (e.g. "Vulkan", "CUDA", "CPU")
     pub backend: String,
-    /// Total memory of the device in bytes
     pub memory_total: usize,
-    /// Free memory of the device in bytes
     pub memory_free: usize,
-    /// Device type
     pub device_type: LlamaBackendDeviceType,
 }
 
@@ -37,7 +25,6 @@ fn cstr_to_string(ptr: *const c_char) -> String {
     }
 }
 
-/// List ggml backend devices
 #[must_use]
 pub fn list_llama_ggml_backend_devices() -> Vec<LlamaBackendDevice> {
     let mut devices = Vec::new();

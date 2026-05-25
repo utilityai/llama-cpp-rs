@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use crate::model::params::LlamaModelParams;
 use crate::model::params::param_override_value::ParamOverrideValue;
 
-/// An iterator over the key-value overrides for a model.
 #[derive(Debug)]
 pub struct KvOverrideValueIterator<'model_params> {
     model_params: &'model_params LlamaModelParams,
@@ -33,8 +32,6 @@ impl Iterator for KvOverrideValueIterator<'_> {
 
         loop {
             // SAFETY: llama.cpp guarantees the last element contains an empty key.
-            // We've checked the previous one in the last iteration, the next one
-            // should be valid or 0 (and thus safe to deref).
             let current = unsafe { *overrides.add(self.current) };
 
             if current.key[0] == 0 {

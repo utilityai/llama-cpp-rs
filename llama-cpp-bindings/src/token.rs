@@ -1,5 +1,3 @@
-//! Safe wrappers around `llama_token_data` and `llama_token_data_array`.
-
 use std::fmt::Debug;
 use std::fmt::Display;
 
@@ -7,7 +5,6 @@ pub mod data;
 pub mod data_array;
 pub mod logit_bias;
 
-/// A safe wrapper for `llama_token`.
 #[repr(transparent)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct LlamaToken(pub llama_cpp_bindings_sys::llama_token);
@@ -19,13 +16,6 @@ impl Display for LlamaToken {
 }
 
 impl LlamaToken {
-    /// Create a new `LlamaToken` from a i32.
-    ///
-    /// ```
-    /// # use llama_cpp_bindings::token::LlamaToken;
-    /// let token = LlamaToken::new(0);
-    /// assert_eq!(token, LlamaToken(0));
-    /// ```
     #[must_use]
     pub const fn new(token_id: i32) -> Self {
         Self(token_id)

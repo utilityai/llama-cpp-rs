@@ -1,4 +1,3 @@
-/// A rusty wrapper around `ggml_type` for KV cache types.
 #[expect(
     non_camel_case_types,
     reason = "variant names mirror llama.cpp's `enum ggml_type` symbol names verbatim so they can \
@@ -11,11 +10,6 @@
 )]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum KvCacheType {
-    /// Represents an unknown or not-yet-mapped `ggml_type` and carries the raw value.
-    /// When passed through FFI, the raw value is used as-is (if llama.cpp supports it,
-    /// the runtime will operate with that type).
-    /// This variant preserves API compatibility when new `ggml_type` values are
-    /// introduced in the future.
     Unknown(llama_cpp_bindings_sys::ggml_type),
     F32,
     F16,

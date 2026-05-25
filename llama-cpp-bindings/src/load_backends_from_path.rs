@@ -3,11 +3,6 @@ use std::path::Path;
 
 use crate::load_backends_error::LoadBackendsError;
 
-/// Load GGML backend modules from the given directory.
-///
-/// Call this before [`crate::llama_backend::LlamaBackend::init`] to enable runtime hardware
-/// selection (Vulkan, CPU-AVX512, CPU-AVX2, etc.) when built with the `dynamic-backends` feature.
-///
 /// # Errors
 ///
 /// Returns [`LoadBackendsError::PathNotUtf8`] when `path` cannot be converted to UTF-8 and

@@ -1,8 +1,5 @@
-//! Path helper for image and audio fixtures used by multimodal integration tests.
-
 use std::path::PathBuf;
 
-/// Returns the absolute path to the test fixtures directory.
 #[must_use]
 pub fn fixtures_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("fixtures")

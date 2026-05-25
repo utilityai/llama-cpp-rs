@@ -12,11 +12,6 @@ fn validate(mut arguments: Arguments) -> Result<Arguments, HarnessArgumentsError
     }
 }
 
-/// Parses the test-binary CLI into [`libtest_mimic::Arguments`], enforcing the harness's
-/// single-thread requirement.
-///
-/// `--test-threads` left unset is treated as `1`; `--test-threads=1` is accepted unchanged.
-///
 /// # Errors
 ///
 /// Returns [`HarnessArgumentsError::ConflictingTestThreads`] when `--test-threads` is set to

@@ -1,19 +1,12 @@
-/// A rusty wrapper around `rope_scaling_type`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RopeScalingType {
-    /// The scaling type is unspecified
     Unspecified = -1,
-    /// No scaling
     None = 0,
-    /// Linear scaling
     Linear = 1,
-    /// Yarn scaling
     Yarn = 2,
 }
 
-/// Create a `RopeScalingType` from a `c_int` - returns `RopeScalingType::ScalingUnspecified` if
-/// the value is not recognized.
 impl From<i32> for RopeScalingType {
     fn from(value: i32) -> Self {
         match value {
@@ -25,7 +18,6 @@ impl From<i32> for RopeScalingType {
     }
 }
 
-/// Create a `c_int` from a `RopeScalingType`.
 impl From<RopeScalingType> for i32 {
     fn from(value: RopeScalingType) -> Self {
         match value {

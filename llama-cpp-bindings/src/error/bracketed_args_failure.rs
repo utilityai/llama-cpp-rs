@@ -1,4 +1,3 @@
-/// Failures specific to the bracketed-JSON args parser (Mistral 3 `[TOOL_CALLS]name[ARGS]{...}`).
 #[derive(Debug, thiserror::Error)]
 pub enum BracketedArgsFailure {
     #[error("tool call '{tool_name}' arguments are not valid JSON: {message}")]

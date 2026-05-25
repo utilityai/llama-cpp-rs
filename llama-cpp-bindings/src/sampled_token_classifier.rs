@@ -70,15 +70,6 @@ impl<'model> SampledTokenClassifier<'model> {
         }
     }
 
-    /// Ingest one sampled token. Returns the outcomes that have finalised this
-    /// turn — typically a single outcome, occasionally zero (the classifier is
-    /// holding back tokens that may yet form a marker), or several when a
-    /// buffered marker prefix diverges and the held-back tokens flush.
-    ///
-    /// Each [`IngestOutcome`] carries both the [`SampledToken`] variant for
-    /// classification and the decoded `visible_piece` for streaming. Marker
-    /// boundaries get an empty `visible_piece` so their text never reaches
-    /// user-visible streams.
     pub fn ingest(&mut self, token: LlamaToken) -> Vec<IngestOutcome> {
         if !self.markers.has_any() {
             self.usage.record_undeterminable_token();
@@ -120,15 +111,6 @@ impl<'model> SampledTokenClassifier<'model> {
         )
     }
 
-    /// Replay one prompt token through the marker state machine so that the
-    /// section at end-of-prompt reflects the chat template's rendered tail
-    /// (e.g. for Qwen3.5/3.6 with `enable_thinking=false` the prompt ends with
-    /// a closed empty `<think>...</think>` block, leaving the section in
-    /// `Content`; with `enable_thinking=true` it ends inside an open `<think>`,
-    /// leaving the section in `Reasoning`).
-    ///
-    /// Prompt tokens never produce [`IngestOutcome`]s and never increment usage
-    /// counters — they are not generated content.
     pub fn ingest_prompt_token(&mut self, token: LlamaToken) {
         if !self.markers.has_any() {
             return;
@@ -156,9 +138,6 @@ impl<'model> SampledTokenClassifier<'model> {
         }
     }
 
-    /// Drain every still-buffered token. Call once at end of generation (EOG)
-    /// to make sure no decoded text is silently dropped. After `flush()` the
-    /// classifier behaves as if freshly constructed in terms of buffer state.
     pub fn flush(&mut self) -> Vec<IngestOutcome> {
         self.probe_mode = ProbeMode::Idle;
         let mut outcomes = Vec::with_capacity(self.pending.len());

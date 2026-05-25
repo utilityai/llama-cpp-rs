@@ -67,13 +67,8 @@ fn map_encode_chunk_status(
     }
 }
 
-/// Safe wrapper around `mtmd_context`.
-///
-/// This represents an initialized multimodal context that can process
-/// text, images, and audio through llama.cpp's multimodal interface.
 #[derive(Debug)]
 pub struct MtmdContext {
-    /// Raw pointer to the underlying `mtmd_context`.
     pub context: NonNull<llama_cpp_bindings_sys::mtmd_context>,
 }
 
@@ -81,8 +76,6 @@ unsafe impl Send for MtmdContext {}
 unsafe impl Sync for MtmdContext {}
 
 impl MtmdContext {
-    /// Initialize MTMD context from a multimodal projection file.
-    ///
     /// # Errors
     ///
     /// Returns an [`MtmdInitError`] variant matching the wrapper's status code.
@@ -132,8 +125,6 @@ impl MtmdContext {
         }
     }
 
-    /// Check whether non-causal attention mask is needed before `llama_decode`
-    /// for the given input chunk.
     #[must_use]
     pub fn decode_use_non_causal(&self, chunk: &MtmdInputChunk) -> bool {
         unsafe {
@@ -144,26 +135,21 @@ impl MtmdContext {
         }
     }
 
-    /// Check whether the current model uses M-RoPE for `llama_decode`.
     #[must_use]
     pub fn decode_use_mrope(&self) -> bool {
         unsafe { llama_cpp_bindings_sys::mtmd_decode_use_mrope(self.context.as_ptr()) }
     }
 
-    /// Check whether the current model supports vision input.
     #[must_use]
     pub fn support_vision(&self) -> bool {
         unsafe { llama_cpp_bindings_sys::mtmd_support_vision(self.context.as_ptr()) }
     }
 
-    /// Check whether the current model supports audio input.
     #[must_use]
     pub fn support_audio(&self) -> bool {
         unsafe { llama_cpp_bindings_sys::mtmd_support_audio(self.context.as_ptr()) }
     }
 
-    /// Get audio sample rate in Hz (e.g., 16000 for Whisper).
-    /// Returns None if audio is not supported.
     #[must_use]
     pub fn get_audio_sample_rate(&self) -> Option<u32> {
         let rate =
@@ -171,12 +157,6 @@ impl MtmdContext {
         (rate > 0).then_some(rate.unsigned_abs())
     }
 
-    /// Tokenize input text and bitmaps into chunks.
-    ///
-    /// The input text must contain media markers (default: `<__media__>`) that will be
-    /// replaced with the corresponding bitmap data from the `bitmaps` array.
-    /// The number of bitmaps must equal the number of markers in the text.
-    ///
     /// # Errors
     ///
     /// Returns an [`MtmdTokenizeError`] variant matching the wrapper's status code.
@@ -217,8 +197,6 @@ impl MtmdContext {
         Ok(chunks)
     }
 
-    /// Encode a chunk for image/audio processing.
-    ///
     /// # Errors
     ///
     /// Returns an [`MtmdEncodeError`] variant matching the wrapper's status code.

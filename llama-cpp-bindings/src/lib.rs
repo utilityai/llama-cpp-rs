@@ -1,14 +1,3 @@
-//! Bindings to the llama.cpp library.
-//!
-//! As llama.cpp is a very fast moving target, this crate does not attempt to create a stable API
-//! with all the rust idioms. Instead it provided safe wrappers around nearly direct bindings to
-//! llama.cpp. This makes it easier to keep up with the changes in llama.cpp, but does mean that
-//! the API is not as nice as it could be.
-//!
-//! # Feature Flags
-//!
-//! - `cuda` enables CUDA gpu support.
-
 pub mod batch_add_error;
 pub mod chat_message_parse_outcome;
 pub mod context;

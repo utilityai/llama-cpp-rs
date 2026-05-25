@@ -1,18 +1,3 @@
-//! Deterministic execution plan for the test harness.
-//!
-//! [`ExecutionPlan::from_registrations`] takes the registrations collected from `inventory` and
-//! groups them into [`ExecutionPhase`]s by [`crate::LoadKey`]. The result is a sorted list of
-//! phases — each phase corresponds to exactly one model-load cycle (load → run trials → drop).
-//!
-//! # Invariants
-//!
-//! - For every distinct [`crate::LoadKey`] the planner produces exactly one
-//!   [`ExecutionPhase`]; the same key never produces two phases.
-//! - Phases are sorted by [`crate::LoadKey`] (lexicographic order on the full key tuple).
-//! - Registrations inside a phase are sorted by their `name`.
-//! - [`crate::ContextParams`] differences within registrations sharing a key do **not** split a
-//!   phase — the model loads once and each trial constructs its own `LlamaContext`.
-
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
