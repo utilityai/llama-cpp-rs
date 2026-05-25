@@ -59,6 +59,7 @@ fn create_base_builder(llama_src: &Path) -> bindgen::Builder {
         .blocklist_function("llama_model_load_from_file_ptr")
         .blocklist_type("FILE")
         .blocklist_type("_IO_.*")
+        .blocklist_type("_iobuf")
         .blocklist_type("__BindgenBitfieldUnit")
         .prepend_enum_name(false)
 }
