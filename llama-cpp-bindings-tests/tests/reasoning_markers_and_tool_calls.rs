@@ -152,6 +152,10 @@ mod deepseek_r1_8b_classifier_emits_reasoning {
 
     const FORBIDDEN_MARKERS: &[&str] = &["<think>", "</think>"];
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "test asserts many distinct properties of DeepSeek-R1-8B reasoning output; shortening messages or splitting the body would reduce diagnostic signal at failure time"
+    )]
     #[llama_test(
         model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
         n_gpu_layers = 999,
@@ -208,7 +212,9 @@ mod deepseek_r1_8b_classifier_emits_reasoning {
         let usage = classifier.usage();
         let parse_outcome = model.parse_chat_message("[]", &outcome.generated_raw, false)?;
         let ChatMessageParseOutcome::Recognized(parsed) = parse_outcome else {
-            bail!("DeepSeek-R1-8B chat template must be recognised; got Unrecognized");
+            bail!(
+                "DeepSeek-R1-8B chat template must be recognised by the parser; got Unrecognized"
+            );
         };
 
         assert!(
