@@ -1163,7 +1163,7 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "llama-cpp-bindings"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "encoding_rs",
  "enumflags2",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-bindings-build"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "bindgen",
  "cc",
@@ -1194,14 +1194,14 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-bindings-sys"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "llama-cpp-bindings-build",
 ]
 
 [[package]]
 name = "llama-cpp-bindings-tests"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "encoding_rs",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-bindings-types"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1222,11 +1222,11 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-log-decoder"
-version = "0.7.0"
+version = "0.8.0"
 
 [[package]]
 name = "llama-cpp-test-harness"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "hf-hub",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "llama-cpp-test-harness-macros"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -13,7 +13,7 @@ members = [
 
 [workspace.package]
 edition = "2024"
-version = "0.7.0"
+version = "0.8.0"
 license = "Apache-2.0"
 repository = "https://github.com/intentee/llama-cpp-bindings"
 
@@ -29,13 +29,13 @@ glob = "=0.3.3"
 hf-hub = "=0.5.0"
 inventory = "=0.3.24"
 libtest-mimic = "=0.8.2"
-llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.7.0" }
-llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.7.0" }
-llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.7.0" }
-llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.7.0" }
-llama-cpp-log-decoder = { path = "llama-cpp-log-decoder", version = "=0.7.0" }
-llama-cpp-test-harness = { path = "llama-cpp-test-harness", version = "=0.7.0" }
-llama-cpp-test-harness-macros = { path = "llama-cpp-test-harness-macros", version = "=0.7.0" }
+llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.8.0" }
+llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.8.0" }
+llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.8.0" }
+llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.8.0" }
+llama-cpp-log-decoder = { path = "llama-cpp-log-decoder", version = "=0.8.0" }
+llama-cpp-test-harness = { path = "llama-cpp-test-harness", version = "=0.8.0" }
+llama-cpp-test-harness-macros = { path = "llama-cpp-test-harness-macros", version = "=0.8.0" }
 llguidance = "=1.7.0"
 log = "=0.4.29"
 nom = "=8.0.0"
