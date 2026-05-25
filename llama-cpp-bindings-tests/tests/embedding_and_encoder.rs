@@ -13,7 +13,7 @@ use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings_tests::decode_hello_world::decode_hello_world;
+use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 use llama_cpp_test_harness::llama_tests_main;
@@ -540,7 +540,7 @@ fn encode_succeeds_with_encoder_model(fixture: &LlamaFixture<'_>) -> Result<()> 
 fn kv_cache_seq_add_succeeds_on_embedding_model(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let result = context.kv_cache_seq_add(0, Some(0), None, 1);
 
@@ -561,7 +561,7 @@ fn kv_cache_seq_add_succeeds_on_embedding_model(fixture: &LlamaFixture<'_>) -> R
 fn kv_cache_seq_div_succeeds_on_embedding_model(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let divisor = NonZeroU8::new(2).ok_or_else(|| anyhow::anyhow!("2 is non-zero"))?;
     let result = context.kv_cache_seq_div(0, Some(0), None, divisor);

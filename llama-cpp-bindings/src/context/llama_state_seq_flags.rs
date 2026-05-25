@@ -1,31 +1,21 @@
-//! Flags for extended state sequence operations on hybrid/recurrent models.
-
-/// Flags controlling which parts of state to save/restore for sequence operations.
-///
-/// Used with the `state_seq_*_ext` methods on [`super::LlamaContext`] to enable
-/// partial state operations (e.g., saving only recurrent/SSM state for hybrid models).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaStateSeqFlags {
     flags: u32,
 }
 
 impl LlamaStateSeqFlags {
-    /// Save/restore only partial (recurrent/SSM) state, skipping attention KV cache.
     pub const PARTIAL_ONLY: Self = Self { flags: 1 };
 
-    /// No flags set.
     #[must_use]
     pub const fn empty() -> Self {
         Self { flags: 0 }
     }
 
-    /// Returns the raw bit representation.
     #[must_use]
     pub const fn bits(&self) -> u32 {
         self.flags
     }
 
-    /// Returns true if `self` contains all bits in `other`.
     #[must_use]
     pub const fn contains(&self, other: Self) -> bool {
         (self.flags & other.flags) == other.flags

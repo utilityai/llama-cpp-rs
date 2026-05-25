@@ -8,11 +8,6 @@ pub enum MarkerKind {
     ToolCallClose,
 }
 
-/// Tokenized marker sequences (token IDs, not strings).
-///
-/// Each marker is a `Vec<LlamaToken>` of length `>= 1`; absent markers are
-/// `None`. Sequence matching at every `ingest()` is by token-ID equality,
-/// never by substring scanning of decoded text.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StreamingMarkers {
     pub reasoning_open: Option<Vec<LlamaToken>>,

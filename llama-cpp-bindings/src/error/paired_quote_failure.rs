@@ -1,4 +1,3 @@
-/// Failures specific to the paired-quote args parser (Gemma 4 `<|tool_call>call:name{key:<|"|>val<|"|>}`).
 #[derive(Debug, thiserror::Error)]
 pub enum PairedQuoteFailure {
     #[error("empty key in tool call '{tool_name}' arguments")]

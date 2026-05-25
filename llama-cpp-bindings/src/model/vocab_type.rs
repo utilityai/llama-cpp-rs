@@ -1,12 +1,9 @@
 use crate::model::vocab_type_from_int_error::VocabTypeFromIntError;
 
-/// a rusty equivalent of `llama_vocab_type`
 #[repr(u32)]
 #[derive(Debug, Eq, Copy, Clone, PartialEq)]
 pub enum VocabType {
-    /// Byte Pair Encoding
     BPE = llama_cpp_bindings_sys::LLAMA_VOCAB_TYPE_BPE as _,
-    /// Sentence Piece Tokenizer
     SPM = llama_cpp_bindings_sys::LLAMA_VOCAB_TYPE_SPM as _,
 }
 

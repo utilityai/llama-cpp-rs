@@ -15,7 +15,6 @@ const fn llama_token_type_to_u32(value: llama_cpp_bindings_sys::llama_token_type
     value
 }
 
-/// A set of [`LlamaTokenAttr`] flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LlamaTokenAttrs(pub BitFlags<LlamaTokenAttr>);
 

@@ -1,39 +1,22 @@
-//! GGUF value types.
-
-/// The type of a value stored in a GGUF key-value pair.
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum GgufType {
-    /// 8-bit unsigned integer
     Uint8 = 0,
-    /// 8-bit signed integer
     Int8 = 1,
-    /// 16-bit unsigned integer
     Uint16 = 2,
-    /// 16-bit signed integer
     Int16 = 3,
-    /// 32-bit unsigned integer
     Uint32 = 4,
-    /// 32-bit signed integer
     Int32 = 5,
-    /// 32-bit floating point
     Float32 = 6,
-    /// Boolean
     Bool = 7,
-    /// String
     String = 8,
-    /// Array
     Array = 9,
-    /// 64-bit unsigned integer
     Uint64 = 10,
-    /// 64-bit signed integer
     Int64 = 11,
-    /// 64-bit floating point
     Float64 = 12,
 }
 
 impl GgufType {
-    /// Converts from the raw `gguf_type` value. Returns None for unknown types.
     #[must_use]
     pub const fn from_raw(value: llama_cpp_bindings_sys::gguf_type) -> Option<Self> {
         match value {
@@ -54,7 +37,6 @@ impl GgufType {
         }
     }
 
-    /// Converts to the raw `gguf_type` value.
     #[must_use]
     pub const fn to_raw(self) -> llama_cpp_bindings_sys::gguf_type {
         self as llama_cpp_bindings_sys::gguf_type

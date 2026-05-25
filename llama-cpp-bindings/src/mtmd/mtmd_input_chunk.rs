@@ -34,21 +34,13 @@ const unsafe fn tokens_from_raw_ptr<'chunk>(
     }
 }
 
-/// Safe wrapper around `mtmd_input_chunk`.
-///
-/// Represents a single chunk of input data, which can be either text tokens,
-/// image tokens, or audio tokens. The chunk type determines what kind of
-/// data and operations are available.
 #[derive(Debug)]
 pub struct MtmdInputChunk {
-    /// Raw pointer to the underlying `mtmd_input_chunk`.
     pub chunk: NonNull<llama_cpp_bindings_sys::mtmd_input_chunk>,
     pub owned: bool,
 }
 
 impl MtmdInputChunk {
-    /// Get the type of this chunk
-    ///
     /// # Errors
     /// Returns an error if the chunk type is unknown.
     pub fn chunk_type(&self) -> Result<MtmdInputChunkType, MtmdInputChunkTypeError> {
@@ -57,9 +49,6 @@ impl MtmdInputChunk {
         MtmdInputChunkType::try_from(chunk_type)
     }
 
-    /// Get text tokens from this chunk.
-    ///
-    /// Only valid for text chunks. Returns `None` for image or audio chunks.
     #[must_use]
     pub fn text_tokens(&self) -> Option<&[LlamaToken]> {
         if self.chunk_type() != Ok(MtmdInputChunkType::Text) {
@@ -77,21 +66,16 @@ impl MtmdInputChunk {
         unsafe { tokens_from_raw_ptr(tokens_ptr, n_tokens) }
     }
 
-    /// Get the number of tokens in this chunk
     #[must_use]
     pub fn n_tokens(&self) -> usize {
         unsafe { llama_cpp_bindings_sys::mtmd_input_chunk_get_n_tokens(self.chunk.as_ptr()) }
     }
 
-    /// Get the number of positions in this chunk.
     #[must_use]
     pub fn n_positions(&self) -> i32 {
         unsafe { llama_cpp_bindings_sys::mtmd_input_chunk_get_n_pos(self.chunk.as_ptr()) }
     }
 
-    /// Get chunk ID if available.
-    ///
-    /// Returns `None` for text chunks, may return an ID for image/audio chunks.
     #[must_use]
     pub fn id(&self) -> Option<String> {
         let ptr = unsafe { llama_cpp_bindings_sys::mtmd_input_chunk_get_id(self.chunk.as_ptr()) };
@@ -105,8 +89,6 @@ impl MtmdInputChunk {
         }
     }
 
-    /// Create a copy of this chunk that you own.
-    ///
     /// # Errors
     ///
     /// Returns `MtmdInputChunkError::ChunkOperationFailed` if copying fails.
@@ -117,19 +99,6 @@ impl MtmdInputChunk {
         Ok(Self { chunk, owned: true })
     }
 
-    /// Evaluate this single chunk through the multimodal helper.
-    ///
-    /// Mirrors `MtmdInputChunks::eval_chunks` but for one chunk at a time, so
-    /// callers can interleave per-chunk decode with per-chunk bookkeeping
-    /// (token counting, marker state-machine replay) inside one loop instead
-    /// of running the helper-level all-chunks eval and a separate ingest pass.
-    ///
-    /// Image chunks are decoded as one `llama_decode` call inside the helper,
-    /// so their token count must fit in `n_batch`. When it would not, the
-    /// binding refuses the call up front because the C-side
-    /// `GGML_ASSERT(n_tokens_all <= cparams.n_batch)` would otherwise abort
-    /// the process.
-    ///
     /// # Errors
     ///
     /// Returns [`MtmdEvalError::ImageChunkExceedsBatchSize`] when this is an

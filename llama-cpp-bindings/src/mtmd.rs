@@ -1,11 +1,3 @@
-//! Safe wrapper around multimodal (MTMD) functionality in llama.cpp.
-//!
-//! This module provides Rust bindings for llama.cpp's multimodal support,
-//! allowing processing of text, image, and audio inputs through a unified interface.
-//!
-//! # Warning
-//! This API is experimental and subject to breaking changes.
-
 pub mod image_chunk_batch_size_mismatch;
 pub mod mtmd_bitmap;
 pub mod mtmd_bitmap_error;

@@ -1,5 +1,3 @@
-//! Safe wrapper around `llama_context`.
-
 use std::ffi::c_void;
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
@@ -57,11 +55,8 @@ unsafe extern "C" fn abort_callback_trampoline(data: *mut c_void) -> bool {
     flag.load(Ordering::Relaxed)
 }
 
-/// Safe wrapper around `llama_context`.
 pub struct LlamaContext<'model> {
-    /// Raw pointer to the underlying `llama_context`.
     pub context: NonNull<llama_cpp_bindings_sys::llama_context>,
-    /// A reference to the context's model.
     pub model: &'model LlamaModel,
     abort_flag: Option<Arc<AtomicBool>>,
     initialized_logits: Vec<i32>,
@@ -77,7 +72,6 @@ impl Debug for LlamaContext<'_> {
 }
 
 impl<'model> LlamaContext<'model> {
-    /// Wraps existing raw pointers into a new `LlamaContext`.
     #[must_use]
     pub const fn new(
         llama_model: &'model LlamaModel,
@@ -93,11 +87,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Create a new context bound to `model`.
-    ///
-    /// `_backend` is unused in the body but serves as a compile-time witness that
-    /// the global llama.cpp backend has been initialised before context creation.
-    ///
     /// # Errors
     ///
     /// Returns [`LlamaContextLoadError`] when llama.cpp fails to allocate the context.
@@ -143,29 +132,21 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to [`Self::n_ubatch`].
     #[must_use]
     pub fn n_batch(&self) -> u32 {
         unsafe { llama_cpp_bindings_sys::llama_n_batch(self.context.as_ptr()) }
     }
 
-    /// Gets the max number of physical tokens (hardware level) to decode in batch. Must be less than or equal to [`Self::n_batch`].
     #[must_use]
     pub fn n_ubatch(&self) -> u32 {
         unsafe { llama_cpp_bindings_sys::llama_n_ubatch(self.context.as_ptr()) }
     }
 
-    /// Gets the size of the context.
     #[must_use]
     pub fn n_ctx(&self) -> u32 {
         unsafe { llama_cpp_bindings_sys::llama_n_ctx(self.context.as_ptr()) }
     }
 
-    /// Sets an abort flag that llama.cpp checks during computation.
-    ///
-    /// When the flag is set to `true`, any in-progress `decode()` call will
-    /// abort and return `DecodeError::Aborted`. The `Arc` is stored internally
-    /// to ensure the flag outlives the callback registration.
     #[expect(unsafe_code, reason = "required for FFI abort callback registration")]
     pub fn set_abort_flag(&mut self, flag: Arc<AtomicBool>) {
         let raw_ptr = Arc::as_ptr(&flag) as *mut c_void;
@@ -180,7 +161,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Clears the abort callback so that decode calls are no longer interruptible.
     #[expect(unsafe_code, reason = "required for FFI abort callback deregistration")]
     pub fn clear_abort_callback(&mut self) {
         self.abort_flag = None;
@@ -194,33 +174,20 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Waits for all pending backend operations to complete.
-    ///
-    /// Must be called before freeing the context to prevent hangs
-    /// during resource cleanup.
     #[expect(unsafe_code, reason = "required for FFI synchronization call")]
     pub fn synchronize(&self) {
         unsafe { llama_cpp_bindings_sys::llama_synchronize(self.context.as_ptr()) }
     }
 
-    /// Detaches the threadpool from the context.
-    ///
-    /// Must be called before freeing the context to prevent threadpool
-    /// workers from accessing freed resources.
     #[expect(unsafe_code, reason = "required for FFI threadpool detachment")]
     pub fn detach_threadpool(&self) {
         unsafe { llama_cpp_bindings_sys::llama_detach_threadpool(self.context.as_ptr()) }
     }
 
-    /// Marks a logit index as initialized so it can be read via
-    /// `get_logits_ith`. Use after external decode operations (like
-    /// `eval_chunks`) that bypass the Rust `decode()` method.
     pub fn mark_logits_initialized(&mut self, token_index: i32) {
         self.initialized_logits = vec![token_index];
     }
 
-    /// Decodes the batch.
-    ///
     /// # Errors
     ///
     /// - `DecodeError` if the decoding failed.
@@ -267,8 +234,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Encodes the batch.
-    ///
     /// # Errors
     ///
     /// - `EncodeError` if the encoding failed.
@@ -318,13 +283,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Get the embeddings for the given sequence in the current context.
-    ///
-    /// # Returns
-    ///
-    /// A slice containing the embeddings for the last decoded batch.
-    /// The size corresponds to the `n_embd` parameter of the context's model.
-    ///
     /// # Errors
     ///
     /// - When the current context was constructed without enabling embeddings.
@@ -353,13 +311,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Get the embeddings for the given token in the current context.
-    ///
-    /// # Returns
-    ///
-    /// A slice containing the embeddings for the last decoded batch of the given token.
-    /// The size corresponds to the `n_embd` parameter of the context's model.
-    ///
     /// # Errors
     ///
     /// - When the current context was constructed without enabling embeddings.
@@ -388,12 +339,6 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
-    /// Get the logits for the last token in the context.
-    ///
-    /// # Returns
-    /// An iterator over unsorted `LlamaTokenData` containing the
-    /// logits for the last token in the context.
-    ///
     /// # Errors
     /// Returns `LogitsError` if logits are null or `n_vocab` overflows.
     pub fn candidates(&self) -> Result<impl Iterator<Item = LlamaTokenData> + '_, LogitsError> {
@@ -405,25 +350,12 @@ impl<'model> LlamaContext<'model> {
         }))
     }
 
-    /// Get the token data array for the last token in the context.
-    ///
     /// # Errors
     /// Returns `LogitsError` if logits are null or `n_vocab` overflows.
     pub fn token_data_array(&self) -> Result<LlamaTokenDataArray, LogitsError> {
         Ok(LlamaTokenDataArray::from_iter(self.candidates()?, false))
     }
 
-    /// Token logits obtained from the last call to `decode()`.
-    /// The logits for which `batch.logits[i] != 0` are stored contiguously
-    /// in the order they have appeared in the batch.
-    /// Rows: number of tokens for which `batch.logits[i] != 0`
-    /// Cols: `n_vocab`
-    ///
-    /// # Returns
-    ///
-    /// A slice containing the logits for the last decoded token.
-    /// The size corresponds to the `n_vocab` parameter of the context's model.
-    ///
     /// # Errors
     /// Returns `LogitsError` if the logits pointer is null or `n_vocab` overflows.
     pub fn get_logits(&self) -> Result<&[f32], LogitsError> {
@@ -438,8 +370,6 @@ impl<'model> LlamaContext<'model> {
         Ok(unsafe { slice::from_raw_parts(data, len) })
     }
 
-    /// Get the logits for the ith token in the context.
-    ///
     /// # Errors
     /// Returns `LogitsError` if the token is not initialized or out of range.
     pub fn candidates_ith(
@@ -454,8 +384,6 @@ impl<'model> LlamaContext<'model> {
         }))
     }
 
-    /// Get the token data array for the ith token in the context.
-    ///
     /// # Errors
     /// Returns `LogitsError` if the token is not initialized or out of range.
     pub fn token_data_array_ith(
@@ -468,8 +396,6 @@ impl<'model> LlamaContext<'model> {
         ))
     }
 
-    /// Get the logits for the ith token in the context.
-    ///
     /// # Errors
     /// Returns `LogitsError` if the token is not initialized, out of range, or `n_vocab` overflows.
     pub fn get_logits_ith(&self, token_index: i32) -> Result<&[f32], LogitsError> {
@@ -497,19 +423,15 @@ impl<'model> LlamaContext<'model> {
         Ok(unsafe { slice::from_raw_parts(data, len) })
     }
 
-    /// Reset the timings for the context.
     pub fn reset_timings(&mut self) {
         unsafe { llama_cpp_bindings_sys::llama_perf_context_reset(self.context.as_ptr()) }
     }
 
-    /// Returns the timings for the context.
     pub fn timings(&mut self) -> LlamaTimings {
         let timings = unsafe { llama_cpp_bindings_sys::llama_perf_context(self.context.as_ptr()) };
         LlamaTimings { timings }
     }
 
-    /// Sets a lora adapter.
-    ///
     /// # Errors
     ///
     /// See [`LlamaLoraAdapterSetError`] for more information.
@@ -534,11 +456,6 @@ impl<'model> LlamaContext<'model> {
         Ok(())
     }
 
-    /// Remove all lora adapters.
-    ///
-    /// Note: The upstream API now replaces all adapters at once via
-    /// `llama_set_adapters_lora`. This clears all adapters from the context.
-    ///
     /// # Errors
     ///
     /// See [`LlamaLoraAdapterRemoveError`] for more information.

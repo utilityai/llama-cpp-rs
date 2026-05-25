@@ -1,7 +1,3 @@
-//! Safe wrapper around `gguf_context` for reading GGUF file metadata.
-//!
-//! Provides metadata-only access to GGUF files without loading tensor data.
-
 use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::ptr::NonNull;
@@ -9,18 +5,12 @@ use std::ptr::NonNull;
 use crate::gguf_context_error::GgufContextError;
 use crate::gguf_type::GgufType;
 
-/// A safe wrapper around `gguf_context`.
-///
-/// Opens a GGUF file in metadata-only mode (`no_alloc = true`), allowing
-/// inspection of key-value pairs and tensor metadata without loading tensor data.
 #[derive(Debug)]
 pub struct GgufContext {
     context: NonNull<llama_cpp_bindings_sys::gguf_context>,
 }
 
 impl GgufContext {
-    /// Open a GGUF file and parse its metadata header.
-    ///
     /// # Errors
     ///
     /// Returns [`GgufContextError::InitFailed`] if the file cannot be opened or parsed.
@@ -46,14 +36,11 @@ impl GgufContext {
         Ok(Self { context })
     }
 
-    /// Returns the number of key-value pairs in the GGUF file.
     #[must_use]
     pub fn n_kv(&self) -> i64 {
         unsafe { llama_cpp_bindings_sys::gguf_get_n_kv(self.context.as_ptr()) }
     }
 
-    /// Find the index of a key by name.
-    ///
     /// # Errors
     ///
     /// Returns [`GgufContextError::KeyNotFound`] if the key does not exist.
@@ -72,8 +59,6 @@ impl GgufContext {
         Ok(index)
     }
 
-    /// Returns the key name at the given index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure `key_id` is in range `[0, n_kv())`.
@@ -92,8 +77,6 @@ impl GgufContext {
         Ok(c_str.to_str()?)
     }
 
-    /// Returns the value type of the key-value pair at the given index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure `key_id` is in range `[0, n_kv())`.
@@ -105,8 +88,6 @@ impl GgufContext {
         GgufType::from_raw(raw)
     }
 
-    /// Returns the u32 value at the given key index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure the key at `key_id` has type [`GgufType::Uint32`].
@@ -115,8 +96,6 @@ impl GgufContext {
         unsafe { llama_cpp_bindings_sys::gguf_get_val_u32(self.context.as_ptr(), key_id) }
     }
 
-    /// Returns the i32 value at the given key index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure the key at `key_id` has type [`GgufType::Int32`].
@@ -125,8 +104,6 @@ impl GgufContext {
         unsafe { llama_cpp_bindings_sys::gguf_get_val_i32(self.context.as_ptr(), key_id) }
     }
 
-    /// Returns the u64 value at the given key index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure the key at `key_id` has type [`GgufType::Uint64`].
@@ -135,8 +112,6 @@ impl GgufContext {
         unsafe { llama_cpp_bindings_sys::gguf_get_val_u64(self.context.as_ptr(), key_id) }
     }
 
-    /// Returns the string value at the given key index.
-    ///
     /// # Safety considerations
     ///
     /// The caller must ensure the key at `key_id` has type [`GgufType::String`].
@@ -155,7 +130,6 @@ impl GgufContext {
         Ok(c_str.to_str()?)
     }
 
-    /// Returns the number of tensors in the GGUF file.
     #[must_use]
     pub fn n_tensors(&self) -> i64 {
         unsafe { llama_cpp_bindings_sys::gguf_get_n_tensors(self.context.as_ptr()) }

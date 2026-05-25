@@ -1,16 +1,11 @@
 use crate::model::llama_split_mode_parse_error::LlamaSplitModeParseError;
 
-/// A rusty wrapper around `llama_split_mode`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LlamaSplitMode {
-    /// Single GPU
     None = LLAMA_SPLIT_MODE_NONE,
-    /// Split layers and KV across GPUs
     Layer = LLAMA_SPLIT_MODE_LAYER,
-    /// Split layers and KV across GPUs, use tensor parallelism if supported
     Row = LLAMA_SPLIT_MODE_ROW,
-    /// Experimental tensor parallelism across GPUs
     Tensor = LLAMA_SPLIT_MODE_TENSOR,
 }
 
@@ -35,8 +30,6 @@ const LLAMA_SPLIT_MODE_ROW: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_ROW as
 )]
 const LLAMA_SPLIT_MODE_TENSOR: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_TENSOR as i8;
 
-/// Create a `LlamaSplitMode` from a `i32`.
-///
 /// # Errors
 /// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
 impl TryFrom<i32> for LlamaSplitMode {
@@ -63,8 +56,6 @@ impl TryFrom<i32> for LlamaSplitMode {
     }
 }
 
-/// Create a `LlamaSplitMode` from a `u32`.
-///
 /// # Errors
 /// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
 impl TryFrom<u32> for LlamaSplitMode {
@@ -92,7 +83,6 @@ impl TryFrom<u32> for LlamaSplitMode {
     }
 }
 
-/// Create a `i32` from a `LlamaSplitMode`.
 impl From<LlamaSplitMode> for i32 {
     fn from(value: LlamaSplitMode) -> Self {
         match value {
@@ -104,7 +94,6 @@ impl From<LlamaSplitMode> for i32 {
     }
 }
 
-/// Create a `u32` from a `LlamaSplitMode`.
 impl From<LlamaSplitMode> for u32 {
     fn from(value: LlamaSplitMode) -> Self {
         match value {
@@ -116,7 +105,6 @@ impl From<LlamaSplitMode> for u32 {
     }
 }
 
-/// The default split mode is `Layer` in llama.cpp.
 impl Default for LlamaSplitMode {
     fn default() -> Self {
         Self::Layer

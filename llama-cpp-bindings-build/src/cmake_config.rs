@@ -217,9 +217,6 @@ fn configure_platform_specific(
     }
 }
 
-/// Work around a cmake-rs bug where debug Rust builds under MSVC strip
-/// optimization flags from Release-profile C/C++ builds.
-/// See: <https://github.com/rust-lang/cmake-rs/issues/240>
 fn configure_msvc_release_workaround(config: &mut Config, profile: &str) {
     let is_release_profile = matches!(profile, "Release" | "RelWithDebInfo" | "MinSizeRel");
 
@@ -269,14 +266,6 @@ fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, _target_triple
     println!("cargo:rustc-link-lib=android");
 }
 
-/// macOS BSD ar (from cctools) does not accept GNU ar's `-D` (deterministic)
-/// flag. cmake's default archive recipe is `<CMAKE_AR> qcD …`, which produces
-/// `illegal option -- D` warnings during every static-library link.
-///
-/// We override the archive command for every language used by llama.cpp's
-/// build — C, C++, Objective-C and Objective-C++ (the latter two appear once
-/// `GGML_METAL=ON` enables the Metal backend). Plain `qc` keeps the
-/// quick-create semantics; `<CMAKE_RANLIB>` still runs as ARCHIVE_FINISH.
 fn override_archive_commands_for_apple_ar(config: &mut Config) {
     for language in ["C", "CXX", "OBJC", "OBJCXX"] {
         config.define(

@@ -1,7 +1,5 @@
 use std::ffi::{CStr, c_char};
 
-/// Reads a C error string, converts to Rust `String`, and frees the C memory.
-///
 /// # Safety
 ///
 /// `error_ptr` must be either null or a valid pointer to a null-terminated

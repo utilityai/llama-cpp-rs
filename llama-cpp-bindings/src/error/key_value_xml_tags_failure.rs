@@ -1,4 +1,3 @@
-/// Failures specific to the key-value XML-tags parser (GLM-4.7 `<tool_call>{name}<arg_key>{k}</arg_key><arg_value>{v}</arg_value>...</tool_call>`).
 #[derive(Debug, thiserror::Error)]
 pub enum KeyValueXmlTagsFailure {
     #[error("tool call function tag has empty name")]

@@ -187,9 +187,6 @@ mod tests {
 
     #[test]
     fn returns_empty_when_object_is_not_a_tool_call_shape() {
-        // The body opens with `{` (so try_parse_one_object enters the JSON path) but the parsed
-        // value is a top-level non-object — the early `let Value::Object(map) = value else
-        // { return Ok(None) };` arm fires.
         let parsed = parse("{ \"foo\": 1 }", &qwen3_shape()).expect("must parse");
 
         assert!(parsed.is_empty());

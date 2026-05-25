@@ -1,29 +1,10 @@
 use std::ffi::{CStr, CString};
 
-/// Configuration parameters for MTMD context
-///
-/// # Examples
-///
-/// ```
-/// use llama_cpp_bindings::mtmd::{MtmdContextParams, mtmd_default_marker};
-/// use std::ffi::CString;
-///
-/// let params = MtmdContextParams {
-///     use_gpu: false,
-///     print_timings: true,
-///     n_threads: 4,
-///     media_marker: CString::new(mtmd_default_marker()).unwrap(),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 pub struct MtmdContextParams {
-    /// Whether to use GPU acceleration
     pub use_gpu: bool,
-    /// Whether to print timing information
     pub print_timings: bool,
-    /// Number of threads to use for processing
     pub n_threads: i32,
-    /// Media marker string used to identify media positions in text
     pub media_marker: CString,
 }
 

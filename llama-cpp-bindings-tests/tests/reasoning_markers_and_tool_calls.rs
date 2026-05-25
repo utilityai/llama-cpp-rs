@@ -153,12 +153,6 @@ fn deepseek_r1_8b_classifier_emits_reasoning_for_thinking_enabled_prompt(
 ) -> Result<()> {
     const MAX_GENERATED_TOKENS: i32 = 1500;
 
-    // DeepSeek-R1-Distill-Llama-8B uses `<think>...</think>` reasoning markers
-    // and full-width-bar role tokens `<｜User｜>` / `<｜Assistant｜>` (U+FF5C,
-    // not ASCII `|`). The chat template's `add_generation_prompt` ALWAYS appends
-    // `<｜Assistant｜><think>\n` — DeepSeek-R1 is a pure reasoner with no
-    // thinking-disabled mode — so the model resumes generation already inside
-    // the reasoning block.
     const DEEPSEEK_R1_8B_THINKING_PROMPT: &str = "\
 <｜User｜>What is 2 + 2?<｜Assistant｜><think>
 ";

@@ -18,7 +18,7 @@ use llama_cpp_bindings::error::KvCacheSeqDivError;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaLoraAdapter;
-use llama_cpp_bindings_tests::decode_hello_world::decode_hello_world;
+use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 use llama_cpp_test_harness::llama_tests_main;
@@ -112,10 +112,6 @@ fn new_context_with_huge_ctx_returns_null_error(fixture: &LlamaFixture<'_>) -> R
     assert!(result.is_err());
     Ok(())
 }
-
-// =========================================================================================
-// Group A: default Qwen model, embeddings=false. Most context tests fall here.
-// =========================================================================================
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
@@ -760,7 +756,7 @@ fn get_logits_ith_returns_token_index_exceeds_context_for_huge_index(
 fn clear_kv_cache_resets_positions(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     context.clear_kv_cache();
     assert_eq!(context.kv_cache_seq_pos_max(0), -1);
@@ -807,7 +803,7 @@ fn clear_kv_cache_resets_positions(fixture: &LlamaFixture<'_>) -> Result<()> {
 fn kv_cache_seq_pos_max_is_non_negative_after_decode(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     assert!(context.kv_cache_seq_pos_max(0) >= 0);
 
@@ -853,7 +849,7 @@ fn kv_cache_seq_pos_max_is_non_negative_after_decode(fixture: &LlamaFixture<'_>)
 fn clear_kv_cache_seq_with_range(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let result = context.clear_kv_cache_seq(Some(0), Some(0), Some(1));
     assert!(result.is_ok());
@@ -900,7 +896,7 @@ fn clear_kv_cache_seq_with_range(fixture: &LlamaFixture<'_>) -> Result<()> {
 fn copy_kv_cache_seq_succeeds(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let result = context.copy_kv_cache_seq(0, 1, None, None);
     assert!(result.is_ok());
@@ -947,7 +943,7 @@ fn copy_kv_cache_seq_succeeds(fixture: &LlamaFixture<'_>) -> Result<()> {
 fn copy_cache_executes_without_crash(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let pos_max = context.kv_cache_seq_pos_max(0);
     context.copy_cache(0, 1, pos_max + 1);
@@ -976,7 +972,7 @@ fn copy_cache_executes_without_crash(fixture: &LlamaFixture<'_>) -> Result<()> {
 fn kv_cache_seq_add_returns_error_for_mrope_model(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let result = context.kv_cache_seq_add(0, Some(0), None, 1);
 
@@ -1009,7 +1005,7 @@ fn kv_cache_seq_add_returns_error_for_mrope_model(fixture: &LlamaFixture<'_>) ->
 fn kv_cache_seq_div_returns_error_for_mrope_model(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let divisor = NonZeroU8::new(2).ok_or_else(|| anyhow::anyhow!("2 is non-zero"))?;
     let result = context.kv_cache_seq_div(0, Some(0), None, divisor);
@@ -1061,7 +1057,7 @@ fn kv_cache_seq_div_returns_error_for_mrope_model(fixture: &LlamaFixture<'_>) ->
 fn kv_cache_seq_keep_retains_specified_sequence(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     context.kv_cache_seq_keep(0);
 
@@ -1109,7 +1105,7 @@ fn kv_cache_seq_keep_retains_specified_sequence(fixture: &LlamaFixture<'_>) -> R
 fn copy_kv_cache_seq_with_explicit_range(fixture: &LlamaFixture<'_>) -> Result<()> {
     let mut context = fixture.build_context()?;
 
-    decode_hello_world(fixture, &mut context)?;
+    prime_kv_cache(fixture, &mut context)?;
 
     let result = context.copy_kv_cache_seq(0, 2, Some(0), Some(1));
 

@@ -1,4 +1,3 @@
-/// Returns true if the given status indicates success.
 #[must_use]
 pub const fn status_is_ok(status: llama_cpp_bindings_sys::llama_rs_status) -> bool {
     status == llama_cpp_bindings_sys::LLAMA_RS_STATUS_OK

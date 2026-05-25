@@ -1,8 +1,3 @@
-//! Pure Rust llguidance sampler for constrained decoding.
-//!
-//! Implements a custom `llama_sampler` using the `llguidance` and `toktrie` Rust crates
-//! to enforce grammar constraints (JSON schema, regex, Lark, etc.) during token sampling.
-
 use std::ffi::c_void;
 use std::sync::Arc;
 
@@ -13,7 +8,6 @@ use crate::GrammarError;
 use crate::model::LlamaModel;
 use crate::sampling::LlamaSampler;
 
-/// Internal state for the llguidance sampler.
 struct LlgContext {
     matcher: Matcher,
     tok_env: Arc<ApproximateTokEnv>,
@@ -113,8 +107,6 @@ static mut LLG_SAMPLER_I: llama_cpp_bindings_sys::llama_sampler_i =
         backend_set_input: None,
     };
 
-/// Create an llguidance-based constrained decoding sampler.
-///
 /// # Errors
 ///
 /// Returns `GrammarError` if the parser factory, grammar, or parser cannot be created.

@@ -1,12 +1,8 @@
-/// A rusty wrapper around `LLAMA_ATTENTION_TYPE`.
 #[repr(i8)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum LlamaAttentionType {
-    /// The attention type is unspecified
     Unspecified = -1,
-    /// Causal attention
     Causal = 0,
-    /// Non-causal attention
     NonCausal = 1,
 }
 

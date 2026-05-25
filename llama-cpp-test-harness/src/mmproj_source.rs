@@ -1,9 +1,3 @@
-//! Identity of the mmproj GGUF file the harness optionally loads for a phase.
-//!
-//! Same shape and semantics as [`crate::ModelSource`], but for the multimodal projection file.
-//! Independent of the model's source — a test may mix any combination (HF model + local mmproj,
-//! local model + HF mmproj, both local, both HF).
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -20,8 +14,6 @@ pub enum MmprojSource {
 }
 
 impl MmprojSource {
-    /// Resolves the source to an on-disk path.
-    ///
     /// # Errors
     ///
     /// Returns an error if the HF download fails. `LocalPath` is infallible here — file

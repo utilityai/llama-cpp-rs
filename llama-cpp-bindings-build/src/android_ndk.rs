@@ -27,8 +27,6 @@ pub enum AndroidNdkDetectionError {
     UnsupportedAndroidTarget { target_triple: String },
 }
 
-/// Consolidated Android NDK configuration, computed once and shared between
-/// bindgen and `CMake` configuration steps.
 #[derive(Debug)]
 pub struct AndroidNdk {
     pub ndk_path: String,

@@ -1,4 +1,3 @@
-//! an rusty equivalent of `llama_token_data_array`.
 use std::ptr;
 
 use crate::error::TokenSamplingError;
@@ -7,31 +6,14 @@ use crate::token::data::LlamaTokenData;
 
 use super::LlamaToken;
 
-/// a safe wrapper around `llama_token_data_array`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LlamaTokenDataArray {
-    /// the underlying data
     pub data: Vec<LlamaTokenData>,
-    /// the index of the selected token in ``data``
     pub selected: Option<usize>,
-    /// is the data sorted?
     pub sorted: bool,
 }
 
 impl LlamaTokenDataArray {
-    /// Create a new `LlamaTokenDataArray` from a vector and whether or not the data is sorted.
-    ///
-    /// ```
-    /// # use llama_cpp_bindings::token::data::LlamaTokenData;
-    /// # use llama_cpp_bindings::token::data_array::LlamaTokenDataArray;
-    /// # use llama_cpp_bindings::token::LlamaToken;
-    /// let array = LlamaTokenDataArray::new(vec![
-    ///         LlamaTokenData::new(LlamaToken(0), 0.0, 0.0),
-    ///         LlamaTokenData::new(LlamaToken(1), 0.1, 0.1)
-    ///    ], false);
-    /// assert_eq!(array.data.len(), 2);
-    /// assert_eq!(array.sorted, false);
-    /// ```
     #[must_use]
     pub const fn new(data: Vec<LlamaTokenData>, sorted: bool) -> Self {
         Self {
@@ -41,17 +23,6 @@ impl LlamaTokenDataArray {
         }
     }
 
-    /// Create a new `LlamaTokenDataArray` from an iterator and whether or not the data is sorted.
-    /// ```
-    /// # use llama_cpp_bindings::token::data::LlamaTokenData;
-    /// # use llama_cpp_bindings::token::data_array::LlamaTokenDataArray;
-    /// # use llama_cpp_bindings::token::LlamaToken;
-    /// let array = LlamaTokenDataArray::from_iter([
-    ///     LlamaTokenData::new(LlamaToken(0), 0.0, 0.0),
-    ///     LlamaTokenData::new(LlamaToken(1), 0.1, 0.1)
-    /// ], false);
-    /// assert_eq!(array.data.len(), 2);
-    /// assert_eq!(array.sorted, false);
     pub fn from_iter<TIterator>(data: TIterator, sorted: bool) -> Self
     where
         TIterator: IntoIterator<Item = LlamaTokenData>,
@@ -59,7 +30,6 @@ impl LlamaTokenDataArray {
         Self::new(data.into_iter().collect(), sorted)
     }
 
-    /// Returns the current selected token, if one exists.
     #[must_use]
     pub fn selected_token(&self) -> Option<LlamaToken> {
         self.data.get(self.selected?).map(LlamaTokenData::id)
@@ -67,8 +37,6 @@ impl LlamaTokenDataArray {
 }
 
 impl LlamaTokenDataArray {
-    /// Modify the underlying data as a `llama_token_data_array`. and reconstruct the `LlamaTokenDataArray`.
-    ///
     /// # Panics
     ///
     /// Panics if some of the safety conditions are not met. (we cannot check all of them at
@@ -125,8 +93,6 @@ impl LlamaTokenDataArray {
         result
     }
 
-    /// Modifies the data array by applying a sampler to it.
-    ///
     /// # Panics
     ///
     /// Panics if the vendored sampler throws a C++ exception. `llama_sampler_apply` is
@@ -149,15 +115,12 @@ impl LlamaTokenDataArray {
         }
     }
 
-    /// Modifies the data array by applying a sampler to it
     #[must_use]
     pub fn with_sampler(mut self, sampler: &mut LlamaSampler) -> Self {
         self.apply_sampler(sampler);
         self
     }
 
-    /// Randomly selects a token from the candidates based on their probabilities.
-    ///
     /// # Errors
     /// Returns [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
     pub fn sample_token(&mut self, seed: u32) -> Result<LlamaToken, TokenSamplingError> {
@@ -166,8 +129,6 @@ impl LlamaTokenDataArray {
             .ok_or(TokenSamplingError::NoTokenSelected)
     }
 
-    /// Selects the token with the highest probability.
-    ///
     /// # Errors
     /// Returns [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
     pub fn sample_token_greedy(&mut self) -> Result<LlamaToken, TokenSamplingError> {

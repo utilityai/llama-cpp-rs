@@ -3,8 +3,6 @@
     reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
 )]
 
-use std::ffi::OsStr;
-use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -158,6 +156,9 @@ fn load_model_with_invalid_file_content_returns_unloadable_or_reported(
 fn load_model_with_non_utf8_path_returns_path_to_str_error(
     fixture: &LlamaFixture<'_>,
 ) -> Result<()> {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
     let model_params = LlamaModelParams::default();
     let non_utf8_path = Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
 
@@ -304,6 +305,9 @@ fn lora_adapter_init_with_invalid_gguf_returns_unloadable(
     n_ubatch = 64,
 )]
 fn lora_adapter_init_with_non_utf8_path_returns_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
     let non_utf8_path = Path::new(OsStr::from_bytes(b"/tmp/\xff\xfe.gguf"));
     let result = fixture.model.lora_adapter_init(non_utf8_path);
 

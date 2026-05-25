@@ -7,14 +7,6 @@ use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
 use llama_cpp_bindings::sampling::LlamaSampler;
 
-/// Drives a classifier through the full sample/decode/flush loop.
-///
-/// Suppresses EOG outcomes (so `generated_raw` and the per-section streams
-/// never contain end-of-generation marker text) and captures per-section
-/// counts. Tests that need to exercise classifier behaviour during real
-/// inference should construct one of these and call
-/// [`ClassifySampleLoop::run`] instead of re-implementing the loop. The
-/// strict per-test assertions then run on [`ClassifySampleLoopOutcome`].
 pub struct ClassifySampleLoop<'borrow, 'model, 'tokens> {
     pub model: &'model LlamaModel,
     pub classifier: &'borrow mut SampledTokenClassifier<'model>,
@@ -59,10 +51,6 @@ impl ClassifySampleLoop<'_, '_, '_> {
                 } else {
                     outcome.generated_raw.push_str(&ingest_outcome.raw_piece);
                 }
-                // Counters always include EOG so they match the classifier's
-                // internal usage counters (which include every sampled token).
-                // EOG text is suppressed from `generated_raw` and the per-section
-                // streams so callers can assert exact textual equality.
                 record_outcome(ingest_outcome, &mut outcome, is_eog);
             }
 

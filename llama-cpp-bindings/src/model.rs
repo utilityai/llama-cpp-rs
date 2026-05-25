@@ -1,5 +1,3 @@
-//! A safe wrapper around `llama_model`.
-
 pub mod add_bos;
 pub mod llama_chat_message;
 pub mod llama_chat_template;
@@ -78,9 +76,7 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
     Ok((c_string, len))
 }
 
-/// A safe wrapper around `llama_model`.
 pub struct LlamaModel {
-    /// Raw pointer to the underlying `llama_model`.
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
     tok_env: OnceLock<Arc<ApproximateTokEnv>>,
 }
@@ -98,14 +94,11 @@ unsafe impl Send for LlamaModel {}
 unsafe impl Sync for LlamaModel {}
 
 impl LlamaModel {
-    /// Returns a raw pointer to the model's vocabulary.
     #[must_use]
     pub fn vocab_ptr(&self) -> *const llama_cpp_bindings_sys::llama_vocab {
         unsafe { llama_cpp_bindings_sys::llama_model_get_vocab(self.model.as_ptr()) }
     }
 
-    /// Get the number of tokens the model was trained on.
-    ///
     /// # Errors
     ///
     /// Returns an error if the value returned by llama.cpp does not fit into a `u32`.
@@ -115,7 +108,6 @@ impl LlamaModel {
         u32::try_from(n_ctx_train)
     }
 
-    /// Get all tokens in the model.
     pub fn tokens(
         &self,
         decode_special: bool,
@@ -136,28 +128,24 @@ impl LlamaModel {
             })
     }
 
-    /// Get the beginning of stream token.
     #[must_use]
     pub fn token_bos(&self) -> LlamaToken {
         let token = unsafe { llama_cpp_bindings_sys::llama_token_bos(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
-    /// Get the end of stream token.
     #[must_use]
     pub fn token_eos(&self) -> LlamaToken {
         let token = unsafe { llama_cpp_bindings_sys::llama_token_eos(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
-    /// Get the newline token.
     #[must_use]
     pub fn token_nl(&self) -> LlamaToken {
         let token = unsafe { llama_cpp_bindings_sys::llama_token_nl(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
-    /// Check if a token represents the end of generation (end of turn, end of sequence, etc.)
     #[must_use]
     pub fn is_eog_token(&self, token: &SampledToken) -> bool {
         let (SampledToken::Content(LlamaToken(id))
@@ -168,7 +156,6 @@ impl LlamaModel {
         unsafe { llama_cpp_bindings_sys::llama_token_is_eog(self.vocab_ptr(), id) }
     }
 
-    /// Get the decoder start token.
     #[must_use]
     pub fn decode_start_token(&self) -> LlamaToken {
         let token =
@@ -176,15 +163,12 @@ impl LlamaModel {
         LlamaToken(token)
     }
 
-    /// Get the separator token (SEP).
     #[must_use]
     pub fn token_sep(&self) -> LlamaToken {
         let token = unsafe { llama_cpp_bindings_sys::llama_vocab_sep(self.vocab_ptr()) };
         LlamaToken(token)
     }
 
-    /// Convert a string to a Vector of tokens.
-    ///
     /// # Errors
     ///
     /// - if [`str`] contains a null byte
@@ -194,14 +178,6 @@ impl LlamaModel {
     /// ```no_run
     /// use llama_cpp_bindings::model::LlamaModel;
     ///
-    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
-    /// use std::path::Path;
-    /// use llama_cpp_bindings::model::AddBos;
-    /// let backend = llama_cpp_bindings::llama_backend::LlamaBackend::init()?;
-    /// let model = LlamaModel::load_from_file(&backend, Path::new("path/to/model"), &Default::default())?;
-    /// let tokens = model.str_to_token("Hello, World!", AddBos::Always)?;
-    /// # Ok(())
-    /// # }
     pub fn str_to_token(
         &self,
         str: &str,
@@ -253,8 +229,6 @@ impl LlamaModel {
         Ok(buffer)
     }
 
-    /// Get the type of a token.
-    ///
     /// # Errors
     ///
     /// Returns an error if the token type is not known to this library.
@@ -268,16 +242,6 @@ impl LlamaModel {
         LlamaTokenAttrs::try_from(token_type)
     }
 
-    /// Convert a token to a string using the underlying llama.cpp `llama_token_to_piece` function.
-    ///
-    /// This is the new default function for token decoding and provides direct access to
-    /// the llama.cpp token decoding functionality without any special logic or filtering.
-    ///
-    /// Decoding raw string requires using an decoder, tokens from language models may not always map
-    /// to full characters depending on the encoding so stateful decoding is required, otherwise partial strings may be lost!
-    /// Invalid characters are mapped to REPLACEMENT CHARACTER making the method safe to use even if the model inherently produces
-    /// garbage.
-    ///
     /// # Errors
     ///
     /// - if the token type is unknown
@@ -310,12 +274,6 @@ impl LlamaModel {
         Ok(output_piece)
     }
 
-    /// Raw token decoding to bytes, use if you want to handle the decoding model output yourself
-    ///
-    /// Convert a token to bytes using the underlying llama.cpp `llama_token_to_piece` function. This is mostly
-    /// a thin wrapper around `llama_token_to_piece` function, that handles rust <-> c type conversions while
-    /// letting the caller handle errors. For a safer interface returning rust strings directly use `token_to_piece` instead!
-    ///
     /// # Errors
     ///
     /// - if the token type is unknown
@@ -356,17 +314,11 @@ impl LlamaModel {
         }
     }
 
-    /// The number of tokens the model was trained on.
-    ///
-    /// This returns a `c_int` for maximum compatibility. Most of the time it can be cast to an i32
-    /// without issue.
     #[must_use]
     pub fn n_vocab(&self) -> i32 {
         unsafe { llama_cpp_bindings_sys::llama_n_vocab(self.vocab_ptr()) }
     }
 
-    /// The type of vocab the model was trained on.
-    ///
     /// # Errors
     ///
     /// Returns an error if llama.cpp emits a vocab type that is not known to this library.
@@ -376,33 +328,26 @@ impl LlamaModel {
         VocabType::try_from(vocab_type)
     }
 
-    /// This returns a `c_int` for maximum compatibility. Most of the time it can be cast to an i32
-    /// without issue.
     #[must_use]
     pub fn n_embd(&self) -> c_int {
         unsafe { llama_cpp_bindings_sys::llama_n_embd(self.model.as_ptr()) }
     }
 
-    /// Returns the total size of all the tensors in the model in bytes.
     #[must_use]
     pub fn size(&self) -> u64 {
         unsafe { llama_cpp_bindings_sys::llama_model_size(self.model.as_ptr()) }
     }
 
-    /// Returns the number of parameters in the model.
     #[must_use]
     pub fn n_params(&self) -> u64 {
         unsafe { llama_cpp_bindings_sys::llama_model_n_params(self.model.as_ptr()) }
     }
 
-    /// Returns whether the model is a recurrent network (Mamba, RWKV, etc)
     #[must_use]
     pub fn is_recurrent(&self) -> bool {
         unsafe { llama_cpp_bindings_sys::llama_model_is_recurrent(self.model.as_ptr()) }
     }
 
-    /// Returns the number of layers within the model.
-    ///
     /// # Errors
     ///
     /// Returns an error if the layer count returned by llama.cpp does not fit into a `u32`.
@@ -410,8 +355,6 @@ impl LlamaModel {
         u32::try_from(unsafe { llama_cpp_bindings_sys::llama_model_n_layer(self.model.as_ptr()) })
     }
 
-    /// Returns the number of attention heads within the model.
-    ///
     /// # Errors
     ///
     /// Returns an error if the head count returned by llama.cpp does not fit into a `u32`.
@@ -419,8 +362,6 @@ impl LlamaModel {
         u32::try_from(unsafe { llama_cpp_bindings_sys::llama_model_n_head(self.model.as_ptr()) })
     }
 
-    /// Returns the number of KV attention heads.
-    ///
     /// # Errors
     ///
     /// Returns an error if the KV head count returned by llama.cpp does not fit into a `u32`.
@@ -428,16 +369,11 @@ impl LlamaModel {
         u32::try_from(unsafe { llama_cpp_bindings_sys::llama_model_n_head_kv(self.model.as_ptr()) })
     }
 
-    /// Returns whether the model is a hybrid network (Jamba, Granite, Qwen3xx, etc.)
-    ///
-    /// Hybrid models have both attention layers and recurrent/SSM layers.
     #[must_use]
     pub fn is_hybrid(&self) -> bool {
         unsafe { llama_cpp_bindings_sys::llama_model_is_hybrid(self.model.as_ptr()) }
     }
 
-    /// Get metadata value as a string by key name
-    ///
     /// # Errors
     /// Returns an error if the key is not found or the value is not valid UTF-8.
     pub fn meta_val_str(&self, key: &str) -> Result<String, MetaValError> {
@@ -457,14 +393,11 @@ impl LlamaModel {
         )
     }
 
-    /// Get the number of metadata key/value pairs
     #[must_use]
     pub fn meta_count(&self) -> i32 {
         unsafe { llama_cpp_bindings_sys::llama_model_meta_count(self.model.as_ptr()) }
     }
 
-    /// Get metadata key name by index
-    ///
     /// # Errors
     /// Returns an error if the index is out of range or the key is not valid UTF-8.
     pub fn meta_key_by_index(&self, index: i32) -> Result<String, MetaValError> {
@@ -481,8 +414,6 @@ impl LlamaModel {
         )
     }
 
-    /// Get metadata value as a string by index
-    ///
     /// # Errors
     /// Returns an error if the index is out of range or the value is not valid UTF-8.
     pub fn meta_val_str_by_index(&self, index: i32) -> Result<String, MetaValError> {
@@ -499,7 +430,6 @@ impl LlamaModel {
         )
     }
 
-    /// Returns the rope type of the model.
     #[must_use]
     pub fn rope_type(&self) -> Option<RopeType> {
         let raw = unsafe { llama_cpp_bindings_sys::llama_model_rope_type(self.model.as_ptr()) };
@@ -507,15 +437,6 @@ impl LlamaModel {
         rope_type::rope_type_from_raw(raw)
     }
 
-    /// Get chat template from model by name. If the name parameter is None, the default chat template will be returned.
-    ///
-    /// You supply this into [`Self::apply_chat_template`] to get back a string with the appropriate template
-    /// substitution applied to convert a list of messages into a prompt the LLM can use to complete
-    /// the chat.
-    ///
-    /// You could also use an external jinja parser, like [minijinja](https://github.com/mitsuhiko/minijinja),
-    /// to parse jinja templates not supported by the llama.cpp template engine.
-    ///
     /// # Errors
     ///
     /// * If the model has no chat template by that name
@@ -546,8 +467,6 @@ impl LlamaModel {
         }
     }
 
-    /// Loads a model from a file.
-    ///
     /// # Errors
     ///
     /// See [`LlamaModelLoadError`] for more information.
@@ -610,8 +529,6 @@ impl LlamaModel {
         }
     }
 
-    /// Initializes a lora adapter from a file.
-    ///
     /// # Errors
     ///
     /// See [`LlamaLoraAdapterInitError`] for more information.
@@ -643,21 +560,6 @@ impl LlamaModel {
         })
     }
 
-    /// Apply the models chat template to some messages.
-    /// See <https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template>
-    ///
-    /// Unlike the llama.cpp `apply_chat_template` which just randomly uses the `ChatML` template when given
-    /// a null pointer for the template, this requires an explicit template to be specified. If you want to
-    /// use "chatml", then just do `LlamaChatTemplate::new("chatml")` or any other model name or template
-    /// string.
-    ///
-    /// Use [`Self::chat_template`] to retrieve the template baked into the model (this is the preferred
-    /// mechanism as using the wrong chat template can result in really unexpected responses from the LLM).
-    ///
-    /// You probably want to set `add_ass` to true so that the generated template string ends with a the
-    /// opening tag of the assistant. If you fail to leave a hanging chat tag, the model will likely generate
-    /// one into the output and the output may also have unexpected output aside from that.
-    ///
     /// # Errors
     /// There are many ways this can fail. See [`ApplyChatTemplateError`] for more information.
     pub fn apply_chat_template(
@@ -720,17 +622,6 @@ impl LlamaModel {
         truncated_buffer_to_string(buff, final_size)
     }
 
-    /// Build a streaming [`SampledTokenClassifier`] for this model.
-    ///
-    /// At construction the bindings detect reasoning markers (via the
-    /// autoparser, with a chunked-thinking fallback for templates that consume
-    /// thoughts via content blocks), tool-call markers, and the trailing
-    /// generation-prompt slice. The classifier then runs a state machine over
-    /// the decoded token stream — no per-model branches.
-    ///
-    /// If the model has no usable chat template the classifier is built in a
-    /// blind mode that classifies every token as
-    /// [`SampledToken::Undeterminable`].
     pub fn sampled_token_classifier(&self) -> SampledTokenClassifier<'_> {
         let markers = match self.streaming_markers() {
             Ok(markers) => markers,
@@ -745,12 +636,6 @@ impl LlamaModel {
         SampledTokenClassifier::new(self, markers)
     }
 
-    /// Detect reasoning / tool-call markers (as token-ID sequences) and the
-    /// trailing generation-prompt slice for this model's chat template. The
-    /// returned `StreamingMarkers` carry tokenised markers — never raw strings
-    /// — so the classifier matches by `LlamaToken` equality rather than text
-    /// scanning.
-    ///
     /// # Errors
     /// Returns [`MarkerDetectionError`] when any underlying FFI call fails.
     pub fn streaming_markers(&self) -> Result<StreamingMarkers, MarkerDetectionError> {
@@ -781,9 +666,6 @@ impl LlamaModel {
         })
     }
 
-    /// When the autoparser-driven FFI returned no tool-call markers, consult the
-    /// per-template override registry so wrapper-known templates (Gemma 4,
-    /// Mistral 3, ...) still drive the classifier.
     fn resolve_tool_call_marker_strings(
         &self,
         autoparser_open: Option<String>,
@@ -828,11 +710,6 @@ impl LlamaModel {
         }
     }
 
-    /// Returns the rich tool-call marker bundle (open / separator / close /
-    /// optional value-quote pair) for this model's chat template, sourced from
-    /// the wrapper's per-template override registry. Returns `None` when no
-    /// registered override matches — callers in that case fall back to
-    /// llama.cpp's autoparser via [`Self::parse_chat_message`].
     #[must_use]
     pub fn tool_call_markers(&self) -> Option<ToolCallMarkers> {
         let template = match self.chat_template(None) {
@@ -873,27 +750,6 @@ impl LlamaModel {
         }
     }
 
-    /// Parse the assistant's output text into structured content, reasoning,
-    /// and tool calls.
-    ///
-    /// Two passes, in order:
-    /// 1. Duck-type the wrapper-side parsers across every known shape
-    ///    (Qwen XML, GLM key-value, Gemma paired-quote, Mistral bracketed-JSON).
-    ///    First match wins. The shapes are ordered so that more restrictive
-    ///    shapes run first, which keeps the duck-type pass safe for inputs
-    ///    that share an open marker but differ in inner structure.
-    /// 2. Delegate to llama.cpp's `common_chat_parse`. If it succeeds the
-    ///    result is `Recognized`; if it throws `ParseException` the result is
-    ///    `Unrecognized` with the raw input plus the FFI's diagnostic, so the
-    ///    caller can pass the unstructured tokens to the client.
-    ///
-    /// Empty tool-call `id` fields are filled with `call_{index}` before
-    /// returning, so callers always see well-formed identifiers.
-    ///
-    /// `tools_json` is a JSON-array string of OpenAI-style tool definitions
-    /// (use `"[]"` when no tools are in scope). `is_partial` switches between
-    /// mid-stream (lenient) and final (strict) parses for the FFI step.
-    ///
     /// # Errors
     ///
     /// Returns [`ParseChatMessageError`] when `tools_json` is not valid JSON,
@@ -1029,11 +885,6 @@ impl LlamaModel {
         }
     }
 
-    /// Render the model's chat template with the autoparser's synthetic
-    /// no-tools and with-tools inputs. Returns `(output_no_tools,
-    /// output_with_tools)`. Either side can be empty when the template throws
-    /// during rendering. Useful for debugging tool-call marker detection.
-    ///
     /// # Errors
     ///
     /// Returns [`MarkerDetectionError`] when the C++ analyzer throws or the FFI
@@ -1049,10 +900,6 @@ impl LlamaModel {
 }
 
 impl LlamaModel {
-    /// Returns a process-cached, approximate token environment built from this model's vocabulary.
-    ///
-    /// The first call iterates the full vocabulary and constructs the trie; subsequent calls
-    /// return the cached `Arc` without further FFI work.
     pub fn approximate_tok_env(&self) -> Arc<ApproximateTokEnv> {
         Arc::clone(self.tok_env.get_or_init(|| build_approximate_tok_env(self)))
     }

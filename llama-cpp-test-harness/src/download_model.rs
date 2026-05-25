@@ -2,8 +2,6 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-/// Downloads a single file from a Hugging Face repo via `hf-hub`'s sync API.
-///
 /// # Errors
 ///
 /// Returns an error if the HF client cannot be built or the file cannot be downloaded

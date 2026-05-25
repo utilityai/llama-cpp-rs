@@ -1,14 +1,3 @@
-//! Identity of the GGUF file the harness loads for a phase.
-//!
-//! Two variants, mutually exclusive by construction:
-//! - [`ModelSource::HuggingFace`] — pull via `hf-hub` (cached); the on-disk path is wherever the
-//!   cache resolves to.
-//! - [`ModelSource::LocalPath`] — use the file at the given absolute path verbatim; no download,
-//!   no cache.
-//!
-//! Mutual exclusion is enforced at compile time by the enum's variant set. There is no string
-//! heuristic anywhere — the proc-macro dispatches on syntactic path identifiers.
-
 use std::path::PathBuf;
 
 use anyhow::Result;
@@ -25,8 +14,6 @@ pub enum ModelSource {
 }
 
 impl ModelSource {
-    /// Resolves the source to an on-disk path.
-    ///
     /// # Errors
     ///
     /// Returns an error if the HF download fails. `LocalPath` is infallible here — file

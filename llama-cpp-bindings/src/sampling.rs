@@ -1,5 +1,3 @@
-//! Safe wrapper around `llama_sampler`.
-
 use std::borrow::Borrow;
 use std::ffi::{CString, c_char};
 use std::fmt::{Debug, Formatter};
@@ -41,9 +39,7 @@ fn checked_usize_as_i32_sampling(value: usize) -> Result<i32, SamplingError> {
     })
 }
 
-/// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
-    /// Raw pointer to the underlying `llama_sampler`.
     pub sampler: *mut llama_cpp_bindings_sys::llama_sampler,
 }
 
@@ -54,8 +50,6 @@ impl Debug for LlamaSampler {
 }
 
 impl LlamaSampler {
-    /// Sample and accept a token from the idx-th output of the last evaluation.
-    ///
     /// # Errors
     ///
     /// Returns [`SampleError`] if the C++ sampler throws an exception or if the index is invalid.
@@ -86,23 +80,16 @@ impl LlamaSampler {
         }
     }
 
-    /// Applies this sampler to a [`LlamaTokenDataArray`].
     pub fn apply(&self, data_array: &mut LlamaTokenDataArray) {
         data_array.apply_sampler(self);
     }
 
-    /// Accepts a token from the sampler, possibly updating the internal state of certain samplers
-    /// (e.g. grammar, repetition, etc.)
-    ///
     /// # Errors
     /// Returns [`SamplerAcceptError`] if the underlying sampler rejects the token.
     pub fn accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
         self.try_accept(token)
     }
 
-    /// Accepts several tokens from the sampler or context, possibly updating the internal state of
-    /// certain samplers (e.g. grammar, repetition, etc.)
-    ///
     /// # Errors
     /// Returns [`SamplerAcceptError`] if the underlying sampler rejects any token.
     pub fn accept_many(
@@ -116,9 +103,6 @@ impl LlamaSampler {
         Ok(())
     }
 
-    /// Accepts several tokens from the sampler or context, possibly updating the internal state of
-    /// certain samplers (e.g. grammar, repetition, etc.)
-    ///
     /// # Errors
     /// Returns [`SamplerAcceptError`] if the underlying sampler rejects any token.
     pub fn with_tokens(
@@ -130,8 +114,6 @@ impl LlamaSampler {
         Ok(self)
     }
 
-    /// Try accepting a token from the sampler. Returns an error if the sampler throws.
-    ///
     /// # Errors
     /// Returns an error if the underlying sampler rejects the token.
     pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
@@ -148,32 +130,17 @@ impl LlamaSampler {
         check_sampler_accept_status(status, error_ptr)
     }
 
-    /// Resets the internal state of the sampler.
-    ///
-    /// This can be useful when you want to start fresh with a sampler without creating a new instance.
     pub fn reset(&mut self) {
         unsafe {
             llama_cpp_bindings_sys::llama_sampler_reset(self.sampler);
         }
     }
 
-    /// Gets the random seed used by this sampler.
-    ///
-    /// Returns:
-    /// - For random samplers (dist, mirostat, `mirostat_v2)`: returns their current seed
-    /// - For sampler chains: returns the first non-default seed found in reverse order
-    /// - For all other samplers: returns 0xFFFFFFFF
     #[must_use]
     pub fn get_seed(&self) -> u32 {
         unsafe { llama_cpp_bindings_sys::llama_sampler_get_seed(self.sampler) }
     }
 
-    /// Combines a list of samplers into a single sampler that applies each component sampler one
-    /// after another.
-    ///
-    /// If you are using a chain to select a token, the chain should always end with one of
-    /// [`LlamaSampler::greedy`], [`LlamaSampler::dist`], [`LlamaSampler::mirostat`], and
-    /// [`LlamaSampler::mirostat_v2`].
     #[must_use]
     pub fn chain(samplers: impl IntoIterator<Item = Self>, no_perf: bool) -> Self {
         unsafe {
@@ -190,74 +157,17 @@ impl LlamaSampler {
         }
     }
 
-    /// Same as [`Self::chain`] with `no_perf = false`.
-    ///
-    /// # Example
-    /// ```rust
-    /// use llama_cpp_bindings::token::{
-    ///    LlamaToken,
-    ///    data::LlamaTokenData,
-    ///    data_array::LlamaTokenDataArray
-    /// };
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    /// use llama_cpp_bindings::llama_backend::LlamaBackend;
-    /// let backend = LlamaBackend::init().unwrap();
-    ///
-    /// let mut data_array = LlamaTokenDataArray::new(vec![
-    ///     LlamaTokenData::new(LlamaToken(0), 0., 0.),
-    ///     LlamaTokenData::new(LlamaToken(1), 1., 0.),
-    ///     LlamaTokenData::new(LlamaToken(2), 2., 0.),
-    /// ], false);
-    ///
-    /// data_array.apply_sampler(&mut LlamaSampler::chain_simple([
-    ///     LlamaSampler::temp(0.5),
-    ///     LlamaSampler::greedy(),
-    /// ]));
-    ///
-    /// assert_eq!(data_array.data[0].logit(), 0.);
-    /// assert_eq!(data_array.data[1].logit(), 2.);
-    /// assert_eq!(data_array.data[2].logit(), 4.);
-    ///
-    /// assert_eq!(data_array.data.len(), 3);
-    /// assert_eq!(data_array.selected_token(), Some(LlamaToken(2)));
-    /// ```
     #[must_use]
     pub fn chain_simple(samplers: impl IntoIterator<Item = Self>) -> Self {
         Self::chain(samplers, false)
     }
 
-    /// Updates the logits `l_i' = l_i/t`. When `t <= 0.0`, the maximum logit is kept at its original
-    /// value, the rest are set to -inf
-    ///
-    /// # Example:
-    /// ```rust
-    /// use llama_cpp_bindings::token::{
-    ///    LlamaToken,
-    ///    data::LlamaTokenData,
-    ///    data_array::LlamaTokenDataArray
-    /// };
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    ///
-    /// let mut data_array = LlamaTokenDataArray::new(vec![
-    ///     LlamaTokenData::new(LlamaToken(0), 0., 0.),
-    ///     LlamaTokenData::new(LlamaToken(1), 1., 0.),
-    ///     LlamaTokenData::new(LlamaToken(2), 2., 0.),
-    /// ], false);
-    ///
-    /// data_array.apply_sampler(&mut LlamaSampler::temp(0.5));
-    ///
-    /// assert_eq!(data_array.data[0].logit(), 0.);
-    /// assert_eq!(data_array.data[1].logit(), 2.);
-    /// assert_eq!(data_array.data[2].logit(), 4.);
-    /// ```
     #[must_use]
     pub fn temp(t: f32) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_temp(t) };
         Self { sampler }
     }
 
-    /// Dynamic temperature implementation (a.k.a. entropy) described in the paper
-    /// <https://arxiv.org/abs/2309.02772>.
     #[must_use]
     pub fn temp_ext(t: f32, delta: f32, exponent: f32) -> Self {
         let sampler =
@@ -265,91 +175,36 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration"
-    /// <https://arxiv.org/abs/1904.09751>
-    ///
-    /// # Example:
-    /// ```rust
-    /// use llama_cpp_bindings::token::{
-    ///    LlamaToken,
-    ///    data::LlamaTokenData,
-    ///    data_array::LlamaTokenDataArray
-    /// };
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    ///
-    /// let mut data_array = LlamaTokenDataArray::new(vec![
-    ///     LlamaTokenData::new(LlamaToken(0), 0., 0.),
-    ///     LlamaTokenData::new(LlamaToken(1), 1., 0.),
-    ///     LlamaTokenData::new(LlamaToken(2), 2., 0.),
-    ///     LlamaTokenData::new(LlamaToken(3), 3., 0.),
-    /// ], false);
-    ///
-    /// data_array.apply_sampler(&mut LlamaSampler::top_k(2));
-    ///
-    /// assert_eq!(data_array.data.len(), 2);
-    /// assert_eq!(data_array.data[0].id(), LlamaToken(3));
-    /// assert_eq!(data_array.data[1].id(), LlamaToken(2));
-    /// ```
     #[must_use]
     pub fn top_k(k: i32) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_top_k(k) };
         Self { sampler }
     }
 
-    /// Top-nσ sampling as described in academic paper "Top-nσ: Not All Logits Are You Need"
-    /// <https://arxiv.org/pdf/2411.07641>
-    ///
-    /// This method filters logits by selecting only those within *n* standard deviations of the mean.
-    ///
-    /// # Parameters
-    /// - `n`: Number of standard deviations from the mean to include in sampling
-    ///
-    /// # Example
-    /// ```rust
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    /// use llama_cpp_bindings::token::{
-    ///     LlamaToken,
-    ///     data::LlamaTokenData,
-    ///     data_array::LlamaTokenDataArray
-    /// };
-    ///
-    /// let mut data_array = LlamaTokenDataArray::new(vec![
-    ///     LlamaTokenData::new(LlamaToken(0), 0.0, 0.0),
-    ///     LlamaTokenData::new(LlamaToken(1), 1.0, 0.0),
-    ///     LlamaTokenData::new(LlamaToken(2), 2.0, 0.0),
-    /// ], false);
-    ///
-    /// data_array.apply_sampler(&mut LlamaSampler::top_n_sigma(2.0));
-    /// ```
     #[must_use]
     pub fn top_n_sigma(n: f32) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_top_n_sigma(n) };
         Self { sampler }
     }
 
-    /// Locally Typical Sampling implementation described in the paper <https://arxiv.org/abs/2202.00666>.
     #[must_use]
     pub fn typical(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_typical(p, min_keep) };
         Self { sampler }
     }
 
-    /// Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration"
-    /// <https://arxiv.org/abs/1904.09751>
     #[must_use]
     pub fn top_p(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_top_p(p, min_keep) };
         Self { sampler }
     }
 
-    /// Minimum P sampling as described in <https://github.com/ggerganov/llama.cpp/pull/3841>
     #[must_use]
     pub fn min_p(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_min_p(p, min_keep) };
         Self { sampler }
     }
 
-    /// XTC sampler as described in <https://github.com/oobabooga/text-generation-webui/pull/6335>
     #[must_use]
     pub fn xtc(p: f32, t: f32, min_keep: usize, seed: u32) -> Self {
         let sampler =
@@ -357,8 +212,6 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Grammar sampler
-    ///
     /// # Errors
     /// Returns an error if the grammar is invalid or the sampler cannot be initialized.
     pub fn grammar(
@@ -401,10 +254,6 @@ impl LlamaSampler {
         }
     }
 
-    /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
-    ///
-    /// This sampler enforces grammar rules only when specific trigger words or tokens are encountered.
-    ///
     /// # Errors
     /// Returns an error if the grammar or trigger words are invalid.
     pub fn grammar_lazy(
@@ -457,12 +306,6 @@ impl LlamaSampler {
         }
     }
 
-    /// Lazy grammar sampler using regex trigger patterns.
-    ///
-    /// Trigger patterns are regular expressions matched from the start of the
-    /// generation output. The grammar sampler will be fed content starting from
-    /// the first match group.
-    ///
     /// # Errors
     /// Returns an error if the grammar or trigger patterns are invalid.
     pub fn grammar_lazy_patterns(
@@ -519,11 +362,6 @@ impl LlamaSampler {
         }
     }
 
-    /// `LLGuidance` sampler for constrained decoding.
-    ///
-    /// Uses the `llguidance` and `toktrie` Rust crates to enforce grammar constraints
-    /// during token sampling. Supports JSON schema, regex, Lark, and other grammar types.
-    ///
     /// # Errors
     ///
     /// Returns [`GrammarError`] if the grammar is invalid or the sampler cannot be initialized.
@@ -567,10 +405,6 @@ impl LlamaSampler {
             .collect()
     }
 
-    /// DRY sampler, designed by p-e-w, as described in:
-    /// <https://github.com/oobabooga/text-generation-webui/pull/5677>, porting Koboldcpp
-    /// implementation authored by pi6am: <https://github.com/LostRuins/koboldcpp/pull/982>
-    ///
     /// # Errors
     /// Returns an error if any string in `seq_breakers` contains null bytes.
     pub fn dry(
@@ -612,13 +446,6 @@ impl LlamaSampler {
         Ok(Self { sampler })
     }
 
-    /// Penalizes tokens for being present in the context.
-    ///
-    /// Parameters:
-    /// - ``penalty_last_n``: last n tokens to penalize (0 = disable penalty, -1 = context size)
-    /// - ``penalty_repeat``: 1.0 = disabled
-    /// - ``penalty_freq``: 0.0 = disabled
-    /// - ``penalty_present``: 0.0 = disabled
     #[must_use]
     pub fn penalties(
         penalty_last_n: i32,
@@ -637,21 +464,6 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Mirostat 1.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
-    ///
-    /// # Parameters:
-    /// - ``n_vocab``: [`LlamaModel::n_vocab`]
-    /// - ``seed``: Seed to initialize random generation with.
-    /// - ``tau``: The target cross-entropy (or surprise) value you want to achieve for the
-    ///   generated text. A higher value corresponds to more surprising or less predictable text,
-    ///   while a lower value corresponds to less surprising or more predictable text.
-    /// - ``eta``: The learning rate used to update `mu` based on the error between the target and
-    ///   observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
-    ///   updated more quickly, while a smaller learning rate will result in slower updates.
-    /// - ``m``: The number of tokens considered in the estimation of `s_hat`. This is an arbitrary
-    ///   value that is used to calculate `s_hat`, which in turn helps to calculate the value of `k`.
-    ///   In the paper, they use `m = 100`, but you can experiment with different values to see how
-    ///   it affects the performance of the algorithm.
     #[must_use]
     pub fn mirostat(n_vocab: i32, seed: u32, tau: f32, eta: f32, m: i32) -> Self {
         let sampler = unsafe {
@@ -660,16 +472,6 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Mirostat 2.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
-    ///
-    /// # Parameters:
-    /// - ``seed``: Seed to initialize random generation with.
-    /// - ``tau``: The target cross-entropy (or surprise) value you want to achieve for the
-    ///   generated text. A higher value corresponds to more surprising or less predictable text,
-    ///   while a lower value corresponds to less surprising or more predictable text.
-    /// - ``eta``: The learning rate used to update `mu` based on the error between the target and
-    ///   observed surprisal of the sampled word. A larger learning rate will cause `mu` to be
-    ///   updated more quickly, while a smaller learning rate will result in slower updates.
     #[must_use]
     pub fn mirostat_v2(seed: u32, tau: f32, eta: f32) -> Self {
         let sampler =
@@ -677,62 +479,21 @@ impl LlamaSampler {
         Self { sampler }
     }
 
-    /// Selects a token at random based on each token's probabilities
     #[must_use]
     pub fn dist(seed: u32) -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_dist(seed) };
         Self { sampler }
     }
 
-    /// Selects the most likely token
-    ///
-    /// # Example:
-    /// ```rust
-    /// use llama_cpp_bindings::token::{
-    ///    LlamaToken,
-    ///    data::LlamaTokenData,
-    ///    data_array::LlamaTokenDataArray
-    /// };
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    ///
-    /// let mut data_array = LlamaTokenDataArray::new(vec![
-    ///     LlamaTokenData::new(LlamaToken(0), 0., 0.),
-    ///     LlamaTokenData::new(LlamaToken(1), 1., 0.),
-    /// ], false);
-    ///
-    /// data_array.apply_sampler(&mut LlamaSampler::greedy());
-    ///
-    /// assert_eq!(data_array.data.len(), 2);
-    /// assert_eq!(data_array.selected_token(), Some(LlamaToken(1)));
-    /// ```
     #[must_use]
     pub fn greedy() -> Self {
         let sampler = unsafe { llama_cpp_bindings_sys::llama_sampler_init_greedy() };
         Self { sampler }
     }
 
-    /// Creates a sampler that applies bias values to specific tokens during sampling.
-    ///
-    /// # Parameters
-    /// - ``n_vocab``: [`LlamaModel::n_vocab`]
-    /// - ``biases``: Slice of [`LlamaLogitBias`] values specifying token-bias pairs
-    ///
     /// # Errors
     /// Returns [`SamplingError::IntegerOverflow`] if `biases.len()` exceeds `i32::MAX`.
     ///
-    /// # Example
-    /// ```rust
-    /// use llama_cpp_bindings::token::{LlamaToken, logit_bias::LlamaLogitBias};
-    /// use llama_cpp_bindings::sampling::LlamaSampler;
-    ///
-    /// let biases = vec![
-    ///     LlamaLogitBias::new(LlamaToken(1), 1.5),  // Increase probability of token 1
-    ///     LlamaLogitBias::new(LlamaToken(2), -1.0), // Decrease probability of token 2
-    /// ];
-    ///
-    /// // Assuming vocab_size of 32000
-    /// let sampler = LlamaSampler::logit_bias(32000, &biases).unwrap();
-    /// ```
     pub fn logit_bias(n_vocab: i32, biases: &[LlamaLogitBias]) -> Result<Self, SamplingError> {
         let bias_count = checked_usize_as_i32_sampling(biases.len())?;
         let data = biases

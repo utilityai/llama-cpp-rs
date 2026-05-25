@@ -1,5 +1,3 @@
-//! utilities for working with session files
-
 use crate::context::LlamaContext;
 use crate::context::llama_state_seq_flags::LlamaStateSeqFlags;
 use crate::context::load_seq_state_error::LoadSeqStateError;
@@ -49,14 +47,6 @@ fn process_seq_load_result(
 }
 
 impl LlamaContext<'_> {
-    /// Save the full state to a file.
-    ///
-    /// # Parameters
-    ///
-    /// * `path_session` - The file to save to.
-    /// * `tokens` - The tokens to associate the state with. This should be a prefix of a sequence
-    ///   of tokens that the context has processed, so that the relevant KV caches are already filled.
-    ///
     /// # Errors
     ///
     /// Fails if the path is not a valid utf8 or llama.cpp fails to save the state file.
@@ -88,18 +78,6 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Load a state file into the current context.
-    ///
-    /// You still need to pass the returned tokens to the context for inference to work. What this
-    /// function buys you is that the KV caches are already filled with the relevant data.
-    ///
-    /// # Parameters
-    ///
-    /// * `path_session` - The file to load from. It must be a state file from a compatible context,
-    ///   otherwise the function will error.
-    /// * `max_tokens` - The maximum token length of the loaded state. If the state was saved with a
-    ///   longer length, the function will error.
-    ///
     /// # Errors
     ///
     /// Fails if the path is not a valid utf8 or llama.cpp fails to load the state file.
@@ -134,24 +112,10 @@ impl LlamaContext<'_> {
         process_session_load_result(success, n_out, max_tokens, tokens)
     }
 
-    /// Save state for a single sequence to a file.
-    ///
-    /// This enables saving state for individual sequences, which is useful for multi-sequence
-    /// inference scenarios.
-    ///
-    /// # Parameters
-    ///
-    /// * `filepath` - The file to save to.
-    /// * `seq_id` - The sequence ID whose state to save.
-    /// * `tokens` - The tokens to associate with the saved state.
-    ///
     /// # Errors
     ///
     /// Fails if the path is not a valid utf8 or llama.cpp fails to save the sequence state file.
     ///
-    /// # Returns
-    ///
-    /// The number of bytes written on success.
     pub fn state_seq_save_file(
         &self,
         filepath: impl AsRef<Path>,
@@ -184,24 +148,10 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Load state for a single sequence from a file.
-    ///
-    /// This enables loading state for individual sequences, which is useful for multi-sequence
-    /// inference scenarios.
-    ///
-    /// # Parameters
-    ///
-    /// * `filepath` - The file to load from.
-    /// * `dest_seq_id` - The destination sequence ID to load the state into.
-    /// * `max_tokens` - The maximum number of tokens to read.
-    ///
     /// # Errors
     ///
     /// Fails if the path is not a valid utf8 or llama.cpp fails to load the sequence state file.
     ///
-    /// # Returns
-    ///
-    /// A tuple of `(tokens, bytes_read)` on success.
     pub fn state_seq_load_file(
         &mut self,
         filepath: impl AsRef<Path>,
@@ -236,19 +186,11 @@ impl LlamaContext<'_> {
         process_seq_load_result(bytes_read, n_out, max_tokens, tokens)
     }
 
-    /// Returns the maximum size in bytes of the state (rng, logits, embedding
-    /// and `kv_cache`) - will often be smaller after compacting tokens
     #[must_use]
     pub fn get_state_size(&self) -> usize {
         unsafe { llama_cpp_bindings_sys::llama_state_get_size(self.context.as_ptr()) }
     }
 
-    /// Copies the state to the specified destination buffer.
-    ///
-    /// Use [`get_state_size`](Self::get_state_size) to determine the required buffer size.
-    ///
-    /// Returns the number of bytes copied.
-    ///
     /// # Safety
     ///
     /// The `dest` buffer must be large enough to hold the complete state data.
@@ -262,10 +204,6 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Set the state reading from the specified buffer.
-    ///
-    /// Returns the number of bytes read.
-    ///
     /// # Safety
     ///
     /// The `src` buffer must contain data previously obtained from [`copy_state_data`](Self::copy_state_data)
@@ -281,10 +219,6 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Get the size of the state data for a specific sequence, with extended flags.
-    ///
-    /// Useful for hybrid/recurrent models where partial state (e.g., only SSM state)
-    /// may be saved or restored.
     #[must_use]
     pub fn state_seq_get_size_ext(&self, seq_id: i32, flags: &LlamaStateSeqFlags) -> usize {
         unsafe {
@@ -296,13 +230,6 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Copy state data for a specific sequence into `dest`, with extended flags.
-    ///
-    /// Use [`state_seq_get_size_ext`](Self::state_seq_get_size_ext) to determine the required
-    /// buffer size before calling this method.
-    ///
-    /// Returns the number of bytes written.
-    ///
     /// # Safety
     ///
     /// The `dest` buffer must be large enough to hold the complete state data.
@@ -323,10 +250,6 @@ impl LlamaContext<'_> {
         }
     }
 
-    /// Restore state data for a specific sequence from `src`, with extended flags.
-    ///
-    /// Returns the number of bytes read.
-    ///
     /// # Safety
     ///
     /// The `src` buffer must contain data previously obtained from

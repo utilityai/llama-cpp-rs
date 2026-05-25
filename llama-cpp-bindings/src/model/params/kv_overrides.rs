@@ -1,18 +1,14 @@
-//! Key-value overrides for a model.
-
 use std::fmt::Debug;
 
 use crate::model::params::LlamaModelParams;
 use crate::model::params::kv_override_value_iterator::KvOverrideValueIterator;
 
-/// A struct implementing [`IntoIterator`] over the key-value overrides for a model.
 #[derive(Debug)]
 pub struct KvOverrides<'model_params> {
     model_params: &'model_params LlamaModelParams,
 }
 
 impl KvOverrides<'_> {
-    /// Creates a new `KvOverrides` view over the given model parameters.
     #[must_use]
     pub const fn new(model_params: &LlamaModelParams) -> KvOverrides<'_> {
         KvOverrides { model_params }

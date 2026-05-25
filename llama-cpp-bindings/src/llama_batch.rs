@@ -1,5 +1,3 @@
-//! Safe wrapper around `llama_batch`.
-
 use crate::batch_add_error::BatchAddError;
 use crate::sampled_token::SampledToken;
 use crate::token::LlamaToken;
@@ -53,32 +51,20 @@ fn checked_usize_as_llama_pos(value: usize, description: &str) -> Result<llama_p
     })
 }
 
-/// A safe wrapper around `llama_batch`.
-///
-/// `PartialEq` is intentionally not implemented because the underlying `llama_batch`
-/// from the C API contains raw pointers whose address comparison would be meaningless.
 #[derive(Debug)]
 pub struct LlamaBatch<'tokens> {
-    /// The number of tokens the batch was allocated with. they are safe to write to - but not necessarily read from as they are not necessarily initialized
     allocated: usize,
-    /// The logits that are initialized. Used by [`LlamaContext`] to ensure that only initialized logits are accessed.
     pub initialized_logits: Vec<i32>,
-    /// The underlying `llama_batch` from the C API.
     pub llama_batch: llama_batch,
     phantom: PhantomData<&'tokens [LlamaToken]>,
 }
 
 impl<'tokens> LlamaBatch<'tokens> {
-    /// Clear the batch. This does not free the memory associated with the batch, but it does reset
-    /// the number of tokens to 0.
     pub fn clear(&mut self) {
         self.llama_batch.n_tokens = 0;
         self.initialized_logits.clear();
     }
 
-    /// add a token to the batch for sequences `seq_ids` at position `pos`. If `logits` is true, the
-    /// token will be initialized and can be read from after the next decode.
-    ///
     /// # Errors
     ///
     /// Returns an error if there is insufficient space in the buffer or if integer conversions fail.
@@ -126,11 +112,6 @@ impl<'tokens> LlamaBatch<'tokens> {
         Ok(())
     }
 
-    /// Add a sequence of tokens to the batch for the given sequence id. If `logits_all` is true, the
-    /// tokens will be initialized and can be read from after the next decode.
-    ///
-    /// Either way the last token in the sequence will have its logits set to `true`.
-    ///
     /// # Errors
     ///
     /// Returns an error if there is insufficient space in the buffer or if integer conversions fail.
@@ -154,13 +135,6 @@ impl<'tokens> LlamaBatch<'tokens> {
         Ok(())
     }
 
-    /// Create a new `LlamaBatch` that can contain up to `n_tokens` tokens.
-    ///
-    /// # Arguments
-    ///
-    /// - `n_tokens`: the maximum number of tokens that can be added to the batch
-    /// - `n_seq_max`: the maximum number of sequences that can be added to the batch (generally 1 unless you know what you are doing)
-    ///
     /// # Errors
     ///
     /// Returns an error if `n_tokens` exceeds `i32::MAX`.
@@ -176,11 +150,6 @@ impl<'tokens> LlamaBatch<'tokens> {
         })
     }
 
-    /// ``llama_batch_get_one``
-    /// Return batch for single sequence of tokens
-    ///
-    /// NOTE: this is a helper function to facilitate transition to the new batch API
-    ///
     /// # Errors
     ///
     /// Returns an error if the provided token buffer is empty or if integer conversions fail.
@@ -210,7 +179,6 @@ impl<'tokens> LlamaBatch<'tokens> {
         })
     }
 
-    /// Returns the number of tokens in the batch.
     #[must_use]
     pub const fn n_tokens(&self) -> i32 {
         self.llama_batch.n_tokens
@@ -218,17 +186,6 @@ impl<'tokens> LlamaBatch<'tokens> {
 }
 
 impl Drop for LlamaBatch<'_> {
-    /// Drops the `LlamaBatch`.
-    ///
-    /// ```
-    /// # use llama_cpp_bindings::llama_batch::LlamaBatch;
-    /// # use std::error::Error;
-    /// # fn main() -> Result<(), Box<dyn Error>> {
-    /// let batch = LlamaBatch::new(512, 1)?;
-    /// // frees the memory associated with the batch. (allocated by llama.cpp)
-    /// drop(batch);
-    /// # Ok(())
-    /// # }
     fn drop(&mut self) {
         unsafe {
             if self.allocated > 0 {

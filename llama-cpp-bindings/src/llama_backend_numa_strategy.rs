@@ -1,17 +1,11 @@
 use crate::invalid_numa_strategy::InvalidNumaStrategy;
 
-/// NUMA (Non-Uniform Memory Access) thread affinity strategy for llama.cpp.
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum NumaStrategy {
-    /// NUMA-aware scheduling is disabled. Threads are not pinned to specific nodes.
     Disabled,
-    /// Distributes threads across NUMA nodes in a round-robin fashion.
     Distribute,
-    /// Pins all threads to the current NUMA node to avoid cross-node memory access.
     Isolate,
-    /// Respects the CPU affinity mask set externally by the `numactl` command.
     Numactl,
-    /// Mirrors memory across NUMA nodes. Currently a no-op in llama.cpp.
     Mirror,
 }
 

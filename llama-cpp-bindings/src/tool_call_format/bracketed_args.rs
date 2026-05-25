@@ -208,9 +208,6 @@ mod tests {
 
     #[test]
     fn rejects_truncated_json_arguments_with_unterminated_failure() {
-        // serde_json's iterator returns None when the deserializer has no token to start from.
-        // Constructing such an input requires whitespace-only input after the separator — the
-        // iterator finds nothing parseable and yields None, surfacing the Unterminated arm.
         let failure = parse(
             "[TOOL_CALLS]get_weather[ARGS]   ",
             &mistral3_markers(),
@@ -226,8 +223,6 @@ mod tests {
 
     #[test]
     fn returns_empty_vec_for_separator_with_only_whitespace_name() {
-        // `get_weather` is replaced with whitespace before the separator, so `name.trim()` is
-        // empty and the parser returns `ParseStep::Done` — covers the empty-name early return.
         let parsed = parse(
             "[TOOL_CALLS]   [ARGS]{\"x\":1}",
             &mistral3_markers(),
@@ -240,8 +235,6 @@ mod tests {
 
     #[test]
     fn returns_empty_vec_when_shape_has_empty_separator() {
-        // When `name_args_separator` is empty, `parse` short-circuits to `Vec::new()` —
-        // covers the early-return guard.
         let mut shape = mistral3_shape();
         shape.name_args_separator.clear();
         let parsed = parse(

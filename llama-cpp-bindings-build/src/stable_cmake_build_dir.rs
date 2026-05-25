@@ -17,13 +17,6 @@ const CMAKE_AFFECTING_FEATURES: &[(&str, bool)] = &[
     ("static-stdcxx", cfg!(feature = "static-stdcxx")),
 ];
 
-/// Compute a stable, persistent cmake build directory under the workspace
-/// `target/` tree, keyed only by inputs that materially change cmake compile
-/// commands. Toggling features that don't affect cmake (e.g. `mtmd`, `llguidance`)
-/// returns the same path, allowing cmake's incremental build (and ccache) to
-/// reuse all prior artifacts — including `nvcc`-built CUDA kernels.
-///
-/// `LLAMA_CMAKE_BUILD_DIR_OVERRIDE` overrides the path entirely when set.
 pub fn stable_cmake_build_dir(
     target_dir: &Path,
     target_triple: &str,
