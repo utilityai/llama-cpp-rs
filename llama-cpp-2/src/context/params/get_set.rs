@@ -211,14 +211,14 @@ impl LlamaContextParams {
     /// models that support it.
     #[must_use]
     pub fn with_ctx_type(mut self, ctx_type: LlamaContextType) -> Self {
-        self.context_params.ctx_type = u32::from(ctx_type);
+        self.context_params.ctx_type = ctx_type as _;
         self
     }
 
     /// Get the context type.
     #[must_use]
     pub fn ctx_type(&self) -> LlamaContextType {
-        LlamaContextType::from(self.context_params.ctx_type)
+        LlamaContextType::from(self.context_params.ctx_type as i32)
     }
 
     /// Set the type of rope scaling

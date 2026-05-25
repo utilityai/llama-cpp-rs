@@ -141,7 +141,25 @@ impl From<u32> for LlamaContextType {
     }
 }
 
+impl From<i32> for LlamaContextType {
+    fn from(value: i32) -> Self {
+        match value {
+            1 => Self::Mtp,
+            _ => Self::Default,
+        }
+    }
+}
+
 impl From<LlamaContextType> for u32 {
+    fn from(value: LlamaContextType) -> Self {
+        match value {
+            LlamaContextType::Default => 0,
+            LlamaContextType::Mtp => 1,
+        }
+    }
+}
+
+impl From<LlamaContextType> for i32 {
     fn from(value: LlamaContextType) -> Self {
         match value {
             LlamaContextType::Default => 0,
