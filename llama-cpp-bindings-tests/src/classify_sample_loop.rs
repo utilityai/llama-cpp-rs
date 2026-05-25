@@ -115,3 +115,30 @@ fn record_outcome(ingest: &IngestOutcome, outcome: &mut ClassifySampleLoopOutcom
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use llama_cpp_bindings::ingest_outcome::IngestOutcome;
+    use llama_cpp_bindings::sampled_token::SampledToken;
+    use llama_cpp_bindings::token::LlamaToken;
+
+    use super::ClassifySampleLoopOutcome;
+    use super::record_outcome;
+
+    #[test]
+    fn record_outcome_tool_call_token() {
+        let ingest = IngestOutcome {
+            sampled_token: SampledToken::ToolCall(LlamaToken(42)),
+            visible_piece: String::new(),
+            raw_piece: String::new(),
+        };
+        let mut outcome = ClassifySampleLoopOutcome::default();
+
+        record_outcome(&ingest, &mut outcome, false);
+
+        assert_eq!(outcome.observed_tool_call, 1);
+        assert_eq!(outcome.observed_content, 0);
+        assert_eq!(outcome.observed_reasoning, 0);
+        assert_eq!(outcome.observed_undeterminable, 0);
+    }
+}

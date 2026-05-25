@@ -11,6 +11,7 @@ pub mod context_params;
 pub mod download_model;
 pub mod execution_phase;
 pub mod execution_plan;
+pub mod fixtures_dir;
 pub mod harness_arguments_error;
 pub mod llama_fixture;
 pub mod llama_test_fn;
