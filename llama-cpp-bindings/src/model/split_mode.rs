@@ -1,9 +1,10 @@
 use crate::model::llama_split_mode_parse_error::LlamaSplitModeParseError;
 
 #[repr(i8)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub enum LlamaSplitMode {
     None = LLAMA_SPLIT_MODE_NONE,
+    #[default]
     Layer = LLAMA_SPLIT_MODE_LAYER,
     Row = LLAMA_SPLIT_MODE_ROW,
     Tensor = LLAMA_SPLIT_MODE_TENSOR,
@@ -102,12 +103,6 @@ impl From<LlamaSplitMode> for u32 {
             LlamaSplitMode::Row => LLAMA_SPLIT_MODE_ROW as Self,
             LlamaSplitMode::Tensor => LLAMA_SPLIT_MODE_TENSOR as Self,
         }
-    }
-}
-
-impl Default for LlamaSplitMode {
-    fn default() -> Self {
-        Self::Layer
     }
 }
 
