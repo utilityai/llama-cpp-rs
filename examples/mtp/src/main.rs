@@ -155,7 +155,8 @@ fn main() -> Result<()> {
         .with_context(|| "failed to enable MTP draft pre-norm embeddings")?;
 
     let eos = model.token_eos();
-    let n_embd = usize::try_from(model.n_embd()).with_context(|| "n_embd does not fit into usize")?;
+    let n_embd =
+        usize::try_from(model.n_embd()).with_context(|| "n_embd does not fit into usize")?;
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut generated = 0usize;
 
@@ -216,9 +217,7 @@ fn ensure_model_has_mtp(path: &Path) -> Result<()> {
     let nextn_idx = gguf.find_key(&nextn_key);
 
     if nextn_idx < 0 {
-        bail!(
-            "model does not advertise bundled MTP layers; expected GGUF key `{nextn_key}`"
-        );
+        bail!("model does not advertise bundled MTP layers; expected GGUF key `{nextn_key}`");
     }
 
     if gguf.val_u32(nextn_idx) == 0 {
@@ -233,7 +232,8 @@ fn prefill_target(ctx: &mut LlamaContext, tokens: &[LlamaToken]) -> Result<()> {
     batch
         .add_sequence(tokens, 0, true)
         .map_err(anyhow::Error::from)?;
-    ctx.decode(&mut batch).with_context(|| "target prefill failed")?;
+    ctx.decode(&mut batch)
+        .with_context(|| "target prefill failed")?;
     Ok(())
 }
 
@@ -250,8 +250,7 @@ fn prefill_mtp_context(
         let embd = if i == 0 {
             zero.as_slice()
         } else {
-            target
-                .embeddings_pre_norm_ith(i32::try_from(i - 1).expect("index fits into i32"))?
+            target.embeddings_pre_norm_ith(i32::try_from(i - 1).expect("index fits into i32"))?
         };
         let logits = i + 1 == tokens.len();
         batch
@@ -319,15 +318,7 @@ fn accept_tokens(
 ) -> Result<Vec<LlamaToken>> {
     let first = greedy_token(target.get_logits());
     if drafted.first().copied() != Some(first) {
-        rollback_and_advance(
-            target,
-            draft,
-            prompt_len,
-            0,
-            first,
-            n_embd,
-            prefix_hidden,
-        )?;
+        rollback_and_advance(target, draft, prompt_len, 0, first, n_embd, prefix_hidden)?;
         return Ok(vec![first]);
     }
 
@@ -392,8 +383,8 @@ fn rollback_and_advance(
     n_embd: usize,
     extra_hidden: &[f32],
 ) -> Result<()> {
-    let rollback_pos =
-        u32::try_from(prompt_len + matched).with_context(|| "rollback position does not fit into u32")?;
+    let rollback_pos = u32::try_from(prompt_len + matched)
+        .with_context(|| "rollback position does not fit into u32")?;
 
     let target_rolled_back = target
         .clear_kv_cache_seq(Some(0), Some(rollback_pos), None)
@@ -409,8 +400,8 @@ fn rollback_and_advance(
         bail!("MTP draft KV rollback failed at position {rollback_pos}");
     }
 
-    let extra_pos =
-        i32::try_from(prompt_len + matched).with_context(|| "extra token position does not fit into i32")?;
+    let extra_pos = i32::try_from(prompt_len + matched)
+        .with_context(|| "extra token position does not fit into i32")?;
 
     let mut target_batch = LlamaBatch::new(1, 1);
     target_batch

@@ -367,9 +367,7 @@ impl LlamaModelParams {
 
         match status {
             llama_cpp_sys_2::LLAMA_RS_PARAMS_FIT_STATUS_SUCCESS => {}
-            llama_cpp_sys_2::LLAMA_RS_PARAMS_FIT_STATUS_FAILURE => {
-                return Err(FitError::Failure)
-            }
+            llama_cpp_sys_2::LLAMA_RS_PARAMS_FIT_STATUS_FAILURE => return Err(FitError::Failure),
             _ => return Err(FitError::Error),
         }
 
