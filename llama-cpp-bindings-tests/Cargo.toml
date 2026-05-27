@@ -5,6 +5,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
+autotests = false
 
 [dependencies]
 anyhow = { workspace = true }
@@ -15,39 +16,7 @@ llama-cpp-test-harness = { workspace = true }
 serde_json = { workspace = true }
 
 [[test]]
-name = "backend_initialization"
-harness = false
-
-[[test]]
-name = "chat_template_and_message_parsing"
-harness = false
-
-[[test]]
-name = "embedding_and_encoder"
-harness = false
-
-[[test]]
-name = "kv_cache_and_session"
-harness = false
-
-[[test]]
-name = "model_loading_errors"
-harness = false
-
-[[test]]
-name = "multimodal_vision"
-harness = false
-
-[[test]]
-name = "reasoning_markers_and_tool_calls"
-harness = false
-
-[[test]]
-name = "sampling_and_constrained_decoding"
-harness = false
-
-[[test]]
-name = "vocabulary_and_metadata"
+name = "main"
 harness = false
 
 [features]

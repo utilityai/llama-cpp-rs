@@ -21,7 +21,6 @@ use llama_cpp_bindings::model::LlamaLoraAdapter;
 use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -2749,4 +2748,3 @@ fn state_seq_get_data_ext_and_set_data_ext_round_trip(fixture: &LlamaFixture<'_>
 
     Ok(())
 }
-llama_tests_main!();

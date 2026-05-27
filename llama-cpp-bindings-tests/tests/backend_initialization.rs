@@ -6,7 +6,6 @@
 use anyhow::Result;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
@@ -26,5 +25,3 @@ fn void_logs_suppresses_output(fixture: &LlamaFixture<'_>) -> Result<()> {
 
     Ok(())
 }
-
-llama_tests_main!();

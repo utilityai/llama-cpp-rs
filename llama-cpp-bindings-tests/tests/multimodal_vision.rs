@@ -27,7 +27,6 @@ use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::fixtures_dir::fixtures_dir;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
@@ -1801,4 +1800,3 @@ fn qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 
     Ok(())
 }
-llama_tests_main!();
