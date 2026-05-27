@@ -27,7 +27,6 @@ use llama_cpp_bindings::token::LlamaToken;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -2433,4 +2432,3 @@ fn diagnose_tool_call_synthetic_renders_returns_a_pair_of_strings(
     let _ = right;
     Ok(())
 }
-llama_tests_main!();

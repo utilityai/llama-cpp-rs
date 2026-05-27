@@ -16,7 +16,6 @@ use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 use serde_json::Value;
 use serde_json::json;
 
@@ -2212,4 +2211,3 @@ What is 2 + 2?<|im_end|>
 
     Ok(())
 }
-llama_tests_main!();

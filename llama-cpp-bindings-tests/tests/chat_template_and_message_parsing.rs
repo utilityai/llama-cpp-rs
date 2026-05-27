@@ -10,7 +10,6 @@ use llama_cpp_bindings::ChatTemplateError;
 use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -547,5 +546,3 @@ fn parses_with_input_null_byte_returns_tools_serialization_error(
     ));
     Ok(())
 }
-
-llama_tests_main!();

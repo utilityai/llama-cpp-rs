@@ -16,7 +16,6 @@ use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
-use llama_cpp_test_harness::llama_tests_main;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input
@@ -626,5 +625,3 @@ fn approximate_tok_env_falls_back_to_eos_when_eot_unavailable(
 
     Ok(())
 }
-
-llama_tests_main!();
