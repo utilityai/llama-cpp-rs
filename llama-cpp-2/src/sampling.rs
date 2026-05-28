@@ -6,10 +6,12 @@ use std::fmt::{Debug, Formatter};
 
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+#[cfg(feature = "common")]
+use crate::status_is_ok;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
-use crate::{status_is_ok, GrammarError, SamplerAcceptError};
+use crate::{GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
@@ -41,14 +43,21 @@ impl LlamaSampler {
     /// Accepts a token from the sampler, possibly updating the internal state of certain samplers
     /// (e.g. grammar, repetition, etc.)
     pub fn accept(&mut self, token: LlamaToken) {
-        let _ = self.try_accept(token);
+        #[cfg(feature = "common")]
+        {
+            let _ = self.try_accept(token);
+        }
+        #[cfg(not(feature = "common"))]
+        unsafe {
+            llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.0);
+        }
     }
 
     /// Accepts several tokens from the sampler or context, possibly updating the internal state of
     /// certain samplers (e.g. grammar, repetition, etc.)
     pub fn accept_many(&mut self, tokens: impl IntoIterator<Item = impl Borrow<LlamaToken>>) {
         for token in tokens {
-            let _ = self.try_accept(*token.borrow());
+            self.accept(*token.borrow());
         }
     }
 
@@ -64,6 +73,7 @@ impl LlamaSampler {
     }
 
     /// Try accepting a token from the sampler. Returns an error if the sampler throws.
+    #[cfg(feature = "common")]
     pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
         let sampler_result =
             unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
@@ -286,6 +296,7 @@ impl LlamaSampler {
     }
 
     /// Grammar sampler
+    #[cfg(feature = "common")]
     #[must_use]
     pub fn grammar(
         model: &LlamaModel,
@@ -313,6 +324,7 @@ impl LlamaSampler {
     /// Lazy grammar sampler, introduced in <https://github.com/ggerganov/llama.cpp/pull/9639>
     ///
     /// This sampler enforces grammar rules only when specific trigger words or tokens are encountered.
+    #[cfg(feature = "common")]
     #[must_use]
     pub fn grammar_lazy(
         model: &LlamaModel,
@@ -352,6 +364,7 @@ impl LlamaSampler {
     /// Trigger patterns are regular expressions matched from the start of the
     /// generation output. The grammar sampler will be fed content starting from
     /// the first match group.
+    #[cfg(feature = "common")]
     #[must_use]
     pub fn grammar_lazy_patterns(
         model: &LlamaModel,

@@ -25,7 +25,13 @@ serde_json = "1.0"
 tracing-subscriber = { workspace = true }
 
 [features]
-default = ["openmp", "android-shared-stdcxx"]
+default = ["openmp", "android-shared-stdcxx", "common"]
+# Enable the OpenAI-compatible / chat-template / JSON-schema-to-grammar APIs.
+# These are backed by `llama.cpp`'s `common/` static library; disabling drops
+# `libcommon.a` (~14 MB) plus the `wrapper_common.cpp` / `wrapper_oai.cpp`
+# bindings (~10 MB combined) from the link line. Enabled by default for
+# backwards compatibility.
+common = ["llama-cpp-sys-2/common"]
 cuda = ["llama-cpp-sys-2/cuda"]
 cuda-no-vmm = ["cuda", "llama-cpp-sys-2/cuda-no-vmm"]
 metal = ["llama-cpp-sys-2/metal"]
@@ -62,14 +68,17 @@ path = "../examples/usage.rs"
 [[example]]
 name = "tools"
 path = "../examples/tools.rs"
+required-features = ["common"]
 
 [[example]]
 name = "tools_reasoning"
 path = "../examples/tools_reasoning.rs"
+required-features = ["common"]
 
 [[example]]
 name = "openai_stream"
 path = "../examples/openai_stream.rs"
+required-features = ["common"]
 
 [[example]]
 name = "llguidance"

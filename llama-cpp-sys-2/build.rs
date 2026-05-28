@@ -278,9 +278,17 @@ fn main() {
         .allowlist_type("gguf_.*")
         .allowlist_function("llama_.*")
         .allowlist_type("llama_.*")
-        .allowlist_function("llama_rs_.*")
-        .allowlist_type("llama_rs_.*")
         .prepend_enum_name(false);
+
+    // The `llama_rs_*` symbols are emitted by `wrapper_common.cpp` /
+    // `wrapper_oai.cpp`, which are only compiled (and only have their headers
+    // included from `wrapper.h`) when the `common` feature is enabled.
+    if cfg!(feature = "common") {
+        bindings_builder = bindings_builder
+            .clang_arg("-DLLAMA_RS_BUILD_COMMON")
+            .allowlist_function("llama_rs_.*")
+            .allowlist_type("llama_rs_.*");
+    }
 
     // Configure mtmd feature if enabled
     if cfg!(feature = "mtmd") {
@@ -496,30 +504,32 @@ fn main() {
 
     debug_log!("Bindings Created");
 
-    let mut common_wrapper_build = cc::Build::new();
-    common_wrapper_build
-        .cpp(true)
-        .file("wrapper_common.cpp")
-        .file("wrapper_oai.cpp")
-        .include(&llama_src)
-        .include(llama_src.join("common"))
-        .include(llama_src.join("include"))
-        .include(llama_src.join("ggml/include"))
-        .include(llama_src.join("vendor"))
-        .flag_if_supported("-std=c++17")
-        .pic(true);
+    if cfg!(feature = "common") {
+        let mut common_wrapper_build = cc::Build::new();
+        common_wrapper_build
+            .cpp(true)
+            .file("wrapper_common.cpp")
+            .file("wrapper_oai.cpp")
+            .include(&llama_src)
+            .include(llama_src.join("common"))
+            .include(llama_src.join("include"))
+            .include(llama_src.join("ggml/include"))
+            .include(llama_src.join("vendor"))
+            .flag_if_supported("-std=c++17")
+            .pic(true);
 
-    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-        common_wrapper_build.flag("/std:c++17");
+        if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+            common_wrapper_build.flag("/std:c++17");
+        }
+
+        // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
+        // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
+        if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
+            common_wrapper_build.cpp_link_stdlib(None);
+        }
+
+        common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
     }
-
-    // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
-    // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
-    if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
-        common_wrapper_build.cpp_link_stdlib(None);
-    }
-
-    common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
 
     // Build with Cmake
 
@@ -532,7 +542,14 @@ fn main() {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
-    config.define("LLAMA_BUILD_COMMON", "ON");
+    config.define(
+        "LLAMA_BUILD_COMMON",
+        if cfg!(feature = "common") {
+            "ON"
+        } else {
+            "OFF"
+        },
+    );
     config.define("LLAMA_CURL", "OFF");
 
     // Pass CMAKE_ environment variables down to CMake
@@ -1015,7 +1032,7 @@ fn main() {
     assert_ne!(llama_libs.len(), 0);
 
     let common_lib_dir = out_dir.join("build").join("common");
-    if common_lib_dir.is_dir() {
+    if cfg!(feature = "common") && common_lib_dir.is_dir() {
         println!(
             "cargo:rustc-link-search=native={}",
             common_lib_dir.display()
