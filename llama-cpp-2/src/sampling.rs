@@ -6,11 +6,11 @@ use std::fmt::{Debug, Formatter};
 
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+#[cfg(feature = "common")]
+use crate::status_is_ok;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
-#[cfg(feature = "common")]
-use crate::status_is_ok;
 use crate::{GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.

@@ -544,7 +544,11 @@ fn main() {
     config.define("LLAMA_BUILD_TOOLS", "OFF");
     config.define(
         "LLAMA_BUILD_COMMON",
-        if cfg!(feature = "common") { "ON" } else { "OFF" },
+        if cfg!(feature = "common") {
+            "ON"
+        } else {
+            "OFF"
+        },
     );
     config.define("LLAMA_CURL", "OFF");
 
