@@ -35,21 +35,39 @@ git clone --recursive https://github.com/utilityai/llama-cpp-rs
 cd llama-cpp-rs
 ```
 
-Run the simple example (add `--features cuda` if you have a cuda gpu)
+Run the simple example (add the hardware dependent features like `--features cuda` or `--features vulkan` if you have a supported gpu)
 
 ```bash
 cargo run --release --bin simple -- --prompt "The way to kill a linux process is" hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
 ```
 
-Run the tools example (add `--features cuda` if you have a cuda gpu)
+Run the `tools` example (again, add `--features cuda` or `--features vulkan` if you have a supported gpu)
 
 ```bash
-cargo run --release --example tools -- hf-model TheBloke/Llama-2-7B-GGUF llama-2-7b.Q4_K_M.gguf
+cargo run --release --example tools -- hf-model unsloth/Qwen3.5-0.8B-GGUF Qwen3.5-0.8B-Q4_K_M.gguf
 ```
 
-The tool-calling path now exposes the raw llama.cpp bindings needed to pass tool JSON into chat templates, retrieve the generated grammar, and parse OpenAI-compatible JSON responses from Rust.
+This will use the `llama.cpp` bindings to pass tool JSON into the appropriate chat template provided in the model's metadata to produce a response that contains the syntax for a tool call:
+```
+<tool_call>
+<function=get_weather>
+<parameter=city>
+Paris
+</parameter>
+<parameter=unit>
+c
+</parameter>
+</function>
+</tool_call>
+```
 
-Run the OpenAI Style Completions Server (add `--features cuda` if you have a cuda gpu)
+The tool-calling path also exposes the `llama.cpp` bindings needed to retrieve the generated grammar, and parse responses in an OpenAI-compatible way from Rust. The `tools_reasoning` example illustrates this:
+
+```bash
+cargo run --release --example tools_reasoning -- --continuous hf-model unsloth/Qwen3.5-0.8B-GGUF Qwen3.5-0.8B-Q4_K_M.gguf
+```
+
+Run the OpenAI Style Completions Server (add `--features cuda` or so if you have a supported gpu)
 
 ```bash
 cargo run -p openai-server -- hf-model QuantFactory/Meta-Llama-3-8B-Instruct-GGUF Meta-Llama-3-8B-Instruct.Q8_0.gguf
