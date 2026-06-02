@@ -40,6 +40,7 @@ openmp = ["llama-cpp-sys-2/openmp"]
 # enabled. Useful for self-contained downstream binaries.
 static-openmp = ["llama-cpp-sys-2/static-openmp"]
 rocm = ["llama-cpp-sys-2/rocm"]
+mkl = ["llama-cpp-sys-2/mkl"]
 sampler = []
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-sys-2/shared-stdcxx"]
