@@ -6,6 +6,7 @@
 #include <string>
 #include <stdint.h>
 
+#include "llama.cpp/common/fit.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/include/llama.h"
 #include "wrapper_utils.h"
@@ -164,5 +165,38 @@ extern "C" llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sample
         return LLAMA_RS_STATUS_EXCEPTION;
     } catch (...) {
         return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
+extern "C" int llama_rs_params_fit(
+    const char * path_model,
+    struct llama_model_params * mparams,
+    struct llama_context_params * cparams,
+    float * tensor_split,
+    struct llama_model_tensor_buft_override * tensor_buft_overrides,
+    size_t * margins,
+    uint32_t n_ctx_min,
+    enum ggml_log_level log_level) {
+    try {
+        return static_cast<int>(common_fit_params(
+            path_model,
+            mparams,
+            cparams,
+            tensor_split,
+            tensor_buft_overrides,
+            margins,
+            n_ctx_min,
+            log_level));
+    } catch (...) {
+        return COMMON_PARAMS_FIT_STATUS_ERROR;
+    }
+}
+
+extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx) {
+    try {
+        common_memory_breakdown_print(ctx);
+    } catch (...) {
+        // Swallow exceptions to preserve the noexcept C-ABI boundary; this is a
+        // best-effort diagnostic print.
     }
 }

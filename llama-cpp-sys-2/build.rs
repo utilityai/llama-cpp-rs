@@ -542,6 +542,7 @@ fn main() {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
+    config.define("LLAMA_BUILD_APP", "OFF");
     config.define(
         "LLAMA_BUILD_COMMON",
         if cfg!(feature = "common") {
@@ -1044,7 +1045,12 @@ fn main() {
                 common_profile_dir.display()
             );
         }
-        println!("cargo:rustc-link-lib=static=common");
+        // Upstream renamed the `common` static library target to `llama-common`
+        // and split out `llama-common-base` (which provides the build-info
+        // symbols that `llama-common` depends on). Link both, with the
+        // referencing library first for the benefit of single-pass linkers.
+        println!("cargo:rustc-link-lib=static=llama-common");
+        println!("cargo:rustc-link-lib=static=llama-common-base");
     }
 
     if cfg!(feature = "system-ggml") {

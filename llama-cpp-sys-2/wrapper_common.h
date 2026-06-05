@@ -69,6 +69,23 @@ llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sampler, llama_to
 void llama_rs_chat_template_result_free(struct llama_rs_chat_template_result * result);
 void llama_rs_string_free(char * ptr);
 
+// Re-exports of llama.cpp `common/fit.h` helpers that moved out of the core C
+// API. Returns the underlying `common_params_fit_status` value (0 = success,
+// 1 = no allocation fits available memory, anything else = hard error).
+// `tensor_split` needs at least `llama_max_devices()` elements and
+// `tensor_buft_overrides` at least `llama_max_tensor_buft_overrides()` elements.
+int llama_rs_params_fit(
+    const char * path_model,
+    struct llama_model_params * mparams,
+    struct llama_context_params * cparams,
+    float * tensor_split,
+    struct llama_model_tensor_buft_override * tensor_buft_overrides,
+    size_t * margins,
+    uint32_t n_ctx_min,
+    enum ggml_log_level log_level);
+
+void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
+
 #ifdef __cplusplus
 }
 #endif
