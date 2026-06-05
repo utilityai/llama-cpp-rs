@@ -70,10 +70,7 @@ void llama_rs_chat_template_result_free(struct llama_rs_chat_template_result * r
 void llama_rs_string_free(char * ptr);
 
 // Re-exports of llama.cpp `common/fit.h` helpers that moved out of the core C
-// API. Returns the underlying `common_params_fit_status` value (0 = success,
-// 1 = no allocation fits available memory, anything else = hard error).
-// `tensor_split` needs at least `llama_max_devices()` elements and
-// `tensor_buft_overrides` at least `llama_max_tensor_buft_overrides()` elements.
+// API.
 int llama_rs_params_fit(
     const char * path_model,
     struct llama_model_params * mparams,
