@@ -33,8 +33,6 @@ mod log;
 pub mod model;
 #[cfg(feature = "mtmd")]
 pub mod mtmd;
-#[cfg(feature = "common")]
-pub mod openai;
 pub mod sampling;
 pub mod timing;
 pub mod token;
@@ -402,28 +400,6 @@ pub enum ApplyChatTemplateError {
     #[error("{0}")]
     FromUtf8Error(#[from] FromUtf8Error),
     /// llama.cpp returned a null pointer for the template result.
-    #[error("null result from llama.cpp")]
-    NullResult,
-    /// llama.cpp returned an error code.
-    #[error("ffi error {0}")]
-    FfiError(i32),
-    /// invalid grammar trigger data returned by llama.cpp.
-    #[cfg(feature = "common")]
-    #[error("invalid grammar trigger data")]
-    InvalidGrammarTriggerType,
-}
-
-/// Failed to parse a chat response.
-#[cfg(feature = "common")]
-#[derive(Debug, thiserror::Error)]
-pub enum ChatParseError {
-    /// the string contained a null byte and thus could not be converted to a c string.
-    #[error("{0}")]
-    NulError(#[from] NulError),
-    /// the string could not be converted to utf8.
-    #[error("{0}")]
-    Utf8Error(#[from] FromUtf8Error),
-    /// llama.cpp returned a null pointer for the parse result.
     #[error("null result from llama.cpp")]
     NullResult,
     /// llama.cpp returned an error code.

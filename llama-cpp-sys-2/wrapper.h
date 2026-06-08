@@ -3,5 +3,4 @@
 
 #ifdef LLAMA_RS_BUILD_COMMON
 #include "wrapper_common.h"
-#include "wrapper_oai.h"
 #endif

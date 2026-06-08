@@ -7,7 +7,6 @@ members = [
   "examples/simple",
   "examples/reranker",
   "examples/mtmd",
-  "examples/server",
 ]
 
 [workspace.dependencies]
