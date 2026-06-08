@@ -63,6 +63,8 @@ impl From<llama_cpp_sys_2::mtmd_input_chunk_type> for MtmdInputChunkType {
 ///     print_timings: true,
 ///     n_threads: 4,
 ///     media_marker: CString::new(mtmd_default_marker()).unwrap(),
+///     image_min_tokens: -1,
+///     image_max_tokens: -1,
 /// };
 /// ```
 #[derive(Debug, Clone)]

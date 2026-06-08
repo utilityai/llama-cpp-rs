@@ -69,6 +69,12 @@ pub struct MtmdCliParams {
     /// Media marker. If not provided, the default marker will be used.
     #[arg(long = "marker", value_name = "TEXT")]
     pub media_marker: Option<String>,
+    /// Minimum number of tokens used to represent an image (-1 for model default).
+    #[arg(long = "image-min-tokens", value_name = "N", default_value = "-1")]
+    pub image_min_tokens: i32,
+    /// Maximum number of tokens used to represent an image (-1 for model default).
+    #[arg(long = "image-max-tokens", value_name = "N", default_value = "-1")]
+    pub image_max_tokens: i32,
 }
 
 /// State of the MTMD CLI application.
@@ -108,6 +114,8 @@ impl<'a> MtmdCliContext<'a> {
                     .unwrap_or(&llama_cpp_2::mtmd::mtmd_default_marker().to_string())
                     .clone(),
             )?,
+            image_min_tokens: params.image_min_tokens,
+            image_max_tokens: params.image_max_tokens,
         };
 
         let mtmd_ctx = MtmdContext::init_from_file(&params.mmproj_path, model, &mtmd_params)?;
