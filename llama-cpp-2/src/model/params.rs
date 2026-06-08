@@ -292,7 +292,7 @@ impl LlamaModelParams {
 impl LlamaModelParams {
     /// Automatically fit model parameters to available device memory.
     ///
-    /// Wraps llama.cpp's `llama_params_fit`, which determines optimal `n_gpu_layers`,
+    /// Wraps llama.cpp's `common_fit_params` (libcommon), which determines optimal `n_gpu_layers`,
     /// `tensor_split`, and `tensor_buft_overrides` based on available VRAM. On success
     /// the model and context params are updated in place.
     ///

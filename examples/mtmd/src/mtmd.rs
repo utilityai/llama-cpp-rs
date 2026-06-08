@@ -131,7 +131,7 @@ impl<'a> MtmdCliContext<'a> {
     /// Loads media (image or audio) from the specified file path
     /// # Errors
     pub fn load_media(&mut self, path: &str) -> Result<(), MtmdBitmapError> {
-        let bitmap = MtmdBitmap::from_file(&self.mtmd_ctx, path)?;
+        let bitmap = MtmdBitmap::from_file(&self.mtmd_ctx, path, false)?;
         self.bitmaps.push(bitmap);
         Ok(())
     }
