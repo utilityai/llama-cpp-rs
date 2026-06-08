@@ -88,6 +88,7 @@ pub enum LlamaCppError {
     #[error("JsonSchemaToGrammarError: {0}")]
     JsonSchemaToGrammarError(String),
     /// There was an error fitting model parameters to available memory.
+    #[cfg(feature = "common")]
     #[error("{0}")]
     FitError(#[from] crate::model::params::FitError),
 }

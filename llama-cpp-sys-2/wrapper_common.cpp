@@ -7,6 +7,7 @@
 #include <stdint.h>
 
 #include "llama.cpp/common/common.h"
+#include "llama.cpp/common/fit.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/include/llama.h"
 #include "wrapper_utils.h"
@@ -118,4 +119,30 @@ extern "C" llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sample
     } catch (...) {
         return LLAMA_RS_STATUS_EXCEPTION;
     }
+}
+
+// Thin pass-through to llama.cpp's common_fit_params (a C++ symbol in libcommon).
+// Returns common_params_fit_status as an int: 0 = success, 1 = failure, 2 = error.
+extern "C" int llama_rs_fit_params(
+    const char * path_model,
+    struct llama_model_params * mparams,
+    struct llama_context_params * cparams,
+    float * tensor_split,
+    struct llama_model_tensor_buft_override * tensor_buft_overrides,
+    size_t * margins,
+    uint32_t n_ctx_min,
+    enum ggml_log_level log_level) {
+    return static_cast<int>(common_fit_params(
+        path_model,
+        mparams,
+        cparams,
+        tensor_split,
+        tensor_buft_overrides,
+        margins,
+        n_ctx_min,
+        log_level));
+}
+
+extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx) {
+    common_memory_breakdown_print(ctx);
 }

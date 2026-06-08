@@ -1044,7 +1044,10 @@ fn main() {
                 common_profile_dir.display()
             );
         }
-        println!("cargo:rustc-link-lib=static=common");
+        // Newer llama.cpp renamed the common static library `common` ->
+        // `llama-common` and split base utilities into `llama-common-base`.
+        println!("cargo:rustc-link-lib=static=llama-common");
+        println!("cargo:rustc-link-lib=static=llama-common-base");
     }
 
     if cfg!(feature = "system-ggml") {

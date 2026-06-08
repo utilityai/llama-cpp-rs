@@ -45,6 +45,20 @@ struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
 
 llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sampler, llama_token token);
 
+// Fit model/context params to device memory (wraps llama.cpp's common_fit_params).
+// Returns common_params_fit_status as an int: 0 = success, 1 = failure, 2 = error.
+int llama_rs_fit_params(
+    const char * path_model,
+    struct llama_model_params * mparams,
+    struct llama_context_params * cparams,
+    float * tensor_split,
+    struct llama_model_tensor_buft_override * tensor_buft_overrides,
+    size_t * margins,
+    uint32_t n_ctx_min,
+    enum ggml_log_level log_level);
+
+void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
+
 void llama_rs_string_free(char * ptr);
 
 #ifdef __cplusplus
