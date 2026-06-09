@@ -1,7 +1,7 @@
 use std::ffi::NulError;
 use std::string::FromUtf8Error;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum JsonSchemaToGrammarError {
     #[error("schema string contains an interior NUL byte: {0}")]
     SchemaContainsNulByte(#[from] NulError),

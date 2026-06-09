@@ -6,6 +6,7 @@ members = [
   "llama-cpp-bindings-types",
   "llama-cpp-bindings",
   "llama-cpp-bindings-tests",
+  "llama-cpp-error-recorder",
   "llama-cpp-log-decoder",
   "llama-cpp-test-harness",
   "llama-cpp-test-harness-macros",
@@ -33,6 +34,7 @@ llama-cpp-bindings = { path = "llama-cpp-bindings", version = "=0.8.0" }
 llama-cpp-bindings-build = { path = "llama-cpp-bindings-build", version = "=0.8.0" }
 llama-cpp-bindings-sys = { path = "llama-cpp-bindings-sys", version = "=0.8.0" }
 llama-cpp-bindings-types = { path = "llama-cpp-bindings-types", version = "=0.8.0" }
+llama-cpp-error-recorder = { path = "llama-cpp-error-recorder", version = "=0.8.0" }
 llama-cpp-log-decoder = { path = "llama-cpp-log-decoder", version = "=0.8.0" }
 llama-cpp-test-harness = { path = "llama-cpp-test-harness", version = "=0.8.0" }
 llama-cpp-test-harness-macros = { path = "llama-cpp-test-harness-macros", version = "=0.8.0" }

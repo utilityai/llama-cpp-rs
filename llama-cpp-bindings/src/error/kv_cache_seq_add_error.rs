@@ -1,6 +1,6 @@
 use std::num::TryFromIntError;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum KvCacheSeqAddError {
     #[error("provided start position is too large for an i32")]
     P0TooLarge(#[source] TryFromIntError),

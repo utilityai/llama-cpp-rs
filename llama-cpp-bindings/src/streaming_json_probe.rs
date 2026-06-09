@@ -22,19 +22,17 @@ impl JsonProbeOutcome {
             return Self::Failed;
         }
 
-        let mut stream = serde_json::Deserializer::from_str(trimmed).into_iter::<Value>();
-        match stream.next() {
-            Some(Ok(value)) => evaluate_completed_value(&value, &trimmed[stream.byte_offset()..]),
-            Some(Err(parse_error)) => match parse_error.classify() {
+        match serde_json::from_str::<Value>(trimmed) {
+            Ok(value) => evaluate_completed_value(&value),
+            Err(parse_error) => match parse_error.classify() {
                 Category::Eof => Self::StillPossiblyValid,
                 Category::Io | Category::Syntax | Category::Data => Self::Failed,
             },
-            None => Self::StillPossiblyValid,
         }
     }
 }
 
-fn evaluate_completed_value(value: &Value, trailing: &str) -> JsonProbeOutcome {
+fn evaluate_completed_value(value: &Value) -> JsonProbeOutcome {
     let Value::Object(map) = value else {
         return JsonProbeOutcome::Failed;
     };
@@ -58,16 +56,15 @@ fn evaluate_completed_value(value: &Value, trailing: &str) -> JsonProbeOutcome {
         }
     }
 
-    if trailing.trim().is_empty() {
-        JsonProbeOutcome::CompletedValid
-    } else {
-        JsonProbeOutcome::Failed
-    }
+    JsonProbeOutcome::CompletedValid
 }
 
 #[cfg(test)]
 mod tests {
+    use serde_json::Value;
+
     use super::JsonProbeOutcome;
+    use super::evaluate_completed_value;
 
     #[test]
     fn empty_buffer_is_still_possibly_valid() {
@@ -451,6 +448,14 @@ mod tests {
     fn syntactically_malformed_object_is_failed() {
         assert_eq!(
             JsonProbeOutcome::validate_prefix("{,}"),
+            JsonProbeOutcome::Failed,
+        );
+    }
+
+    #[test]
+    fn non_object_completed_value_is_failed() {
+        assert_eq!(
+            evaluate_completed_value(&Value::Bool(true)),
             JsonProbeOutcome::Failed,
         );
     }

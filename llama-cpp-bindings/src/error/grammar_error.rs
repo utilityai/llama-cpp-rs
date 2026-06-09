@@ -1,7 +1,11 @@
 use std::ffi::NulError;
 
-#[derive(Debug, thiserror::Error)]
+use crate::error::token_to_string_error::TokenToStringError;
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum GrammarError {
+    #[error("the approximate token environment could not be built: {0}")]
+    TokEnvUnavailable(#[from] TokenToStringError),
     #[error("grammar root not found in grammar string")]
     RootNotFound,
     #[error("trigger word contains null bytes: {0}")]

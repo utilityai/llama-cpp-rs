@@ -4,7 +4,6 @@ use llama_cpp_bindings_types::ToolCallArguments;
 use llama_cpp_bindings_types::ToolCallMarkers;
 use nom::IResult;
 use nom::Parser;
-use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 
 use crate::error::KeyValueXmlTagsFailure;
@@ -23,11 +22,9 @@ const fn shape_is_complete(shape: &KeyValueXmlTagsShape) -> bool {
 
 fn skip_to_next_open<'body>(input: &'body str, open: &str) -> Option<&'body str> {
     let take_result: IResult<&'body str, &'body str> = take_until(open).parse(input);
-    let (after_prefix_inclusive, _) = take_result.ok()?;
-    let consume_result: IResult<&'body str, &'body str> = tag(open).parse(after_prefix_inclusive);
-    let (after_open, _) = consume_result.ok()?;
+    let (after_open_inclusive, _) = take_result.ok()?;
 
-    Some(after_open)
+    Some(&after_open_inclusive[open.len()..])
 }
 
 fn parameter_value_to_json(raw: &str) -> serde_json::Value {
@@ -46,11 +43,7 @@ fn parse_one_parameter<'body>(
     let Ok((after_key_open_inclusive, _)) = take_result else {
         return Ok(None);
     };
-    let consume_result: IResult<&'body str, &'body str> =
-        tag(shape.key_open.as_str()).parse(after_key_open_inclusive);
-    let Ok((after_key_open, _)) = consume_result else {
-        return Ok(None);
-    };
+    let after_key_open = &after_key_open_inclusive[shape.key_open.len()..];
 
     let key_close_position = after_key_open
         .find(shape.key_close.as_str())
@@ -75,15 +68,7 @@ fn parse_one_parameter<'body>(
             expected_open: shape.value_open.clone(),
         });
     };
-    let value_open_consume: IResult<&str, &str> =
-        tag(shape.value_open.as_str()).parse(after_value_open_inclusive);
-    let Ok((after_value_open, _)) = value_open_consume else {
-        return Err(KeyValueXmlTagsFailure::MissingValueTag {
-            function_name: function_name.to_owned(),
-            key,
-            expected_open: shape.value_open.clone(),
-        });
-    };
+    let after_value_open = &after_value_open_inclusive[shape.value_open.len()..];
 
     let value_close_position = after_value_open
         .find(shape.value_close.as_str())
@@ -264,12 +249,12 @@ mod tests {
         let body = "<tool_call>get_weather<arg_key>location</arg_key><arg_value>Paris</arg_value>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::UnclosedFunctionBlock { expected_close } => {
-                assert_eq!(expected_close, "</tool_call>");
-            }
-            other => panic!("expected UnclosedFunctionBlock, got {other:?}"),
-        }
+        assert_eq!(
+            result,
+            Err(KeyValueXmlTagsFailure::UnclosedFunctionBlock {
+                expected_close: "</tool_call>".to_owned(),
+            }),
+        );
     }
 
     #[test]
@@ -277,10 +262,7 @@ mod tests {
         let body = "<tool_call><arg_key>k</arg_key><arg_value>v</arg_value></tool_call>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::EmptyFunctionName => {}
-            other => panic!("expected EmptyFunctionName, got {other:?}"),
-        }
+        assert_eq!(result, Err(KeyValueXmlTagsFailure::EmptyFunctionName));
     }
 
     #[test]
@@ -288,12 +270,13 @@ mod tests {
         let body = "<tool_call>f<arg_key>location</tool_call>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::UnclosedKeyTag { function_name, .. } => {
-                assert_eq!(function_name, "f");
-            }
-            other => panic!("expected UnclosedKeyTag, got {other:?}"),
-        }
+        assert_eq!(
+            result,
+            Err(KeyValueXmlTagsFailure::UnclosedKeyTag {
+                function_name: "f".to_owned(),
+                expected_close: "</arg_key>".to_owned(),
+            }),
+        );
     }
 
     #[test]
@@ -301,15 +284,14 @@ mod tests {
         let body = "<tool_call>f<arg_key>location</arg_key>Paris</tool_call>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::MissingValueTag {
-                function_name, key, ..
-            } => {
-                assert_eq!(function_name, "f");
-                assert_eq!(key, "location");
-            }
-            other => panic!("expected MissingValueTag, got {other:?}"),
-        }
+        assert_eq!(
+            result,
+            Err(KeyValueXmlTagsFailure::MissingValueTag {
+                function_name: "f".to_owned(),
+                key: "location".to_owned(),
+                expected_open: "<arg_value>".to_owned(),
+            }),
+        );
     }
 
     #[test]
@@ -317,12 +299,12 @@ mod tests {
         let body = "<tool_call>f<arg_key></arg_key><arg_value>Paris</arg_value></tool_call>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::EmptyKey { function_name } => {
-                assert_eq!(function_name, "f");
-            }
-            other => panic!("expected EmptyKey, got {other:?}"),
-        }
+        assert_eq!(
+            result,
+            Err(KeyValueXmlTagsFailure::EmptyKey {
+                function_name: "f".to_owned(),
+            }),
+        );
     }
 
     #[test]
@@ -330,18 +312,14 @@ mod tests {
         let body = "<tool_call>f<arg_key>location</arg_key><arg_value>Paris</tool_call>";
         let result = parse(body, &glm47_markers(), &glm47_shape());
 
-        match result.expect_err("must error") {
-            KeyValueXmlTagsFailure::UnclosedValueTag {
-                function_name,
-                key,
-                expected_close,
-            } => {
-                assert_eq!(function_name, "f");
-                assert_eq!(key, "location");
-                assert_eq!(expected_close, "</arg_value>");
-            }
-            other => panic!("expected UnclosedValueTag, got {other:?}"),
-        }
+        assert_eq!(
+            result,
+            Err(KeyValueXmlTagsFailure::UnclosedValueTag {
+                function_name: "f".to_owned(),
+                key: "location".to_owned(),
+                expected_close: "</arg_value>".to_owned(),
+            }),
+        );
     }
 
     #[test]

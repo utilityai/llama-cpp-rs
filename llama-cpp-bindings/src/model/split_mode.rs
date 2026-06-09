@@ -33,41 +33,14 @@ const LLAMA_SPLIT_MODE_TENSOR: i8 = llama_cpp_bindings_sys::LLAMA_SPLIT_MODE_TEN
 
 /// # Errors
 /// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
-impl TryFrom<i32> for LlamaSplitMode {
-    type Error = LlamaSplitModeParseError;
-
-    fn try_from(value: i32) -> Result<Self, Self::Error> {
-        let i8_value = value
-            .try_into()
-            .map_err(|convert_error| LlamaSplitModeParseError {
-                value,
-                context: format!("i32 to i8 conversion failed: {convert_error}"),
-            })?;
-
-        match i8_value {
-            LLAMA_SPLIT_MODE_NONE => Ok(Self::None),
-            LLAMA_SPLIT_MODE_LAYER => Ok(Self::Layer),
-            LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
-            LLAMA_SPLIT_MODE_TENSOR => Ok(Self::Tensor),
-            _ => Err(LlamaSplitModeParseError {
-                value,
-                context: format!("unknown split mode value: {value}"),
-            }),
-        }
-    }
-}
-
-/// # Errors
-/// Returns `LlamaSplitModeParseError` if the value does not correspond to a valid `LlamaSplitMode`.
 impl TryFrom<u32> for LlamaSplitMode {
     type Error = LlamaSplitModeParseError;
 
     fn try_from(value: u32) -> Result<Self, Self::Error> {
-        let clamped_value = i32::try_from(value).unwrap_or(i32::MAX);
         let i8_value = value
             .try_into()
             .map_err(|convert_error| LlamaSplitModeParseError {
-                value: clamped_value,
+                value,
                 context: format!("u32 to i8 conversion failed: {convert_error}"),
             })?;
 
@@ -77,20 +50,9 @@ impl TryFrom<u32> for LlamaSplitMode {
             LLAMA_SPLIT_MODE_ROW => Ok(Self::Row),
             LLAMA_SPLIT_MODE_TENSOR => Ok(Self::Tensor),
             _ => Err(LlamaSplitModeParseError {
-                value: clamped_value,
+                value,
                 context: format!("unknown split mode value: {value}"),
             }),
-        }
-    }
-}
-
-impl From<LlamaSplitMode> for i32 {
-    fn from(value: LlamaSplitMode) -> Self {
-        match value {
-            LlamaSplitMode::None => LLAMA_SPLIT_MODE_NONE.into(),
-            LlamaSplitMode::Layer => LLAMA_SPLIT_MODE_LAYER.into(),
-            LlamaSplitMode::Row => LLAMA_SPLIT_MODE_ROW.into(),
-            LlamaSplitMode::Tensor => LLAMA_SPLIT_MODE_TENSOR.into(),
         }
     }
 }
@@ -114,49 +76,11 @@ mod tests {
     };
 
     #[test]
-    fn try_from_i32_invalid() {
-        let result = LlamaSplitMode::try_from(99_i32);
+    fn try_from_u32_invalid_reports_the_value() {
+        let result = LlamaSplitMode::try_from(99_u32);
 
         assert!(result.is_err());
-        let error = result.unwrap_err();
-        assert_eq!(error.value, 99);
-    }
-
-    #[test]
-    fn try_from_u32_invalid() {
-        assert!(LlamaSplitMode::try_from(99_u32).is_err());
-    }
-
-    #[test]
-    fn try_from_i32_none_roundtrip() {
-        let mode = LlamaSplitMode::try_from(i32::from(LLAMA_SPLIT_MODE_NONE)).unwrap();
-
-        assert_eq!(mode, LlamaSplitMode::None);
-        assert_eq!(i32::from(mode), i32::from(LLAMA_SPLIT_MODE_NONE));
-    }
-
-    #[test]
-    fn try_from_i32_layer_roundtrip() {
-        let mode = LlamaSplitMode::try_from(i32::from(LLAMA_SPLIT_MODE_LAYER)).unwrap();
-
-        assert_eq!(mode, LlamaSplitMode::Layer);
-        assert_eq!(i32::from(mode), i32::from(LLAMA_SPLIT_MODE_LAYER));
-    }
-
-    #[test]
-    fn try_from_i32_row_roundtrip() {
-        let mode = LlamaSplitMode::try_from(i32::from(LLAMA_SPLIT_MODE_ROW)).unwrap();
-
-        assert_eq!(mode, LlamaSplitMode::Row);
-        assert_eq!(i32::from(mode), i32::from(LLAMA_SPLIT_MODE_ROW));
-    }
-
-    #[test]
-    fn try_from_i32_tensor_roundtrip() {
-        let mode = LlamaSplitMode::try_from(i32::from(LLAMA_SPLIT_MODE_TENSOR)).unwrap();
-
-        assert_eq!(mode, LlamaSplitMode::Tensor);
-        assert_eq!(i32::from(mode), i32::from(LLAMA_SPLIT_MODE_TENSOR));
+        assert_eq!(result.unwrap_err().value, 99);
     }
 
     #[test]
@@ -194,19 +118,6 @@ mod tests {
     #[test]
     fn default_is_layer() {
         assert_eq!(LlamaSplitMode::default(), LlamaSplitMode::Layer);
-    }
-
-    #[test]
-    fn try_from_i32_overflow_returns_error() {
-        let result = LlamaSplitMode::try_from(i32::MAX);
-
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .context
-                .contains("i32 to i8 conversion failed")
-        );
     }
 
     #[test]

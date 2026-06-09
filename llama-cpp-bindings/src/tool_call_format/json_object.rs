@@ -13,10 +13,10 @@ fn try_parse_one_object(
         return Ok(None);
     };
 
-    let mut stream =
-        serde_json::Deserializer::from_str(&input[start..]).into_iter::<serde_json::Value>();
-    let value = match stream.next() {
-        Some(Ok(value)) => value,
+    let mut stream = serde_json::Deserializer::from_str(&input[start..])
+        .into_iter::<serde_json::Map<String, serde_json::Value>>();
+    let map = match stream.next() {
+        Some(Ok(map)) => map,
         Some(Err(err)) => {
             return Err(JsonObjectFailure::InvalidJson {
                 message: err.to_string(),
@@ -25,10 +25,6 @@ fn try_parse_one_object(
         None => return Ok(None),
     };
     let consumed = stream.byte_offset();
-
-    let serde_json::Value::Object(map) = value else {
-        return Ok(None);
-    };
 
     let Some(name_value) = map.get(&shape.name_field) else {
         return Ok(None);

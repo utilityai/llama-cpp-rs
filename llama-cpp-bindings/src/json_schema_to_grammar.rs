@@ -3,24 +3,17 @@ use std::ffi::{CStr, CString, c_char};
 use crate::error::JsonSchemaToGrammarError;
 use crate::ffi_error_reader::read_and_free_cpp_error;
 
-/// # Errors
+/// # Safety
 ///
-/// Returns [`JsonSchemaToGrammarError`] if the schema string contains a NUL byte,
-/// the wrapper reports any non-OK status, or the returned grammar is not valid UTF-8.
-pub fn json_schema_to_grammar(schema_json: &str) -> Result<String, JsonSchemaToGrammarError> {
-    let schema_cstr = CString::new(schema_json)?;
-    let mut out: *mut c_char = std::ptr::null_mut();
-    let mut error_ptr: *mut c_char = std::ptr::null_mut();
-
-    let status = unsafe {
-        llama_cpp_bindings_sys::llama_rs_json_schema_to_grammar(
-            schema_cstr.as_ptr(),
-            false,
-            &raw mut out,
-            &raw mut error_ptr,
-        )
-    };
-
+/// On `LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK` the function reads and frees `out` as a
+/// null-terminated C string allocated by the wrapper, so `out` must be a valid such
+/// pointer for that status. On error statuses it reads and frees `error_ptr` via
+/// [`read_and_free_cpp_error`], which tolerates a null pointer.
+unsafe fn json_schema_to_grammar_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_json_schema_to_grammar_status,
+    out: *mut c_char,
+    error_ptr: *mut c_char,
+) -> Result<String, JsonSchemaToGrammarError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK => {
             let grammar_bytes = unsafe { CStr::from_ptr(out) }.to_bytes().to_vec();
@@ -44,10 +37,38 @@ pub fn json_schema_to_grammar(schema_json: &str) -> Result<String, JsonSchemaToG
     }
 }
 
+/// # Errors
+///
+/// Returns [`JsonSchemaToGrammarError`] if the schema string contains a NUL byte,
+/// the wrapper reports any non-OK status, or the returned grammar is not valid UTF-8.
+pub fn json_schema_to_grammar(schema_json: &str) -> Result<String, JsonSchemaToGrammarError> {
+    let schema_cstr = CString::new(schema_json)?;
+    let mut out: *mut c_char = std::ptr::null_mut();
+    let mut error_ptr: *mut c_char = std::ptr::null_mut();
+
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_json_schema_to_grammar(
+            schema_cstr.as_ptr(),
+            false,
+            &raw mut out,
+            &raw mut error_ptr,
+        )
+    };
+
+    unsafe { json_schema_to_grammar_status_to_result(status, out, error_ptr) }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::ffi::c_char;
+
     use super::json_schema_to_grammar;
+    use super::json_schema_to_grammar_status_to_result;
     use crate::error::JsonSchemaToGrammarError;
+
+    unsafe extern "C" {
+        fn strdup(source: *const c_char) -> *mut c_char;
+    }
 
     #[test]
     fn simple_object() {
@@ -107,5 +128,105 @@ mod tests {
             std::mem::discriminant(&err),
             std::mem::discriminant(&representative)
         );
+    }
+
+    #[test]
+    fn invalid_schema_status_returns_invalid_schema() {
+        let result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_INVALID_SCHEMA,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            result,
+            Err(JsonSchemaToGrammarError::InvalidSchema {
+                message: "unknown error".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn vendored_exception_status_returns_reported() {
+        let result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            result,
+            Err(JsonSchemaToGrammarError::Reported {
+                message: "unknown error".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    fn allocation_failed_status_returns_not_enough_memory() {
+        let result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result, Err(JsonSchemaToGrammarError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn ok_status_with_non_utf8_grammar_returns_grammar_not_utf8() {
+        let invalid_utf8_grammar: [u8; 2] = [0xFF, 0];
+        let out = unsafe { strdup(invalid_utf8_grammar.as_ptr().cast::<c_char>()) };
+        assert!(!out.is_null(), "strdup must allocate a copy");
+
+        let result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK,
+                out,
+                std::ptr::null_mut(),
+            )
+        };
+        let representative =
+            JsonSchemaToGrammarError::GrammarNotUtf8(String::from_utf8(vec![0xFF]).unwrap_err());
+
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&representative),
+        );
+    }
+
+    #[test]
+    fn ok_status_with_valid_utf8_grammar_returns_grammar_string() {
+        let grammar_text: &[u8; 14] = b"root ::= \"x\"\0\0";
+        let out = unsafe { strdup(grammar_text.as_ptr().cast::<c_char>()) };
+        assert!(!out.is_null(), "strdup must allocate a copy");
+
+        let result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK,
+                out,
+                std::ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result, Ok("root ::= \"x\"".to_owned()));
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_json_schema_to_grammar returned unrecognized status")]
+    fn unrecognized_status_panics() {
+        let _result = unsafe {
+            json_schema_to_grammar_status_to_result(
+                u32::MAX,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
     }
 }

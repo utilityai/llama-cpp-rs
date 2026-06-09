@@ -1,4 +1,4 @@
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum XmlFunctionTagsFailure {
     #[error("tool call function tag has empty name")]
     EmptyFunctionName,

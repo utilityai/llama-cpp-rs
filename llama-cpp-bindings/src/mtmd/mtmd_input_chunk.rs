@@ -34,6 +34,56 @@ const unsafe fn tokens_from_raw_ptr<'chunk>(
     }
 }
 
+fn eval_chunk_single_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_mtmd_eval_chunk_single_status,
+    final_position: llama_cpp_bindings_sys::llama_pos,
+    out_vendored_return_code: i32,
+    out_error: *mut c_char,
+) -> Result<llama_cpp_bindings_sys::llama_pos, MtmdEvalError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_OK => Ok(final_position),
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_RETURNED_NONZERO_CODE => {
+            Err(MtmdEvalError::EvalFailed {
+                code: out_vendored_return_code,
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MtmdEvalError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { read_and_free_cpp_error(out_error) };
+            Err(MtmdEvalError::Reported { message })
+        }
+        other => {
+            unreachable!("llama_rs_mtmd_eval_chunk_single returned unrecognized status: {other}")
+        }
+    }
+}
+
+fn image_chunk_batch_size_error(
+    is_image_chunk: bool,
+    chunk_token_count: usize,
+    n_batch: i32,
+) -> Option<MtmdEvalError> {
+    if is_image_chunk
+        && i64::try_from(chunk_token_count).is_ok_and(|tokens| tokens > i64::from(n_batch))
+    {
+        #[expect(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "image token counts and n_batch are model-bounded and fit in u32"
+        )]
+        return Some(MtmdEvalError::ImageChunkExceedsBatchSize(
+            ImageChunkBatchSizeMismatch {
+                image_tokens: chunk_token_count as u32,
+                n_batch: n_batch as u32,
+            },
+        ));
+    }
+
+    None
+}
+
 #[derive(Debug)]
 pub struct MtmdInputChunk {
     pub chunk: NonNull<llama_cpp_bindings_sys::mtmd_input_chunk>,
@@ -116,20 +166,12 @@ impl MtmdInputChunk {
     ) -> Result<llama_cpp_bindings_sys::llama_pos, MtmdEvalError> {
         let chunk_token_count = self.n_tokens();
 
-        if matches!(self.chunk_type(), Ok(MtmdInputChunkType::Image))
-            && i64::try_from(chunk_token_count).is_ok_and(|tokens| tokens > i64::from(n_batch))
-        {
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "image token counts and n_batch are model-bounded and fit in u32"
-            )]
-            return Err(MtmdEvalError::ImageChunkExceedsBatchSize(
-                ImageChunkBatchSizeMismatch {
-                    image_tokens: chunk_token_count as u32,
-                    n_batch: n_batch as u32,
-                },
-            ));
+        if let Some(error) = image_chunk_batch_size_error(
+            matches!(self.chunk_type(), Ok(MtmdInputChunkType::Image)),
+            chunk_token_count,
+            n_batch,
+        ) {
+            return Err(error);
         }
 
         let mut final_position: llama_cpp_bindings_sys::llama_pos = start_position;
@@ -151,24 +193,12 @@ impl MtmdInputChunk {
             )
         };
 
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_OK => Ok(final_position),
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_RETURNED_NONZERO_CODE => {
-                Err(MtmdEvalError::EvalFailed {
-                    code: out_vendored_return_code,
-                })
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(MtmdEvalError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(MtmdEvalError::Reported { message })
-            }
-            other => unreachable!(
-                "llama_rs_mtmd_eval_chunk_single returned unrecognized status: {other}"
-            ),
-        }
+        eval_chunk_single_status_to_result(
+            status,
+            final_position,
+            out_vendored_return_code,
+            out_error,
+        )
     }
 }
 
@@ -182,7 +212,11 @@ impl Drop for MtmdInputChunk {
 
 #[cfg(test)]
 mod unit_tests {
+    use super::eval_chunk_single_status_to_result;
+    use super::image_chunk_batch_size_error;
     use super::tokens_from_raw_ptr;
+    use crate::mtmd::image_chunk_batch_size_mismatch::ImageChunkBatchSizeMismatch;
+    use crate::mtmd::mtmd_eval_error::MtmdEvalError;
 
     #[test]
     fn tokens_from_raw_ptr_returns_none_for_null() {
@@ -202,5 +236,89 @@ mod unit_tests {
 
         assert!(result.is_some());
         assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn eval_chunk_single_status_ok_returns_final_position() {
+        let result = eval_chunk_single_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_OK,
+            7,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Ok(7));
+    }
+
+    #[test]
+    fn eval_chunk_single_status_nonzero_code_maps_to_eval_failed() {
+        let result = eval_chunk_single_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_RETURNED_NONZERO_CODE,
+            0,
+            -3,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(MtmdEvalError::EvalFailed { code: -3 }));
+    }
+
+    #[test]
+    fn eval_chunk_single_status_allocation_failed_maps_to_not_enough_memory() {
+        let result = eval_chunk_single_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(MtmdEvalError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn eval_chunk_single_status_cxx_exception_reports_unknown_error_for_null() {
+        let result = eval_chunk_single_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_EVAL_CHUNK_SINGLE_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(MtmdEvalError::Reported {
+                message: "unknown error".to_string()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_mtmd_eval_chunk_single returned unrecognized status")]
+    fn eval_chunk_single_status_unrecognized_panics() {
+        let _ = eval_chunk_single_status_to_result(u32::MAX, 0, 0, std::ptr::null_mut());
+    }
+
+    #[test]
+    fn image_chunk_over_batch_size_reports_mismatch() {
+        let error = image_chunk_batch_size_error(true, 9, 4);
+
+        assert_eq!(
+            error,
+            Some(MtmdEvalError::ImageChunkExceedsBatchSize(
+                ImageChunkBatchSizeMismatch {
+                    image_tokens: 9,
+                    n_batch: 4,
+                }
+            ))
+        );
+    }
+
+    #[test]
+    fn non_image_chunk_never_reports_mismatch() {
+        assert!(image_chunk_batch_size_error(false, 9, 4).is_none());
+    }
+
+    #[test]
+    fn image_chunk_within_batch_size_reports_no_mismatch() {
+        assert!(image_chunk_batch_size_error(true, 4, 4).is_none());
     }
 }

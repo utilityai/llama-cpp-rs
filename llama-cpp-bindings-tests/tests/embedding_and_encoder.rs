@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use std::num::NonZeroU8;
 use std::time::Duration;
 
@@ -66,7 +61,7 @@ fn embedding_generation_produces_vectors(fixture: &LlamaFixture<'_>) -> Result<(
 
     let t_main_start = ggml_time_us();
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let mut batch = LlamaBatch::new(n_ctx, 1)?;
     classifier.feed_prompt_sequence_to_batch(&mut batch, &tokens, 0, false)?;
 
@@ -168,7 +163,7 @@ fn reranking_produces_scores(fixture: &LlamaFixture<'_>) -> Result<()> {
         bail!("one of the provided prompts exceeds the size of the context window");
     }
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let mut batch = LlamaBatch::new(2048, i32::try_from(document_count)?)?;
     let t_main_start = ggml_time_us();
 
@@ -580,7 +575,7 @@ fn kv_cache_seq_div_succeeds_on_embedding_model(fixture: &LlamaFixture<'_>) -> R
     n_ubatch = 128
 )]
 fn embedding_model_tool_call_markers_call_does_not_panic(fixture: &LlamaFixture<'_>) -> Result<()> {
-    let _markers = fixture.model.tool_call_markers();
+    let _markers = fixture.model.tool_call_markers()?;
 
     Ok(())
 }
@@ -614,8 +609,8 @@ fn embedding_model_streaming_markers_returns_ok_for_a_model_without_tool_calls(
 fn approximate_tok_env_falls_back_to_eos_when_eot_unavailable(
     fixture: &LlamaFixture<'_>,
 ) -> Result<()> {
-    let env = fixture.model.approximate_tok_env();
-    let env_again = fixture.model.approximate_tok_env();
+    let env = fixture.model.approximate_tok_env()?;
+    let env_again = fixture.model.approximate_tok_env()?;
 
     assert!(
         std::sync::Arc::ptr_eq(&env, &env_again),

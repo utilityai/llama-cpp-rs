@@ -1,5 +1,6 @@
 use std::string::FromUtf8Error;
 
+use crate::error::marker_detection_error::MarkerDetectionError;
 use crate::error::tool_call_format_failure::ToolCallFormatFailure;
 
 #[derive(Debug, thiserror::Error)]
@@ -30,6 +31,8 @@ pub enum ParseChatMessageError {
     ToolsSerialization(String),
     #[error("template-override fallback parser failed: {0}")]
     TemplateOverrideFailed(#[from] ToolCallFormatFailure),
+    #[error("reasoning-marker detection failed: {0}")]
+    MarkerDetection(#[from] MarkerDetectionError),
     #[error("{message}")]
     Reported { message: String },
 }

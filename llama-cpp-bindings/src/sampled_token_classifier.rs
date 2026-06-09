@@ -10,6 +10,7 @@ use crate::batch_add_error::BatchAddError;
 use crate::context::LlamaContext;
 use crate::error::EvalMultimodalChunksError;
 use crate::error::SampleError;
+use crate::error::TokenToStringError;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
@@ -70,18 +71,22 @@ impl<'model> SampledTokenClassifier<'model> {
         }
     }
 
-    pub fn ingest(&mut self, token: LlamaToken) -> Vec<IngestOutcome> {
+    /// # Errors
+    /// Returns [`TokenToStringError`] when the sampled token cannot be
+    /// detokenised. The failure is surfaced rather than substituting an empty
+    /// piece, so classification never silently drops generated text.
+    pub fn ingest(&mut self, token: LlamaToken) -> Result<Vec<IngestOutcome>, TokenToStringError> {
         if !self.markers.has_any() {
             self.usage.record_undeterminable_token();
-            let piece = self.decode(token);
-            return vec![IngestOutcome {
+            let piece = self.decode(token)?;
+            return Ok(vec![IngestOutcome {
                 sampled_token: SampledToken::Undeterminable(token),
                 visible_piece: piece.clone(),
                 raw_piece: piece,
-            }];
+            }]);
         }
 
-        let decoded = self.decode(token);
+        let decoded = self.decode(token)?;
         self.pending.push_back(PendingToken {
             token,
             decoded: decoded.clone(),
@@ -93,15 +98,19 @@ impl<'model> SampledTokenClassifier<'model> {
 
         self.try_consume_marker_at_tail();
 
-        let probe_was_active = matches!(self.probe_mode, ProbeMode::Active(_));
-        let mut outcomes = if probe_was_active && self.section_disengages_probe() {
-            self.abandon_probe()
-        } else {
-            self.update_probe(&decoded)
-        };
+        let mut outcomes = self.classify_pending_tail(&decoded);
 
         outcomes.extend(self.drain_overflow());
-        outcomes
+        Ok(outcomes)
+    }
+
+    fn classify_pending_tail(&mut self, decoded: &str) -> Vec<IngestOutcome> {
+        let probe_was_active = matches!(self.probe_mode, ProbeMode::Active(_));
+        if probe_was_active && self.section_disengages_probe() {
+            self.abandon_probe()
+        } else {
+            self.update_probe(decoded)
+        }
     }
 
     const fn section_disengages_probe(&self) -> bool {
@@ -150,21 +159,9 @@ impl<'model> SampledTokenClassifier<'model> {
         outcomes
     }
 
-    fn decode(&mut self, token: LlamaToken) -> String {
-        match self.model.token_to_piece(
-            &SampledToken::Content(token),
-            &mut self.decoder,
-            true,
-            None,
-        ) {
-            Ok(piece) => piece,
-            Err(detokenize_error) => {
-                log::debug!(
-                    "token_to_piece failed during classification, dropping piece: {detokenize_error}",
-                );
-                String::new()
-            }
-        }
+    fn decode(&mut self, token: LlamaToken) -> Result<String, TokenToStringError> {
+        self.model
+            .token_to_piece(&SampledToken::Content(token), &mut self.decoder, true, None)
     }
 
     fn try_consume_marker_at_tail(&mut self) {
@@ -391,7 +388,7 @@ impl<'model> SampledTokenClassifier<'model> {
         idx: i32,
     ) -> Result<(LlamaToken, Vec<IngestOutcome>), SampleError> {
         let raw = sampler.sample(context, idx)?;
-        let outcomes = self.ingest(raw);
+        let outcomes = self.ingest(raw)?;
 
         Ok((raw, outcomes))
     }
@@ -537,6 +534,7 @@ impl<'model> SampledTokenClassifier<'model> {
 
 #[cfg(test)]
 mod tests {
+    use super::JsonProbeState;
     use super::PendingToken;
     use super::ProbeMode;
     use super::SampledTokenClassifier;
@@ -604,12 +602,7 @@ mod tests {
     ) -> Vec<IngestOutcome> {
         push_pending(classifier, token_id, decoded);
         classifier.try_consume_marker_at_tail();
-        let probe_was_active = matches!(classifier.probe_mode, ProbeMode::Active(_));
-        let mut outcomes = if probe_was_active && classifier.section_disengages_probe() {
-            classifier.abandon_probe()
-        } else {
-            classifier.update_probe(decoded)
-        };
+        let mut outcomes = classifier.classify_pending_tail(decoded);
         outcomes.extend(classifier.drain_overflow());
         outcomes
     }
@@ -704,11 +697,10 @@ mod tests {
         outcomes.extend(classifier.flush());
 
         assert_eq!(outcome_pieces(&outcomes), vec!["r", "a", "b", "x"]);
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Reasoning(_)))
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::Reasoning(LlamaToken::new(0)))
+        }));
         assert_eq!(classifier.section, SampledTokenSection::Reasoning);
     }
 
@@ -1148,12 +1140,12 @@ mod tests {
         let outcomes = feed_json_string(&mut classifier, r#"{"name":"f","arguments":{}}"#, 100);
 
         assert!(!outcomes.is_empty());
+        let sections = outcome_sections(&outcomes);
         assert!(
-            outcomes
+            sections
                 .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-            "every emitted outcome should be ToolCall, got {:?}",
-            outcome_sections(&outcomes),
+                .all(|section| *section == SampledTokenSection::ToolCall),
+            "every emitted outcome should be ToolCall, got {sections:?}",
         );
         assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
@@ -1166,12 +1158,12 @@ mod tests {
 
         let outcomes = feed_json_string(&mut classifier, r#"{"foo":"bar"}"#, 100);
 
+        let sections = outcome_sections(&outcomes);
         assert!(
-            outcomes
+            sections
                 .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
-            "every emitted outcome should be Content, got {:?}",
-            outcome_sections(&outcomes),
+                .all(|section| *section == SampledTokenSection::Content),
+            "every emitted outcome should be Content, got {sections:?}",
         );
         assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
@@ -1188,11 +1180,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::Content(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1203,11 +1194,10 @@ mod tests {
 
         let outcomes = feed_json_string(&mut classifier, r#"{"name":"f","arguments":"hi"}"#, 100);
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::Content(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1222,11 +1212,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1241,11 +1230,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1260,11 +1248,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1279,11 +1266,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1298,11 +1284,10 @@ mod tests {
             100,
         );
 
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1314,11 +1299,10 @@ mod tests {
         let outcomes = feed_json_string(&mut classifier, "}}", 100);
 
         assert_eq!(classifier.probe_mode, ProbeMode::Idle);
-        assert!(
-            outcomes
-                .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
-        );
+        assert!(outcomes.iter().all(|outcome| {
+            std::mem::discriminant(&outcome.sampled_token)
+                == std::mem::discriminant(&SampledToken::Content(LlamaToken::new(0)))
+        }));
     }
 
     #[test]
@@ -1384,12 +1368,12 @@ mod tests {
             200,
         ));
 
+        let sections = outcome_sections(&outcomes);
         assert!(
-            outcomes
+            sections
                 .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_))),
-            "two consecutive markerless tool calls must both classify as ToolCall, got {:?}",
-            outcome_sections(&outcomes),
+                .all(|section| *section == SampledTokenSection::ToolCall),
+            "two consecutive markerless tool calls must both classify as ToolCall, got {sections:?}",
         );
     }
 
@@ -1408,11 +1392,17 @@ mod tests {
 
         let tool_call_count = outcomes
             .iter()
-            .filter(|outcome| matches!(outcome.sampled_token, SampledToken::ToolCall(_)))
+            .filter(|outcome| {
+                std::mem::discriminant(&outcome.sampled_token)
+                    == std::mem::discriminant(&SampledToken::ToolCall(LlamaToken::new(0)))
+            })
             .count();
         let content_count = outcomes
             .iter()
-            .filter(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_)))
+            .filter(|outcome| {
+                std::mem::discriminant(&outcome.sampled_token)
+                    == std::mem::discriminant(&SampledToken::Content(LlamaToken::new(0)))
+            })
             .count();
         assert_eq!(
             content_count, 3,
@@ -1467,13 +1457,78 @@ mod tests {
 
         let outcomes = classifier.flush();
 
+        let sections = outcome_sections(&outcomes);
         assert!(
-            outcomes
+            sections
                 .iter()
-                .all(|outcome| matches!(outcome.sampled_token, SampledToken::Content(_))),
-            "mid-probe flush must release held tokens as Content, got {:?}",
-            outcome_sections(&outcomes),
+                .all(|section| *section == SampledTokenSection::Content),
+            "mid-probe flush must release held tokens as Content, got {sections:?}",
         );
+        assert_eq!(classifier.probe_mode, ProbeMode::Idle);
+    }
+
+    #[test]
+    fn evaluate_probe_while_idle_returns_no_outcomes() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+
+        let outcomes = classifier.evaluate_probe();
+
+        assert!(outcomes.is_empty());
+    }
+
+    #[test]
+    fn commit_probe_as_tool_call_while_idle_returns_no_outcomes() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+
+        let outcomes = classifier.commit_probe_as_tool_call();
+
+        assert!(outcomes.is_empty());
+    }
+
+    #[test]
+    fn abandon_probe_while_idle_returns_no_outcomes() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+
+        let outcomes = classifier.abandon_probe();
+
+        assert!(outcomes.is_empty());
+    }
+
+    #[test]
+    fn commit_probe_as_tool_call_requeues_non_held_entries_and_releases_held_as_tool_call() {
+        let markers = markers_with_tool_call_open(vec![token(900)]);
+        let mut classifier = synthetic_classifier(markers);
+        classifier.section = SampledTokenSection::Content;
+
+        classifier.pending.push_back(PendingToken {
+            token: token(1),
+            decoded: "before".to_owned(),
+            section: SampledTokenSection::Content,
+            is_boundary: false,
+            is_from_prompt: false,
+            is_held_for_probe: false,
+        });
+        classifier.pending.push_back(PendingToken {
+            token: token(2),
+            decoded: "{}".to_owned(),
+            section: SampledTokenSection::Content,
+            is_boundary: false,
+            is_from_prompt: false,
+            is_held_for_probe: true,
+        });
+        classifier.probe_mode = ProbeMode::Active(JsonProbeState {
+            held_text: "{}".to_owned(),
+        });
+
+        let outcomes = classifier.commit_probe_as_tool_call();
+
+        let sections = outcome_sections(&outcomes);
+        assert_eq!(sections, vec![SampledTokenSection::ToolCall]);
+        assert_eq!(classifier.pending.len(), 1);
+        assert_eq!(classifier.pending[0].token, token(1));
         assert_eq!(classifier.probe_mode, ProbeMode::Idle);
     }
 }

@@ -1878,8 +1878,8 @@ fn debug_format_includes_struct_name_and_model_field(fixture: &LlamaFixture<'_>)
     n_ubatch = 128
 )]
 fn approximate_tok_env_is_cached_across_calls(fixture: &LlamaFixture<'_>) -> Result<()> {
-    let first = fixture.model.approximate_tok_env();
-    let second = fixture.model.approximate_tok_env();
+    let first = fixture.model.approximate_tok_env()?;
+    let second = fixture.model.approximate_tok_env()?;
 
     assert!(std::sync::Arc::ptr_eq(&first, &second));
 

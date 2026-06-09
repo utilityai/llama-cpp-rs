@@ -457,14 +457,20 @@ mod tests {
     fn checked_n_tokens_plus_one_as_usize_fails_for_negative() {
         let result = checked_n_tokens_plus_one_as_usize(-2);
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
     fn checked_n_tokens_plus_one_as_usize_fails_for_i32_max() {
         let result = checked_n_tokens_plus_one_as_usize(i32::MAX);
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
@@ -478,7 +484,10 @@ mod tests {
     fn checked_i32_as_usize_fails_for_negative() {
         let result = checked_i32_as_usize(i32::MIN, "test_value");
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
@@ -492,7 +501,10 @@ mod tests {
     fn checked_usize_as_llama_seq_id_fails_for_overflow() {
         let result = checked_usize_as_llama_seq_id(usize::MAX, "test_value");
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
@@ -506,7 +518,10 @@ mod tests {
     fn checked_usize_as_i32_fails_for_overflow() {
         let result = checked_usize_as_i32(usize::MAX, "test_value");
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
@@ -520,13 +535,45 @@ mod tests {
     fn checked_usize_as_llama_pos_fails_for_overflow() {
         let result = checked_usize_as_llama_pos(usize::MAX, "test_value");
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 
     #[test]
     fn new_fails_for_oversized_n_tokens() {
         let result = LlamaBatch::new(usize::MAX, 1);
 
-        assert!(result.unwrap_err().to_string().contains("overflow"));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
+    }
+
+    #[test]
+    fn add_fails_when_required_token_count_overflows_i32() {
+        let mut batch = LlamaBatch::new(16, 1).unwrap();
+        batch.llama_batch.n_tokens = i32::MAX;
+
+        let result = batch.add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false);
+
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
+    }
+
+    #[test]
+    fn add_fails_when_existing_offset_is_negative() {
+        let mut batch = LlamaBatch::new(16, 1).unwrap();
+        batch.llama_batch.n_tokens = -1;
+
+        let result = batch.add(&SampledToken::Content(LlamaToken::new(1)), 0, &[0], false);
+
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&BatchAddError::IntegerOverflow(String::new())),
+        );
     }
 }

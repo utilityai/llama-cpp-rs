@@ -1,4 +1,4 @@
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum MtmdEncodeError {
     #[error("multimodal chunk encoding failed with code: {code}")]
     EncodingFailed { code: i32 },

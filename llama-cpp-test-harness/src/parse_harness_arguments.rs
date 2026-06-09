@@ -56,10 +56,10 @@ mod tests {
         };
         let error = validate(input).expect_err("--test-threads=8 must be rejected");
 
-        assert!(matches!(
+        assert_eq!(
             error,
             HarnessArgumentsError::ConflictingTestThreads { requested: 8 }
-        ));
+        );
     }
 
     #[test]

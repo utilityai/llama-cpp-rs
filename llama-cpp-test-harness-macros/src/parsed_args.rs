@@ -97,7 +97,7 @@ fn require<TValue>(value: Option<TValue>, field: &str, span: Span) -> syn::Resul
 struct AttributeAccumulator {
     model_source: Option<ParsedSource>,
     mmproj_source: Option<ParsedSource>,
-    n_gpu_layers: Option<u32>,
+    n_gpu_layers: Option<i32>,
     use_mmap: Option<bool>,
     use_mlock: Option<bool>,
     n_ctx: Option<u32>,
@@ -123,7 +123,7 @@ fn dispatch_field(
             accumulator.mmproj_source = Some(ParsedSource::parse(value, "mmproj_source")?);
         }
         "n_gpu_layers" => {
-            accumulator.n_gpu_layers = Some(require_int_lit(
+            accumulator.n_gpu_layers = Some(require_i32_lit(
                 literal_from_expression(value)?,
                 "n_gpu_layers",
             )?);
@@ -477,10 +477,10 @@ mod tests {
     fn negative_int_for_u32_field_is_rejected() {
         let source = "\
             model_source = HuggingFace(\"x\", \"y\"), \
-            n_gpu_layers = -1, \
+            n_gpu_layers = 0, \
             use_mmap = true, \
             use_mlock = false, \
-            n_ctx = 1, \
+            n_ctx = -1, \
             n_batch = 1, \
             n_ubatch = 1";
         let message = parse(source)
@@ -512,10 +512,10 @@ mod tests {
     fn overflowing_int_is_rejected() {
         let source = "\
             model_source = HuggingFace(\"x\", \"y\"), \
-            n_gpu_layers = 99999999999, \
+            n_gpu_layers = 0, \
             use_mmap = true, \
             use_mlock = false, \
-            n_ctx = 1, \
+            n_ctx = 99999999999, \
             n_batch = 1, \
             n_ubatch = 1";
         let message = parse(source).expect_err("overflow must fail").to_string();

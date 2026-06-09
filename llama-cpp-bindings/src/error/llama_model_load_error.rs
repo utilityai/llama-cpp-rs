@@ -1,7 +1,7 @@
 use std::ffi::NulError;
 use std::path::PathBuf;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum LlamaModelLoadError {
     #[error("null byte in string {0}")]
     NullError(#[from] NulError),

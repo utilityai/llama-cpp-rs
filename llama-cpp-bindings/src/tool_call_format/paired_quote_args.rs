@@ -122,9 +122,6 @@ fn parse_args_body<'body>(
         map.insert(key.clone(), value);
 
         remaining = after_value.trim_start();
-        if remaining.is_empty() {
-            return Ok((map, remaining));
-        }
         if !close_marker.is_empty()
             && let Some(after_close) = remaining.strip_prefix(close_marker)
         {
@@ -341,13 +338,13 @@ mod tests {
             &gemma4_shape(),
         );
 
-        match result.expect_err("unclosed quote must produce a typed failure") {
-            PairedQuoteFailure::UnclosedQuotedValue { tool_name, key } => {
-                assert_eq!(tool_name, "f");
-                assert_eq!(key, "a");
-            }
-            other => panic!("expected UnclosedQuotedValue, got {other:?}"),
-        }
+        assert_eq!(
+            result.expect_err("unclosed quote must produce a typed failure"),
+            PairedQuoteFailure::UnclosedQuotedValue {
+                tool_name: "f".to_owned(),
+                key: "a".to_owned(),
+            },
+        );
     }
 
     #[test]
@@ -358,18 +355,14 @@ mod tests {
             &gemma4_shape(),
         );
 
-        match result.expect_err("garbage after value must produce a typed failure") {
+        assert_eq!(
+            result.expect_err("garbage after value must produce a typed failure"),
             PairedQuoteFailure::UnexpectedCharAfterValue {
-                tool_name,
-                key,
-                character,
-            } => {
-                assert_eq!(tool_name, "f");
-                assert_eq!(key, "a");
-                assert_eq!(character, '$');
-            }
-            other => panic!("expected UnexpectedCharAfterValue, got {other:?}"),
-        }
+                tool_name: "f".to_owned(),
+                key: "a".to_owned(),
+                character: '$',
+            },
+        );
     }
 
     #[test]
@@ -423,12 +416,12 @@ mod tests {
             &gemma4_shape(),
         );
 
-        match result.expect_err("empty key must produce a typed failure") {
-            PairedQuoteFailure::EmptyKey { tool_name } => {
-                assert_eq!(tool_name, "f");
-            }
-            other => panic!("expected EmptyKey, got {other:?}"),
-        }
+        assert_eq!(
+            result.expect_err("empty key must produce a typed failure"),
+            PairedQuoteFailure::EmptyKey {
+                tool_name: "f".to_owned(),
+            },
+        );
     }
 
     #[test]
@@ -439,12 +432,74 @@ mod tests {
             &gemma4_shape(),
         );
 
-        match result.expect_err("args body without colon must produce a typed failure") {
-            PairedQuoteFailure::UnclosedArgumentBlock { tool_name, state } => {
-                assert_eq!(tool_name, "f");
-                assert_eq!(state, "key");
-            }
-            other => panic!("expected UnclosedArgumentBlock, got {other:?}"),
-        }
+        assert_eq!(
+            result.expect_err("args body without colon must produce a typed failure"),
+            PairedQuoteFailure::UnclosedArgumentBlock {
+                tool_name: "f".to_owned(),
+                state: "key",
+            },
+        );
+    }
+
+    #[test]
+    fn parses_empty_bare_value_as_null() {
+        let parsed = parse("<|tool_call>call:f{a:}", &gemma4_markers(), &gemma4_shape())
+            .expect("empty bare value must parse");
+
+        assert_eq!(
+            parsed[0].arguments,
+            ToolCallArguments::ValidJson(json!({"a": null})),
+        );
+    }
+
+    #[test]
+    fn parses_call_with_empty_args_body_terminated_by_end_of_input() {
+        let parsed = parse("<|tool_call>call:f{", &gemma4_markers(), &gemma4_shape())
+            .expect("empty args body must parse");
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].name, "f");
+        assert_eq!(parsed[0].arguments, ToolCallArguments::ValidJson(json!({})),);
+    }
+
+    #[test]
+    fn parses_call_with_empty_args_body_closed_by_marker() {
+        let parsed = parse("<|tool_call>call:f{}", &gemma4_markers(), &gemma4_shape())
+            .expect("empty args body closed by marker must parse");
+
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].name, "f");
+        assert_eq!(parsed[0].arguments, ToolCallArguments::ValidJson(json!({})),);
+    }
+
+    #[test]
+    fn stops_parsing_when_tool_name_is_empty() {
+        let parsed = parse(
+            "<|tool_call>call:{a:<|\"|>v<|\"|>}",
+            &gemma4_markers(),
+            &gemma4_shape(),
+        )
+        .expect("empty tool name must yield no calls");
+
+        assert!(parsed.is_empty());
+    }
+
+    #[test]
+    fn returns_empty_vec_when_separator_is_empty() {
+        let shape = PairedQuoteShape {
+            name_args_separator: String::new(),
+            value_quote: ToolCallValueQuote {
+                open: "<|\"|>".to_owned(),
+                close: "<|\"|>".to_owned(),
+            },
+        };
+        let parsed = parse(
+            "<|tool_call>call:f{a:<|\"|>v<|\"|>}",
+            &gemma4_markers(),
+            &shape,
+        )
+        .expect("empty separator must yield no calls");
+
+        assert!(parsed.is_empty());
     }
 }

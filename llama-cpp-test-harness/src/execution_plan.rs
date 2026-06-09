@@ -202,14 +202,20 @@ mod tests {
         let plan = ExecutionPlan::from_registrations(&[&REG_BETA_A, &REG_ALPHA_Z]);
 
         assert_eq!(plan.phases.len(), 2);
-        assert!(matches!(
+        assert_eq!(
             plan.phases[0].key.model_source,
-            ModelSource::HuggingFace { repo: "alpha", .. }
-        ));
-        assert!(matches!(
+            ModelSource::HuggingFace {
+                repo: "alpha",
+                file: "f"
+            }
+        );
+        assert_eq!(
             plan.phases[1].key.model_source,
-            ModelSource::HuggingFace { repo: "beta", .. }
-        ));
+            ModelSource::HuggingFace {
+                repo: "beta",
+                file: "f"
+            }
+        );
     }
 
     #[test]
