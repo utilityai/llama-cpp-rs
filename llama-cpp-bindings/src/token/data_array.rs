@@ -196,7 +196,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "llama_rs_sampler_apply returned unrecognized status")]
     fn sampler_apply_status_unrecognized_panics() {
-        let _ = sampler_apply_status_to_result(u32::MAX, std::ptr::null_mut());
+        let _ = sampler_apply_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_sampler_apply_status::MAX,
+            std::ptr::null_mut(),
+        );
     }
 
     #[test]

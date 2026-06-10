@@ -609,7 +609,7 @@ mod unit_tests {
     #[should_panic(expected = "llama_rs_new_context_with_model returned unrecognized status")]
     fn new_context_unrecognized_status_panics() {
         let _result = new_context_with_model_status_to_result(
-            u32::MAX,
+            llama_cpp_bindings_sys::llama_rs_new_context_with_model_status::MAX,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -688,7 +688,11 @@ mod unit_tests {
     #[test]
     #[should_panic(expected = "llama_rs_decode returned unrecognized status")]
     fn decode_unrecognized_status_panics() {
-        let _result = decode_status_to_result(u32::MAX, 0, std::ptr::null_mut());
+        let _result = decode_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_decode_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
     }
 
     #[test]
@@ -775,7 +779,11 @@ mod unit_tests {
     #[test]
     #[should_panic(expected = "llama_rs_encode returned unrecognized status")]
     fn encode_unrecognized_status_panics() {
-        let _result = encode_status_to_result(u32::MAX, 0, std::ptr::null_mut());
+        let _result = encode_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_encode_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
     }
 
     #[test]

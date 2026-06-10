@@ -829,6 +829,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "unrecognized wrapper status")]
     fn fit_params_status_out_of_range_panics() {
-        let _ = super::fit_params_status_to_result(u32::MAX, 0, std::ptr::null_mut());
+        let _ = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_fit_params_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
     }
 }

@@ -223,7 +223,7 @@ mod tests {
     fn unrecognized_status_panics() {
         let _result = unsafe {
             json_schema_to_grammar_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_json_schema_to_grammar_status::MAX,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
             )

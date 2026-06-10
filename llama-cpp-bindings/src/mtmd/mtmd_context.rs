@@ -350,7 +350,11 @@ mod unit_tests {
     #[test]
     #[should_panic(expected = "llama_rs_mtmd_tokenize returned unrecognized status")]
     fn tokenize_status_unrecognized_panics() {
-        let _result = map_tokenize_status(u32::MAX, 0, std::ptr::null_mut());
+        let _result = map_tokenize_status(
+            llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
     }
 
     #[test]
@@ -383,7 +387,11 @@ mod unit_tests {
     #[test]
     #[should_panic(expected = "llama_rs_mtmd_encode_chunk returned unrecognized status")]
     fn encode_chunk_status_unrecognized_panics() {
-        let _result = map_encode_chunk_status(u32::MAX, 0, std::ptr::null_mut());
+        let _result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
     }
 
     #[test]
@@ -436,7 +444,7 @@ mod unit_tests {
     #[should_panic(expected = "llama_rs_mtmd_init_from_file returned unrecognized status")]
     fn init_from_file_status_unrecognized_panics() {
         let _result = map_init_from_file_status(
-            u32::MAX,
+            llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file_status::MAX,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             "mmproj.gguf",

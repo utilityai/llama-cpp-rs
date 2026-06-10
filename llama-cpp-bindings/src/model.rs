@@ -2020,7 +2020,7 @@ mod ffi_status_mapping_tests {
     fn load_model_from_file_unrecognized_status_panics() {
         let _ = unsafe {
             load_model_from_file_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_load_model_from_file_status::MAX,
                 ptr::null_mut(),
                 ptr::null_mut(),
                 Path::new("/some/path"),
@@ -2118,7 +2118,11 @@ mod ffi_status_mapping_tests {
     fn parse_chat_message_unrecognized_status_panics() {
         let mut out_error: *mut c_char = ptr::null_mut();
         let _ = unsafe {
-            parse_chat_message_status_to_result(u32::MAX, ptr::null_mut(), &raw mut out_error)
+            parse_chat_message_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_parse_chat_message_status::MAX,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
         };
     }
 
@@ -2198,7 +2202,12 @@ mod ffi_status_mapping_tests {
     fn parsed_chat_free_unrecognized_status_panics() {
         let parsed = Ok(ParsedChatMessage::default());
         let _ = unsafe {
-            parsed_chat_free_status_to_result(parsed, u32::MAX, ptr::null_mut(), ptr::null_mut())
+            parsed_chat_free_status_to_result(
+                parsed,
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_free_status::MAX,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
         };
     }
 
@@ -2253,7 +2262,11 @@ mod ffi_status_mapping_tests {
     #[should_panic(expected = "llama_rs_parsed_chat_content returned unrecognized status")]
     fn parsed_chat_content_unrecognized_status_panics() {
         let _ = unsafe {
-            parsed_chat_content_status_to_result(u32::MAX, ptr::null_mut(), ptr::null_mut())
+            parsed_chat_content_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_content_status::MAX,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
         };
     }
 
@@ -2311,7 +2324,7 @@ mod ffi_status_mapping_tests {
     fn parsed_chat_reasoning_content_unrecognized_status_panics() {
         let _ = unsafe {
             parsed_chat_reasoning_content_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_reasoning_content_status::MAX,
                 ptr::null_mut(),
                 ptr::null_mut(),
             )
@@ -2368,8 +2381,13 @@ mod ffi_status_mapping_tests {
     #[test]
     #[should_panic(expected = "llama_rs_parsed_chat_tool_call_count returned unrecognized status")]
     fn parsed_chat_tool_call_count_unrecognized_status_panics() {
-        let _ =
-            unsafe { parsed_chat_tool_call_count_status_to_result(u32::MAX, 0, ptr::null_mut()) };
+        let _ = unsafe {
+            parsed_chat_tool_call_count_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_count_status::MAX,
+                0,
+                ptr::null_mut(),
+            )
+        };
     }
 
     #[test]
@@ -2443,7 +2461,12 @@ mod ffi_status_mapping_tests {
     #[should_panic(expected = "llama_rs_parsed_chat_tool_call_id returned unrecognized status")]
     fn parsed_chat_tool_call_id_unrecognized_status_panics() {
         let _ = unsafe {
-            parsed_chat_tool_call_id_status_to_result(u32::MAX, 0, ptr::null_mut(), ptr::null_mut())
+            parsed_chat_tool_call_id_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_id_status::MAX,
+                0,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
         };
     }
 
@@ -2519,7 +2542,7 @@ mod ffi_status_mapping_tests {
     fn parsed_chat_tool_call_name_unrecognized_status_panics() {
         let _ = unsafe {
             parsed_chat_tool_call_name_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_name_status::MAX,
                 0,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -2601,7 +2624,7 @@ mod ffi_status_mapping_tests {
     fn parsed_chat_tool_call_arguments_unrecognized_status_panics() {
         let _ = unsafe {
             parsed_chat_tool_call_arguments_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments_status::MAX,
                 0,
                 ptr::null_mut(),
                 ptr::null_mut(),
@@ -2661,7 +2684,7 @@ mod ffi_status_mapping_tests {
     fn detect_reasoning_markers_unrecognized_status_panics() {
         let _ = unsafe {
             detect_reasoning_markers_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_detect_reasoning_markers_status::MAX,
                 ptr::null(),
                 ptr::null(),
                 ptr::null_mut(),
@@ -2717,7 +2740,11 @@ mod ffi_status_mapping_tests {
     #[should_panic(expected = "llama_rs_compute_tool_call_haystack returned unrecognized status")]
     fn compute_tool_call_haystack_unrecognized_status_panics() {
         let _ = unsafe {
-            compute_tool_call_haystack_status_to_result(u32::MAX, ptr::null(), ptr::null_mut())
+            compute_tool_call_haystack_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_compute_tool_call_haystack_status::MAX,
+                ptr::null(),
+                ptr::null_mut(),
+            )
         };
     }
 
@@ -2777,7 +2804,7 @@ mod ffi_status_mapping_tests {
     fn diagnose_tool_call_synthetic_renders_unrecognized_status_panics() {
         let _ = unsafe {
             diagnose_tool_call_synthetic_renders_status_to_result(
-                u32::MAX,
+                llama_cpp_bindings_sys::llama_rs_diagnose_tool_call_synthetic_renders_status::MAX,
                 ptr::null(),
                 ptr::null(),
                 ptr::null_mut(),
@@ -2832,7 +2859,13 @@ mod ffi_status_mapping_tests {
     #[test]
     #[should_panic(expected = "llama_rs_tokenize returned unrecognized status")]
     fn tokenize_unrecognized_status_panics() {
-        let _ = unsafe { tokenize_status_to_result(u32::MAX, 0, ptr::null_mut()) };
+        let _ = unsafe {
+            tokenize_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_tokenize_status::MAX,
+                0,
+                ptr::null_mut(),
+            )
+        };
     }
 
     #[test]
@@ -2922,7 +2955,11 @@ mod ffi_status_mapping_tests {
     #[should_panic(expected = "llama_rs_apply_chat_template returned unrecognized status")]
     fn apply_chat_template_unrecognized_status_panics() {
         let _ = unsafe {
-            super::apply_chat_template_status_to_result(u32::MAX, ptr::null_mut(), ptr::null_mut())
+            super::apply_chat_template_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_apply_chat_template_status::MAX,
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
         };
     }
 

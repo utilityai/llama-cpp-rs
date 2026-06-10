@@ -255,7 +255,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "llama_rs_memory_seq_add returned unrecognized status")]
     fn add_unrecognized_status_panics() {
-        let _ = kv_cache_seq_add_status_to_result(u32::MAX, ptr::null_mut());
+        let _ = kv_cache_seq_add_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_memory_seq_add_status::MAX,
+            ptr::null_mut(),
+        );
     }
 
     #[test]
@@ -317,6 +320,9 @@ mod tests {
     #[test]
     #[should_panic(expected = "llama_rs_memory_seq_div returned unrecognized status")]
     fn div_unrecognized_status_panics() {
-        let _ = kv_cache_seq_div_status_to_result(u32::MAX, ptr::null_mut());
+        let _ = kv_cache_seq_div_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_memory_seq_div_status::MAX,
+            ptr::null_mut(),
+        );
     }
 }
