@@ -19,6 +19,7 @@ extern "C" llama_rs_apply_chat_template_status llama_rs_apply_chat_template(
     const char * const * contents,
     size_t n_messages,
     int add_generation_prompt,
+    int enable_thinking,
     char ** out_string,
     char ** out_error) {
     if (out_string) {
@@ -66,6 +67,7 @@ extern "C" llama_rs_apply_chat_template_status llama_rs_apply_chat_template(
         inputs.messages              = std::move(messages);
         inputs.tools                 = nlohmann::ordered_json::array();
         inputs.add_generation_prompt = add_generation_prompt != 0;
+        inputs.enable_thinking       = enable_thinking != 0;
 
         std::string rendered = common_chat_template_direct_apply(tmpl, inputs);
         if (rendered.empty()) {

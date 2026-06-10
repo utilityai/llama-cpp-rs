@@ -1,10 +1,6 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use anyhow::Context;
 use anyhow::Result;
+use llama_cpp_bindings::EvalMultimodalChunksParams;
 use llama_cpp_bindings::SampledToken;
 use llama_cpp_bindings::SampledTokenClassifier;
 use llama_cpp_bindings::TokenUsage;
@@ -1067,7 +1063,17 @@ fn multimodal_vision_inference_produces_output(fixture: &LlamaFixture<'_>) -> Re
 
     let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier
-        .eval_multimodal_chunks(&chunks, mtmd_ctx, &ctx, 0, 0, 512, true)
+        .eval_multimodal_chunks(
+            &chunks,
+            mtmd_ctx,
+            &ctx,
+            EvalMultimodalChunksParams {
+                start_position: 0,
+                seq_id: 0,
+                n_batch: 512,
+                logits_last: true,
+            },
+        )
         .with_context(|| "failed to evaluate chunks")?;
 
     eprintln!("evaluated chunks, n_past = {n_past}");
@@ -1134,7 +1140,17 @@ fn build_multimodal_chunks_and_eval_into_usage(
     let context = LlamaContext::from_model(model, fixture.backend, context_params)?;
 
     let mut classifier = model.sampled_token_classifier()?;
-    classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+    classifier.eval_multimodal_chunks(
+        &chunks,
+        mtmd_ctx,
+        &context,
+        EvalMultimodalChunksParams {
+            start_position: 0,
+            seq_id: 0,
+            n_batch: 512,
+            logits_last: true,
+        },
+    )?;
 
     Ok((classifier.into_usage(), expected))
 }
@@ -1457,7 +1473,17 @@ fn gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt(
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier()?;
-    let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past = classifier.eval_multimodal_chunks(
+        &chunks,
+        mtmd_ctx,
+        &context,
+        EvalMultimodalChunksParams {
+            start_position: 0,
+            seq_id: 0,
+            n_batch: 512,
+            logits_last: true,
+        },
+    )?;
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::penalties(64, 1.1, 0.0, 0.0),
@@ -1552,7 +1578,17 @@ fn mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt(
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier()?;
-    let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past = classifier.eval_multimodal_chunks(
+        &chunks,
+        mtmd_ctx,
+        &context,
+        EvalMultimodalChunksParams {
+            start_position: 0,
+            seq_id: 0,
+            n_batch: 512,
+            logits_last: true,
+        },
+    )?;
 
     let mut sampler = LlamaSampler::greedy();
     let mut batch = LlamaBatch::new(2048, 1)?;
@@ -1641,7 +1677,17 @@ fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt(
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier()?;
-    let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past = classifier.eval_multimodal_chunks(
+        &chunks,
+        mtmd_ctx,
+        &context,
+        EvalMultimodalChunksParams {
+            start_position: 0,
+            seq_id: 0,
+            n_batch: 512,
+            logits_last: true,
+        },
+    )?;
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::penalties(64, 1.1, 0.0, 0.0),
@@ -1728,7 +1774,17 @@ fn qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt(
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
     let mut classifier = model.sampled_token_classifier()?;
-    let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
+    let n_past = classifier.eval_multimodal_chunks(
+        &chunks,
+        mtmd_ctx,
+        &context,
+        EvalMultimodalChunksParams {
+            start_position: 0,
+            seq_id: 0,
+            n_batch: 512,
+            logits_last: true,
+        },
+    )?;
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::penalties(64, 1.1, 0.0, 0.0),

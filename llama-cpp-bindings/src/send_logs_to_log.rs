@@ -1,7 +1,12 @@
-#![deny(clippy::expect_used)]
-#![deny(clippy::indexing_slicing)]
-#![deny(clippy::panic)]
-#![deny(clippy::unwrap_used)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::expect_used,
+        clippy::indexing_slicing,
+        clippy::panic,
+        clippy::unwrap_used
+    )
+)]
 
 use std::sync::{Mutex, OnceLock};
 
@@ -467,10 +472,6 @@ mod tests {
     }
 
     #[test]
-    #[expect(
-        clippy::panic,
-        reason = "deliberate panic to poison the decoder mutex for fault-injection coverage"
-    )]
     fn decoder_mutex_poison() {
         ensure_test_logger_installed();
 

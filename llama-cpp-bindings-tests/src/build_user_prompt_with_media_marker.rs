@@ -12,5 +12,5 @@ pub fn build_user_prompt_with_media_marker(model: &LlamaModel, question: &str) -
     let chat_template = model.chat_template(None)?;
     let messages = [LlamaChatMessage::new("user".to_string(), user_content)?];
 
-    Ok(model.apply_chat_template(&chat_template, &messages, true)?)
+    Ok(model.apply_chat_template(&chat_template, &messages, true, true)?)
 }

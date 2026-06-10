@@ -6,17 +6,12 @@ pub use crate::context::llama_attention_type::LlamaAttentionType;
 pub use crate::context::llama_pooling_type::LlamaPoolingType;
 pub use crate::context::rope_scaling_type::RopeScalingType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 #[expect(
     missing_docs,
     reason = "field meanings mirror llama.cpp's `llama_context_params` C struct; restating each \
               one inline would risk drift from the upstream spec — the doc-comment on the struct \
               points at the canonical reference"
-)]
-#[expect(
-    clippy::module_name_repetitions,
-    reason = "`LlamaContextParams` is the canonical Rust name in the public API; renaming it to \
-              `Params` would force `params::Params` at every call site"
 )]
 pub struct LlamaContextParams {
     pub context_params: llama_cpp_bindings_sys::llama_context_params,

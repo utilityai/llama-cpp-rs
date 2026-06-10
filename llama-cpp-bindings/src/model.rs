@@ -70,6 +70,35 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
 pub struct LlamaModel {
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
     tok_env: OnceLock<Arc<ApproximateTokEnv>>,
+    chat_parser: OnceLock<ChatParserHandle>,
+}
+
+#[derive(Debug)]
+struct ChatParserHandle {
+    parser: NonNull<llama_cpp_bindings_sys::llama_rs_chat_parser>,
+}
+
+// SAFETY: the handle is an opaque pointer to a heap-allocated parser owned by the
+// model; it is created once, never mutated afterwards, and freed exactly once on
+// drop. The owning `LlamaModel` is already `Send + Sync`, so the handle shares that
+// guarantee.
+unsafe impl Send for ChatParserHandle {}
+
+unsafe impl Sync for ChatParserHandle {}
+
+impl Drop for ChatParserHandle {
+    fn drop(&mut self) {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        unsafe {
+            llama_cpp_bindings_sys::llama_rs_chat_parser_free(
+                self.parser.as_ptr(),
+                &raw mut out_error,
+            );
+        }
+        if !out_error.is_null() {
+            let _ = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+        }
+    }
 }
 
 impl std::fmt::Debug for LlamaModel {
@@ -99,6 +128,7 @@ unsafe fn load_model_from_file_status_to_result(
             Ok(LlamaModel {
                 model,
                 tok_env: OnceLock::new(),
+                chat_parser: OnceLock::new(),
             })
         }
         llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL => {
@@ -134,12 +164,6 @@ unsafe fn parse_chat_message_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_OK => {
             collect_parsed_chat_message(handle)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE => {
-            Err(ParseChatMessageError::NoChatTemplate)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB => {
-            Err(ParseChatMessageError::NoVocab)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(ParseChatMessageError::NotEnoughMemory)
         }
@@ -150,6 +174,39 @@ unsafe fn parse_chat_message_status_to_result(
         }
         other => {
             unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}")
+        }
+    }
+}
+
+// SAFETY: `out_error` must reference the pointer populated by the preceding
+// `llama_rs_chat_parser_create` call (or null); it is read, freed, and nulled only in
+// the CXX-exception arm. `parser` must be the pointer populated by the same call.
+unsafe fn chat_parser_create_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_chat_parser_create_status,
+    parser: *mut llama_cpp_bindings_sys::llama_rs_chat_parser,
+    out_error: *mut *mut c_char,
+) -> Result<ChatParserHandle, ParseChatMessageError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_OK => NonNull::new(parser).map_or_else(
+            || unreachable!("llama_rs_chat_parser_create returned OK with a null parser handle"),
+            |parser| Ok(ChatParserHandle { parser }),
+        ),
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE => {
+            Err(ParseChatMessageError::NoChatTemplate)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB => {
+            Err(ParseChatMessageError::NoVocab)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(ParseChatMessageError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(*out_error) };
+            unsafe { *out_error = ptr::null_mut() };
+            Err(ParseChatMessageError::ParseFailed { message })
+        }
+        other => {
+            unreachable!("llama_rs_chat_parser_create returned unrecognized status {other}")
         }
     }
 }
@@ -686,6 +743,7 @@ impl LlamaModel {
         tmpl: &LlamaChatTemplate,
         chat: &[LlamaChatMessage],
         add_ass: bool,
+        enable_thinking: bool,
     ) -> Result<String, ApplyChatTemplateError> {
         let roles: Vec<*const c_char> = chat
             .iter()
@@ -707,6 +765,7 @@ impl LlamaModel {
                 contents.as_ptr(),
                 chat.len(),
                 i32::from(add_ass),
+                i32::from(enable_thinking),
                 &raw mut out_string,
                 &raw mut out_error,
             )
@@ -875,6 +934,8 @@ impl LlamaModel {
         input: &str,
         is_partial: bool,
     ) -> Result<ParsedChatMessage, ParseChatMessageError> {
+        let parser = self.chat_parser()?;
+
         let tools_cstring = CString::new(tools_json)
             .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
         let input_cstring = CString::new(input)
@@ -885,7 +946,7 @@ impl LlamaModel {
 
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_parse_chat_message(
-                self.model.as_ptr(),
+                parser.parser.as_ptr(),
                 tools_cstring.as_ptr(),
                 input_cstring.as_ptr(),
                 i32::from(is_partial),
@@ -902,6 +963,29 @@ impl LlamaModel {
             llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle, &raw mut free_error)
         };
         unsafe { parsed_chat_free_status_to_result(parsed, free_status, out_error, free_error) }
+    }
+
+    fn chat_parser(&self) -> Result<&ChatParserHandle, ParseChatMessageError> {
+        if let Some(parser) = self.chat_parser.get() {
+            return Ok(parser);
+        }
+        let parser = self.create_chat_parser()?;
+        Ok(self.chat_parser.get_or_init(|| parser))
+    }
+
+    fn create_chat_parser(&self) -> Result<ChatParserHandle, ParseChatMessageError> {
+        let mut out_parser: *mut llama_cpp_bindings_sys::llama_rs_chat_parser = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_chat_parser_create(
+                self.model.as_ptr(),
+                &raw mut out_parser,
+                &raw mut out_error,
+            )
+        };
+
+        unsafe { chat_parser_create_status_to_result(status, out_parser, &raw mut out_error) }
     }
 
     /// # Errors
@@ -1905,6 +1989,7 @@ mod ffi_status_mapping_tests {
     use llama_cpp_bindings_types::ToolCallArguments;
 
     use super::ReasoningSplit;
+    use super::chat_parser_create_status_to_result;
     use super::compute_tool_call_haystack_status_to_result;
     use super::cxx_exception_owns_out_error;
     use super::detect_reasoning_markers_status_to_result;
@@ -2043,11 +2128,11 @@ mod ffi_status_mapping_tests {
     }
 
     #[test]
-    fn parse_chat_message_no_chat_template_maps_to_no_chat_template() {
+    fn chat_parser_create_no_chat_template_maps_to_no_chat_template() {
         let mut out_error: *mut c_char = ptr::null_mut();
         let result = unsafe {
-            parse_chat_message_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE,
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE,
                 ptr::null_mut(),
                 &raw mut out_error,
             )
@@ -2060,11 +2145,11 @@ mod ffi_status_mapping_tests {
     }
 
     #[test]
-    fn parse_chat_message_no_vocab_maps_to_no_vocab() {
+    fn chat_parser_create_no_vocab_maps_to_no_vocab() {
         let mut out_error: *mut c_char = ptr::null_mut();
         let result = unsafe {
-            parse_chat_message_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB,
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB,
                 ptr::null_mut(),
                 &raw mut out_error,
             )
@@ -2074,6 +2159,69 @@ mod ffi_status_mapping_tests {
             discriminant(&result.unwrap_err()),
             discriminant(&ParseChatMessageError::NoVocab)
         );
+    }
+
+    #[test]
+    fn chat_parser_create_allocation_failed_is_not_enough_memory() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let result = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&ParseChatMessageError::NotEnoughMemory)
+        );
+    }
+
+    #[test]
+    fn chat_parser_create_cxx_exception_is_parse_failed_and_nulls_error() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let result = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&ParseChatMessageError::ParseFailed {
+                message: String::new()
+            })
+        );
+        assert!(out_error.is_null());
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_chat_parser_create returned OK with a null parser handle")]
+    fn chat_parser_create_ok_with_null_parser_panics() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let _ = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_OK,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_chat_parser_create returned unrecognized status")]
+    fn chat_parser_create_unrecognized_status_panics() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let _ = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_chat_parser_create_status::MAX,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
     }
 
     #[test]

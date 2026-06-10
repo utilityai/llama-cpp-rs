@@ -11,6 +11,7 @@ use crate::context::LlamaContext;
 use crate::error::EvalMultimodalChunksError;
 use crate::error::SampleError;
 use crate::error::TokenToStringError;
+use crate::eval_multimodal_chunks_params::EvalMultimodalChunksParams;
 use crate::llama_batch::LlamaBatch;
 use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
@@ -455,35 +456,28 @@ impl<'model> SampledTokenClassifier<'model> {
     /// type unknown to this binding, or
     /// [`EvalMultimodalChunksError::ChunkOutOfBounds`] when a valid index returns
     /// `None` from `chunks.get`.
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "thin wrapper over MtmdInputChunks::eval_chunks; parameter shape mirrors the underlying API"
-    )]
     pub fn eval_multimodal_chunks(
         &mut self,
         chunks: &MtmdInputChunks,
         mtmd_ctx: &MtmdContext,
         llama_ctx: &LlamaContext,
-        start_position: llama_pos,
-        seq_id: llama_seq_id,
-        n_batch: i32,
-        logits_last: bool,
+        params: EvalMultimodalChunksParams,
     ) -> Result<llama_pos, EvalMultimodalChunksError> {
         let chunk_count = chunks.len();
-        let mut next_position = start_position;
+        let mut next_position = params.start_position;
 
         for index in 0..chunk_count {
             let chunk = chunks
                 .get(index)
                 .ok_or(EvalMultimodalChunksError::ChunkOutOfBounds(index))?;
-            let logits_for_this_chunk = logits_last && index + 1 == chunk_count;
+            let logits_for_this_chunk = params.logits_last && index + 1 == chunk_count;
 
             next_position = chunk.eval_single(
                 mtmd_ctx,
                 llama_ctx,
                 next_position,
-                seq_id,
-                n_batch,
+                params.seq_id,
+                params.n_batch,
                 logits_for_this_chunk,
             )?;
             crate::ingest_prompt_chunk::ingest_prompt_chunk(self, &chunk)?;

@@ -73,7 +73,9 @@ extern "C" llama_rs_mtmd_bitmap_init_from_file_status llama_rs_mtmd_bitmap_init_
     }
 
     try {
-        struct mtmd_bitmap * bitmap = mtmd_helper_bitmap_init_from_file(ctx, fname);
+        struct mtmd_helper_bitmap_wrapper bitmap_wrapper =
+            mtmd_helper_bitmap_init_from_file(ctx, fname, false);
+        struct mtmd_bitmap * bitmap = bitmap_wrapper.bitmap;
         if (!bitmap) {
             return LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL;
         }

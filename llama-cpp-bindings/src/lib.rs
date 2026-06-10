@@ -7,6 +7,7 @@ pub mod batch_add_error;
 pub mod chat_message_parse_outcome;
 pub mod context;
 pub mod error;
+pub mod eval_multimodal_chunks_params;
 pub mod extract_tool_call_markers_from_haystack;
 pub mod ffi_error_reader;
 pub mod ffi_status_is_ok;
@@ -69,6 +70,7 @@ pub use error::{
 };
 
 pub use chat_message_parse_outcome::ChatMessageParseOutcome;
+pub use eval_multimodal_chunks_params::EvalMultimodalChunksParams;
 pub use llama_backend_device::{LlamaBackendDevice, list_llama_ggml_backend_devices};
 pub use llama_backend_device_type::LlamaBackendDeviceType;
 pub use llama_cpp_bindings_types::{

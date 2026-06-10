@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "every trial returns anyhow::Result<()> to match the LlamaTestFn signature"
-)]
-
 use std::process::ExitCode;
 
 use anyhow::Result;

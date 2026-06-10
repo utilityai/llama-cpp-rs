@@ -1,5 +1,5 @@
 #[derive(Debug, PartialEq, Eq)]
 pub struct ImageChunkBatchSizeMismatch {
-    pub image_tokens: u32,
-    pub n_batch: u32,
+    pub image_tokens: usize,
+    pub n_batch: i32,
 }

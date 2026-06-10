@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
@@ -115,7 +110,7 @@ fn apply_chat_template_produces_prompt(fixture: &LlamaFixture<'_>) -> Result<()>
     let model = fixture.model;
     let template = model.chat_template(None)?;
     let message = LlamaChatMessage::new("user".to_string(), "hello".to_string())?;
-    let prompt = model.apply_chat_template(&template, &[message], true)?;
+    let prompt = model.apply_chat_template(&template, &[message], true, true)?;
 
     assert!(
         prompt.contains("hello"),
@@ -185,7 +180,7 @@ fn apply_chat_template_renders_long_messages(fixture: &LlamaFixture<'_>) -> Resu
     let template = model.chat_template(None)?;
     let long_content = "a".repeat(2000);
     let message = LlamaChatMessage::new("user".to_string(), long_content.clone())?;
-    let prompt = model.apply_chat_template(&template, &[message], true)?;
+    let prompt = model.apply_chat_template(&template, &[message], true, true)?;
 
     assert!(
         prompt.contains(&long_content),

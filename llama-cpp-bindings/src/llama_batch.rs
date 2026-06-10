@@ -161,11 +161,7 @@ impl<'tokens> LlamaBatch<'tokens> {
         let token_count = checked_usize_as_i32(tokens.len(), "token count")?;
 
         let batch = unsafe {
-            #[expect(
-                clippy::as_ptr_cast_mut,
-                reason = "llama_batch_get_one signature requires *mut i32 but does not mutate the tokens"
-            )]
-            let ptr = tokens.as_ptr() as *mut i32;
+            let ptr = tokens.as_ptr().cast::<i32>().cast_mut();
             llama_cpp_bindings_sys::llama_batch_get_one(ptr, token_count)
         };
 

@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use anyhow::Result;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
