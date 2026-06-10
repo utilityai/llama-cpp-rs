@@ -139,7 +139,7 @@ impl LlamaContext<'_> {
         let mut out_error: *mut c_char = ptr::null_mut();
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_memory_seq_add(
-                self.context.as_ptr(),
+                self.context.as_ptr().cast_const(),
                 seq_id,
                 p0,
                 p1,
@@ -169,7 +169,7 @@ impl LlamaContext<'_> {
         let mut out_error: *mut c_char = ptr::null_mut();
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_memory_seq_div(
-                self.context.as_ptr(),
+                self.context.as_ptr().cast_const(),
                 seq_id,
                 p0,
                 p1,
@@ -183,7 +183,10 @@ impl LlamaContext<'_> {
     #[must_use]
     pub fn kv_cache_seq_pos_max(&self, seq_id: i32) -> i32 {
         unsafe {
-            llama_cpp_bindings_sys::llama_rs_memory_seq_pos_max(self.context.as_ptr(), seq_id)
+            llama_cpp_bindings_sys::llama_rs_memory_seq_pos_max(
+                self.context.as_ptr().cast_const(),
+                seq_id,
+            )
         }
     }
 }

@@ -122,7 +122,7 @@ llama_rs_sampler_sample_status llama_rs_sampler_sample(
 void llama_rs_string_free(char * ptr);
 
 llama_pos llama_rs_memory_seq_pos_max(
-    struct llama_context * ctx,
+    const struct llama_context * ctx,
     llama_seq_id seq_id);
 
 typedef enum llama_rs_encode_status {
@@ -152,10 +152,10 @@ typedef enum llama_rs_memory_seq_add_status {
 } llama_rs_memory_seq_add_status;
 
 llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
-    struct llama_context * ctx,
+    const struct llama_context * ctx,
     llama_seq_id seq_id,
-    llama_pos p0,
-    llama_pos p1,
+    llama_pos pos_start,
+    llama_pos pos_end,
     llama_pos shift,
     char ** out_error);
 
@@ -169,11 +169,11 @@ typedef enum llama_rs_memory_seq_div_status {
 } llama_rs_memory_seq_div_status;
 
 llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
-    struct llama_context * ctx,
+    const struct llama_context * ctx,
     llama_seq_id seq_id,
-    llama_pos p0,
-    llama_pos p1,
-    int d,
+    llama_pos pos_start,
+    llama_pos pos_end,
+    int divisor,
     char ** out_error);
 
 typedef enum llama_rs_load_model_from_file_status {

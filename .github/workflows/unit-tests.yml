@@ -46,3 +46,29 @@ jobs:
       - uses: ./.github/actions/install-rust-toolchain
 
       - run: make test.unit
+
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - run: make lint.cpp.cppcheck
+
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - run: sudo apt-get update && sudo apt-get install -y clang-tidy
+
+      - run: make lint.cpp.clang-tidy

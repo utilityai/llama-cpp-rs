@@ -1,14 +1,17 @@
 #include "wrapper_tool_calls.h"
+#include <nlohmann/json.hpp> // IWYU pragma: keep
+#include <nlohmann/json_fwd.hpp>
 #include "wrapper_token_text.h"
 
 #include "llama.cpp/common/chat-auto-parser.h"
 #include "llama.cpp/common/chat-auto-parser-helpers.h"
 #include "llama.cpp/common/chat.h"
 #include "llama.cpp/include/llama.h"
+#include "wrapper_utils.h"
 
 #include <exception>
+#include <memory>
 #include <new>
-#include <nlohmann/json.hpp>
 #include <string>
 
 using wrapper_helpers::token_text_or_empty;
@@ -24,18 +27,18 @@ namespace {
 // detected markers come from the model's actual template behavior, not from a
 // hardcoded list), but use plain-ASCII synthetic names where the upstream
 // autoparser uses sentinel strings that some Jinja templates choke on.
-std::string detect_tool_call_haystack(
+auto detect_tool_call_haystack(
     const common_chat_template & tmpl,
-    const autoparser::analyze_reasoning & reasoning) {
-    nlohmann::ordered_json user_msg = {
+    const autoparser::analyze_reasoning & reasoning) -> std::string {
+    nlohmann::ordered_json const user_msg = {
         { "role",    "user"                },
         { "content", "Please use the tool" }
     };
-    nlohmann::ordered_json assistant_no_tools = {
+    nlohmann::ordered_json const assistant_no_tools = {
         { "role",    "assistant"      },
         { "content", "Sure, calling." }
     };
-    nlohmann::ordered_json first_tool_call = {
+    nlohmann::ordered_json const first_tool_call = {
         { "id",       "call_001"  },
         { "type",     "function"  },
         { "function", {
@@ -46,12 +49,12 @@ std::string detect_tool_call_haystack(
             }}
         }}
     };
-    nlohmann::ordered_json assistant_with_tools = {
+    nlohmann::ordered_json const assistant_with_tools = {
         { "role",       "assistant"                                                  },
         { "content",    ""                                                           },
         { "tool_calls", nlohmann::ordered_json::array({ first_tool_call })           }
     };
-    nlohmann::ordered_json tool_definition = {
+    nlohmann::ordered_json const tool_definition = {
         { "type",     "function"  },
         { "function", {
             { "name",        "tool_first"           },
@@ -77,26 +80,26 @@ std::string detect_tool_call_haystack(
     params_with_tools.messages =
         nlohmann::ordered_json::array({ user_msg, assistant_with_tools });
 
-    std::string output_no_tools = autoparser::apply_template(tmpl, params_no_tools);
-    std::string output_with_tools = autoparser::apply_template(tmpl, params_with_tools);
+    std::string const output_no_tools = autoparser::apply_template(tmpl, params_no_tools);
+    std::string const output_with_tools = autoparser::apply_template(tmpl, params_with_tools);
 
     if (output_no_tools.empty() || output_with_tools.empty()) {
         return {};
     }
 
-    diff_split diff = calculate_diff_split(output_no_tools, output_with_tools);
+    diff_split const diff = calculate_diff_split(output_no_tools, output_with_tools);
     std::string haystack = diff.right;
 
     // Strip reasoning markers so the surrounding tool-call markers can be
     // located reliably — the autoparser does the same for the JSON-native
     // path.
-    auto remove_first = [&haystack](const std::string & needle) {
+    auto remove_first = [&haystack](const std::string & needle) -> void {
         if (needle.empty()) {
             return;
         }
         auto pos = haystack.find(needle);
         if (pos != std::string::npos) {
-            haystack = haystack.substr(0, pos) + haystack.substr(pos + needle.length());
+            haystack.erase(pos, needle.length());
         }
     };
 
@@ -108,51 +111,51 @@ std::string detect_tool_call_haystack(
 
 }  // namespace
 
-extern "C" llama_rs_compute_tool_call_haystack_status llama_rs_compute_tool_call_haystack(
+extern "C" auto llama_rs_compute_tool_call_haystack(
     const struct llama_model * model,
     char ** out_haystack,
-    char ** out_error) {
-    if (out_haystack) {
+    char ** out_error) -> llama_rs_compute_tool_call_haystack_status {
+    if (out_haystack != nullptr) {
         *out_haystack = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!model) {
+    if (model == nullptr) {
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_MODEL_ARG;
     }
-    if (!out_haystack) {
+    if (out_haystack == nullptr) {
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_HAYSTACK_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_NULL_OUT_ERROR_ARG;
     }
 
     try {
         const char * tmpl_src = llama_model_chat_template(model, nullptr);
-        if (!tmpl_src) {
+        if (tmpl_src == nullptr) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
         const llama_vocab * vocab = llama_model_get_vocab(model);
-        if (!vocab) {
+        if (vocab == nullptr) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
-        std::string bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
-        std::string eos_token = token_text_or_empty(vocab, llama_vocab_eos(vocab));
+        std::string const bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
+        std::string const eos_token = token_text_or_empty(vocab, llama_vocab_eos(vocab));
 
-        common_chat_template tmpl(tmpl_src, bos_token, eos_token);
+        common_chat_template const tmpl(tmpl_src, bos_token, eos_token);
         auto jinja_caps = tmpl.original_caps();
-        autoparser::analyze_reasoning reasoning(tmpl, jinja_caps.supports_tool_calls);
+        autoparser::analyze_reasoning const reasoning(tmpl, jinja_caps.supports_tool_calls);
 
-        std::string haystack = detect_tool_call_haystack(tmpl, reasoning);
+        std::string const haystack = detect_tool_call_haystack(tmpl, reasoning);
         if (haystack.empty()) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_OK;
         }
 
         char * haystack_dup = llama_rs_dup_string(haystack);
-        if (!haystack_dup) {
+        if (haystack_dup == nullptr) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
         }
 
@@ -163,71 +166,71 @@ extern "C" llama_rs_compute_tool_call_haystack_status llama_rs_compute_tool_call
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & ex) {
         *out_error = llama_rs_dup_string(std::string(ex.what()));
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string(std::string("unknown c++ exception"));
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_COMPUTE_TOOL_CALL_HAYSTACK_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_diagnose_tool_call_synthetic_renders_status llama_rs_diagnose_tool_call_synthetic_renders(
+extern "C" auto llama_rs_diagnose_tool_call_synthetic_renders(
     const struct llama_model * model,
     char ** out_no_tools,
     char ** out_with_tools,
-    char ** out_error) {
-    if (out_no_tools) {
+    char ** out_error) -> llama_rs_diagnose_tool_call_synthetic_renders_status {
+    if (out_no_tools != nullptr) {
         *out_no_tools = nullptr;
     }
-    if (out_with_tools) {
+    if (out_with_tools != nullptr) {
         *out_with_tools = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!model) {
+    if (model == nullptr) {
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_MODEL_ARG;
     }
-    if (!out_no_tools) {
+    if (out_no_tools == nullptr) {
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_NO_TOOLS_ARG;
     }
-    if (!out_with_tools) {
+    if (out_with_tools == nullptr) {
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_WITH_TOOLS_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_NULL_OUT_ERROR_ARG;
     }
 
     try {
         const char * tmpl_src = llama_model_chat_template(model, nullptr);
-        if (!tmpl_src) {
+        if (tmpl_src == nullptr) {
             return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
         }
 
         const llama_vocab * vocab = llama_model_get_vocab(model);
-        if (!vocab) {
+        if (vocab == nullptr) {
             return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
         }
 
-        std::string bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
-        std::string eos_token = token_text_or_empty(vocab, llama_vocab_eos(vocab));
+        std::string const bos_token = token_text_or_empty(vocab, llama_vocab_bos(vocab));
+        std::string const eos_token = token_text_or_empty(vocab, llama_vocab_eos(vocab));
 
-        common_chat_template tmpl(tmpl_src, bos_token, eos_token);
+        common_chat_template const tmpl(tmpl_src, bos_token, eos_token);
 
-        nlohmann::ordered_json user_msg = {
+        nlohmann::ordered_json const user_msg = {
             { "role",    "user"                },
             { "content", "Please use the tool" }
         };
-        nlohmann::ordered_json assistant_no_tools = {
+        nlohmann::ordered_json const assistant_no_tools = {
             { "role",    "assistant"      },
             { "content", "Sure, calling." }
         };
-        nlohmann::ordered_json first_tool_call = {
+        nlohmann::ordered_json const first_tool_call = {
             { "id",       "call_001"  },
             { "type",     "function"  },
             { "function", {
@@ -238,12 +241,12 @@ extern "C" llama_rs_diagnose_tool_call_synthetic_renders_status llama_rs_diagnos
                 }}
             }}
         };
-        nlohmann::ordered_json assistant_with_tools = {
+        nlohmann::ordered_json const assistant_with_tools = {
             { "role",       "assistant"                                                  },
             { "content",    ""                                                           },
             { "tool_calls", nlohmann::ordered_json::array({ first_tool_call })           }
         };
-        nlohmann::ordered_json tool_definition = {
+        nlohmann::ordered_json const tool_definition = {
             { "type",     "function"  },
             { "function", {
                 { "name",        "tool_first"           },
@@ -269,34 +272,31 @@ extern "C" llama_rs_diagnose_tool_call_synthetic_renders_status llama_rs_diagnos
         params_with_tools.messages =
             nlohmann::ordered_json::array({ user_msg, assistant_with_tools });
 
-        std::string output_a = autoparser::apply_template(tmpl, params_no_tools);
-        std::string output_b = autoparser::apply_template(tmpl, params_with_tools);
+        std::string const output_a = autoparser::apply_template(tmpl, params_no_tools);
+        std::string const output_b = autoparser::apply_template(tmpl, params_with_tools);
 
-        char * a_dup = llama_rs_dup_string(output_a);
-        char * b_dup = llama_rs_dup_string(output_b);
+        std::unique_ptr<char[]> a_dup(llama_rs_dup_string(output_a));
+        std::unique_ptr<char[]> b_dup(llama_rs_dup_string(output_b));
 
-        if (!a_dup || !b_dup) {
-            std::free(a_dup);
-            std::free(b_dup);
-
+        if ((a_dup == nullptr) || (b_dup == nullptr)) {
             return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
         }
 
-        *out_no_tools = a_dup;
-        *out_with_tools = b_dup;
+        *out_no_tools = a_dup.release();
+        *out_with_tools = b_dup.release();
 
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_OK;
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & ex) {
         *out_error = llama_rs_dup_string(std::string(ex.what()));
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string(std::string("unknown c++ exception"));
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_DIAGNOSE_TOOL_CALL_SYNTHETIC_RENDERS_VENDORED_THREW_CXX_EXCEPTION;

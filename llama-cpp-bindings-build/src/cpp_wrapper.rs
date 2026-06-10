@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::glob_paths;
 use crate::target_os::TargetOs;
 
-const WRAPPER_SOURCE_PATTERNS: &[&str] = &["wrapper_*.cpp", "marker_probes/**/*.cpp"];
+const WRAPPER_SOURCE_PATTERNS: &[&str] = &["wrapper_*.cpp"];
 
 pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
     let mut build = cc::Build::new();
@@ -12,6 +12,7 @@ pub fn compile_cpp_wrappers(llama_src: &Path, target_os: &TargetOs) {
         .cpp(true)
         .warnings(false)
         .include(".")
+        .include("GSL/include")
         .include(llama_src)
         .include(llama_src.join("common"))
         .include(llama_src.join("include"))

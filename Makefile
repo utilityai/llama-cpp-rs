@@ -51,6 +51,24 @@ fmt:
 fmt.check:
 	cargo fmt --all --check
 
+.PHONY: lint.cpp
+lint.cpp: lint.cpp.clang-tidy lint.cpp.cppcheck
+
+.PHONY: lint.cpp.clang-tidy
+lint.cpp.clang-tidy:
+	cd llama-cpp-bindings-sys && clang-tidy wrapper_*.cpp -- \
+		-std=c++17 -I. -IGSL/include -Illama.cpp -Illama.cpp/common \
+		-Illama.cpp/include -Illama.cpp/ggml/include -Illama.cpp/vendor
+
+.PHONY: lint.cpp.cppcheck
+lint.cpp.cppcheck:
+	cd llama-cpp-bindings-sys && cppcheck --enable=all --inconclusive \
+		--check-level=exhaustive --std=c++17 --error-exitcode=1 \
+		-I. -IGSL/include -Illama.cpp -Illama.cpp/common -Illama.cpp/include \
+		-Illama.cpp/ggml/include -Illama.cpp/vendor \
+		--suppress='*:llama.cpp/*' --suppress=missingIncludeSystem \
+		--suppress=unusedFunction --suppress=checkersReport wrapper_*.cpp
+
 .PHONY: test
 test: test.unit test.llms
 
