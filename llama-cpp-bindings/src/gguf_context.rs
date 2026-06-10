@@ -176,6 +176,12 @@ mod tests {
         std::mem::discriminant(&GgufContextError::PathToStrError(PathBuf::new()))
     }
 
+    fn utf8_error_disc() -> Discriminant<GgufContextError> {
+        let invalid_utf8_bytes: Vec<u8> = vec![0xFF];
+        let utf8_err = std::str::from_utf8(&invalid_utf8_bytes).unwrap_err();
+        std::mem::discriminant(&GgufContextError::Utf8Error(utf8_err))
+    }
+
     #[test]
     fn from_file_opens_valid_gguf() {
         let context = GgufContext::from_file(fixture_path());
@@ -291,7 +297,7 @@ mod tests {
     }
 
     impl SyntheticGgufFile {
-        fn new(test_name: &str) -> Self {
+        fn from_bytes(test_name: &str, bytes: &[u8]) -> Self {
             use std::io::Write as _;
 
             let path = std::env::temp_dir().join(format!(
@@ -300,6 +306,13 @@ mod tests {
                 test_name,
             ));
 
+            let mut file = std::fs::File::create(&path).unwrap();
+            file.write_all(bytes).unwrap();
+
+            Self { path }
+        }
+
+        fn new(test_name: &str) -> Self {
             let mut bytes: Vec<u8> = Vec::new();
             bytes.extend_from_slice(b"GGUF");
             bytes.extend_from_slice(&3u32.to_le_bytes());
@@ -326,10 +339,7 @@ mod tests {
             bytes.extend_from_slice(&10u32.to_le_bytes());
             bytes.extend_from_slice(&987_654_321u64.to_le_bytes());
 
-            let mut file = std::fs::File::create(&path).unwrap();
-            file.write_all(&bytes).unwrap();
-
-            Self { path }
+            Self::from_bytes(test_name, &bytes)
         }
     }
 
@@ -352,5 +362,54 @@ mod tests {
         let u64_index = context.find_key("synthetic.u64_value").unwrap();
         assert_eq!(context.kv_type(u64_index), Some(GgufType::Uint64));
         assert_eq!(context.val_u64(u64_index), 987_654_321);
+    }
+
+    #[test]
+    fn val_str_returns_utf8_error_for_non_utf8_value() {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"GGUF");
+        bytes.extend_from_slice(&3u32.to_le_bytes());
+        bytes.extend_from_slice(&0u64.to_le_bytes());
+        bytes.extend_from_slice(&1u64.to_le_bytes());
+
+        let value_key = b"synthetic.str_value";
+        bytes.extend_from_slice(&(value_key.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(value_key);
+        bytes.extend_from_slice(&8u32.to_le_bytes());
+        let non_utf8_value: [u8; 2] = [0xFF, 0xFE];
+        bytes.extend_from_slice(&(non_utf8_value.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&non_utf8_value);
+
+        let fixture =
+            SyntheticGgufFile::from_bytes("val_str_returns_utf8_error_for_non_utf8_value", &bytes);
+        let context = GgufContext::from_file(&fixture.path).unwrap();
+
+        let value_index = context.find_key("synthetic.str_value").unwrap();
+        let err = context.val_str(value_index).unwrap_err();
+
+        assert_eq!(std::mem::discriminant(&err), utf8_error_disc());
+    }
+
+    #[test]
+    fn key_at_returns_utf8_error_for_non_utf8_key() {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(b"GGUF");
+        bytes.extend_from_slice(&3u32.to_le_bytes());
+        bytes.extend_from_slice(&0u64.to_le_bytes());
+        bytes.extend_from_slice(&1u64.to_le_bytes());
+
+        let non_utf8_key: [u8; 2] = [0xFF, 0xFE];
+        bytes.extend_from_slice(&(non_utf8_key.len() as u64).to_le_bytes());
+        bytes.extend_from_slice(&non_utf8_key);
+        bytes.extend_from_slice(&5u32.to_le_bytes());
+        bytes.extend_from_slice(&42i32.to_le_bytes());
+
+        let fixture =
+            SyntheticGgufFile::from_bytes("key_at_returns_utf8_error_for_non_utf8_key", &bytes);
+        let context = GgufContext::from_file(&fixture.path).unwrap();
+
+        let err = context.key_at(0).unwrap_err();
+
+        assert_eq!(std::mem::discriminant(&err), utf8_error_disc());
     }
 }

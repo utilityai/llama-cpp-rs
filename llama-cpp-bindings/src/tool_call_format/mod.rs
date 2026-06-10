@@ -46,6 +46,7 @@ mod tests {
     use llama_cpp_bindings_types::BracketedJsonShape;
     use llama_cpp_bindings_types::KeyValueXmlTagsShape;
     use llama_cpp_bindings_types::PairedQuoteShape;
+    use llama_cpp_bindings_types::ParsedToolCall;
     use llama_cpp_bindings_types::ToolCallArgsShape;
     use llama_cpp_bindings_types::ToolCallArguments;
     use llama_cpp_bindings_types::ToolCallMarkers;
@@ -55,6 +56,8 @@ mod tests {
 
     use super::ToolCallFormatOutcome;
     use super::try_parse;
+    use crate::error::BracketedArgsFailure;
+    use crate::error::ToolCallFormatFailure;
 
     fn mistral3_markers() -> ToolCallMarkers {
         ToolCallMarkers {
@@ -113,17 +116,14 @@ mod tests {
             &mistral3_markers(),
         );
 
-        match outcome {
-            ToolCallFormatOutcome::Parsed(calls) => {
-                assert_eq!(calls.len(), 1);
-                assert_eq!(calls[0].name, "get_weather");
-                assert_eq!(
-                    calls[0].arguments,
-                    ToolCallArguments::ValidJson(json!({"location": "Paris"})),
-                );
-            }
-            other => panic!("expected Parsed, got {other:?}"),
-        }
+        assert_eq!(
+            outcome,
+            ToolCallFormatOutcome::Parsed(vec![ParsedToolCall::new(
+                String::new(),
+                "get_weather".to_owned(),
+                ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+            )]),
+        );
     }
 
     #[test]
@@ -133,17 +133,14 @@ mod tests {
             &gemma4_markers(),
         );
 
-        match outcome {
-            ToolCallFormatOutcome::Parsed(calls) => {
-                assert_eq!(calls.len(), 1);
-                assert_eq!(calls[0].name, "get_weather");
-                assert_eq!(
-                    calls[0].arguments,
-                    ToolCallArguments::ValidJson(json!({"location": "Paris"})),
-                );
-            }
-            other => panic!("expected Parsed, got {other:?}"),
-        }
+        assert_eq!(
+            outcome,
+            ToolCallFormatOutcome::Parsed(vec![ParsedToolCall::new(
+                String::new(),
+                "get_weather".to_owned(),
+                ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+            )]),
+        );
     }
 
     #[test]
@@ -153,17 +150,14 @@ mod tests {
             &glm47_markers(),
         );
 
-        match outcome {
-            ToolCallFormatOutcome::Parsed(calls) => {
-                assert_eq!(calls.len(), 1);
-                assert_eq!(calls[0].name, "get_weather");
-                assert_eq!(
-                    calls[0].arguments,
-                    ToolCallArguments::ValidJson(json!({"location": "Paris"})),
-                );
-            }
-            other => panic!("expected Parsed, got {other:?}"),
-        }
+        assert_eq!(
+            outcome,
+            ToolCallFormatOutcome::Parsed(vec![ParsedToolCall::new(
+                String::new(),
+                "get_weather".to_owned(),
+                ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+            )]),
+        );
     }
 
     #[test]
@@ -173,17 +167,14 @@ mod tests {
             &qwen35_markers(),
         );
 
-        match outcome {
-            ToolCallFormatOutcome::Parsed(calls) => {
-                assert_eq!(calls.len(), 1);
-                assert_eq!(calls[0].name, "get_weather");
-                assert_eq!(
-                    calls[0].arguments,
-                    ToolCallArguments::ValidJson(json!({"location": "Paris"})),
-                );
-            }
-            other => panic!("expected Parsed, got {other:?}"),
-        }
+        assert_eq!(
+            outcome,
+            ToolCallFormatOutcome::Parsed(vec![ParsedToolCall::new(
+                String::new(),
+                "get_weather".to_owned(),
+                ToolCallArguments::ValidJson(json!({"location": "Paris"})),
+            )]),
+        );
     }
 
     #[test]
@@ -196,29 +187,32 @@ mod tests {
             }),
         };
 
-        match try_parse("[TOOL_CALLS]get_weather[ARGS]{}", &markers) {
-            ToolCallFormatOutcome::NoMatch => {}
-            other => panic!("expected NoMatch, got {other:?}"),
-        }
+        assert_eq!(
+            try_parse("[TOOL_CALLS]get_weather[ARGS]{}", &markers),
+            ToolCallFormatOutcome::NoMatch,
+        );
     }
 
     #[test]
     fn no_match_when_body_lacks_markers() {
-        match try_parse("plain text without tool calls", &mistral3_markers()) {
-            ToolCallFormatOutcome::NoMatch => {}
-            other => panic!("expected NoMatch, got {other:?}"),
-        }
+        assert_eq!(
+            try_parse("plain text without tool calls", &mistral3_markers()),
+            ToolCallFormatOutcome::NoMatch,
+        );
     }
 
     #[test]
     fn failed_when_inner_parser_returns_typed_failure() {
-        match try_parse(
-            "[TOOL_CALLS]get_weather[ARGS]{\"location\":}",
-            &mistral3_markers(),
-        ) {
-            ToolCallFormatOutcome::Failed(_) => {}
-            other => panic!("expected Failed, got {other:?}"),
-        }
+        let outcome = try_parse("[TOOL_CALLS]get_weather[ARGS]   ", &mistral3_markers());
+
+        assert_eq!(
+            outcome,
+            ToolCallFormatOutcome::Failed(ToolCallFormatFailure::BracketedArgs(
+                BracketedArgsFailure::UnterminatedArguments {
+                    tool_name: "get_weather".to_owned(),
+                },
+            )),
+        );
     }
 
     #[test]
@@ -228,10 +222,10 @@ mod tests {
             <arg_value>Paris</arg_value>\
             </tool_call>";
 
-        match try_parse(glm_input, &qwen35_markers()) {
-            ToolCallFormatOutcome::NoMatch => {}
-            other => panic!("expected NoMatch for GLM input under Qwen markers, got {other:?}"),
-        }
+        assert_eq!(
+            try_parse(glm_input, &qwen35_markers()),
+            ToolCallFormatOutcome::NoMatch,
+        );
     }
 
     #[test]
@@ -241,12 +235,11 @@ mod tests {
         let plain_content = "Sorry, I cannot help with that request.";
 
         for candidate in known_marker_candidates() {
-            match try_parse(plain_content, &candidate) {
-                ToolCallFormatOutcome::NoMatch => {}
-                other => panic!(
-                    "expected NoMatch for plain content under candidate {candidate:?}, got {other:?}"
-                ),
-            }
+            assert_eq!(
+                try_parse(plain_content, &candidate),
+                ToolCallFormatOutcome::NoMatch,
+                "expected NoMatch for plain content under candidate {candidate:?}"
+            );
         }
     }
 
@@ -274,8 +267,14 @@ mod tests {
 
         let (args_shape, calls) =
             resolved.expect("Qwen XML input must resolve via at least one duck-type candidate");
-        assert!(
-            matches!(args_shape, ToolCallArgsShape::XmlTags(_)),
+        assert_eq!(
+            args_shape,
+            ToolCallArgsShape::XmlTags(XmlTagsShape {
+                function_open_prefix: "<function=".to_owned(),
+                function_close: "</function>".to_owned(),
+                parameter_open_prefix: "<parameter=".to_owned(),
+                parameter_close: "</parameter>".to_owned(),
+            }),
             "duck-type ordering must resolve Qwen XML via the XmlTags shape (most restrictive \
              shape that requires `<function=`), got {args_shape:?}"
         );
@@ -308,8 +307,14 @@ mod tests {
 
         let (args_shape, calls) =
             resolved.expect("GLM input must resolve via at least one duck-type candidate");
-        assert!(
-            matches!(args_shape, ToolCallArgsShape::KeyValueXmlTags(_)),
+        assert_eq!(
+            args_shape,
+            ToolCallArgsShape::KeyValueXmlTags(KeyValueXmlTagsShape {
+                key_open: "<arg_key>".to_owned(),
+                key_close: "</arg_key>".to_owned(),
+                value_open: "<arg_value>".to_owned(),
+                value_close: "</arg_value>".to_owned(),
+            }),
             "GLM input must resolve via the KeyValueXmlTags shape, got {args_shape:?}"
         );
         assert_eq!(calls.len(), 1);
@@ -338,8 +343,11 @@ mod tests {
 
         let (args_shape, calls) =
             resolved.expect("Mistral input must resolve via at least one duck-type candidate");
-        assert!(
-            matches!(args_shape, ToolCallArgsShape::BracketedJson(_)),
+        assert_eq!(
+            args_shape,
+            ToolCallArgsShape::BracketedJson(BracketedJsonShape {
+                name_args_separator: "[ARGS]".to_owned(),
+            }),
             "Mistral input must resolve via the BracketedJson shape; the candidate ordering must \
              try BracketedJson before PairedQuote because PairedQuote's `{{` separator could \
              greedily match Mistral's JSON args. Got {args_shape:?}"
@@ -370,8 +378,15 @@ mod tests {
 
         let (args_shape, calls) =
             resolved.expect("Gemma input must resolve via at least one duck-type candidate");
-        assert!(
-            matches!(args_shape, ToolCallArgsShape::PairedQuote(_)),
+        assert_eq!(
+            args_shape,
+            ToolCallArgsShape::PairedQuote(PairedQuoteShape {
+                name_args_separator: "{".to_owned(),
+                value_quote: ToolCallValueQuote {
+                    open: "<|\"|>".to_owned(),
+                    close: "<|\"|>".to_owned(),
+                },
+            }),
             "Gemma input must resolve via the PairedQuote shape, got {args_shape:?}"
         );
         assert_eq!(calls.len(), 1);

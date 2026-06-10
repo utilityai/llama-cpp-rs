@@ -1,11 +1,8 @@
 use std::process::ExitCode;
-use std::sync::Arc;
 
 use libtest_mimic::Conclusion;
-use llama_cpp_bindings::llama_backend::LlamaBackend;
 
-use crate::execution_plan::ExecutionPlan;
-use crate::parse_harness_arguments::parse_harness_arguments;
+use crate::run_to_conclusions::run_to_conclusions;
 
 fn aggregate_exit_code(conclusions: &[Conclusion]) -> ExitCode {
     if conclusions.iter().any(Conclusion::has_failed) {
@@ -17,26 +14,13 @@ fn aggregate_exit_code(conclusions: &[Conclusion]) -> ExitCode {
 
 #[must_use]
 pub fn run() -> ExitCode {
-    let arguments = match parse_harness_arguments() {
-        Ok(arguments) => arguments,
+    match run_to_conclusions() {
+        Ok(conclusions) => aggregate_exit_code(&conclusions),
         Err(error) => {
             eprintln!("llama-cpp-test-harness: {error}");
-            return ExitCode::from(2);
+            ExitCode::from(2)
         }
-    };
-    let mut backend = match LlamaBackend::init() {
-        Ok(backend) => backend,
-        Err(error) => {
-            eprintln!("llama-cpp-test-harness: backend init failed: {error}");
-            return ExitCode::from(2);
-        }
-    };
-    let plan = ExecutionPlan::from_inventory();
-    if plan.requests_void_logs() {
-        backend.void_logs();
     }
-    let backend = Arc::new(backend);
-    aggregate_exit_code(&plan.run(&backend, &arguments))
 }
 
 #[cfg(test)]
@@ -46,6 +30,7 @@ mod tests {
     use libtest_mimic::Conclusion;
     use llama_cpp_bindings::llama_backend::LlamaBackend;
 
+    use crate::harness_run_error::HarnessRunError;
     use crate::run_to_conclusions::run_to_conclusions;
     use crate::test_backend_gate::BACKEND_INIT_GATE;
 
@@ -104,17 +89,15 @@ mod tests {
     }
 
     #[test]
-    fn run_to_conclusions_panics_when_backend_init_fails() {
+    fn run_to_conclusions_errors_when_backend_init_fails() {
         let _gate = BACKEND_INIT_GATE
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _hold = LlamaBackend::init().expect("first init must succeed");
-        let outcome = std::panic::catch_unwind(run_to_conclusions);
 
-        assert!(
-            outcome.is_err(),
-            "expected panic from re-initialised backend"
-        );
+        let outcome = run_to_conclusions();
+
+        assert!(matches!(outcome, Err(HarnessRunError::BackendInit(_))));
     }
 
     #[test]
@@ -123,6 +106,7 @@ mod tests {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _hold = LlamaBackend::init().expect("first init must succeed");
+
         let code = run();
 
         assert_eq!(as_u8(code), 2);

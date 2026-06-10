@@ -1,15 +1,18 @@
 use std::ffi::c_void;
 use std::sync::Arc;
 
-use llguidance::Matcher;
+use llama_cpp_error_recorder::RecordedError;
+use llama_cpp_error_recorder::record;
 use toktrie::ApproximateTokEnv;
 
 use crate::GrammarError;
+use crate::grammar_matcher::GrammarMatcher;
+use crate::mask_outcome::MaskOutcome;
 use crate::model::LlamaModel;
 use crate::sampling::LlamaSampler;
 
 struct LlgContext {
-    matcher: Matcher,
+    grammar: GrammarMatcher,
     tok_env: Arc<ApproximateTokEnv>,
     grammar_kind: String,
     grammar_data: String,
@@ -27,10 +30,8 @@ unsafe extern "C" fn llg_accept(
 ) {
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
 
-    if let Err(consume_error) = ctx.matcher.consume_token(token.cast_unsigned()) {
-        log::warn!(
-            "llguidance sampler failed to consume token: token={token}, error={consume_error}",
-        );
+    if let Err(grammar_error) = ctx.grammar.consume_token(token.cast_unsigned()) {
+        record(RecordedError::new(grammar_error));
     }
 }
 
@@ -41,12 +42,11 @@ unsafe extern "C" fn llg_apply(
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
     let cur_p = unsafe { &mut *cur_p };
 
-    let mask = match ctx.matcher.compute_mask() {
-        Ok(mask) => mask,
-        Err(compute_error) => {
-            log::warn!(
-                "llguidance sampler failed to compute mask, skipping constraint application: error={compute_error}",
-            );
+    let mask = match ctx.grammar.compute_mask() {
+        Ok(MaskOutcome::Constrained(mask)) => mask,
+        Ok(MaskOutcome::GrammarComplete) => return,
+        Err(grammar_error) => {
+            record(RecordedError::new(grammar_error));
 
             return;
         }
@@ -63,8 +63,8 @@ unsafe extern "C" fn llg_apply(
 unsafe extern "C" fn llg_reset(smpl: *mut llama_cpp_bindings_sys::llama_sampler) {
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
 
-    if let Err(reset_error) = ctx.matcher.reset() {
-        log::warn!("llguidance sampler failed to reset: error={reset_error}");
+    if let Err(grammar_error) = ctx.grammar.reset() {
+        record(RecordedError::new(grammar_error));
     }
 }
 
@@ -73,7 +73,7 @@ unsafe extern "C" fn llg_clone(
 ) -> *mut llama_cpp_bindings_sys::llama_sampler {
     let ctx = unsafe { &*(*smpl).ctx.cast::<LlgContext>() };
     let new_ctx = Box::new(LlgContext {
-        matcher: ctx.matcher.deep_clone(),
+        grammar: ctx.grammar.deep_clone(),
         tok_env: Arc::clone(&ctx.tok_env),
         grammar_kind: ctx.grammar_kind.clone(),
         grammar_data: ctx.grammar_data.clone(),
@@ -115,7 +115,7 @@ pub fn create_llg_sampler(
     grammar_kind: &str,
     grammar_data: &str,
 ) -> Result<LlamaSampler, GrammarError> {
-    let tok_env = model.approximate_tok_env();
+    let tok_env = model.approximate_tok_env()?;
     let tok_env_dyn: Arc<dyn toktrie::TokenizerEnv + Sync> = tok_env.clone();
 
     let factory = llguidance::ParserFactory::new_simple(&tok_env_dyn)
@@ -128,10 +128,8 @@ pub fn create_llg_sampler(
         .create_parser(grammar)
         .map_err(|parser_error| GrammarError::LlguidanceError(parser_error.to_string()))?;
 
-    let matcher = Matcher::new(Ok(parser));
-
     let ctx = Box::new(LlgContext {
-        matcher,
+        grammar: GrammarMatcher::new(parser),
         tok_env,
         grammar_kind: grammar_kind.to_string(),
         grammar_data: grammar_data.to_string(),

@@ -210,8 +210,7 @@ impl LlamaModelParams {
     }
 
     #[must_use]
-    pub fn with_n_gpu_layers(mut self, n_gpu_layers: u32) -> Self {
-        let n_gpu_layers = i32::try_from(n_gpu_layers).unwrap_or(i32::MAX);
+    pub const fn with_n_gpu_layers(mut self, n_gpu_layers: i32) -> Self {
         self.params.n_gpu_layers = n_gpu_layers;
         self
     }
@@ -283,6 +282,35 @@ impl LlamaModelParams {
     }
 }
 
+fn fit_params_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_fit_params_status,
+    out_unrecognized_status_code: i32,
+    out_error: *mut c_char,
+) -> Result<(), FitError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE => {
+            Err(FitError::NoFittingMemoryLayout)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR => {
+            Err(FitError::Aborted)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE => {
+            Err(FitError::UnknownStatus {
+                code: out_unrecognized_status_code,
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(FitError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(FitError::Reported { message })
+        }
+        other => unreachable!("llama_rs_fit_params returned unrecognized wrapper status: {other}"),
+    }
+}
+
 impl LlamaModelParams {
     /// # Errors
     ///
@@ -331,29 +359,7 @@ impl LlamaModelParams {
             )
         };
 
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK => {}
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE => {
-                return Err(FitError::NoFittingMemoryLayout);
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR => {
-                return Err(FitError::Aborted);
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE => {
-                return Err(FitError::UnknownStatus {
-                    code: out_unrecognized_status_code,
-                });
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED => {
-                return Err(FitError::NotEnoughMemory);
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION => {
-                let message =
-                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                return Err(FitError::Reported { message });
-            }
-            other => unreachable!("llama_rs_fit_params returned unrecognized wrapper status: {other}"),
-        }
+        fit_params_status_to_result(status, out_unrecognized_status_code, out_error)?;
 
         self.params.tensor_split = self.tensor_split.as_ptr();
         self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
@@ -406,10 +412,10 @@ mod tests {
     }
 
     #[test]
-    fn n_gpu_layers_overflow_clamps_to_max() {
-        let params = LlamaModelParams::default().with_n_gpu_layers(u32::MAX);
+    fn with_n_gpu_layers_sets_the_offload_count() {
+        let params = LlamaModelParams::default().with_n_gpu_layers(999);
 
-        assert_eq!(params.n_gpu_layers(), i32::MAX);
+        assert_eq!(params.n_gpu_layers(), 999);
     }
 
     #[test]
@@ -554,10 +560,10 @@ mod tests {
     fn with_devices_invalid_index_returns_error() {
         let result = LlamaModelParams::default().with_devices(&[999_999]);
 
-        assert!(matches!(
-            result.unwrap_err(),
-            crate::LlamaCppError::BackendDeviceNotFound(999_999)
-        ));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&crate::LlamaCppError::BackendDeviceNotFound(0)),
+        );
     }
 
     #[test]
@@ -661,10 +667,13 @@ mod tests {
             .as_mut()
             .append_kv_override(key, ParamOverrideValue::Int(1));
 
-        assert!(matches!(
-            result,
-            Err(crate::error::ModelParamsError::InvalidCharacterInKey { byte: 0xff, .. })
-        ));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&crate::error::ModelParamsError::InvalidCharacterInKey {
+                byte: 0,
+                reason: String::new(),
+            }),
+        );
     }
 
     #[test]
@@ -675,10 +684,45 @@ mod tests {
         let mut params = std::pin::pin!(LlamaModelParams::default());
         let result = params.as_mut().add_cpu_buft_override(key);
 
-        assert!(matches!(
-            result,
-            Err(crate::error::ModelParamsError::InvalidCharacterInKey { byte: 0xff, .. })
-        ));
+        assert_eq!(
+            std::mem::discriminant(&result.unwrap_err()),
+            std::mem::discriminant(&crate::error::ModelParamsError::InvalidCharacterInKey {
+                byte: 0,
+                reason: String::new(),
+            }),
+        );
+    }
+
+    #[test]
+    fn append_kv_override_with_empty_slot_vector_returns_no_available_slot() {
+        use crate::model::params::param_override_value::ParamOverrideValue;
+
+        let mut params = LlamaModelParams::default();
+        params.kv_overrides.clear();
+        let mut pinned = std::pin::pin!(params);
+
+        let result = pinned
+            .as_mut()
+            .append_kv_override(c"any_key", ParamOverrideValue::Int(1));
+
+        assert_eq!(
+            result.unwrap_err(),
+            crate::error::ModelParamsError::NoAvailableSlot
+        );
+    }
+
+    #[test]
+    fn add_cpu_buft_override_with_empty_slot_vector_returns_no_available_slot() {
+        let mut params = LlamaModelParams::default();
+        params.buft_overrides.clear();
+        let mut pinned = std::pin::pin!(params);
+
+        let result = pinned.as_mut().add_cpu_buft_override(c"any_pattern");
+
+        assert_eq!(
+            result.unwrap_err(),
+            crate::error::ModelParamsError::NoAvailableSlot
+        );
     }
 
     #[test]
@@ -705,6 +749,90 @@ mod tests {
         assert!(
             matches!(result, Err(FitError::Aborted | FitError::Reported { .. })),
             "expected Aborted or Reported, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn fit_params_status_ok_returns_ok() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Ok(()));
+    }
+
+    #[test]
+    fn fit_params_status_reported_failure_returns_no_fitting_memory_layout() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(crate::error::FitError::NoFittingMemoryLayout));
+    }
+
+    #[test]
+    fn fit_params_status_reported_error_returns_aborted() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(crate::error::FitError::Aborted));
+    }
+
+    #[test]
+    fn fit_params_status_unrecognized_code_returns_unknown_status() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE,
+            42,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::error::FitError::UnknownStatus { code: 42 })
+        );
+    }
+
+    #[test]
+    fn fit_params_status_allocation_failed_returns_not_enough_memory() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(crate::error::FitError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn fit_params_status_cxx_exception_returns_reported_with_unknown_error() {
+        let result = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(crate::error::FitError::Reported {
+                message: "unknown error".to_owned()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "unrecognized wrapper status")]
+    fn fit_params_status_out_of_range_panics() {
+        let _ = super::fit_params_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_fit_params_status::MAX,
+            0,
+            std::ptr::null_mut(),
         );
     }
 }

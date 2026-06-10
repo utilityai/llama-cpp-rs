@@ -4,7 +4,7 @@ use crate::error::key_value_xml_tags_failure::KeyValueXmlTagsFailure;
 use crate::error::paired_quote_failure::PairedQuoteFailure;
 use crate::error::xml_function_tags_failure::XmlFunctionTagsFailure;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ToolCallFormatFailure {
     #[error("bracketed-args fallback parser: {0}")]
     BracketedArgs(#[from] BracketedArgsFailure),

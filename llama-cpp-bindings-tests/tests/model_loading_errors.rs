@@ -15,34 +15,7 @@ use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,
@@ -63,34 +36,7 @@ fn load_model_with_invalid_path_returns_error(fixture: &LlamaFixture<'_>) -> Res
 }
 
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,
@@ -117,34 +63,7 @@ fn load_model_with_invalid_file_content_returns_unloadable_or_reported(
 
 #[cfg(unix)]
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,
@@ -171,34 +90,7 @@ fn load_model_with_non_utf8_path_returns_path_to_str_error(
 }
 
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,
@@ -218,34 +110,7 @@ fn lora_adapter_init_with_invalid_path_returns_error(fixture: &LlamaFixture<'_>)
 }
 
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,
@@ -268,34 +133,7 @@ fn lora_adapter_init_with_invalid_gguf_returns_unloadable(
 
 #[cfg(unix)]
 #[llama_test(
-    model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/GLM-4.7-Flash-GGUF", "GLM-4.7-Flash-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
-    n_gpu_layers = 999,
-    use_mmap = true,
-    use_mlock = false,
-    n_ctx = 512,
-    n_batch = 128,
-    n_ubatch = 64,
-)]
-#[llama_test(
-    model_source = HuggingFace("unsloth/Qwen3.6-35B-A3B-GGUF", "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"),
     n_gpu_layers = 999,
     use_mmap = true,
     use_mlock = false,

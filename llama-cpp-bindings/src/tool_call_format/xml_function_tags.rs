@@ -3,7 +3,6 @@ use llama_cpp_bindings_types::ToolCallArguments;
 use llama_cpp_bindings_types::XmlTagsShape;
 use nom::IResult;
 use nom::Parser;
-use nom::bytes::complete::tag;
 use nom::bytes::complete::take_until;
 
 use crate::error::XmlFunctionTagsFailure;
@@ -43,11 +42,8 @@ fn skip_to_next_function_open<'body>(
     let take_result: IResult<&'body str, &'body str> =
         take_until(function_open_prefix).parse(input);
     let (after_prefix_inclusive, _) = take_result.ok()?;
-    let consume_result: IResult<&'body str, &'body str> =
-        tag(function_open_prefix).parse(after_prefix_inclusive);
-    let (after_prefix, _) = consume_result.ok()?;
 
-    Some(after_prefix)
+    Some(&after_prefix_inclusive[function_open_prefix.len()..])
 }
 
 fn parse_one_parameter<'body>(
@@ -60,11 +56,7 @@ fn parse_one_parameter<'body>(
     let Ok((after_prefix_inclusive, _)) = take_result else {
         return Ok(None);
     };
-    let consume_result: IResult<&'body str, &'body str> =
-        tag(shape.parameter_open_prefix.as_str()).parse(after_prefix_inclusive);
-    let Ok((after_prefix, _)) = consume_result else {
-        return Ok(None);
-    };
+    let after_prefix = &after_prefix_inclusive[shape.parameter_open_prefix.len()..];
 
     let Some(name_end) = locate_tag_name_end(after_prefix) else {
         return Err(XmlFunctionTagsFailure::UnclosedParameterBlock {
@@ -248,91 +240,77 @@ mod tests {
     #[test]
     fn rejects_function_tag_missing_closing_angle_with_typed_failure() {
         let body = "<function=get_weather\n<parameter=location>Paris</parameter></function>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::UnclosedFunctionBlock { .. } => {}
-            other => panic!("expected UnclosedFunctionBlock, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::UnclosedFunctionBlock {
+                function_name: String::new(),
+                expected_close: "</function>".to_owned(),
+            }),
+        );
     }
 
     #[test]
     fn rejects_function_block_missing_close_tag_with_typed_failure() {
         let body = "<function=get_weather><parameter=location>Paris</parameter>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::UnclosedFunctionBlock {
-                function_name,
-                expected_close,
-            } => {
-                assert_eq!(function_name, "get_weather");
-                assert_eq!(expected_close, "</function>");
-            }
-            other => panic!("expected UnclosedFunctionBlock, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::UnclosedFunctionBlock {
+                function_name: "get_weather".to_owned(),
+                expected_close: "</function>".to_owned(),
+            }),
+        );
     }
 
     #[test]
     fn rejects_parameter_tag_missing_closing_angle_with_typed_failure() {
         let body = "<function=f><parameter=x</function>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::UnclosedParameterBlock {
-                function_name,
-                parameter_name,
-                expected_close,
-            } => {
-                assert_eq!(function_name, "f");
-                assert_eq!(parameter_name, "");
-                assert_eq!(expected_close, "</parameter>");
-            }
-            other => panic!("expected UnclosedParameterBlock, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::UnclosedParameterBlock {
+                function_name: "f".to_owned(),
+                parameter_name: String::new(),
+                expected_close: "</parameter>".to_owned(),
+            }),
+        );
     }
 
     #[test]
     fn rejects_parameter_block_missing_close_tag_with_typed_failure() {
         let body = "<function=get_weather><parameter=location>Paris</function>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::UnclosedParameterBlock {
-                function_name,
-                parameter_name,
-                expected_close,
-            } => {
-                assert_eq!(function_name, "get_weather");
-                assert_eq!(parameter_name, "location");
-                assert_eq!(expected_close, "</parameter>");
-            }
-            other => panic!("expected UnclosedParameterBlock, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::UnclosedParameterBlock {
+                function_name: "get_weather".to_owned(),
+                parameter_name: "location".to_owned(),
+                expected_close: "</parameter>".to_owned(),
+            }),
+        );
     }
 
     #[test]
     fn rejects_empty_function_name_with_typed_failure() {
         let body = "<function=><parameter=x>1</parameter></function>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::EmptyFunctionName => {}
-            other => panic!("expected EmptyFunctionName, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::EmptyFunctionName),
+        );
     }
 
     #[test]
     fn rejects_empty_parameter_name_with_typed_failure() {
         let body = "<function=f><parameter=>1</parameter></function>";
-        let result = parse(body, &xml_shape());
 
-        match result.expect_err("must error") {
-            XmlFunctionTagsFailure::EmptyParameterName { function_name } => {
-                assert_eq!(function_name, "f");
-            }
-            other => panic!("expected EmptyParameterName, got {other:?}"),
-        }
+        assert_eq!(
+            parse(body, &xml_shape()),
+            Err(XmlFunctionTagsFailure::EmptyParameterName {
+                function_name: "f".to_owned(),
+            }),
+        );
     }
 
     #[test]

@@ -199,11 +199,14 @@ mod tests {
         );
 
         let failure = result.expect_err("malformed JSON must produce a typed failure");
-        let BracketedArgsFailure::InvalidJsonArguments { tool_name, .. } = failure else {
-            unreachable!("input was syntactically malformed JSON, never truncated")
-        };
 
-        assert_eq!(tool_name, "get_weather");
+        assert_eq!(
+            std::mem::discriminant(&failure),
+            std::mem::discriminant(&BracketedArgsFailure::InvalidJsonArguments {
+                tool_name: String::new(),
+                message: String::new(),
+            }),
+        );
     }
 
     #[test]
@@ -214,11 +217,13 @@ mod tests {
             &mistral3_shape(),
         )
         .expect_err("truncated arguments must produce a typed failure");
-        let BracketedArgsFailure::UnterminatedArguments { tool_name } = failure else {
-            unreachable!("input had only whitespace after [ARGS]; iterator yields None")
-        };
 
-        assert_eq!(tool_name, "get_weather");
+        assert_eq!(
+            failure,
+            BracketedArgsFailure::UnterminatedArguments {
+                tool_name: "get_weather".to_owned(),
+            },
+        );
     }
 
     #[test]

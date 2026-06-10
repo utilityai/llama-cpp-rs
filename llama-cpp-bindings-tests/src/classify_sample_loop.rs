@@ -129,4 +129,50 @@ mod tests {
         assert_eq!(outcome.observed_reasoning, 0);
         assert_eq!(outcome.observed_undeterminable, 0);
     }
+
+    #[test]
+    fn record_outcome_reasoning_token_streams_visible_piece() {
+        let ingest = IngestOutcome {
+            sampled_token: SampledToken::Reasoning(LlamaToken(7)),
+            visible_piece: "thinking".to_string(),
+            raw_piece: String::new(),
+        };
+        let mut outcome = ClassifySampleLoopOutcome::default();
+
+        record_outcome(&ingest, &mut outcome, false);
+
+        assert_eq!(outcome.observed_reasoning, 1);
+        assert_eq!(outcome.reasoning_stream, "thinking");
+    }
+
+    #[test]
+    fn record_outcome_reasoning_token_at_end_of_generation_is_not_streamed() {
+        let ingest = IngestOutcome {
+            sampled_token: SampledToken::Reasoning(LlamaToken(7)),
+            visible_piece: "thinking".to_string(),
+            raw_piece: String::new(),
+        };
+        let mut outcome = ClassifySampleLoopOutcome::default();
+
+        record_outcome(&ingest, &mut outcome, true);
+
+        assert_eq!(outcome.observed_reasoning, 1);
+        assert!(outcome.reasoning_stream.is_empty());
+    }
+
+    #[test]
+    fn record_outcome_undeterminable_token_counts_without_streaming() {
+        let ingest = IngestOutcome {
+            sampled_token: SampledToken::Undeterminable(LlamaToken(9)),
+            visible_piece: "ignored".to_string(),
+            raw_piece: String::new(),
+        };
+        let mut outcome = ClassifySampleLoopOutcome::default();
+
+        record_outcome(&ingest, &mut outcome, false);
+
+        assert_eq!(outcome.observed_undeterminable, 1);
+        assert!(outcome.content_stream.is_empty());
+        assert!(outcome.reasoning_stream.is_empty());
+    }
 }

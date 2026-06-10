@@ -20,6 +20,45 @@ fn cstr_ptr_to_optional_string(ptr: *const c_char) -> Option<String> {
     }
 }
 
+/// # Safety
+///
+/// `out_bitmap` must be either null or a valid pointer to an `mtmd_bitmap`
+/// allocated by `llama_rs_mtmd_bitmap_init_from_file`. `out_error` must be
+/// either null or a valid pointer to a null-terminated C string allocated by
+/// `llama_rs_dup_string`.
+unsafe fn from_file_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_mtmd_bitmap_init_from_file_status,
+    out_bitmap: *mut llama_cpp_bindings_sys::mtmd_bitmap,
+    out_error: *mut c_char,
+    path: &str,
+) -> Result<MtmdBitmap, MtmdBitmapError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_OK => {
+            let bitmap = NonNull::new(out_bitmap).ok_or_else(|| {
+                MtmdBitmapError::FileUnreadable {
+                    path: PathBuf::from(path),
+                }
+            })?;
+            Ok(MtmdBitmap { bitmap })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
+            Err(MtmdBitmapError::FileUnreadable {
+                path: PathBuf::from(path),
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MtmdBitmapError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { read_and_free_cpp_error(out_error) };
+            Err(MtmdBitmapError::Reported { message })
+        }
+        other => unreachable!(
+            "llama_rs_mtmd_bitmap_init_from_file returned unrecognized status: {other}"
+        ),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MtmdBitmap {
     pub bitmap: NonNull<llama_cpp_bindings_sys::mtmd_bitmap>,
@@ -81,31 +120,7 @@ impl MtmdBitmap {
             )
         };
 
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_OK => {
-                let bitmap = NonNull::new(out_bitmap).ok_or_else(|| {
-                    MtmdBitmapError::FileUnreadable {
-                        path: PathBuf::from(path),
-                    }
-                })?;
-                Ok(Self { bitmap })
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
-                Err(MtmdBitmapError::FileUnreadable {
-                    path: PathBuf::from(path),
-                })
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(MtmdBitmapError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(MtmdBitmapError::Reported { message })
-            }
-            other => unreachable!(
-                "llama_rs_mtmd_bitmap_init_from_file returned unrecognized status: {other}"
-            ),
-        }
+        unsafe { from_file_status_to_result(status, out_bitmap, out_error, path) }
     }
 
     /// # Errors
@@ -176,6 +191,8 @@ impl Drop for MtmdBitmap {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::MtmdBitmap;
     use super::MtmdBitmapError;
 
@@ -216,22 +233,22 @@ mod tests {
         let result_2x1 = MtmdBitmap::from_image_data(2, 1, &[0u8; 6]);
         let result_0x0 = MtmdBitmap::from_image_data(0, 0, &[]);
 
-        assert!(matches!(
-            result_1x1,
-            Err(MtmdBitmapError::ImageDimensionsTooSmall(1, 1))
-        ));
-        assert!(matches!(
-            result_1x2,
-            Err(MtmdBitmapError::ImageDimensionsTooSmall(1, 2))
-        ));
-        assert!(matches!(
-            result_2x1,
-            Err(MtmdBitmapError::ImageDimensionsTooSmall(2, 1))
-        ));
-        assert!(matches!(
-            result_0x0,
-            Err(MtmdBitmapError::ImageDimensionsTooSmall(0, 0))
-        ));
+        assert_eq!(
+            result_1x1.unwrap_err(),
+            MtmdBitmapError::ImageDimensionsTooSmall(1, 1)
+        );
+        assert_eq!(
+            result_1x2.unwrap_err(),
+            MtmdBitmapError::ImageDimensionsTooSmall(1, 2)
+        );
+        assert_eq!(
+            result_2x1.unwrap_err(),
+            MtmdBitmapError::ImageDimensionsTooSmall(2, 1)
+        );
+        assert_eq!(
+            result_0x0.unwrap_err(),
+            MtmdBitmapError::ImageDimensionsTooSmall(0, 0)
+        );
     }
 
     #[test]
@@ -289,5 +306,89 @@ mod tests {
         let result = bitmap.set_id("id\0null");
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn from_file_status_ok_with_null_bitmap_returns_file_unreadable() {
+        let result = unsafe {
+            super::from_file_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_OK,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "/missing/image.png",
+            )
+        };
+
+        assert_eq!(
+            result.unwrap_err(),
+            MtmdBitmapError::FileUnreadable {
+                path: PathBuf::from("/missing/image.png")
+            }
+        );
+    }
+
+    #[test]
+    fn from_file_status_vendored_returned_null_returns_file_unreadable() {
+        let result = unsafe {
+            super::from_file_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_RETURNED_NULL,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "/missing/image.png",
+            )
+        };
+
+        assert_eq!(
+            result.unwrap_err(),
+            MtmdBitmapError::FileUnreadable {
+                path: PathBuf::from("/missing/image.png")
+            }
+        );
+    }
+
+    #[test]
+    fn from_file_status_error_string_allocation_failed_returns_not_enough_memory() {
+        let result = unsafe {
+            super::from_file_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "/missing/image.png",
+            )
+        };
+
+        assert_eq!(result.unwrap_err(), MtmdBitmapError::NotEnoughMemory);
+    }
+
+    #[test]
+    fn from_file_status_vendored_threw_cxx_exception_returns_reported() {
+        let result = unsafe {
+            super::from_file_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "/missing/image.png",
+            )
+        };
+
+        assert_eq!(
+            result.unwrap_err(),
+            MtmdBitmapError::Reported {
+                message: "unknown error".to_string()
+            }
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "returned unrecognized status")]
+    fn from_file_status_null_ctx_arg_panics_as_unreachable() {
+        let _result = unsafe {
+            super::from_file_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_BITMAP_INIT_FROM_FILE_NULL_CTX_ARG,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "/missing/image.png",
+            )
+        };
     }
 }

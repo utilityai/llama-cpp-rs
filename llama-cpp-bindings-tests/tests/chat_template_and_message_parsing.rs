@@ -8,6 +8,7 @@ use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
 use llama_cpp_bindings::ChatTemplateError;
 use llama_cpp_bindings::model::LlamaChatMessage;
+use llama_cpp_bindings_tests::build_user_prompt_with_media_marker::build_user_prompt_with_media_marker;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 
@@ -89,14 +90,57 @@ fn chat_template_returns_non_empty(fixture: &LlamaFixture<'_>) -> Result<()> {
     n_batch = 128,
     n_ubatch = 64,
 )]
+#[llama_test(
+    model_source = HuggingFace("unsloth/gemma-4-E4B-it-GGUF", "gemma-4-E4B-it-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
+#[llama_test(
+    model_source = HuggingFace(
+        "unsloth/Ministral-3-14B-Reasoning-2512-GGUF",
+        "Ministral-3-14B-Reasoning-2512-Q4_K_M.gguf"
+    ),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 512,
+    n_batch = 128,
+    n_ubatch = 64,
+)]
 fn apply_chat_template_produces_prompt(fixture: &LlamaFixture<'_>) -> Result<()> {
     let model = fixture.model;
     let template = model.chat_template(None)?;
     let message = LlamaChatMessage::new("user".to_string(), "hello".to_string())?;
-    let prompt = model.apply_chat_template(&template, &[message], true);
+    let prompt = model.apply_chat_template(&template, &[message], true)?;
 
-    assert!(prompt.is_ok());
-    assert!(!prompt?.is_empty());
+    assert!(
+        prompt.contains("hello"),
+        "the model's built-in chat template must render the user message content through the \
+         engine; got: {prompt:?}"
+    );
+    Ok(())
+}
+
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 64,
+    n_batch = 64,
+    n_ubatch = 64,
+)]
+fn build_user_prompt_surfaces_message_construction_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let result = build_user_prompt_with_media_marker(fixture.model, "describe\0this");
+
+    assert!(
+        result.is_err(),
+        "an interior null byte in the question must surface a message construction error"
+    );
     Ok(())
 }
 
@@ -136,15 +180,17 @@ fn apply_chat_template_produces_prompt(fixture: &LlamaFixture<'_>) -> Result<()>
     n_batch = 128,
     n_ubatch = 64,
 )]
-fn apply_chat_template_buffer_resize_with_long_messages(fixture: &LlamaFixture<'_>) -> Result<()> {
+fn apply_chat_template_renders_long_messages(fixture: &LlamaFixture<'_>) -> Result<()> {
     let model = fixture.model;
     let template = model.chat_template(None)?;
     let long_content = "a".repeat(2000);
-    let message = LlamaChatMessage::new("user".to_string(), long_content)?;
-    let prompt = model.apply_chat_template(&template, &[message], true);
+    let message = LlamaChatMessage::new("user".to_string(), long_content.clone())?;
+    let prompt = model.apply_chat_template(&template, &[message], true)?;
 
-    assert!(prompt.is_ok());
-    assert!(!prompt?.is_empty());
+    assert!(
+        prompt.contains(&long_content),
+        "a long user message must be rendered in full by the engine without truncation"
+    );
     Ok(())
 }
 

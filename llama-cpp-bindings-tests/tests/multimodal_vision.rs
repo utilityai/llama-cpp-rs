@@ -11,7 +11,6 @@ use llama_cpp_bindings::TokenUsage;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::ingest_prompt_chunk::ingest_prompt_chunk;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::mtmd::MtmdBitmap;
 use llama_cpp_bindings::mtmd::MtmdContext;
@@ -23,9 +22,11 @@ use llama_cpp_bindings::mtmd::MtmdInputText;
 use llama_cpp_bindings::mtmd::mtmd_default_marker;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
+use llama_cpp_bindings_tests::build_user_prompt_with_media_marker::build_user_prompt_with_media_marker;
+use llama_cpp_bindings_tests::chunk_token_breakdown::ChunkTokenBreakdown;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
+use llama_cpp_bindings_tests::fixtures_dir::fixtures_dir;
 use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::fixtures_dir::fixtures_dir;
 use llama_cpp_test_harness::llama_test;
 
 #[llama_test(
@@ -939,41 +940,6 @@ fn tokenize_with_null_byte_in_text_returns_error(fixture: &LlamaFixture<'_>) -> 
     assert!(result.is_err());
     Ok(())
 }
-struct ChunkTokenBreakdown {
-    text: u64,
-    image: u64,
-    audio: u64,
-}
-
-fn count_chunk_tokens_by_type(chunks: &MtmdInputChunks) -> Result<ChunkTokenBreakdown> {
-    let mut breakdown = ChunkTokenBreakdown {
-        text: 0,
-        image: 0,
-        audio: 0,
-    };
-    for index in 0..chunks.len() {
-        let chunk = chunks
-            .get(index)
-            .with_context(|| format!("chunk index {index} is missing"))?;
-        let n_tokens = u64::try_from(chunk.n_tokens())?;
-        match chunk.chunk_type()? {
-            MtmdInputChunkType::Text => breakdown.text += n_tokens,
-            MtmdInputChunkType::Image => breakdown.image += n_tokens,
-            MtmdInputChunkType::Audio => breakdown.audio += n_tokens,
-        }
-    }
-
-    Ok(breakdown)
-}
-
-fn build_user_prompt_with_image_marker(model: &LlamaModel, question: &str) -> Result<String> {
-    let marker = mtmd_default_marker();
-    let user_content = format!("{marker}{question}");
-    let chat_template = model.chat_template(None)?;
-    let messages = [LlamaChatMessage::new("user".to_string(), user_content)?];
-
-    Ok(model.apply_chat_template(&chat_template, &messages, true)?)
-}
 
 struct SamplingTotals {
     generated: String,
@@ -1067,7 +1033,7 @@ fn multimodal_vision_inference_produces_output(fixture: &LlamaFixture<'_>) -> Re
         .with_context(|| "failed to load image from file")?;
 
     let formatted_prompt =
-        build_user_prompt_with_image_marker(model, "What animals do you see in this image?")?;
+        build_user_prompt_with_media_marker(model, "What animals do you see in this image?")?;
 
     let input_text = MtmdInputText {
         text: formatted_prompt,
@@ -1084,7 +1050,7 @@ fn multimodal_vision_inference_produces_output(fixture: &LlamaFixture<'_>) -> Re
         "tokenization should produce at least one chunk"
     );
 
-    let expected = count_chunk_tokens_by_type(&chunks)?;
+    let expected = ChunkTokenBreakdown::from_chunks(&chunks)?;
 
     eprintln!(
         "tokenized into {} chunks, text {} image {} audio {}",
@@ -1099,7 +1065,7 @@ fn multimodal_vision_inference_produces_output(fixture: &LlamaFixture<'_>) -> Re
         "vision input must produce at least one image chunk"
     );
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier
         .eval_multimodal_chunks(&chunks, mtmd_ctx, &ctx, 0, 0, 512, true)
         .with_context(|| "failed to evaluate chunks")?;
@@ -1152,7 +1118,7 @@ fn build_multimodal_chunks_and_eval_into_usage(
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let prompt = format!("{marker}{PROMPT_QUESTION}");
 
     let input_text = MtmdInputText {
@@ -1162,12 +1128,12 @@ fn build_multimodal_chunks_and_eval_into_usage(
     };
 
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
-    let expected = count_chunk_tokens_by_type(&chunks)?;
+    let expected = ChunkTokenBreakdown::from_chunks(&chunks)?;
 
     let context_params = (*fixture.context_params).into_llama_context_params();
     let context = LlamaContext::from_model(model, fixture.backend, context_params)?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
     Ok((classifier.into_usage(), expected))
@@ -1307,7 +1273,7 @@ fn text_chunk_records_prompt_tokens(fixture: &LlamaFixture<'_>) -> Result<()> {
 
     let n_tokens = u64::try_from(text_chunk.n_tokens())?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
 
     ingest_prompt_chunk(&mut classifier, &text_chunk)?;
 
@@ -1356,7 +1322,7 @@ fn image_chunk_records_input_image_tokens_only(fixture: &LlamaFixture<'_>) -> Re
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let input_text = MtmdInputText {
         text: marker.to_owned(),
         add_special: false,
@@ -1374,7 +1340,7 @@ fn image_chunk_records_input_image_tokens_only(fixture: &LlamaFixture<'_>) -> Re
         anyhow::bail!("image chunk should report at least one token");
     }
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
 
     ingest_prompt_chunk(&mut classifier, &image_chunk)?;
 
@@ -1424,7 +1390,7 @@ fn text_chunk_drives_marker_state_machine_to_reasoning(fixture: &LlamaFixture<'_
     };
     let chunks = mtmd_ctx.tokenize(input_text, &[])?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
 
     for index in 0..chunks.len() {
         let chunk = chunks
@@ -1477,7 +1443,7 @@ fn gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt(
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let prompt = format!(
         "<bos><start_of_turn>user\n{marker}What animals do you see in this image?<end_of_turn>\n<start_of_turn>model\n<|channel>thought\n"
     );
@@ -1490,7 +1456,7 @@ fn gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::chain_simple([
@@ -1544,7 +1510,7 @@ fn gemma4_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 fn mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt(
     fixture: &LlamaFixture<'_>,
 ) -> Result<()> {
-    const MAX_GENERATED_TOKENS: i32 = 768;
+    const MAX_GENERATED_TOKENS: i32 = 512;
 
     let model = fixture.model;
     let backend = fixture.backend;
@@ -1564,7 +1530,7 @@ fn mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt(
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let prompt = format!(
         "[SYSTEM_PROMPT]# HOW YOU SHOULD THINK AND ANSWER\n\n\
          First draft your thinking process (inner monologue) until you arrive at a response. \
@@ -1585,7 +1551,7 @@ fn mistral3_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::greedy();
@@ -1661,7 +1627,7 @@ fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt(
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let prompt = format!(
         "<|im_start|>user\n{marker}What animals do you see in this image?<|im_end|>\n<|im_start|>assistant\n<think>\n"
     );
@@ -1674,7 +1640,7 @@ fn qwen35_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::chain_simple([
@@ -1748,7 +1714,7 @@ fn qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt(
         .ok_or_else(|| anyhow::anyhow!("image path is not valid UTF-8"))?;
     let bitmap = MtmdBitmap::from_file(mtmd_ctx, image_path_str)?;
 
-    let marker = mtmd_default_marker();
+    let marker = mtmd_default_marker()?;
     let prompt = format!(
         "<|im_start|>user\n{marker}What animals do you see in this image?<|im_end|>\n<|im_start|>assistant\n<think>\n"
     );
@@ -1761,7 +1727,7 @@ fn qwen36_classifier_emits_reasoning_for_multimodal_thinking_prompt(
 
     let chunks = mtmd_ctx.tokenize(input_text, &[&bitmap])?;
 
-    let mut classifier = model.sampled_token_classifier();
+    let mut classifier = model.sampled_token_classifier()?;
     let n_past = classifier.eval_multimodal_chunks(&chunks, mtmd_ctx, &context, 0, 0, 512, true)?;
 
     let mut sampler = LlamaSampler::chain_simple([

@@ -1,4 +1,4 @@
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum PairedQuoteFailure {
     #[error("empty key in tool call '{tool_name}' arguments")]
     EmptyKey { tool_name: String },

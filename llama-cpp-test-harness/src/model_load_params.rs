@@ -2,7 +2,7 @@ use llama_cpp_bindings::model::params::LlamaModelParams;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ModelLoadParams {
-    pub n_gpu_layers: u32,
+    pub n_gpu_layers: i32,
     pub use_mmap: bool,
     pub use_mlock: bool,
 }
@@ -38,18 +38,6 @@ mod tests {
         assert_eq!(params.n_gpu_layers(), 7);
         assert!(!params.use_mmap());
         assert!(params.use_mlock());
-    }
-
-    #[test]
-    fn into_llama_model_params_clamps_n_gpu_layers_to_i32_max() {
-        let params = ModelLoadParams {
-            n_gpu_layers: u32::MAX,
-            use_mmap: true,
-            use_mlock: false,
-        }
-        .into_llama_model_params();
-
-        assert_eq!(params.n_gpu_layers(), i32::MAX);
     }
 
     #[test]

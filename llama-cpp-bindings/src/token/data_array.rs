@@ -1,10 +1,33 @@
 use std::ptr;
 
+use crate::error::SamplerApplyError;
 use crate::error::TokenSamplingError;
 use crate::sampling::LlamaSampler;
 use crate::token::data::LlamaTokenData;
 
 use super::LlamaToken;
+
+fn sampler_apply_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_sampler_apply_status,
+    out_error: *mut std::os::raw::c_char,
+) -> Result<(), SamplerApplyError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_NULL_SAMPLER_ARG => {
+            Err(SamplerApplyError::NullSampler)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(SamplerApplyError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(SamplerApplyError::Reported { message })
+        }
+        other => {
+            unreachable!("llama_rs_sampler_apply returned unrecognized status {other}")
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LlamaTokenDataArray {
@@ -93,12 +116,11 @@ impl LlamaTokenDataArray {
         result
     }
 
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the vendored sampler throws a C++ exception. `llama_sampler_apply` is
-    /// documented to be a pure logit transform and is not expected to throw; if it does
-    /// the failure is propagated as a panic per the crash-fast invariant.
-    pub fn apply_sampler(&mut self, sampler: &LlamaSampler) {
+    /// Returns [`SamplerApplyError`] if the sampler pointer is null, the vendored
+    /// sampler runs out of memory, or it throws a C++ exception while applying.
+    pub fn apply_sampler(&mut self, sampler: &LlamaSampler) -> Result<(), SamplerApplyError> {
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
                 let mut out_error: *mut std::os::raw::c_char = ptr::null_mut();
@@ -107,32 +129,32 @@ impl LlamaTokenDataArray {
                     c_llama_token_data_array,
                     &raw mut out_error,
                 );
-                if status != llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_OK {
-                    let message = crate::ffi_error_reader::read_and_free_cpp_error(out_error);
-                    panic!("llama_rs_sampler_apply returned status {status}: {message}");
-                }
-            });
+                sampler_apply_status_to_result(status, out_error)
+            })
         }
     }
 
-    #[must_use]
-    pub fn with_sampler(mut self, sampler: &mut LlamaSampler) -> Self {
-        self.apply_sampler(sampler);
-        self
+    /// # Errors
+    /// Returns [`SamplerApplyError`] if applying the sampler fails.
+    pub fn with_sampler(mut self, sampler: &mut LlamaSampler) -> Result<Self, SamplerApplyError> {
+        self.apply_sampler(sampler)?;
+        Ok(self)
     }
 
     /// # Errors
-    /// Returns [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
+    /// Returns [`TokenSamplingError::SamplerApply`] if applying the sampler fails, or
+    /// [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
     pub fn sample_token(&mut self, seed: u32) -> Result<LlamaToken, TokenSamplingError> {
-        self.apply_sampler(&LlamaSampler::dist(seed));
+        self.apply_sampler(&LlamaSampler::dist(seed))?;
         self.selected_token()
             .ok_or(TokenSamplingError::NoTokenSelected)
     }
 
     /// # Errors
-    /// Returns [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
+    /// Returns [`TokenSamplingError::SamplerApply`] if applying the sampler fails, or
+    /// [`TokenSamplingError::NoTokenSelected`] if the sampler fails to select a token.
     pub fn sample_token_greedy(&mut self) -> Result<LlamaToken, TokenSamplingError> {
-        self.apply_sampler(&LlamaSampler::greedy());
+        self.apply_sampler(&LlamaSampler::greedy())?;
         self.selected_token()
             .ok_or(TokenSamplingError::NoTokenSelected)
     }
@@ -140,10 +162,45 @@ impl LlamaTokenDataArray {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::SamplerApplyError;
     use crate::token::LlamaToken;
     use crate::token::data::LlamaTokenData;
 
     use super::LlamaTokenDataArray;
+    use super::sampler_apply_status_to_result;
+
+    #[test]
+    fn sampler_apply_status_allocation_failed_returns_not_enough_memory() {
+        assert_eq!(
+            sampler_apply_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED,
+                std::ptr::null_mut(),
+            ),
+            Err(SamplerApplyError::NotEnoughMemory),
+        );
+    }
+
+    #[test]
+    fn sampler_apply_status_cxx_exception_returns_reported_with_unknown_message() {
+        assert_eq!(
+            sampler_apply_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION,
+                std::ptr::null_mut(),
+            ),
+            Err(SamplerApplyError::Reported {
+                message: "unknown error".to_owned(),
+            }),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_sampler_apply returned unrecognized status")]
+    fn sampler_apply_status_unrecognized_panics() {
+        let _ = sampler_apply_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_sampler_apply_status::MAX,
+            std::ptr::null_mut(),
+        );
+    }
 
     #[test]
     fn apply_greedy_sampler_selects_highest_logit() {
@@ -158,7 +215,9 @@ mod tests {
             false,
         );
 
-        array.apply_sampler(&LlamaSampler::greedy());
+        array
+            .apply_sampler(&LlamaSampler::greedy())
+            .expect("test: greedy sampler must apply");
 
         assert_eq!(array.selected_token(), Some(LlamaToken::new(1)));
     }
@@ -174,9 +233,28 @@ mod tests {
             ],
             false,
         )
-        .with_sampler(&mut LlamaSampler::greedy());
+        .with_sampler(&mut LlamaSampler::greedy())
+        .expect("test: building with greedy sampler must succeed");
 
         assert_eq!(array.selected_token(), Some(LlamaToken::new(1)));
+    }
+
+    #[test]
+    fn with_sampler_with_null_sampler_returns_sampler_apply_error() {
+        use crate::sampling::LlamaSampler;
+
+        let mut null_sampler = LlamaSampler {
+            sampler: std::ptr::null_mut(),
+        };
+        let array = LlamaTokenDataArray::new(
+            vec![LlamaTokenData::new(LlamaToken::new(0), 1.0, 0.0)],
+            false,
+        );
+
+        assert_eq!(
+            array.with_sampler(&mut null_sampler),
+            Err(SamplerApplyError::NullSampler),
+        );
     }
 
     #[test]
@@ -289,6 +367,41 @@ mod tests {
     }
 
     #[test]
+    fn apply_sampler_with_null_sampler_returns_null_sampler_error() {
+        use crate::sampling::LlamaSampler;
+
+        let mut array = LlamaTokenDataArray::new(
+            vec![LlamaTokenData::new(LlamaToken::new(0), 1.0, 0.0)],
+            false,
+        );
+
+        let null_sampler = LlamaSampler {
+            sampler: std::ptr::null_mut(),
+        };
+
+        assert_eq!(
+            array.apply_sampler(&null_sampler),
+            Err(SamplerApplyError::NullSampler)
+        );
+    }
+
+    #[test]
+    fn modify_clears_selection_when_index_is_out_of_range() {
+        let mut array = LlamaTokenDataArray::new(
+            vec![LlamaTokenData::new(LlamaToken::new(0), 1.0, 0.0)],
+            false,
+        );
+
+        unsafe {
+            array.modify_as_c_llama_token_data_array(|c_array| {
+                c_array.selected = 5;
+            });
+        }
+
+        assert_eq!(array.selected, None);
+    }
+
+    #[test]
     fn selected_overflow_uses_negative_one() {
         let mut array = LlamaTokenDataArray {
             data: vec![LlamaTokenData::new(LlamaToken::new(0), 1.0, 0.0)],
@@ -301,5 +414,25 @@ mod tests {
                 assert_eq!(c_array.selected, -1);
             });
         }
+    }
+
+    #[test]
+    fn preset_valid_selection_is_passed_through_as_index() {
+        let mut array = LlamaTokenDataArray {
+            data: vec![
+                LlamaTokenData::new(LlamaToken::new(0), 1.0, 0.0),
+                LlamaTokenData::new(LlamaToken::new(1), 2.0, 0.0),
+            ],
+            selected: Some(1),
+            sorted: false,
+        };
+
+        unsafe {
+            array.modify_as_c_llama_token_data_array(|c_array| {
+                assert_eq!(c_array.selected, 1);
+            });
+        }
+
+        assert_eq!(array.selected, Some(1));
     }
 }

@@ -151,7 +151,14 @@ const EXPECTED_PASSED: u64 = 6;
 const EXPECTED_FAILED: u64 = 4;
 
 fn main() -> ExitCode {
-    let conclusions = run_to_conclusions();
+    let conclusions = match run_to_conclusions() {
+        Ok(conclusions) => conclusions,
+        Err(error) => {
+            eprintln!("harness_self_test: unexpected harness setup failure: {error}");
+
+            return ExitCode::FAILURE;
+        }
+    };
     let phases = conclusions.len();
     let total_passed: u64 = conclusions
         .iter()

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum MtmdInitError {
     #[error("Failed to create CString from mmproj path: {0}")]
     CStringError(#[from] std::ffi::NulError),

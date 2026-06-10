@@ -67,6 +67,37 @@ fn map_encode_chunk_status(
     }
 }
 
+fn map_init_from_file_status(
+    status: llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file_status,
+    out_ctx: *mut llama_cpp_bindings_sys::mtmd_context,
+    out_error: *mut c_char,
+    mmproj_path: &str,
+) -> Result<MtmdContext, MtmdInitError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_OK => {
+            let context = NonNull::new(out_ctx).ok_or_else(|| MtmdInitError::Unloadable {
+                path: std::path::PathBuf::from(mmproj_path),
+            })?;
+            Ok(MtmdContext { context })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
+            Err(MtmdInitError::Unloadable {
+                path: std::path::PathBuf::from(mmproj_path),
+            })
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MtmdInitError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { read_and_free_cpp_error(out_error) };
+            Err(MtmdInitError::Reported { message })
+        }
+        other => {
+            unreachable!("llama_rs_mtmd_init_from_file returned unrecognized status: {other}")
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct MtmdContext {
     pub context: NonNull<llama_cpp_bindings_sys::mtmd_context>,
@@ -100,29 +131,7 @@ impl MtmdContext {
             )
         };
 
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_OK => {
-                let context = NonNull::new(out_ctx).ok_or_else(|| MtmdInitError::Unloadable {
-                    path: std::path::PathBuf::from(mmproj_path),
-                })?;
-                Ok(Self { context })
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
-                Err(MtmdInitError::Unloadable {
-                    path: std::path::PathBuf::from(mmproj_path),
-                })
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(MtmdInitError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { read_and_free_cpp_error(out_error) };
-                Err(MtmdInitError::Reported { message })
-            }
-            other => {
-                unreachable!("llama_rs_mtmd_init_from_file returned unrecognized status: {other}")
-            }
-        }
+        map_init_from_file_status(status, out_ctx, out_error, mmproj_path)
     }
 
     #[must_use]
@@ -226,8 +235,10 @@ impl Drop for MtmdContext {
 #[cfg(test)]
 mod unit_tests {
     use super::map_encode_chunk_status;
+    use super::map_init_from_file_status;
     use super::map_tokenize_status;
     use crate::mtmd::mtmd_encode_error::MtmdEncodeError;
+    use crate::mtmd::mtmd_init_error::MtmdInitError;
     use crate::mtmd::mtmd_tokenize_error::MtmdTokenizeError;
 
     #[test]
@@ -238,10 +249,10 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(
+        assert_eq!(
             result,
             Err(MtmdTokenizeError::BitmapCountDoesNotMatchMarkerCount)
-        ));
+        );
     }
 
     #[test]
@@ -252,10 +263,7 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(
-            result,
-            Err(MtmdTokenizeError::MediaPreprocessingFailed)
-        ));
+        assert_eq!(result, Err(MtmdTokenizeError::MediaPreprocessingFailed));
     }
 
     #[test]
@@ -266,10 +274,7 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(
-            result,
-            Err(MtmdTokenizeError::UnknownStatus { code: 42 })
-        ));
+        assert_eq!(result, Err(MtmdTokenizeError::UnknownStatus { code: 42 }));
     }
 
     #[test]
@@ -280,7 +285,7 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(result, Ok(())));
+        assert_eq!(result, Ok(()));
     }
 
     #[test]
@@ -291,7 +296,7 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(result, Ok(())));
+        assert_eq!(result, Ok(()));
     }
 
     #[test]
@@ -302,9 +307,147 @@ mod unit_tests {
             std::ptr::null_mut(),
         );
 
-        assert!(matches!(
+        assert_eq!(result, Err(MtmdEncodeError::EncodingFailed { code: 5 }));
+    }
+
+    #[test]
+    fn tokenize_status_maps_string_allocation_failed_to_not_enough_memory() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(MtmdTokenizeError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn tokenize_status_maps_cxx_exception_to_reported() {
+        let result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
             result,
-            Err(MtmdEncodeError::EncodingFailed { code: 5 })
-        ));
+            Err(MtmdTokenizeError::Reported {
+                message: "unknown error".to_string()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "NULL_BITMAPS_ARG")]
+    fn tokenize_status_null_bitmaps_arg_panics() {
+        let _result = map_tokenize_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_mtmd_tokenize returned unrecognized status")]
+    fn tokenize_status_unrecognized_panics() {
+        let _result = map_tokenize_status(
+            llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    fn encode_chunk_status_maps_string_allocation_failed_to_not_enough_memory() {
+        let result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(MtmdEncodeError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn encode_chunk_status_maps_cxx_exception_to_reported() {
+        let result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(MtmdEncodeError::Reported {
+                message: "unknown error".to_string()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_mtmd_encode_chunk returned unrecognized status")]
+    fn encode_chunk_status_unrecognized_panics() {
+        let _result = map_encode_chunk_status(
+            llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    fn init_from_file_status_ok_with_null_ctx_maps_unloadable() {
+        let result = map_init_from_file_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_OK,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            "mmproj.gguf",
+        );
+
+        assert_eq!(
+            result.unwrap_err(),
+            MtmdInitError::Unloadable {
+                path: std::path::PathBuf::from("mmproj.gguf")
+            }
+        );
+    }
+
+    #[test]
+    fn init_from_file_status_maps_string_allocation_failed_to_not_enough_memory() {
+        let result = map_init_from_file_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            "mmproj.gguf",
+        );
+
+        assert_eq!(result.unwrap_err(), MtmdInitError::NotEnoughMemory);
+    }
+
+    #[test]
+    fn init_from_file_status_maps_cxx_exception_to_reported() {
+        let result = map_init_from_file_status(
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            "mmproj.gguf",
+        );
+
+        assert_eq!(
+            result.unwrap_err(),
+            MtmdInitError::Reported {
+                message: "unknown error".to_string()
+            }
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_mtmd_init_from_file returned unrecognized status")]
+    fn init_from_file_status_unrecognized_panics() {
+        let _result = map_init_from_file_status(
+            llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file_status::MAX,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            "mmproj.gguf",
+        );
     }
 }

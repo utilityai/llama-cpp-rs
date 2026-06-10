@@ -1169,6 +1169,7 @@ dependencies = [
  "enumflags2",
  "llama-cpp-bindings-sys",
  "llama-cpp-bindings-types",
+ "llama-cpp-error-recorder",
  "llama-cpp-log-decoder",
  "llguidance",
  "log",
@@ -1219,6 +1220,10 @@ dependencies = [
  "serde_json",
  "thiserror",
 ]
+
+[[package]]
+name = "llama-cpp-error-recorder"
+version = "0.8.0"
 
 [[package]]
 name = "llama-cpp-log-decoder"

@@ -1,6 +1,6 @@
 use crate::mtmd::mtmd_input_chunks_error::MtmdInputChunksError;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum MtmdTokenizeError {
     #[error("Failed to create CString from input text: {0}")]
     CStringError(#[from] std::ffi::NulError),

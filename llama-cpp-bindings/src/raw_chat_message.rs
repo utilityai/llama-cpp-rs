@@ -1,3 +1,4 @@
+#[derive(Debug, Eq, PartialEq)]
 pub struct RawChatMessage {
     pub tools_json: String,
     pub text: String,

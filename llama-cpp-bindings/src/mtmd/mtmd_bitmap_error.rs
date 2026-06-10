@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum MtmdBitmapError {
     #[error("Failed to create CString from bitmap-source path: {0}")]
     CStringError(#[from] std::ffi::NulError),

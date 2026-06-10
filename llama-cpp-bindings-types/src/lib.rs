@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
+
 pub mod bracketed_json_shape;
 pub mod json_object_shape;
 pub mod key_value_xml_tags_shape;

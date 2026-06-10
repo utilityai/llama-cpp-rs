@@ -36,6 +36,123 @@ const fn check_lora_remove_result(err_code: i32) -> Result<(), LlamaLoraAdapterR
     Ok(())
 }
 
+fn new_context_with_model_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_new_context_with_model_status,
+    out_ctx: *mut llama_cpp_bindings_sys::llama_context,
+    out_error: *mut std::os::raw::c_char,
+) -> Result<NonNull<llama_cpp_bindings_sys::llama_context>, LlamaContextLoadError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK => {
+            NonNull::new(out_ctx).ok_or(LlamaContextLoadError::Unconstructible)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL => {
+            Err(LlamaContextLoadError::Unconstructible)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(LlamaContextLoadError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(LlamaContextLoadError::Reported { message })
+        }
+        other => {
+            unreachable!("llama_rs_new_context_with_model returned unrecognized status {other}")
+        }
+    }
+}
+
+fn decode_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_decode_status,
+    out_vendored_return_code: i32,
+    out_error: *mut std::os::raw::c_char,
+) -> Result<(), DecodeError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE => {
+            let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
+                unreachable!(
+                    "llama_rs_decode reported a nonzero return code but the value was zero"
+                )
+            });
+            Err(DecodeError::from(code))
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_OUT_OF_MEMORY => {
+            Err(DecodeError::DecodeOutOfMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_COMPUTE_FAILED => Err(DecodeError::ComputeFailed),
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(DecodeError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(DecodeError::Reported { message })
+        }
+        other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
+    }
+}
+
+fn encode_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_encode_status,
+    out_vendored_return_code: i32,
+    out_error: *mut std::os::raw::c_char,
+) -> Result<(), EncodeError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OK => Ok(()),
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
+            Err(EncodeError::ModelHasNoEncoder)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE => {
+            let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
+                unreachable!(
+                    "llama_rs_encode reported a nonzero return code but the value was zero"
+                )
+            });
+            Err(EncodeError::from(code))
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OUT_OF_MEMORY => {
+            Err(EncodeError::EncodeOutOfMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_COMPUTE_FAILED => Err(EncodeError::ComputeFailed),
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(EncodeError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(EncodeError::Reported { message })
+        }
+        other => unreachable!("llama_rs_encode returned unrecognized status {other}"),
+    }
+}
+
+fn token_index_within_context(token_index: i32, context_size: u32) -> Result<(), LogitsError> {
+    if token_index >= 0 {
+        let token_index_u32 =
+            u32::try_from(token_index).map_err(LogitsError::TokenIndexOverflow)?;
+
+        if context_size <= token_index_u32 {
+            return Err(LogitsError::TokenIndexExceedsContext {
+                token_index: token_index_u32,
+                context_size,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+unsafe fn logits_slice_from_raw_parts<'logits>(
+    data: *const f32,
+    n_vocab: i32,
+) -> Result<&'logits [f32], LogitsError> {
+    if data.is_null() {
+        return Err(LogitsError::NullLogits);
+    }
+
+    let len = usize::try_from(n_vocab).map_err(LogitsError::VocabSizeOverflow)?;
+
+    Ok(unsafe { slice::from_raw_parts(data, len) })
+}
+
 pub mod kv_cache;
 pub mod kv_cache_type;
 pub mod llama_attention_type;
@@ -110,26 +227,9 @@ impl<'model> LlamaContext<'model> {
                 &raw mut out_error,
             )
         };
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK => {
-                let context = NonNull::new(out_ctx)
-                    .ok_or(LlamaContextLoadError::Unconstructible)?;
-                Ok(Self::new(model, context, params.embeddings()))
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL => {
-                Err(LlamaContextLoadError::Unconstructible)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(LlamaContextLoadError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION => {
-                let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(LlamaContextLoadError::Reported { message })
-            }
-            other => unreachable!(
-                "llama_rs_new_context_with_model returned unrecognized status {other}"
-            ),
-        }
+        let context = new_context_with_model_status_to_result(status, out_ctx, out_error)?;
+
+        Ok(Self::new(model, context, params.embeddings()))
     }
 
     #[must_use]
@@ -202,36 +302,12 @@ impl<'model> LlamaContext<'model> {
                 &raw mut out_error,
             )
         };
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_OK => {
-                self.initialized_logits
-                    .clone_from(&batch.initialized_logits);
-                Ok(())
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE => {
-                let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
-                    unreachable!(
-                        "llama_rs_decode reported a nonzero return code but the value was zero"
-                    )
-                });
-                Err(DecodeError::from(code))
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_OUT_OF_MEMORY => {
-                Err(DecodeError::DecodeOutOfMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_COMPUTE_FAILED => {
-                Err(DecodeError::ComputeFailed)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(DecodeError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message =
-                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(DecodeError::Reported { message })
-            }
-            other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
-        }
+        decode_status_to_result(status, out_vendored_return_code, out_error)?;
+
+        self.initialized_logits
+            .clone_from(&batch.initialized_logits);
+
+        Ok(())
     }
 
     /// # Errors
@@ -248,39 +324,12 @@ impl<'model> LlamaContext<'model> {
                 &raw mut out_error,
             )
         };
-        match status {
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OK => {
-                self.initialized_logits
-                    .clone_from(&batch.initialized_logits);
-                Ok(())
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
-                Err(EncodeError::ModelHasNoEncoder)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE => {
-                let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
-                    unreachable!(
-                        "llama_rs_encode reported a nonzero return code but the value was zero"
-                    )
-                });
-                Err(EncodeError::from(code))
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OUT_OF_MEMORY => {
-                Err(EncodeError::EncodeOutOfMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_COMPUTE_FAILED => {
-                Err(EncodeError::ComputeFailed)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED => {
-                Err(EncodeError::NotEnoughMemory)
-            }
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
-                let message =
-                    unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
-                Err(EncodeError::Reported { message })
-            }
-            other => unreachable!("llama_rs_encode returned unrecognized status {other}"),
-        }
+        encode_status_to_result(status, out_vendored_return_code, out_error)?;
+
+        self.initialized_logits
+            .clone_from(&batch.initialized_logits);
+
+        Ok(())
     }
 
     /// # Errors
@@ -361,13 +410,7 @@ impl<'model> LlamaContext<'model> {
     pub fn get_logits(&self) -> Result<&[f32], LogitsError> {
         let data = unsafe { llama_cpp_bindings_sys::llama_get_logits(self.context.as_ptr()) };
 
-        if data.is_null() {
-            return Err(LogitsError::NullLogits);
-        }
-
-        let len = usize::try_from(self.model.n_vocab()).map_err(LogitsError::VocabSizeOverflow)?;
-
-        Ok(unsafe { slice::from_raw_parts(data, len) })
+        unsafe { logits_slice_from_raw_parts(data, self.model.n_vocab()) }
     }
 
     /// # Errors
@@ -403,17 +446,7 @@ impl<'model> LlamaContext<'model> {
             return Err(LogitsError::TokenNotInitialized(token_index));
         }
 
-        if token_index >= 0 {
-            let token_index_u32 =
-                u32::try_from(token_index).map_err(LogitsError::TokenIndexOverflow)?;
-
-            if self.n_ctx() <= token_index_u32 {
-                return Err(LogitsError::TokenIndexExceedsContext {
-                    token_index: token_index_u32,
-                    context_size: self.n_ctx(),
-                });
-            }
-        }
+        token_index_within_context(token_index, self.n_ctx())?;
 
         let data = unsafe {
             llama_cpp_bindings_sys::llama_get_logits_ith(self.context.as_ptr(), token_index)
@@ -486,10 +519,18 @@ impl Drop for LlamaContext<'_> {
 
 #[cfg(test)]
 mod unit_tests {
+    use crate::DecodeError;
+    use crate::EncodeError;
+    use crate::LlamaContextLoadError;
     use crate::LlamaLoraAdapterRemoveError;
     use crate::LlamaLoraAdapterSetError;
+    use crate::LogitsError;
 
-    use super::{check_lora_remove_result, check_lora_set_result};
+    use super::{
+        check_lora_remove_result, check_lora_set_result, decode_status_to_result,
+        encode_status_to_result, logits_slice_from_raw_parts,
+        new_context_with_model_status_to_result, token_index_within_context,
+    };
 
     #[test]
     fn check_lora_set_result_ok_for_zero() {
@@ -513,5 +554,278 @@ mod unit_tests {
         let result = check_lora_remove_result(-1);
 
         assert_eq!(result, Err(LlamaLoraAdapterRemoveError::ErrorResult(-1)));
+    }
+
+    #[test]
+    fn new_context_ok_with_null_ctx_maps_unconstructible() {
+        let result = new_context_with_model_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(LlamaContextLoadError::Unconstructible));
+    }
+
+    #[test]
+    fn new_context_vendored_returned_null_maps_unconstructible() {
+        let result = new_context_with_model_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(LlamaContextLoadError::Unconstructible));
+    }
+
+    #[test]
+    fn new_context_allocation_failed_maps_not_enough_memory() {
+        let result = new_context_with_model_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(LlamaContextLoadError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn new_context_cxx_exception_maps_reported() {
+        let result = new_context_with_model_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(LlamaContextLoadError::Reported {
+                message: "unknown error".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_new_context_with_model returned unrecognized status")]
+    fn new_context_unrecognized_status_panics() {
+        let _result = new_context_with_model_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_new_context_with_model_status::MAX,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    fn decode_nonzero_code_maps_from_code() {
+        let result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE,
+            1,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(DecodeError::NoKvCacheSlot));
+    }
+
+    #[test]
+    fn decode_out_of_memory_maps_decode_out_of_memory() {
+        let result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_OUT_OF_MEMORY,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(DecodeError::DecodeOutOfMemory));
+    }
+
+    #[test]
+    fn decode_compute_failed_maps_compute_failed() {
+        let result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_COMPUTE_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(DecodeError::ComputeFailed));
+    }
+
+    #[test]
+    fn decode_allocation_failed_maps_not_enough_memory() {
+        let result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(DecodeError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn decode_cxx_exception_maps_reported() {
+        let result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(DecodeError::Reported {
+                message: "unknown error".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_decode reported a nonzero return code")]
+    fn decode_nonzero_code_with_zero_value_panics() {
+        let _result = decode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_decode returned unrecognized status")]
+    fn decode_unrecognized_status_panics() {
+        let _result = decode_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_decode_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    fn encode_model_has_no_encoder_maps_model_has_no_encoder() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(EncodeError::ModelHasNoEncoder));
+    }
+
+    #[test]
+    fn encode_nonzero_code_maps_from_code() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE,
+            1,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(EncodeError::NoKvCacheSlot));
+    }
+
+    #[test]
+    fn encode_out_of_memory_maps_encode_out_of_memory() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OUT_OF_MEMORY,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(EncodeError::EncodeOutOfMemory));
+    }
+
+    #[test]
+    fn encode_compute_failed_maps_compute_failed() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_COMPUTE_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(EncodeError::ComputeFailed));
+    }
+
+    #[test]
+    fn encode_allocation_failed_maps_not_enough_memory() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(result, Err(EncodeError::NotEnoughMemory));
+    }
+
+    #[test]
+    fn encode_cxx_exception_maps_reported() {
+        let result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION,
+            0,
+            std::ptr::null_mut(),
+        );
+
+        assert_eq!(
+            result,
+            Err(EncodeError::Reported {
+                message: "unknown error".to_owned(),
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_encode reported a nonzero return code")]
+    fn encode_nonzero_code_with_zero_value_panics() {
+        let _result = encode_status_to_result(
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_encode returned unrecognized status")]
+    fn encode_unrecognized_status_panics() {
+        let _result = encode_status_to_result(
+            llama_cpp_bindings_sys::llama_rs_encode_status::MAX,
+            0,
+            std::ptr::null_mut(),
+        );
+    }
+
+    #[test]
+    fn token_index_beyond_context_size_maps_exceeds_context() {
+        let result = token_index_within_context(5, 4);
+
+        assert_eq!(
+            result,
+            Err(LogitsError::TokenIndexExceedsContext {
+                token_index: 5,
+                context_size: 4,
+            })
+        );
+    }
+
+    #[test]
+    fn token_index_within_context_size_is_ok() {
+        assert!(token_index_within_context(2, 4).is_ok());
+    }
+
+    #[test]
+    fn token_index_negative_skips_context_check() {
+        assert!(token_index_within_context(-1, 4).is_ok());
+    }
+
+    #[test]
+    fn logits_slice_from_null_data_maps_null_logits() {
+        let result = unsafe { logits_slice_from_raw_parts(std::ptr::null(), 4) };
+
+        assert_eq!(result, Err(LogitsError::NullLogits));
+    }
+
+    #[test]
+    fn logits_slice_from_negative_vocab_maps_vocab_size_overflow() {
+        let logit_value = 0.0_f32;
+        let result = unsafe { logits_slice_from_raw_parts(&raw const logit_value, -1) };
+
+        let conversion_error = usize::try_from(-1_i32).unwrap_err();
+
+        assert_eq!(
+            result,
+            Err(LogitsError::VocabSizeOverflow(conversion_error))
+        );
     }
 }

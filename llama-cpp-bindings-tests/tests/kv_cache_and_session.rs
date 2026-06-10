@@ -19,6 +19,7 @@ use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaLoraAdapter;
 use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
+use llama_cpp_bindings_tests::prime_kv_cache_with::prime_kv_cache_with;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 
@@ -805,6 +806,46 @@ fn kv_cache_seq_pos_max_is_non_negative_after_decode(fixture: &LlamaFixture<'_>)
     prime_kv_cache(fixture, &mut context)?;
 
     assert!(context.kv_cache_seq_pos_max(0) >= 0);
+
+    Ok(())
+}
+
+#[llama_test(
+    model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
+    n_gpu_layers = 999,
+    use_mmap = true,
+    use_mlock = false,
+    n_ctx = 256,
+    n_batch = 256,
+    n_ubatch = 64,
+)]
+fn prime_kv_cache_surfaces_each_underlying_error(fixture: &LlamaFixture<'_>) -> Result<()> {
+    let mut context = fixture.build_context()?;
+
+    assert!(
+        prime_kv_cache_with(fixture, &mut context, "Hello\0world", 512).is_err(),
+        "an interior null byte must surface a tokenization error"
+    );
+    assert!(
+        prime_kv_cache_with(fixture, &mut context, "Hello", usize::MAX).is_err(),
+        "a batch capacity exceeding i32::MAX must surface a batch construction error"
+    );
+    assert!(
+        prime_kv_cache_with(fixture, &mut context, &"word ".repeat(64), 4).is_err(),
+        "more tokens than the batch capacity must surface an add-sequence error"
+    );
+
+    let filler = "word ".repeat(40);
+    let mut decode_result = prime_kv_cache_with(fixture, &mut context, &filler, 256);
+    let mut attempts = 0;
+    while decode_result.is_ok() && attempts < 16 {
+        decode_result = prime_kv_cache_with(fixture, &mut context, &filler, 256);
+        attempts += 1;
+    }
+    assert!(
+        decode_result.is_err(),
+        "filling the context past its window must surface a decode error"
+    );
 
     Ok(())
 }

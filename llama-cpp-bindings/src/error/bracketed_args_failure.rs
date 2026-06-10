@@ -1,4 +1,4 @@
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum BracketedArgsFailure {
     #[error("tool call '{tool_name}' arguments are not valid JSON: {message}")]
     InvalidJsonArguments { tool_name: String, message: String },

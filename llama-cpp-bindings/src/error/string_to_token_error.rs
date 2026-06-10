@@ -1,6 +1,6 @@
 use std::ffi::NulError;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum StringToTokenError {
     #[error("{0}")]
     NulError(#[from] NulError),

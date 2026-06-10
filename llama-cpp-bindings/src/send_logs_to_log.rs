@@ -158,12 +158,16 @@ pub fn send_logs_to_log(options: LogOptions) {
 mod tests {
     use std::sync::{Mutex, Once};
 
+    use llama_cpp_log_decoder::decode_output::DecodeOutput;
     use llama_cpp_log_decoder::incoming_log_level::IncomingLogLevel;
+    use llama_cpp_log_decoder::log_level::LogLevel;
+    use llama_cpp_log_decoder::log_line::LogLine;
     use log::{Level, Log, Metadata, Record};
     use serial_test::serial;
 
     use super::{
-        GGML_SOURCE, LLAMA_SOURCE, LogSource, ggml_level_to_incoming, logs_to_log, send_logs_to_log,
+        GGML_SOURCE, LLAMA_SOURCE, LogSource, dispatch_output, ggml_level_to_incoming, logs_to_log,
+        resolve_record, send_logs_to_log,
     };
     use crate::log_options::LogOptions;
 
@@ -234,6 +238,17 @@ mod tests {
         unsafe {
             logs_to_log(level, text.as_ptr(), ptr);
         }
+    }
+
+    #[test]
+    fn test_logger_enabled_and_flush() {
+        let metadata = Metadata::builder()
+            .level(Level::Info)
+            .target("test-logger-enabled")
+            .build();
+
+        assert!(TEST_LOGGER.enabled(&metadata));
+        TEST_LOGGER.flush();
     }
 
     #[test]
@@ -359,6 +374,64 @@ mod tests {
         assert!(records_for(target).iter().any(|record| {
             record.level == Level::Warn && record.message.contains("OrphanCont")
         }));
+    }
+
+    #[test]
+    fn resolve_record_error_level_maps_to_error_level() {
+        let (level, message) = resolve_record(
+            LogLine {
+                level: LogLevel::Error,
+                text: "boom".to_owned(),
+            },
+            false,
+        );
+
+        assert_eq!(level, Level::Error);
+        assert_eq!(message, "boom");
+    }
+
+    #[test]
+    fn dispatch_output_none_emits_no_records() {
+        ensure_test_logger_installed();
+
+        let target = "test-dispatch-output-none";
+        let source = LogSource::new(target, LogOptions::default());
+        dispatch_output(&source, DecodeOutput::None);
+
+        assert!(records_for(target).is_empty());
+    }
+
+    #[test]
+    fn dispatch_output_two_lines_emits_both_records() {
+        ensure_test_logger_installed();
+
+        let target = "test-dispatch-output-two-lines";
+        let source = LogSource::new(target, LogOptions::default());
+        dispatch_output(
+            &source,
+            DecodeOutput::TwoLines {
+                earlier: LogLine {
+                    level: LogLevel::Info,
+                    text: "earlier-line".to_owned(),
+                },
+                current: LogLine {
+                    level: LogLevel::Warn,
+                    text: "current-line".to_owned(),
+                },
+            },
+        );
+
+        let records = records_for(target);
+        assert!(
+            records
+                .iter()
+                .any(|record| record.message.contains("earlier-line"))
+        );
+        assert!(
+            records
+                .iter()
+                .any(|record| record.message.contains("current-line"))
+        );
     }
 
     #[test]

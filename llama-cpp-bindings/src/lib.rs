@@ -1,3 +1,8 @@
+#![cfg_attr(
+    not(test),
+    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+)]
+
 pub mod batch_add_error;
 pub mod chat_message_parse_outcome;
 pub mod context;
@@ -10,6 +15,7 @@ pub mod ggml_time_us;
 pub mod gguf_context;
 pub mod gguf_context_error;
 pub mod gguf_type;
+pub mod grammar_matcher;
 pub mod ingest_outcome;
 pub mod ingest_prompt_chunk;
 pub mod invalid_numa_strategy;
@@ -31,6 +37,7 @@ pub mod load_backends_error;
 #[cfg(feature = "dynamic-backends")]
 pub mod load_backends_from_path;
 pub mod log_options;
+pub mod mask_outcome;
 pub mod max_devices;
 pub mod mlock_supported;
 pub mod mmap_supported;
