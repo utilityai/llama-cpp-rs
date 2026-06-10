@@ -66,8 +66,9 @@ lint.cpp.cppcheck:
 		--check-level=exhaustive --std=c++17 --error-exitcode=1 \
 		-I. -IGSL/include -Illama.cpp -Illama.cpp/common -Illama.cpp/include \
 		-Illama.cpp/ggml/include -Illama.cpp/vendor \
-		--suppress='*:llama.cpp/*' --suppress=missingIncludeSystem \
-		--suppress=unusedFunction --suppress=checkersReport wrapper_*.cpp
+		--suppress='*:llama.cpp/*' --suppress='*:GSL/*' \
+		--suppress=missingIncludeSystem --suppress=unusedFunction \
+		--suppress=checkersReport --suppress=toomanyconfigs wrapper_*.cpp
 
 .PHONY: test
 test: test.unit test.llms
