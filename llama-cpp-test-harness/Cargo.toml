@@ -32,7 +32,7 @@ unused_qualifications = "warn"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
+nursery = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
 unnecessary_wraps = "allow"
