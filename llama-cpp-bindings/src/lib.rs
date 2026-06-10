@@ -8,6 +8,7 @@ pub mod chat_message_parse_outcome;
 pub mod context;
 pub mod error;
 pub mod eval_multimodal_chunks_params;
+pub mod extract_reasoning_markers_from_probe_renders;
 pub mod extract_tool_call_markers_from_haystack;
 pub mod ffi_error_reader;
 pub mod ffi_status_is_ok;

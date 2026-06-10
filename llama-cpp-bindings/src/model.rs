@@ -852,7 +852,11 @@ impl LlamaModel {
     pub fn reasoning_markers(&self) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
         let (open, close) = invoke_detect_reasoning_markers(self.model.as_ptr())?;
 
-        Ok(reasoning_markers_from_marker_pair(open, close))
+        if let Some(markers) = reasoning_markers_from_marker_pair(open, close) {
+            return Ok(Some(markers));
+        }
+
+        detect_reasoning_markers_via_template_probe(self.model.as_ptr())
     }
 
     /// # Errors
@@ -974,12 +978,31 @@ impl LlamaModel {
     }
 
     fn create_chat_parser(&self) -> Result<ChatParserHandle, ParseChatMessageError> {
+        let probe_markers = detect_reasoning_markers_via_template_probe(self.model.as_ptr())?;
+
+        // SAFETY: reasoning markers are template render text and never contain an
+        // interior NUL byte, so the unchecked CString construction is sound.
+        let reasoning_open = probe_markers.as_ref().map(|markers| unsafe {
+            CString::from_vec_unchecked(markers.open.as_bytes().to_vec())
+        });
+        let reasoning_close = probe_markers.as_ref().map(|markers| unsafe {
+            CString::from_vec_unchecked(markers.close.as_bytes().to_vec())
+        });
+        let reasoning_open_ptr = reasoning_open
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+        let reasoning_close_ptr = reasoning_close
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+
         let mut out_parser: *mut llama_cpp_bindings_sys::llama_rs_chat_parser = ptr::null_mut();
         let mut out_error: *mut c_char = ptr::null_mut();
 
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_chat_parser_create(
                 self.model.as_ptr(),
+                reasoning_open_ptr,
+                reasoning_close_ptr,
                 &raw mut out_parser,
                 &raw mut out_error,
             )
@@ -1490,6 +1513,101 @@ fn invoke_detect_reasoning_markers(
     }
 
     parsed
+}
+
+// SAFETY: `out_rendered` and `out_error` must be the pointers populated by the
+// preceding `llama_rs_render_chat_template` call (or null). `out_rendered` is
+// read but not freed here; `out_error` is freed only in the CXX-exception arm,
+// mirroring the conditional cleanup in the caller.
+unsafe fn render_chat_template_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_render_chat_template_status,
+    out_rendered: *const c_char,
+    out_error: *mut c_char,
+) -> Result<Option<String>, MarkerDetectionError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_OK => {
+            read_optional_owned_cstr(out_rendered)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_CHAT_TEMPLATE
+        | llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB => Ok(None),
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MarkerDetectionError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { message })
+        }
+        other => {
+            unreachable!("llama_rs_render_chat_template returned unrecognized status {other}")
+        }
+    }
+}
+
+fn render_chat_template(
+    model: *const llama_cpp_bindings_sys::llama_model,
+    messages_json: &str,
+) -> Result<Option<String>, MarkerDetectionError> {
+    // SAFETY: `messages_json` is serde_json output, which never emits an interior
+    // NUL byte, so the unchecked CString construction has no NUL to trip over.
+    let messages = unsafe { CString::from_vec_unchecked(messages_json.as_bytes().to_vec()) };
+    let mut out_rendered: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_render_chat_template(
+            model,
+            messages.as_ptr(),
+            0,
+            1,
+            &raw mut out_rendered,
+            &raw mut out_error,
+        )
+    };
+
+    let parsed = unsafe { render_chat_template_status_to_result(status, out_rendered, out_error) };
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_rendered) };
+    if !cxx_exception_owns_out_error(&parsed) {
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+    }
+
+    parsed
+}
+
+// The reasoning-marker probe is best-effort. A template that cannot render the
+// probe's structured-content messages (e.g. a Jinja template expecting string
+// content throws "unexpected item type in content") simply makes the probe
+// inapplicable, yielding no markers — mirroring the original C++ probe's
+// catch-and-continue. Genuine resource failures still propagate.
+fn render_probe_messages(
+    model: *const llama_cpp_bindings_sys::llama_model,
+    messages_json: &str,
+) -> Result<Option<String>, MarkerDetectionError> {
+    match render_chat_template(model, messages_json) {
+        Ok(rendered) => Ok(rendered),
+        Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { .. }) => Ok(None),
+        Err(other) => Err(other),
+    }
+}
+
+fn detect_reasoning_markers_via_template_probe(
+    model: *const llama_cpp_bindings_sys::llama_model,
+) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
+    use crate::extract_reasoning_markers_from_probe_renders::chunked_probe_messages_json;
+    use crate::extract_reasoning_markers_from_probe_renders::extract_reasoning_markers_from_probe_renders;
+    use crate::extract_reasoning_markers_from_probe_renders::plain_probe_messages_json;
+
+    let Some(plain_render) = render_probe_messages(model, &plain_probe_messages_json())? else {
+        return Ok(None);
+    };
+    let Some(chunked_render) = render_probe_messages(model, &chunked_probe_messages_json())? else {
+        return Ok(None);
+    };
+
+    Ok(extract_reasoning_markers_from_probe_renders(
+        &plain_render,
+        &chunked_render,
+    ))
 }
 
 // SAFETY: `out_haystack` and `out_error` must be the pointers populated by the
@@ -2005,6 +2123,7 @@ mod ffi_status_mapping_tests {
     use super::parsed_chat_tool_call_id_status_to_result;
     use super::parsed_chat_tool_call_name_status_to_result;
     use super::reasoning_markers_from_marker_pair;
+    use super::render_chat_template_status_to_result;
     use super::split_reasoning_prefix;
     use super::tokenize_status_to_result;
     use crate::ChatMessageParseOutcome;
@@ -2775,6 +2894,92 @@ mod ffi_status_mapping_tests {
                 llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments_status::MAX,
                 0,
                 ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+    }
+
+    #[test]
+    fn render_chat_template_status_ok_reads_rendered() {
+        let rendered = std::ffi::CString::new("hi").expect("test render string");
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_OK,
+                rendered.as_ptr(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("ok render"), Some("hi".to_owned()));
+    }
+
+    #[test]
+    fn render_chat_template_status_no_chat_template_is_none() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_CHAT_TEMPLATE,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("none"), None);
+    }
+
+    #[test]
+    fn render_chat_template_status_no_vocab_is_none() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("none"), None);
+    }
+
+    #[test]
+    fn render_chat_template_status_allocation_failed_is_not_enough_memory() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&MarkerDetectionError::NotEnoughMemory)
+        );
+    }
+
+    #[test]
+    fn render_chat_template_status_cxx_exception_is_reported() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&MarkerDetectionError::ReasoningMarkerDetectionFailed {
+                message: String::new()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_render_chat_template returned unrecognized status")]
+    fn render_chat_template_status_unrecognized_panics() {
+        let _ = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_render_chat_template_status::MAX,
+                ptr::null(),
                 ptr::null_mut(),
             )
         };

@@ -28,6 +28,8 @@ typedef enum llama_rs_chat_parser_create_status {
 
 llama_rs_chat_parser_create_status llama_rs_chat_parser_create(
     const struct llama_model * model,
+    const char * reasoning_open,
+    const char * reasoning_close,
     llama_rs_chat_parser_handle * out_parser,
     char ** out_error);
 

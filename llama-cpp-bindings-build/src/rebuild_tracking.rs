@@ -4,12 +4,7 @@ use walkdir::DirEntry;
 
 use crate::glob_paths;
 
-const WRAPPER_TRACKING_PATTERNS: &[&str] = &[
-    "wrapper*.h",
-    "wrapper_*.cpp",
-    "marker_probes/**/*.h",
-    "marker_probes/**/*.cpp",
-];
+const WRAPPER_TRACKING_PATTERNS: &[&str] = &["wrapper*.h", "wrapper_*.cpp"];
 
 fn is_hidden(entry: &DirEntry) -> bool {
     entry
