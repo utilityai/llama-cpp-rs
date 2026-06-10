@@ -35,9 +35,4 @@ all = { level = "deny", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
-
-# Every `#[llama_test]` trial fn must return `anyhow::Result<()>` to match the
-# `LlamaTestFn` pointer type (so test bodies can use `?`). Trials whose bodies
-# never propagate an error trip `unnecessary_wraps`; the harness signature is
-# load-bearing, so this lint is a structural false positive for this crate.
 unnecessary_wraps = "allow"

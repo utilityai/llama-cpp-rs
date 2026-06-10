@@ -1,3 +1,6 @@
+use std::ffi::CString;
+use std::path::Path;
+
 use crate::context::LlamaContext;
 use crate::context::llama_state_seq_flags::LlamaStateSeqFlags;
 use crate::context::load_seq_state_error::LoadSeqStateError;
@@ -5,8 +8,6 @@ use crate::context::load_session_error::LoadSessionError;
 use crate::context::save_seq_state_error::SaveSeqStateError;
 use crate::context::save_session_error::SaveSessionError;
 use crate::token::LlamaToken;
-use std::ffi::CString;
-use std::path::Path;
 
 fn process_session_load_result(
     success: bool,

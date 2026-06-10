@@ -1,8 +1,10 @@
-use crate::LlamaCppError;
-use crate::llama_backend_numa_strategy::NumaStrategy;
-use llama_cpp_bindings_sys::ggml_log_level;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering::SeqCst;
+
+use llama_cpp_bindings_sys::ggml_log_level;
+
+use crate::LlamaCppError;
+use crate::llama_backend_numa_strategy::NumaStrategy;
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct LlamaBackend {}

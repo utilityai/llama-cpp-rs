@@ -1,12 +1,5 @@
+use crate::marker_kind::MarkerKind;
 use crate::token::LlamaToken;
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum MarkerKind {
-    ReasoningOpen,
-    ReasoningClose,
-    ToolCallOpen,
-    ToolCallClose,
-}
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StreamingMarkers {

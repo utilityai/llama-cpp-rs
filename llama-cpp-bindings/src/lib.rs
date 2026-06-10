@@ -38,6 +38,7 @@ pub mod load_backends_error;
 #[cfg(feature = "dynamic-backends")]
 pub mod load_backends_from_path;
 pub mod log_options;
+pub mod marker_kind;
 pub mod mask_outcome;
 pub mod max_devices;
 pub mod mlock_supported;

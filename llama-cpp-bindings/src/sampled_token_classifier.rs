@@ -13,13 +13,14 @@ use crate::error::SampleError;
 use crate::error::TokenToStringError;
 use crate::eval_multimodal_chunks_params::EvalMultimodalChunksParams;
 use crate::llama_batch::LlamaBatch;
+use crate::marker_kind::MarkerKind;
 use crate::model::LlamaModel;
 use crate::mtmd::MtmdContext;
 use crate::mtmd::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
 use crate::sampling::LlamaSampler;
 use crate::streaming_json_probe::JsonProbeOutcome;
-use crate::streaming_markers::{MarkerKind, StreamingMarkers};
+use crate::streaming_markers::StreamingMarkers;
 use crate::token::LlamaToken;
 
 pub use crate::ingest_outcome::IngestOutcome;
