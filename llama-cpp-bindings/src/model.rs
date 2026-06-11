@@ -70,6 +70,35 @@ fn cstring_with_validated_len(str: &str) -> Result<(CString, c_int), StringToTok
 pub struct LlamaModel {
     pub model: NonNull<llama_cpp_bindings_sys::llama_model>,
     tok_env: OnceLock<Arc<ApproximateTokEnv>>,
+    chat_parser: OnceLock<ChatParserHandle>,
+}
+
+#[derive(Debug)]
+struct ChatParserHandle {
+    parser: NonNull<llama_cpp_bindings_sys::llama_rs_chat_parser>,
+}
+
+// SAFETY: the handle is an opaque pointer to a heap-allocated parser owned by the
+// model; it is created once, never mutated afterwards, and freed exactly once on
+// drop. The owning `LlamaModel` is already `Send + Sync`, so the handle shares that
+// guarantee.
+unsafe impl Send for ChatParserHandle {}
+
+unsafe impl Sync for ChatParserHandle {}
+
+impl Drop for ChatParserHandle {
+    fn drop(&mut self) {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        unsafe {
+            llama_cpp_bindings_sys::llama_rs_chat_parser_free(
+                self.parser.as_ptr(),
+                &raw mut out_error,
+            );
+        }
+        if !out_error.is_null() {
+            let _ = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+        }
+    }
 }
 
 impl std::fmt::Debug for LlamaModel {
@@ -99,6 +128,7 @@ unsafe fn load_model_from_file_status_to_result(
             Ok(LlamaModel {
                 model,
                 tok_env: OnceLock::new(),
+                chat_parser: OnceLock::new(),
             })
         }
         llama_cpp_bindings_sys::LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL => {
@@ -134,12 +164,6 @@ unsafe fn parse_chat_message_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_OK => {
             collect_parsed_chat_message(handle)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE => {
-            Err(ParseChatMessageError::NoChatTemplate)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB => {
-            Err(ParseChatMessageError::NoVocab)
-        }
         llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(ParseChatMessageError::NotEnoughMemory)
         }
@@ -150,6 +174,39 @@ unsafe fn parse_chat_message_status_to_result(
         }
         other => {
             unreachable!("llama_rs_parse_chat_message returned unrecognized status {other}")
+        }
+    }
+}
+
+// SAFETY: `out_error` must reference the pointer populated by the preceding
+// `llama_rs_chat_parser_create` call (or null); it is read, freed, and nulled only in
+// the CXX-exception arm. `parser` must be the pointer populated by the same call.
+unsafe fn chat_parser_create_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_chat_parser_create_status,
+    parser: *mut llama_cpp_bindings_sys::llama_rs_chat_parser,
+    out_error: *mut *mut c_char,
+) -> Result<ChatParserHandle, ParseChatMessageError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_OK => NonNull::new(parser).map_or_else(
+            || unreachable!("llama_rs_chat_parser_create returned OK with a null parser handle"),
+            |parser| Ok(ChatParserHandle { parser }),
+        ),
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE => {
+            Err(ParseChatMessageError::NoChatTemplate)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB => {
+            Err(ParseChatMessageError::NoVocab)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(ParseChatMessageError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(*out_error) };
+            unsafe { *out_error = ptr::null_mut() };
+            Err(ParseChatMessageError::ParseFailed { message })
+        }
+        other => {
+            unreachable!("llama_rs_chat_parser_create returned unrecognized status {other}")
         }
     }
 }
@@ -686,6 +743,7 @@ impl LlamaModel {
         tmpl: &LlamaChatTemplate,
         chat: &[LlamaChatMessage],
         add_ass: bool,
+        enable_thinking: bool,
     ) -> Result<String, ApplyChatTemplateError> {
         let roles: Vec<*const c_char> = chat
             .iter()
@@ -707,6 +765,7 @@ impl LlamaModel {
                 contents.as_ptr(),
                 chat.len(),
                 i32::from(add_ass),
+                i32::from(enable_thinking),
                 &raw mut out_string,
                 &raw mut out_error,
             )
@@ -793,7 +852,11 @@ impl LlamaModel {
     pub fn reasoning_markers(&self) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
         let (open, close) = invoke_detect_reasoning_markers(self.model.as_ptr())?;
 
-        Ok(reasoning_markers_from_marker_pair(open, close))
+        if let Some(markers) = reasoning_markers_from_marker_pair(open, close) {
+            return Ok(Some(markers));
+        }
+
+        detect_reasoning_markers_via_template_probe(self.model.as_ptr())
     }
 
     /// # Errors
@@ -875,6 +938,8 @@ impl LlamaModel {
         input: &str,
         is_partial: bool,
     ) -> Result<ParsedChatMessage, ParseChatMessageError> {
+        let parser = self.chat_parser()?;
+
         let tools_cstring = CString::new(tools_json)
             .map_err(|err| ParseChatMessageError::ToolsSerialization(err.to_string()))?;
         let input_cstring = CString::new(input)
@@ -885,7 +950,7 @@ impl LlamaModel {
 
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_parse_chat_message(
-                self.model.as_ptr(),
+                parser.parser.as_ptr(),
                 tools_cstring.as_ptr(),
                 input_cstring.as_ptr(),
                 i32::from(is_partial),
@@ -902,6 +967,48 @@ impl LlamaModel {
             llama_cpp_bindings_sys::llama_rs_parsed_chat_free(handle, &raw mut free_error)
         };
         unsafe { parsed_chat_free_status_to_result(parsed, free_status, out_error, free_error) }
+    }
+
+    fn chat_parser(&self) -> Result<&ChatParserHandle, ParseChatMessageError> {
+        if let Some(parser) = self.chat_parser.get() {
+            return Ok(parser);
+        }
+        let parser = self.create_chat_parser()?;
+        Ok(self.chat_parser.get_or_init(|| parser))
+    }
+
+    fn create_chat_parser(&self) -> Result<ChatParserHandle, ParseChatMessageError> {
+        let probe_markers = detect_reasoning_markers_via_template_probe(self.model.as_ptr())?;
+
+        // SAFETY: reasoning markers are template render text and never contain an
+        // interior NUL byte, so the unchecked CString construction is sound.
+        let reasoning_open = probe_markers.as_ref().map(|markers| unsafe {
+            CString::from_vec_unchecked(markers.open.as_bytes().to_vec())
+        });
+        let reasoning_close = probe_markers.as_ref().map(|markers| unsafe {
+            CString::from_vec_unchecked(markers.close.as_bytes().to_vec())
+        });
+        let reasoning_open_ptr = reasoning_open
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+        let reasoning_close_ptr = reasoning_close
+            .as_ref()
+            .map_or(ptr::null(), |value| value.as_ptr());
+
+        let mut out_parser: *mut llama_cpp_bindings_sys::llama_rs_chat_parser = ptr::null_mut();
+        let mut out_error: *mut c_char = ptr::null_mut();
+
+        let status = unsafe {
+            llama_cpp_bindings_sys::llama_rs_chat_parser_create(
+                self.model.as_ptr(),
+                reasoning_open_ptr,
+                reasoning_close_ptr,
+                &raw mut out_parser,
+                &raw mut out_error,
+            )
+        };
+
+        unsafe { chat_parser_create_status_to_result(status, out_parser, &raw mut out_error) }
     }
 
     /// # Errors
@@ -1408,6 +1515,101 @@ fn invoke_detect_reasoning_markers(
     parsed
 }
 
+// SAFETY: `out_rendered` and `out_error` must be the pointers populated by the
+// preceding `llama_rs_render_chat_template` call (or null). `out_rendered` is
+// read but not freed here; `out_error` is freed only in the CXX-exception arm,
+// mirroring the conditional cleanup in the caller.
+unsafe fn render_chat_template_status_to_result(
+    status: llama_cpp_bindings_sys::llama_rs_render_chat_template_status,
+    out_rendered: *const c_char,
+    out_error: *mut c_char,
+) -> Result<Option<String>, MarkerDetectionError> {
+    match status {
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_OK => {
+            read_optional_owned_cstr(out_rendered)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_CHAT_TEMPLATE
+        | llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB => Ok(None),
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED => {
+            Err(MarkerDetectionError::NotEnoughMemory)
+        }
+        llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION => {
+            let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
+            Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { message })
+        }
+        other => {
+            unreachable!("llama_rs_render_chat_template returned unrecognized status {other}")
+        }
+    }
+}
+
+fn render_chat_template(
+    model: *const llama_cpp_bindings_sys::llama_model,
+    messages_json: &str,
+) -> Result<Option<String>, MarkerDetectionError> {
+    // SAFETY: `messages_json` is serde_json output, which never emits an interior
+    // NUL byte, so the unchecked CString construction has no NUL to trip over.
+    let messages = unsafe { CString::from_vec_unchecked(messages_json.as_bytes().to_vec()) };
+    let mut out_rendered: *mut c_char = ptr::null_mut();
+    let mut out_error: *mut c_char = ptr::null_mut();
+
+    let status = unsafe {
+        llama_cpp_bindings_sys::llama_rs_render_chat_template(
+            model,
+            messages.as_ptr(),
+            0,
+            1,
+            &raw mut out_rendered,
+            &raw mut out_error,
+        )
+    };
+
+    let parsed = unsafe { render_chat_template_status_to_result(status, out_rendered, out_error) };
+
+    unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_rendered) };
+    if !cxx_exception_owns_out_error(&parsed) {
+        unsafe { llama_cpp_bindings_sys::llama_rs_string_free(out_error) };
+    }
+
+    parsed
+}
+
+// The reasoning-marker probe is best-effort. A template that cannot render the
+// probe's structured-content messages (e.g. a Jinja template expecting string
+// content throws "unexpected item type in content") simply makes the probe
+// inapplicable, yielding no markers — mirroring the original C++ probe's
+// catch-and-continue. Genuine resource failures still propagate.
+fn render_probe_messages(
+    model: *const llama_cpp_bindings_sys::llama_model,
+    messages_json: &str,
+) -> Result<Option<String>, MarkerDetectionError> {
+    match render_chat_template(model, messages_json) {
+        Ok(rendered) => Ok(rendered),
+        Err(MarkerDetectionError::ReasoningMarkerDetectionFailed { .. }) => Ok(None),
+        Err(other) => Err(other),
+    }
+}
+
+fn detect_reasoning_markers_via_template_probe(
+    model: *const llama_cpp_bindings_sys::llama_model,
+) -> Result<Option<ReasoningMarkers>, MarkerDetectionError> {
+    use crate::extract_reasoning_markers_from_probe_renders::chunked_probe_messages_json;
+    use crate::extract_reasoning_markers_from_probe_renders::extract_reasoning_markers_from_probe_renders;
+    use crate::extract_reasoning_markers_from_probe_renders::plain_probe_messages_json;
+
+    let Some(plain_render) = render_probe_messages(model, &plain_probe_messages_json())? else {
+        return Ok(None);
+    };
+    let Some(chunked_render) = render_probe_messages(model, &chunked_probe_messages_json())? else {
+        return Ok(None);
+    };
+
+    Ok(extract_reasoning_markers_from_probe_renders(
+        &plain_render,
+        &chunked_render,
+    ))
+}
+
 // SAFETY: `out_haystack` and `out_error` must be the pointers populated by the
 // preceding `llama_rs_compute_tool_call_haystack` call (or null). `out_haystack`
 // is read but not freed here; `out_error` is freed only in the CXX-exception
@@ -1905,6 +2107,7 @@ mod ffi_status_mapping_tests {
     use llama_cpp_bindings_types::ToolCallArguments;
 
     use super::ReasoningSplit;
+    use super::chat_parser_create_status_to_result;
     use super::compute_tool_call_haystack_status_to_result;
     use super::cxx_exception_owns_out_error;
     use super::detect_reasoning_markers_status_to_result;
@@ -1920,6 +2123,7 @@ mod ffi_status_mapping_tests {
     use super::parsed_chat_tool_call_id_status_to_result;
     use super::parsed_chat_tool_call_name_status_to_result;
     use super::reasoning_markers_from_marker_pair;
+    use super::render_chat_template_status_to_result;
     use super::split_reasoning_prefix;
     use super::tokenize_status_to_result;
     use crate::ChatMessageParseOutcome;
@@ -2043,11 +2247,11 @@ mod ffi_status_mapping_tests {
     }
 
     #[test]
-    fn parse_chat_message_no_chat_template_maps_to_no_chat_template() {
+    fn chat_parser_create_no_chat_template_maps_to_no_chat_template() {
         let mut out_error: *mut c_char = ptr::null_mut();
         let result = unsafe {
-            parse_chat_message_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE,
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE,
                 ptr::null_mut(),
                 &raw mut out_error,
             )
@@ -2060,11 +2264,11 @@ mod ffi_status_mapping_tests {
     }
 
     #[test]
-    fn parse_chat_message_no_vocab_maps_to_no_vocab() {
+    fn chat_parser_create_no_vocab_maps_to_no_vocab() {
         let mut out_error: *mut c_char = ptr::null_mut();
         let result = unsafe {
-            parse_chat_message_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB,
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB,
                 ptr::null_mut(),
                 &raw mut out_error,
             )
@@ -2074,6 +2278,69 @@ mod ffi_status_mapping_tests {
             discriminant(&result.unwrap_err()),
             discriminant(&ParseChatMessageError::NoVocab)
         );
+    }
+
+    #[test]
+    fn chat_parser_create_allocation_failed_is_not_enough_memory() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let result = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&ParseChatMessageError::NotEnoughMemory)
+        );
+    }
+
+    #[test]
+    fn chat_parser_create_cxx_exception_is_parse_failed_and_nulls_error() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let result = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&ParseChatMessageError::ParseFailed {
+                message: String::new()
+            })
+        );
+        assert!(out_error.is_null());
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_chat_parser_create returned OK with a null parser handle")]
+    fn chat_parser_create_ok_with_null_parser_panics() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let _ = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_CHAT_PARSER_CREATE_OK,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_chat_parser_create returned unrecognized status")]
+    fn chat_parser_create_unrecognized_status_panics() {
+        let mut out_error: *mut c_char = ptr::null_mut();
+        let _ = unsafe {
+            chat_parser_create_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_chat_parser_create_status::MAX,
+                ptr::null_mut(),
+                &raw mut out_error,
+            )
+        };
     }
 
     #[test]
@@ -2627,6 +2894,92 @@ mod ffi_status_mapping_tests {
                 llama_cpp_bindings_sys::llama_rs_parsed_chat_tool_call_arguments_status::MAX,
                 0,
                 ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+    }
+
+    #[test]
+    fn render_chat_template_status_ok_reads_rendered() {
+        let rendered = std::ffi::CString::new("hi").expect("test render string");
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_OK,
+                rendered.as_ptr(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("ok render"), Some("hi".to_owned()));
+    }
+
+    #[test]
+    fn render_chat_template_status_no_chat_template_is_none() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_CHAT_TEMPLATE,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("none"), None);
+    }
+
+    #[test]
+    fn render_chat_template_status_no_vocab_is_none() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(result.expect("none"), None);
+    }
+
+    #[test]
+    fn render_chat_template_status_allocation_failed_is_not_enough_memory() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&MarkerDetectionError::NotEnoughMemory)
+        );
+    }
+
+    #[test]
+    fn render_chat_template_status_cxx_exception_is_reported() {
+        let result = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_RENDER_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION,
+                ptr::null(),
+                ptr::null_mut(),
+            )
+        };
+
+        assert_eq!(
+            discriminant(&result.unwrap_err()),
+            discriminant(&MarkerDetectionError::ReasoningMarkerDetectionFailed {
+                message: String::new()
+            })
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "llama_rs_render_chat_template returned unrecognized status")]
+    fn render_chat_template_status_unrecognized_panics() {
+        let _ = unsafe {
+            render_chat_template_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_render_chat_template_status::MAX,
+                ptr::null(),
                 ptr::null_mut(),
             )
         };

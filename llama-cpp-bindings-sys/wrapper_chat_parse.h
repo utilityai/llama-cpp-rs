@@ -12,20 +12,49 @@ extern "C" {
 struct llama_rs_parsed_chat;
 typedef struct llama_rs_parsed_chat * llama_rs_parsed_chat_handle;
 
+struct llama_rs_chat_parser;
+typedef struct llama_rs_chat_parser * llama_rs_chat_parser_handle;
+
+typedef enum llama_rs_chat_parser_create_status {
+    LLAMA_RS_CHAT_PARSER_CREATE_OK = 0,
+    LLAMA_RS_CHAT_PARSER_CREATE_NULL_MODEL_ARG,
+    LLAMA_RS_CHAT_PARSER_CREATE_NULL_OUT_PARSER_ARG,
+    LLAMA_RS_CHAT_PARSER_CREATE_NULL_OUT_ERROR_ARG,
+    LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE,
+    LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB,
+    LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION,
+} llama_rs_chat_parser_create_status;
+
+llama_rs_chat_parser_create_status llama_rs_chat_parser_create(
+    const struct llama_model * model,
+    const char * reasoning_open,
+    const char * reasoning_close,
+    llama_rs_chat_parser_handle * out_parser,
+    char ** out_error);
+
+typedef enum llama_rs_chat_parser_free_status {
+    LLAMA_RS_CHAT_PARSER_FREE_OK = 0,
+    LLAMA_RS_CHAT_PARSER_FREE_ERROR_STRING_ALLOCATION_FAILED,
+    LLAMA_RS_CHAT_PARSER_FREE_DESTRUCTOR_THREW_CXX_EXCEPTION,
+} llama_rs_chat_parser_free_status;
+
+llama_rs_chat_parser_free_status llama_rs_chat_parser_free(
+    llama_rs_chat_parser_handle parser,
+    char ** out_error);
+
 typedef enum llama_rs_parse_chat_message_status {
     LLAMA_RS_PARSE_CHAT_MESSAGE_OK = 0,
-    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_MODEL_ARG,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_PARSER_ARG,
     LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_INPUT_ARG,
     LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_HANDLE_ARG,
     LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_ERROR_ARG,
-    LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_CHAT_TEMPLATE,
-    LLAMA_RS_PARSE_CHAT_MESSAGE_MODEL_HAS_NO_VOCAB,
     LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED,
     LLAMA_RS_PARSE_CHAT_MESSAGE_VENDORED_THREW_CXX_EXCEPTION,
 } llama_rs_parse_chat_message_status;
 
 llama_rs_parse_chat_message_status llama_rs_parse_chat_message(
-    const struct llama_model * model,
+    llama_rs_chat_parser_handle parser,
     const char * tools_json,
     const char * input,
     int is_partial,

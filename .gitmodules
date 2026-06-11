@@ -1,3 +1,6 @@
 [submodule "llama-cpp-bindings-sys/llama.cpp"]
 	path = llama-cpp-bindings-sys/llama.cpp
 	url = https://github.com/ggml-org/llama.cpp
+[submodule "llama-cpp-bindings-sys/GSL"]
+	path = llama-cpp-bindings-sys/GSL
+	url = https://github.com/microsoft/GSL.git

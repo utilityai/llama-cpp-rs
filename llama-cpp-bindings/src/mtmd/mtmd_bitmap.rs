@@ -127,15 +127,17 @@ impl MtmdBitmap {
     ///
     /// * `NullResult` - Buffer could not be processed
     pub fn from_buffer(ctx: &MtmdContext, data: &[u8]) -> Result<Self, MtmdBitmapError> {
-        let bitmap = unsafe {
+        let bitmap_wrapper = unsafe {
             llama_cpp_bindings_sys::mtmd_helper_bitmap_init_from_buf(
                 ctx.context.as_ptr(),
                 data.as_ptr(),
                 data.len(),
+                false,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::BitmapDecodeFailed)?;
+        let bitmap =
+            NonNull::new(bitmap_wrapper.bitmap).ok_or(MtmdBitmapError::BitmapDecodeFailed)?;
 
         Ok(Self { bitmap })
     }
@@ -262,12 +264,9 @@ mod tests {
 
     #[test]
     fn from_audio_data_creates_valid_bitmap() {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "test fixture casts a small i32 (0..100) to f32 to synthesise a sine wave; \
-                      the values are well within f32's exact-representation range"
-        )]
-        let audio_samples: Vec<f32> = (0..100).map(|index| (index as f32 * 0.1).sin()).collect();
+        let audio_samples: Vec<f32> = (0u8..100)
+            .map(|index| (f32::from(index) * 0.1).sin())
+            .collect();
         let bitmap = MtmdBitmap::from_audio_data(&audio_samples).unwrap();
 
         assert!(bitmap.is_audio());

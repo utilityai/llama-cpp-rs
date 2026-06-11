@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use std::num::NonZeroU8;
 use std::ptr::NonNull;
 use std::sync::Arc;

@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use std::ffi::CStr;
 use std::io::Write;
 use std::sync::Arc;
@@ -976,15 +971,11 @@ fn raw_prompt_completion_with_timing(fixture: &LlamaFixture<'_>) -> Result<()> {
     let total_observed =
         outcome.observed_content + outcome.observed_reasoning + outcome.observed_undeterminable;
 
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "logged throughput tolerates f32 precision"
-    )]
-    let tokens_per_second = total_observed as f32 / duration.as_secs_f32();
+    let tokens_per_second = f64::from(u32::try_from(total_observed)?) / duration.as_secs_f64();
 
     eprintln!(
         "\ndecoded {total_observed} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
-        duration.as_secs_f32(),
+        duration.as_secs_f64(),
     );
 
     assert!(
@@ -1081,7 +1072,7 @@ fn chat_inference_produces_coherent_output(fixture: &LlamaFixture<'_>) -> Result
         "user".to_string(),
         "Hello! How are you?".to_string(),
     )?];
-    let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
+    let prompt = model.apply_chat_template(&chat_template, &messages, true, true)?;
 
     let mut classifier = model.sampled_token_classifier()?;
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;

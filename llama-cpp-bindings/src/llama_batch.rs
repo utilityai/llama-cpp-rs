@@ -1,10 +1,12 @@
-use crate::batch_add_error::BatchAddError;
-use crate::sampled_token::SampledToken;
-use crate::token::LlamaToken;
+use std::marker::PhantomData;
+
 use llama_cpp_bindings_sys::{
     llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id,
 };
-use std::marker::PhantomData;
+
+use crate::batch_add_error::BatchAddError;
+use crate::sampled_token::SampledToken;
+use crate::token::LlamaToken;
 
 fn checked_n_tokens_plus_one_as_usize(n_tokens: i32) -> Result<usize, BatchAddError> {
     let incremented = n_tokens.checked_add(1).ok_or_else(|| {
@@ -161,11 +163,7 @@ impl<'tokens> LlamaBatch<'tokens> {
         let token_count = checked_usize_as_i32(tokens.len(), "token count")?;
 
         let batch = unsafe {
-            #[expect(
-                clippy::as_ptr_cast_mut,
-                reason = "llama_batch_get_one signature requires *mut i32 but does not mutate the tokens"
-            )]
-            let ptr = tokens.as_ptr() as *mut i32;
+            let ptr = tokens.as_ptr().cast::<i32>().cast_mut();
             llama_cpp_bindings_sys::llama_batch_get_one(ptr, token_count)
         };
 

@@ -1,3 +1,8 @@
+use std::ffi::{CStr, c_char};
+use std::fmt::{Debug, Formatter};
+use std::pin::Pin;
+use std::ptr::null;
+
 use crate::LlamaCppError;
 use crate::context::params::LlamaContextParams;
 use crate::error::{FitError, ModelParamsError};
@@ -5,10 +10,6 @@ use crate::model::llama_split_mode_parse_error::LlamaSplitModeParseError;
 use crate::model::params::fit_result::FitResult;
 use crate::model::params::kv_overrides::KvOverrides;
 use crate::model::split_mode::LlamaSplitMode;
-use std::ffi::{CStr, c_char};
-use std::fmt::{Debug, Formatter};
-use std::pin::Pin;
-use std::ptr::null;
 
 pub mod fit_result;
 pub mod kv_override_value_iterator;

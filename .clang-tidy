@@ -1,0 +1,28 @@
+# clang-tidy for the C++ FFI wrappers (llama-cpp-bindings-sys/*.cpp). Every check
+# is enabled and every warning is an error, except:
+#   - Other-project convention groups this codebase is not and cannot satisfy
+#     (some of which contradict each other and the modernize checks, e.g.
+#     fuchsia-trailing-return vs modernize-use-trailing-return-type):
+#     abseil/altera/android/boost/darwin/fuchsia/linuxkernel/llvm/llvmlibc/mpi/openmp/zircon.
+#   - bugprone-easily-swappable-parameters: the wrapper signatures mirror the
+#     llama.cpp C API shape (adjacent llama_pos p0, p1, ...) and cannot be reshaped.
+# Headers are out of scope here: they are C-ABI (bindgen parses them as C), so C++
+# modernizations would break them. cppcheck lints the headers instead.
+Checks: >
+  *,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -boost-*,
+  -darwin-*,
+  -fuchsia-*,
+  -linuxkernel-*,
+  -llvm-*,
+  -llvmlibc-*,
+  -mpi-*,
+  -openmp-*,
+  -zircon-*,
+  -bugprone-easily-swappable-parameters
+WarningsAsErrors: '*'
+HeaderFilterRegex: '$^'
+FormatStyle: none

@@ -12,12 +12,12 @@ typedef enum llama_rs_status {
 
 #ifdef __cplusplus
 
-#include <cstdlib>
 #include <cstring>
+#include <new>
 #include <string>
 
 static inline char * llama_rs_dup_string(const std::string & value) {
-    char * buffer = static_cast<char *>(std::malloc(value.size() + 1));
+    char * buffer = new (std::nothrow) char[value.size() + 1];
     if (!buffer) {
         return nullptr;
     }

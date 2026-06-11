@@ -1,6 +1,8 @@
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::ChatMessageParseOutcome;
+use llama_cpp_bindings::ParsedChatMessage;
+use llama_cpp_bindings::TokenUsage;
 use llama_cpp_bindings::ToolCallArgsShape;
 use llama_cpp_bindings::ToolCallArguments;
 use llama_cpp_bindings::context::LlamaContext;
@@ -9,6 +11,7 @@ use llama_cpp_bindings::model::AddBos;
 use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
+use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoopOutcome;
 use llama_cpp_test_harness::LlamaFixture;
 use llama_cpp_test_harness::llama_test;
 use serde_json::Value;
@@ -129,10 +132,6 @@ fn deepseek_r1_8b_classifier_does_not_emit_reasoning_for_thinking_disabled_promp
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_lines,
-    reason = "test asserts many distinct properties of DeepSeek-R1-8B reasoning output; shortening messages or splitting the body would reduce diagnostic signal at failure time"
-)]
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
     n_gpu_layers = 999,
@@ -200,6 +199,13 @@ fn deepseek_r1_8b_classifier_emits_reasoning_for_thinking_enabled_prompt(
         bail!("DeepSeek-R1-8B chat template must be recognised by the parser; got Unrecognized");
     };
 
+    assert_deepseek_r1_token_counts(&outcome, usage);
+    assert_deepseek_r1_streams(&outcome, &parsed, MAX_GENERATED_TOKENS, FORBIDDEN_MARKERS);
+
+    Ok(())
+}
+
+fn assert_deepseek_r1_token_counts(outcome: &ClassifySampleLoopOutcome, usage: &TokenUsage) {
     assert!(
         !outcome.generated_raw.is_empty(),
         "DeepSeek-R1-8B: must generate at least one token"
@@ -228,10 +234,17 @@ fn deepseek_r1_8b_classifier_emits_reasoning_for_thinking_enabled_prompt(
         outcome.observed_content + outcome.observed_reasoning,
         "DeepSeek-R1-8B: completion tokens must equal observed Content + Reasoning"
     );
+}
 
+fn assert_deepseek_r1_streams(
+    outcome: &ClassifySampleLoopOutcome,
+    parsed: &ParsedChatMessage,
+    max_generated_tokens: i32,
+    forbidden_markers: &[&str],
+) {
     if parsed.reasoning_content.is_empty() {
         eprintln!(
-            "DeepSeek-R1-8B didn't close its reasoning block within {MAX_GENERATED_TOKENS} \
+            "DeepSeek-R1-8B didn't close its reasoning block within {max_generated_tokens} \
              tokens — skipping strict parser-equality assertions"
         );
     } else {
@@ -247,7 +260,7 @@ fn deepseek_r1_8b_classifier_emits_reasoning_for_thinking_enabled_prompt(
         );
     }
 
-    for forbidden in FORBIDDEN_MARKERS {
+    for forbidden in forbidden_markers {
         assert!(
             !outcome.reasoning_stream.contains(forbidden),
             "DeepSeek-R1-8B: reasoning_stream leaked marker {forbidden:?}; \
@@ -261,8 +274,6 @@ fn deepseek_r1_8b_classifier_emits_reasoning_for_thinking_enabled_prompt(
             outcome.content_stream
         );
     }
-
-    Ok(())
 }
 
 #[llama_test(
@@ -1425,7 +1436,7 @@ fn qwen35_chat_inference_emits_reasoning_when_template_auto_opens(
         "user".to_owned(),
         "Hello! How are you?".to_owned(),
     )?];
-    let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
+    let prompt = model.apply_chat_template(&chat_template, &messages, true, true)?;
 
     let mut classifier = model.sampled_token_classifier()?;
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;
@@ -1975,7 +1986,7 @@ fn qwen36_chat_inference_emits_reasoning_when_template_auto_opens(
         "user".to_owned(),
         "Hello! How are you?".to_owned(),
     )?];
-    let prompt = model.apply_chat_template(&chat_template, &messages, true)?;
+    let prompt = model.apply_chat_template(&chat_template, &messages, true, true)?;
 
     let mut classifier = model.sampled_token_classifier()?;
     let tokens = model.str_to_token(&prompt, AddBos::Always)?;

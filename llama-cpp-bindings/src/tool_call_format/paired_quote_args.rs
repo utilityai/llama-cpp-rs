@@ -217,11 +217,6 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    #![expect(
-        clippy::literal_string_with_formatting_args,
-        reason = "Gemma tool-call format literals contain braces that resemble format args"
-    )]
-
     use llama_cpp_bindings_types::PairedQuoteShape;
     use llama_cpp_bindings_types::ToolCallArgsShape;
     use llama_cpp_bindings_types::ToolCallArguments;

@@ -201,15 +201,11 @@ fn reranking_produces_scores(fixture: &LlamaFixture<'_>) -> Result<()> {
     let t_main_end = ggml_time_us();
     let duration = Duration::from_micros(u64::try_from(t_main_end - t_main_start)?);
 
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "logged throughput tolerates f32 precision"
-    )]
-    let tokens_per_second = total_tokens as f32 / duration.as_secs_f32();
+    let tokens_per_second = f64::from(u32::try_from(total_tokens)?) / duration.as_secs_f64();
 
     eprintln!(
         "created embeddings for {total_tokens} tokens in {:.2} s, speed {tokens_per_second:.2} t/s",
-        duration.as_secs_f32(),
+        duration.as_secs_f64(),
     );
 
     assert_eq!(

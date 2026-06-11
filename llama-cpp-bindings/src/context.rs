@@ -207,10 +207,6 @@ impl<'model> LlamaContext<'model> {
     /// # Errors
     ///
     /// Returns [`LlamaContextLoadError`] when llama.cpp fails to allocate the context.
-    #[expect(
-        clippy::needless_pass_by_value,
-        reason = "LlamaContextParams may become non-trivially copyable upstream"
-    )]
     pub fn from_model(
         model: &'model LlamaModel,
         _backend: &LlamaBackend,

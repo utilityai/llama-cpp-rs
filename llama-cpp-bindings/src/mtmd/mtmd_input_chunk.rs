@@ -68,15 +68,10 @@ fn image_chunk_batch_size_error(
     if is_image_chunk
         && i64::try_from(chunk_token_count).is_ok_and(|tokens| tokens > i64::from(n_batch))
     {
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "image token counts and n_batch are model-bounded and fit in u32"
-        )]
         return Some(MtmdEvalError::ImageChunkExceedsBatchSize(
             ImageChunkBatchSizeMismatch {
-                image_tokens: chunk_token_count as u32,
-                n_batch: n_batch as u32,
+                image_tokens: chunk_token_count,
+                n_batch,
             },
         ));
     }

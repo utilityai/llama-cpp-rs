@@ -29,6 +29,7 @@ llama_rs_apply_chat_template_status llama_rs_apply_chat_template(
     const char * const * contents,
     size_t n_messages,
     int add_generation_prompt,
+    int enable_thinking,
     char ** out_string,
     char ** out_error);
 

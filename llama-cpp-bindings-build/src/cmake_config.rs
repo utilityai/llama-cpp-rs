@@ -70,6 +70,7 @@ fn configure_base_defines(config: &mut Config) {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
+    config.define("LLAMA_BUILD_APP", "OFF");
     config.define("LLAMA_BUILD_COMMON", "ON");
     config.define("LLAMA_CURL", "OFF");
     config.cflag("-w");
@@ -231,16 +232,8 @@ fn configure_msvc_release_workaround(config: &mut Config, profile: &str) {
 }
 
 fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, _target_triple: &str) {
-    #[expect(
-        clippy::assertions_on_constants,
-        reason = "the assertion enforces a feature flag invariant at build time"
-    )]
-    {
-        assert!(
-            !(cfg!(feature = "shared-stdcxx") && cfg!(feature = "static-stdcxx")),
-            "Features 'shared-stdcxx' and 'static-stdcxx' are mutually exclusive"
-        );
-    }
+    #[cfg(all(feature = "shared-stdcxx", feature = "static-stdcxx"))]
+    compile_error!("Features 'shared-stdcxx' and 'static-stdcxx' are mutually exclusive");
 
     println!("cargo:rerun-if-env-changed=ANDROID_NDK");
     println!("cargo:rerun-if-env-changed=NDK_ROOT");

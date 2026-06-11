@@ -1,39 +1,44 @@
 #include "wrapper_common.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <gsl/span>
+#include <memory>
 #include <new>
 #include <regex>
 #include <stdexcept>
 #include <string>
-#include <stdint.h>
+#include <cstdint>
 
 #include "llama.cpp/common/common.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/include/llama.h"
+#include <nlohmann/json.hpp> // IWYU pragma: keep
+#include <nlohmann/json_fwd.hpp>
 #include "wrapper_utils.h"
 
-#include <nlohmann/json.hpp>
+#include <vector>
 
-extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_grammar(
+extern "C" auto llama_rs_json_schema_to_grammar(
     const char * schema_json,
     bool force_gbnf,
     char ** out_grammar,
-    char ** out_error) {
-    if (out_grammar) {
+    char ** out_error) -> llama_rs_json_schema_to_grammar_status {
+    if (out_grammar != nullptr) {
         *out_grammar = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!schema_json) {
+    if (schema_json == nullptr) {
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_SCHEMA_JSON_ARG;
     }
-    if (!out_grammar) {
+    if (out_grammar == nullptr) {
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_GRAMMAR_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_NULL_OUT_ERROR_ARG;
     }
 
@@ -41,7 +46,7 @@ extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_gramma
         const auto schema = nlohmann::ordered_json::parse(schema_json);
         const auto grammar = json_schema_to_grammar(schema, force_gbnf);
         *out_grammar = llama_rs_dup_string(grammar);
-        if (!*out_grammar) {
+        if (*out_grammar == nullptr) {
             return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_OK;
@@ -49,19 +54,19 @@ extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_gramma
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::invalid_argument & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_INVALID_SCHEMA;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_JSON_SCHEMA_TO_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
@@ -69,32 +74,30 @@ extern "C" llama_rs_json_schema_to_grammar_status llama_rs_json_schema_to_gramma
 }
 
 extern "C" void llama_rs_string_free(char * ptr) {
-    if (ptr) {
-        std::free(ptr);
-    }
+    const std::unique_ptr<char[]> reclaimed(ptr);
 }
 
-extern "C" llama_rs_sampler_init_grammar_status llama_rs_sampler_init_grammar(
+extern "C" auto llama_rs_sampler_init_grammar(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
     struct llama_sampler ** out_sampler,
-    char ** out_error) {
-    if (out_sampler) {
+    char ** out_error) -> llama_rs_sampler_init_grammar_status {
+    if (out_sampler != nullptr) {
         *out_sampler = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!out_sampler) {
+    if (out_sampler == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_ERROR_ARG;
     }
     try {
         *out_sampler = llama_sampler_init_grammar(vocab, grammar_str, grammar_root);
-        if (!*out_sampler) {
+        if (*out_sampler == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_OK;
@@ -102,20 +105,20 @@ extern "C" llama_rs_sampler_init_grammar_status llama_rs_sampler_init_grammar(
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_grammar_lazy(
+extern "C" auto llama_rs_sampler_init_grammar_lazy(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -124,33 +127,35 @@ extern "C" llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_gramm
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
     struct llama_sampler ** out_sampler,
-    char ** out_error) {
-    if (out_sampler) {
+    char ** out_error) -> llama_rs_sampler_init_grammar_lazy_status {
+    if (out_sampler != nullptr) {
         *out_sampler = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!out_sampler) {
+    if (out_sampler == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_ERROR_ARG;
     }
     try {
         std::vector<std::string> trigger_patterns;
         trigger_patterns.reserve(num_trigger_words);
-        for (size_t i = 0; i < num_trigger_words; ++i) {
-            const char * word = trigger_words ? trigger_words[i] : nullptr;
-            if (word && word[0] != '\0') {
+        const gsl::span<const char *> words(
+            trigger_words, trigger_words != nullptr ? num_trigger_words : 0);
+        for (const char * const word : words) {
+            if ((word != nullptr) && *word != '\0') {
                 trigger_patterns.push_back(regex_escape(word));
             }
         }
-        std::vector<const char *> trigger_patterns_c;
-        trigger_patterns_c.reserve(trigger_patterns.size());
-        for (const auto & pattern : trigger_patterns) {
-            trigger_patterns_c.push_back(pattern.c_str());
-        }
+        std::vector<const char *> trigger_patterns_c(trigger_patterns.size());
+        std::transform(
+            trigger_patterns.begin(),
+            trigger_patterns.end(),
+            trigger_patterns_c.begin(),
+            [](const std::string & pattern) -> const char * { return pattern.c_str(); });
 
         *out_sampler = llama_sampler_init_grammar_lazy_patterns(
             vocab,
@@ -160,7 +165,7 @@ extern "C" llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_gramm
             trigger_patterns_c.size(),
             trigger_tokens,
             num_trigger_tokens);
-        if (!*out_sampler) {
+        if (*out_sampler == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_OK;
@@ -168,20 +173,20 @@ extern "C" llama_rs_sampler_init_grammar_lazy_status llama_rs_sampler_init_gramm
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_init_grammar_lazy_patterns(
+extern "C" auto llama_rs_sampler_init_grammar_lazy_patterns(
     const struct llama_vocab * vocab,
     const char * grammar_str,
     const char * grammar_root,
@@ -190,17 +195,17 @@ extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_i
     const llama_token * trigger_tokens,
     size_t num_trigger_tokens,
     struct llama_sampler ** out_sampler,
-    char ** out_error) {
-    if (out_sampler) {
+    char ** out_error) -> llama_rs_sampler_init_grammar_lazy_patterns_status {
+    if (out_sampler != nullptr) {
         *out_sampler = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!out_sampler) {
+    if (out_sampler == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_ERROR_ARG;
     }
     try {
@@ -212,7 +217,7 @@ extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_i
             num_trigger_patterns,
             trigger_tokens,
             num_trigger_tokens);
-        if (!*out_sampler) {
+        if (*out_sampler == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK;
@@ -220,37 +225,37 @@ extern "C" llama_rs_sampler_init_grammar_lazy_patterns_status llama_rs_sampler_i
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::regex_error & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_INVALID_TRIGGER_PATTERN;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_pos llama_rs_memory_seq_pos_max(
-    struct llama_context * ctx,
-    llama_seq_id seq_id) {
-    if (!ctx) {
+extern "C" auto llama_rs_memory_seq_pos_max(
+    const struct llama_context * ctx,
+    llama_seq_id seq_id) -> llama_pos {
+    if (ctx == nullptr) {
         return -1;
     }
     try {
         auto * mem = llama_get_memory(ctx);
-        if (!mem) {
+        if (mem == nullptr) {
             return -1;
         }
-        uint32_t n_seq_max = llama_n_seq_max(ctx);
+        uint32_t const n_seq_max = llama_n_seq_max(ctx);
         if (seq_id < 0 || (uint32_t) seq_id >= n_seq_max) {
             return -1;
         }
@@ -261,18 +266,18 @@ extern "C" llama_pos llama_rs_memory_seq_pos_max(
     }
 }
 
-extern "C" llama_rs_encode_status llama_rs_encode(
+extern "C" auto llama_rs_encode(
     struct llama_context * ctx,
     struct llama_batch batch,
     int32_t * out_vendored_return_code,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_encode_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (out_vendored_return_code) {
+    if (out_vendored_return_code != nullptr) {
         *out_vendored_return_code = 0;
     }
-    if (!ctx) {
+    if (ctx == nullptr) {
         return LLAMA_RS_ENCODE_NULL_CTX_ARG;
     }
     try {
@@ -280,9 +285,9 @@ extern "C" llama_rs_encode_status llama_rs_encode(
         if (!llama_model_has_encoder(model)) {
             return LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER;
         }
-        int32_t result = llama_encode(ctx, batch);
+        int32_t const result = llama_encode(ctx, batch);
         if (result != 0) {
-            if (out_vendored_return_code) {
+            if (out_vendored_return_code != nullptr) {
                 *out_vendored_return_code = result;
             }
             if (result == -2) {
@@ -297,17 +302,17 @@ extern "C" llama_rs_encode_status llama_rs_encode(
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string(err.what());
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
         return LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string("unknown c++ exception");
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
@@ -315,17 +320,17 @@ extern "C" llama_rs_encode_status llama_rs_encode(
     }
 }
 
-extern "C" llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
-    struct llama_context * ctx,
+extern "C" auto llama_rs_memory_seq_add(
+    const struct llama_context * ctx,
     llama_seq_id seq_id,
-    llama_pos p0,
-    llama_pos p1,
+    llama_pos pos_start,
+    llama_pos pos_end,
     llama_pos shift,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_memory_seq_add_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!ctx) {
+    if (ctx == nullptr) {
         return LLAMA_RS_MEMORY_SEQ_ADD_NULL_CTX_ARG;
     }
     try {
@@ -335,25 +340,25 @@ extern "C" llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
             return LLAMA_RS_MEMORY_SEQ_ADD_INCOMPATIBLE_ROPE_TYPE;
         }
         auto * mem = llama_get_memory(ctx);
-        if (!mem) {
+        if (mem == nullptr) {
             return LLAMA_RS_MEMORY_SEQ_ADD_NULL_MEM;
         }
-        llama_memory_seq_add(mem, seq_id, p0, p1, shift);
+        llama_memory_seq_add(mem, seq_id, pos_start, pos_end, shift);
         return LLAMA_RS_MEMORY_SEQ_ADD_OK;
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string(err.what());
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
         return LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string("unknown c++ exception");
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
@@ -361,17 +366,17 @@ extern "C" llama_rs_memory_seq_add_status llama_rs_memory_seq_add(
     }
 }
 
-extern "C" llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
-    struct llama_context * ctx,
+extern "C" auto llama_rs_memory_seq_div(
+    const struct llama_context * ctx,
     llama_seq_id seq_id,
-    llama_pos p0,
-    llama_pos p1,
-    int d,
-    char ** out_error) {
-    if (out_error) {
+    llama_pos pos_start,
+    llama_pos pos_end,
+    int divisor,
+    char ** out_error) -> llama_rs_memory_seq_div_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!ctx) {
+    if (ctx == nullptr) {
         return LLAMA_RS_MEMORY_SEQ_DIV_NULL_CTX_ARG;
     }
     try {
@@ -381,25 +386,25 @@ extern "C" llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
             return LLAMA_RS_MEMORY_SEQ_DIV_INCOMPATIBLE_ROPE_TYPE;
         }
         auto * mem = llama_get_memory(ctx);
-        if (!mem) {
+        if (mem == nullptr) {
             return LLAMA_RS_MEMORY_SEQ_DIV_NULL_MEM;
         }
-        llama_memory_seq_div(mem, seq_id, p0, p1, d);
+        llama_memory_seq_div(mem, seq_id, pos_start, pos_end, divisor);
         return LLAMA_RS_MEMORY_SEQ_DIV_OK;
     } catch (const std::bad_alloc &) {
         return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string(err.what());
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
         return LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
-        if (out_error) {
+        if (out_error != nullptr) {
             *out_error = llama_rs_dup_string("unknown c++ exception");
-            if (!*out_error) {
+            if (*out_error == nullptr) {
                 return LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED;
             }
         }
@@ -407,25 +412,25 @@ extern "C" llama_rs_memory_seq_div_status llama_rs_memory_seq_div(
     }
 }
 
-extern "C" llama_rs_sampler_sample_status llama_rs_sampler_sample(
+extern "C" auto llama_rs_sampler_sample(
     struct llama_sampler * sampler,
     struct llama_context * ctx,
     int32_t idx,
     llama_token * out_token,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_sampler_sample_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!sampler) {
+    if (sampler == nullptr) {
         return LLAMA_RS_SAMPLER_SAMPLE_NULL_SAMPLER_ARG;
     }
-    if (!ctx) {
+    if (ctx == nullptr) {
         return LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG;
     }
-    if (!out_token) {
+    if (out_token == nullptr) {
         return LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_TOKEN_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_SAMPLE_NULL_OUT_ERROR_ARG;
     }
     try {
@@ -435,30 +440,30 @@ extern "C" llama_rs_sampler_sample_status llama_rs_sampler_sample(
         return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_sampler_accept_status llama_rs_sampler_accept(
+extern "C" auto llama_rs_sampler_accept(
     struct llama_sampler * sampler,
     llama_token token,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_sampler_accept_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!sampler) {
+    if (sampler == nullptr) {
         return LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_ACCEPT_NULL_OUT_ERROR_ARG;
     }
     try {
@@ -468,42 +473,42 @@ extern "C" llama_rs_sampler_accept_status llama_rs_sampler_accept(
         return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_load_model_from_file_status llama_rs_load_model_from_file(
+extern "C" auto llama_rs_load_model_from_file(
     const char * path,
     struct llama_model_params params,
     struct llama_model ** out_model,
-    char ** out_error) {
-    if (out_model) {
+    char ** out_error) -> llama_rs_load_model_from_file_status {
+    if (out_model != nullptr) {
         *out_model = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!path) {
+    if (path == nullptr) {
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_PATH_ARG;
     }
-    if (!out_model) {
+    if (out_model == nullptr) {
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_MODEL_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_NULL_OUT_ERROR_ARG;
     }
     try {
-        *out_model = llama_load_model_from_file(path, params);
-        if (!*out_model) {
+        *out_model = llama_model_load_from_file(path, params);
+        if (*out_model == nullptr) {
             return LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_RETURNED_NULL;
         }
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_OK;
@@ -511,42 +516,42 @@ extern "C" llama_rs_load_model_from_file_status llama_rs_load_model_from_file(
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_LOAD_MODEL_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_LOAD_MODEL_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_new_context_with_model_status llama_rs_new_context_with_model(
+extern "C" auto llama_rs_new_context_with_model(
     struct llama_model * model,
     struct llama_context_params params,
     struct llama_context ** out_ctx,
-    char ** out_error) {
-    if (out_ctx) {
+    char ** out_error) -> llama_rs_new_context_with_model_status {
+    if (out_ctx != nullptr) {
         *out_ctx = nullptr;
     }
-    if (out_error) {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!model) {
+    if (model == nullptr) {
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_MODEL_ARG;
     }
-    if (!out_ctx) {
+    if (out_ctx == nullptr) {
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_CTX_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_NULL_OUT_ERROR_ARG;
     }
     try {
-        *out_ctx = llama_new_context_with_model(model, params);
-        if (!*out_ctx) {
+        *out_ctx = llama_init_from_model(model, params);
+        if (*out_ctx == nullptr) {
             return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL;
         }
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK;
@@ -554,40 +559,40 @@ extern "C" llama_rs_new_context_with_model_status llama_rs_new_context_with_mode
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_decode_status llama_rs_decode(
+extern "C" auto llama_rs_decode(
     struct llama_context * ctx,
     struct llama_batch batch,
     int32_t * out_vendored_return_code,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_decode_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (out_vendored_return_code) {
+    if (out_vendored_return_code != nullptr) {
         *out_vendored_return_code = 0;
     }
-    if (!ctx) {
+    if (ctx == nullptr) {
         return LLAMA_RS_DECODE_NULL_CTX_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_DECODE_NULL_OUT_ERROR_ARG;
     }
     try {
-        int32_t result = llama_decode(ctx, batch);
+        int32_t const result = llama_decode(ctx, batch);
         if (result != 0) {
-            if (out_vendored_return_code) {
+            if (out_vendored_return_code != nullptr) {
                 *out_vendored_return_code = result;
             }
             if (result == -2) {
@@ -603,20 +608,20 @@ extern "C" llama_rs_decode_status llama_rs_decode(
         return LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_tokenize_status llama_rs_tokenize(
+extern "C" auto llama_rs_tokenize(
     const struct llama_vocab * vocab,
     const char * text,
     int32_t text_len,
@@ -625,27 +630,27 @@ extern "C" llama_rs_tokenize_status llama_rs_tokenize(
     bool add_special,
     bool parse_special,
     int32_t * out_returned_count,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_tokenize_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (out_returned_count) {
+    if (out_returned_count != nullptr) {
         *out_returned_count = 0;
     }
-    if (!vocab) {
+    if (vocab == nullptr) {
         return LLAMA_RS_TOKENIZE_NULL_VOCAB_ARG;
     }
-    if (!text) {
+    if (text == nullptr) {
         return LLAMA_RS_TOKENIZE_NULL_TEXT_ARG;
     }
-    if (!out_returned_count) {
+    if (out_returned_count == nullptr) {
         return LLAMA_RS_TOKENIZE_NULL_OUT_RETURNED_COUNT_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_TOKENIZE_NULL_OUT_ERROR_ARG;
     }
     try {
-        int32_t count = llama_tokenize(
+        int32_t const count = llama_tokenize(
             vocab, text, text_len, tokens, n_tokens_max, add_special, parse_special);
         *out_returned_count = count;
         return LLAMA_RS_TOKENIZE_OK;
@@ -653,33 +658,33 @@ extern "C" llama_rs_tokenize_status llama_rs_tokenize(
         return LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION;
     }
 }
 
-extern "C" llama_rs_sampler_apply_status llama_rs_sampler_apply(
+extern "C" auto llama_rs_sampler_apply(
     struct llama_sampler * sampler,
     struct llama_token_data_array * data_array,
-    char ** out_error) {
-    if (out_error) {
+    char ** out_error) -> llama_rs_sampler_apply_status {
+    if (out_error != nullptr) {
         *out_error = nullptr;
     }
-    if (!sampler) {
+    if (sampler == nullptr) {
         return LLAMA_RS_SAMPLER_APPLY_NULL_SAMPLER_ARG;
     }
-    if (!data_array) {
+    if (data_array == nullptr) {
         return LLAMA_RS_SAMPLER_APPLY_NULL_DATA_ARRAY_ARG;
     }
-    if (!out_error) {
+    if (out_error == nullptr) {
         return LLAMA_RS_SAMPLER_APPLY_NULL_OUT_ERROR_ARG;
     }
     try {
@@ -689,13 +694,13 @@ extern "C" llama_rs_sampler_apply_status llama_rs_sampler_apply(
         return LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED;
     } catch (const std::exception & err) {
         *out_error = llama_rs_dup_string(err.what());
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION;
     } catch (...) {
         *out_error = llama_rs_dup_string("unknown c++ exception");
-        if (!*out_error) {
+        if (*out_error == nullptr) {
             return LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED;
         }
         return LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION;

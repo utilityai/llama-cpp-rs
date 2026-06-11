@@ -1,8 +1,3 @@
-#![expect(
-    clippy::unnecessary_wraps,
-    reason = "trial fns share the harness LlamaTestFn signature even when their bodies never propagate"
-)]
-
 use std::ffi::CString;
 use std::num::NonZeroU16;
 use std::pin::pin;
@@ -806,23 +801,19 @@ fn meta_val_str_with_null_byte_in_key_returns_error(fixture: &LlamaFixture<'_>) 
     n_batch = 128,
     n_ubatch = 64,
 )]
-#[expect(
-    clippy::similar_names,
-    reason = "model_path_str and model_path_cstr are both genuinely needed; renaming would not improve clarity"
-)]
 fn fit_params_succeeds_with_test_model(fixture: &LlamaFixture<'_>) -> Result<()> {
-    let model_path_str = fixture
+    let model_path_utf8 = fixture
         .model_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("model path is not valid UTF-8"))?;
-    let model_path_cstr = CString::new(model_path_str)?;
+    let model_path_c = CString::new(model_path_utf8)?;
 
     let mut params = pin!(LlamaModelParams::default());
     let mut context_params = LlamaContextParams::default();
     let mut margins = vec![0usize; max_devices()];
 
     let result = params.as_mut().fit_params(
-        &model_path_cstr,
+        &model_path_c,
         &mut context_params,
         &mut margins,
         512,
