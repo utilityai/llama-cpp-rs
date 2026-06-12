@@ -89,7 +89,7 @@ unsafe extern "C" fn llg_apply(
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
     let cur_p = unsafe { &mut *cur_p };
 
-    let Ok(mask) = ctx.matcher.compute_mask() else {
+    let Ok(mask) = ctx.matcher.compute_mask_or_eos() else {
         return;
     };
 
