@@ -145,6 +145,28 @@ impl LlamaContextParams {
         self.context_params.n_rs_seq
     }
 
+    /// Set the max number of outputs in a ubatch (0 = `n_batch`).
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # use llama_cpp_2::context::params::LlamaContextParams;
+    /// let params = LlamaContextParams::default()
+    ///     .with_n_outputs_max(64);
+    /// assert_eq!(params.n_outputs_max(), 64);
+    /// ```
+    #[must_use]
+    pub fn with_n_outputs_max(mut self, n_outputs_max: u32) -> Self {
+        self.context_params.n_outputs_max = n_outputs_max;
+        self
+    }
+
+    /// Get the max number of outputs in a ubatch (0 = `n_batch`).
+    #[must_use]
+    pub fn n_outputs_max(&self) -> u32 {
+        self.context_params.n_outputs_max
+    }
+
     /// Set the number of threads
     ///
     /// # Examples

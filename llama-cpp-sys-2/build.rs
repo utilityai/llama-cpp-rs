@@ -558,8 +558,12 @@ fn main() {
     config.define("LLAMA_BUILD_EXAMPLES", "OFF");
     config.define("LLAMA_BUILD_SERVER", "OFF");
     config.define("LLAMA_BUILD_TOOLS", "OFF");
+    config.define("LLAMA_BUILD_APP", "OFF");
+    config.define("LLAMA_BUILD_UI", "OFF");
     config.define("LLAMA_BUILD_COMMON", "ON");
-    config.define("LLAMA_CURL", "OFF");
+    // The common lib uses a vendored cpp-httplib for model downloads; keep it
+    // free of a system OpenSSL dependency (downloads then fall back to HTTP-only).
+    config.define("LLAMA_OPENSSL", "OFF");
     config.define("GGML_CCACHE", "OFF");
 
     // Pass CMAKE_ environment variables down to CMake
@@ -1059,6 +1063,17 @@ fn main() {
         let common_profile_dir = common_lib_dir.join(&profile);
         if common_profile_dir.is_dir() {
             common_lib_dirs.push(common_profile_dir);
+        }
+
+        // The common lib depends on the vendored cpp-httplib static lib,
+        // which is built in the vendor directory and not installed.
+        let httplib_dir = out_dir.join("build").join("vendor").join("cpp-httplib");
+        if httplib_dir.is_dir() {
+            common_lib_dirs.push(httplib_dir.clone());
+            let httplib_profile_dir = httplib_dir.join(&profile);
+            if httplib_profile_dir.is_dir() {
+                common_lib_dirs.push(httplib_profile_dir);
+            }
         }
 
         let mut common_libs = Vec::new();

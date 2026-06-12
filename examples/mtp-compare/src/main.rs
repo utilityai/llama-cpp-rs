@@ -288,11 +288,11 @@ fn run_mtp(
         .with_context(|| "failed to create MTP draft context")?;
 
     target
-        .set_embeddings_pre_norm(true)
-        .with_context(|| "failed to enable target pre-norm embeddings")?;
+        .set_embeddings_nextn(true, true)
+        .with_context(|| "failed to enable target nextn embeddings")?;
     draft
-        .set_embeddings_pre_norm(true)
-        .with_context(|| "failed to enable MTP draft pre-norm embeddings")?;
+        .set_embeddings_nextn(true, true)
+        .with_context(|| "failed to enable MTP draft nextn embeddings")?;
 
     target.reset_timings();
     draft.reset_timings();
@@ -313,7 +313,7 @@ fn run_mtp(
     let mut accepted_tokens = 0usize;
 
     while generated_tokens < n_predict {
-        let prefix_hidden = target.embeddings_pre_norm()?.to_vec();
+        let prefix_hidden = target.embeddings_nextn()?.to_vec();
         let drafted = draft_tokens(&mut draft, n_embd, tokens.len(), draft_n, eos)?;
         if drafted.is_empty() {
             break;
@@ -415,7 +415,7 @@ fn prefill_mtp_context(
         let embd = if i == 0 {
             zero.as_slice()
         } else {
-            target.embeddings_pre_norm_ith(i32::try_from(i - 1).expect("index fits into i32"))?
+            target.embeddings_nextn_ith(i32::try_from(i - 1).expect("index fits into i32"))?
         };
         let logits = i + 1 == tokens.len();
         batch
@@ -443,7 +443,7 @@ fn draft_tokens(
     eos: LlamaToken,
 ) -> Result<Vec<LlamaToken>> {
     let mut drafted = Vec::with_capacity(draft_n);
-    let mut h_prev = draft.embeddings_pre_norm()?.to_vec();
+    let mut h_prev = draft.embeddings_nextn()?.to_vec();
 
     for step in 0..draft_n {
         let token = greedy_token(draft.get_logits());
@@ -466,7 +466,7 @@ fn draft_tokens(
         draft
             .decode(&mut batch)
             .with_context(|| "MTP draft step failed")?;
-        h_prev = draft.embeddings_pre_norm()?.to_vec();
+        h_prev = draft.embeddings_nextn()?.to_vec();
     }
 
     Ok(drafted)
@@ -521,7 +521,7 @@ fn accept_tokens(
         prefix_hidden.to_vec()
     } else {
         target
-            .embeddings_pre_norm_ith(i32::try_from(matched - 1).expect("index fits into i32"))?
+            .embeddings_nextn_ith(i32::try_from(matched - 1).expect("index fits into i32"))?
             .to_vec()
     };
 

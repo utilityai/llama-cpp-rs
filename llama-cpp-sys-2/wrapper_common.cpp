@@ -208,23 +208,23 @@ extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx
     common_memory_breakdown_print(ctx);
 }
 
-extern "C" void llama_rs_set_embeddings_pre_norm(struct llama_context * ctx, bool value) {
+extern "C" void llama_rs_set_embeddings_nextn(struct llama_context * ctx, bool value, bool masked) {
     if (!ctx) {
         return;
     }
-    llama_set_embeddings_pre_norm(ctx, value);
+    llama_set_embeddings_nextn(ctx, value, masked);
 }
 
-extern "C" float * llama_rs_get_embeddings_pre_norm(struct llama_context * ctx) {
+extern "C" float * llama_rs_get_embeddings_nextn(struct llama_context * ctx) {
     if (!ctx) {
         return nullptr;
     }
-    return llama_get_embeddings_pre_norm(ctx);
+    return llama_get_embeddings_nextn(ctx);
 }
 
-extern "C" float * llama_rs_get_embeddings_pre_norm_ith(struct llama_context * ctx, int32_t i) {
+extern "C" float * llama_rs_get_embeddings_nextn_ith(struct llama_context * ctx, int32_t i) {
     if (!ctx) {
         return nullptr;
     }
-    return llama_get_embeddings_pre_norm_ith(ctx, i);
+    return llama_get_embeddings_nextn_ith(ctx, i);
 }

@@ -346,6 +346,10 @@ impl Drop for MtmdContext {
 #[derive(Debug, Clone)]
 pub struct MtmdBitmap {
     pub(crate) bitmap: NonNull<llama_cpp_sys_2::mtmd_bitmap>,
+    /// Video decoding context backing a lazy (video) bitmap, if any.
+    /// Only ever set when llama.cpp is built with video support (`MTMD_VIDEO`);
+    /// it must outlive the bitmap and be freed after it.
+    pub(crate) video_ctx: Option<NonNull<llama_cpp_sys_2::mtmd_helper_video>>,
 }
 
 // MtmdBitmap is thread safe
@@ -390,7 +394,10 @@ impl MtmdBitmap {
         let bitmap = unsafe { llama_cpp_sys_2::mtmd_bitmap_init(nx, ny, data.as_ptr()) };
 
         let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Ok(Self {
+            bitmap,
+            video_ctx: None,
+        })
     }
 
     /// Create a bitmap from audio data in PCM F32 format.
@@ -425,7 +432,10 @@ impl MtmdBitmap {
             unsafe { llama_cpp_sys_2::mtmd_bitmap_init_from_audio(data.len(), data.as_ptr()) };
 
         let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        Ok(Self {
+            bitmap,
+            video_ctx: None,
+        })
     }
 
     /// Create a bitmap from a file.
@@ -453,15 +463,19 @@ impl MtmdBitmap {
     /// This function is thread-safe.
     pub fn from_file(ctx: &MtmdContext, path: &str) -> Result<Self, MtmdBitmapError> {
         let path_cstr = CString::new(path)?;
-        let bitmap = unsafe {
+        let wrapper = unsafe {
             llama_cpp_sys_2::mtmd_helper_bitmap_init_from_file(
                 ctx.context.as_ptr(),
                 path_cstr.as_ptr(),
+                false,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        Ok(Self {
+            bitmap,
+            video_ctx: NonNull::new(wrapper.video_ctx),
+        })
     }
 
     /// Create a bitmap from a buffer containing file data.
@@ -487,16 +501,20 @@ impl MtmdBitmap {
     ///
     /// This function is thread-safe.
     pub fn from_buffer(ctx: &MtmdContext, data: &[u8]) -> Result<Self, MtmdBitmapError> {
-        let bitmap = unsafe {
+        let wrapper = unsafe {
             llama_cpp_sys_2::mtmd_helper_bitmap_init_from_buf(
                 ctx.context.as_ptr(),
                 data.as_ptr(),
                 data.len(),
+                false,
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
-        Ok(Self { bitmap })
+        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        Ok(Self {
+            bitmap,
+            video_ctx: NonNull::new(wrapper.video_ctx),
+        })
     }
 
     /// Get bitmap width in pixels.
@@ -580,6 +598,9 @@ impl MtmdBitmap {
 impl Drop for MtmdBitmap {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::mtmd_bitmap_free(self.bitmap.as_ptr()) }
+        if let Some(video_ctx) = self.video_ctx {
+            unsafe { llama_cpp_sys_2::mtmd_helper_video_free(video_ctx.as_ptr()) }
+        }
     }
 }
 
