@@ -243,6 +243,22 @@ impl LlamaContextParams {
         LlamaContextType::from(self.context_params.ctx_type as i32)
     }
 
+    /// Pair the context created from these params with an existing context.
+    ///
+    /// Some drafter architectures cannot run standalone and must be attached to a target
+    /// context at creation time (e.g. Gemma 4 assistant MTP drafters, which cross-attend into
+    /// the target's memory and reuse its output head, or EAGLE3 heads without their own
+    /// embeddings). llama.cpp refuses to create such contexts unless `ctx_other` points at the
+    /// target context.
+    ///
+    /// The caller must keep `other` alive for the entire lifetime of the context created from
+    /// these params; llama.cpp stores the raw pointer and dereferences it during decode.
+    #[must_use]
+    pub fn with_ctx_other(mut self, other: &crate::context::LlamaContext<'_>) -> Self {
+        self.context_params.ctx_other = other.context.as_ptr();
+        self
+    }
+
     /// Set the type of rope scaling
     ///
     /// # Examples

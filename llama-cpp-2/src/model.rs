@@ -638,6 +638,17 @@ impl LlamaModel {
         unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
     }
 
+    /// Get the output embedding width of the model.
+    ///
+    /// For most models this equals [`Self::n_embd`]. Drafter models that project their hidden
+    /// state into a wider target space (e.g. Gemma 4 assistant MTP drafters, which advertise
+    /// `embedding_length_out`) report the projected width here. Speculative drivers should
+    /// validate this against the target model's [`Self::n_embd`].
+    #[must_use]
+    pub fn n_embd_out(&self) -> c_int {
+        unsafe { llama_cpp_sys_2::llama_model_n_embd_out(self.model.as_ptr()) }
+    }
+
     /// Returns the total size of all the tensors in the model in bytes.
     pub fn size(&self) -> u64 {
         unsafe { llama_cpp_sys_2::llama_model_size(self.model.as_ptr()) }
