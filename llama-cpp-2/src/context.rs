@@ -221,9 +221,12 @@ impl<'model> LlamaContext<'model> {
     }
 
     /// Get the nextn (MTP) embeddings buffer for the last decoded batch.
+    ///
+    /// Rows are `n_embd_out` floats wide: equal to `n_embd` for regular models, and the
+    /// projected target width for attached drafters (e.g. Gemma 4 assistants).
     pub fn embeddings_nextn(&self) -> Result<&[f32], EmbeddingsError> {
         let n_embd =
-            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
+            usize::try_from(self.model.n_embd_out()).expect("n_embd_out does not fit into a usize");
 
         unsafe {
             let embedding = llama_cpp_sys_2::llama_rs_get_embeddings_nextn(self.context.as_ptr());
@@ -236,9 +239,12 @@ impl<'model> LlamaContext<'model> {
     }
 
     /// Get the nextn (MTP) embeddings for the `i`th token in the current context.
+    ///
+    /// Rows are `n_embd_out` floats wide: equal to `n_embd` for regular models, and the
+    /// projected target width for attached drafters (e.g. Gemma 4 assistants).
     pub fn embeddings_nextn_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
         let n_embd =
-            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
+            usize::try_from(self.model.n_embd_out()).expect("n_embd_out does not fit into a usize");
 
         unsafe {
             let embedding =
