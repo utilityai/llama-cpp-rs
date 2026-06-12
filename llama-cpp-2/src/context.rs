@@ -364,8 +364,9 @@ impl<'model> LlamaContext<'model> {
     }
 
     /// Print a breakdown of per-device memory use to the default logger.
+    #[cfg(feature = "common")]
     pub fn print_memory_breakdown(&self) {
-        unsafe { llama_cpp_sys_2::llama_memory_breakdown_print(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_rs_memory_breakdown_print(self.context.as_ptr()) }
     }
 }
 

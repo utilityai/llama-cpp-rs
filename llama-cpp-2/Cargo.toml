@@ -20,16 +20,13 @@ toktrie = { version = "1.7.5", optional = true }
 
 [dev-dependencies]
 encoding_rs = { workspace = true }
-hf-hub = { workspace = true }
-serde_json = "1.0"
 tracing-subscriber = { workspace = true }
 
 [features]
 default = ["openmp", "android-shared-stdcxx", "common"]
-# Enable the OpenAI-compatible / chat-template / JSON-schema-to-grammar APIs.
-# These are backed by `llama.cpp`'s `common/` static library; disabling drops
-# `libcommon.a` (~14 MB) plus the `wrapper_common.cpp` / `wrapper_oai.cpp`
-# bindings (~10 MB combined) from the link line. Enabled by default for
+# Enable the JSON-schema-to-grammar API. Backed by `llama.cpp`'s `common/`
+# static library; disabling drops `libcommon.a` (~14 MB) plus the
+# `wrapper_common.cpp` bindings from the link line. Enabled by default for
 # backwards compatibility.
 common = ["llama-cpp-sys-2/common"]
 cuda = ["llama-cpp-sys-2/cuda"]
@@ -64,21 +61,6 @@ features = ["sampler"]
 [[example]]
 name = "usage"
 path = "../examples/usage.rs"
-
-[[example]]
-name = "tools"
-path = "../examples/tools.rs"
-required-features = ["common"]
-
-[[example]]
-name = "tools_reasoning"
-path = "../examples/tools_reasoning.rs"
-required-features = ["common"]
-
-[[example]]
-name = "openai_stream"
-path = "../examples/openai_stream.rs"
-required-features = ["common"]
 
 [[example]]
 name = "llguidance"
