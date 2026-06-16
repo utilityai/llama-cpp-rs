@@ -851,6 +851,40 @@ fn main() {
         config.define("GGML_HIP", "ON");
     }
 
+    if cfg!(feature = "opencl") {
+        // The Qualcomm-supported GPU backend for Adreno. EMBED_KERNELS and
+        // USE_ADRENO_KERNELS are ON by default upstream, so no extra defines are
+        // needed for those.
+        config.define("GGML_OPENCL", "ON");
+
+        // ggml-opencl/CMakeLists.txt runs `find_package(OpenCL REQUIRED)`. When
+        // cross-compiling (e.g. Android, whose NDK ships no OpenCL SDK) CMake's
+        // FindOpenCL can't locate one, so let the caller hand us the header dir
+        // and the import library directly — FindOpenCL skips its own search when
+        // these result variables are already set.
+        println!("cargo:rerun-if-env-changed=OPENCL_INCLUDE_DIR");
+        println!("cargo:rerun-if-env-changed=OPENCL_LIBRARY");
+        if let Ok(include_dir) = env::var("OPENCL_INCLUDE_DIR") {
+            config.define("OpenCL_INCLUDE_DIR", include_dir);
+        }
+        if let Ok(library) = env::var("OPENCL_LIBRARY") {
+            config.define("OpenCL_LIBRARY", library);
+        }
+
+        // The backend embeds its kernels at build time with a Python helper
+        // (`find_package(Python3 REQUIRED)`); allow pinning the interpreter so a
+        // cross-build doesn't pick a broken stub `python3` (e.g. the Windows
+        // Store alias). When unset, CMake's FindPython3 runs as usual.
+        println!("cargo:rerun-if-env-changed=PYTHON3_EXECUTABLE");
+        if let Ok(python3) = env::var("PYTHON3_EXECUTABLE") {
+            config.define("Python3_EXECUTABLE", python3);
+        }
+
+        // The final `-lOpenCL` link is left to the top-level crate (mirroring how
+        // the Android branch above leaves `-lvulkan` to it), keeping this fork
+        // minimal: at runtime the device's own ICD provides the implementation.
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
