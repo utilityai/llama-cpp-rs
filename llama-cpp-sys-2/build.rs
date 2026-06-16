@@ -883,6 +883,8 @@ fn main() {
         // The final `-lOpenCL` link is left to the top-level crate (mirroring how
         // the Android branch above leaves `-lvulkan` to it), keeping this fork
         // minimal: at runtime the device's own ICD provides the implementation.
+    }
+
     if cfg!(feature = "mkl") {
         let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         assert_eq!(
@@ -1101,7 +1103,10 @@ fn main() {
                 found = true;
             }
         }
-        assert!(found, "No MKL library directory found under MKLROOT={mkl_root}");
+        assert!(
+            found,
+            "No MKL library directory found under MKLROOT={mkl_root}"
+        );
 
         println!("cargo:rustc-link-lib=dylib=mkl_rt");
     }
