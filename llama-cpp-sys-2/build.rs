@@ -1,8 +1,11 @@
-use cmake::Config;
-use glob::glob;
 use std::env;
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr as _;
+
+use cmake::Config;
+use glob::glob;
 use walkdir::DirEntry;
 
 enum WindowsVariant {
@@ -256,14 +259,16 @@ fn main() {
         }
     }
 
-    // Speed up build
-    env::set_var(
-        "CMAKE_BUILD_PARALLEL_LEVEL",
-        std::thread::available_parallelism()
-            .unwrap()
-            .get()
-            .to_string(),
-    );
+    // Use all available cores except 2 to
+    let cmake_build_parallelism_level =
+        match env::var("CMAKE_BUILD_PARALLEL_LEVEL").map(|v| NonZeroUsize::from_str(&v)) {
+            Ok(Ok(v)) => v.to_string(),
+            _ => std::thread::available_parallelism()
+                .expect("failed to load available parallelism")
+                .get()
+                .to_string(),
+        };
+    env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", cmake_build_parallelism_level);
 
     // Bindings
     let mut bindings_builder = bindgen::Builder::default()
