@@ -94,10 +94,14 @@ metal = []
 dynamic-link = []
 vulkan = []
 openmp = []
+# Link GNU OpenMP (`libgomp`) statically on GNU targets. This is useful for
+# downstreams that ship self-contained binaries while keeping OpenMP enabled.
+static-openmp = ["openmp"]
 rocm = []
-# Only has an impact on Android.
-shared-stdcxx = []
+# Link the C++ standard library statically where the target toolchain supports
+# it. Currently used by Android and Linux GNU/musl targets.
 static-stdcxx = []
+shared-stdcxx = []
 system-ggml = []
 system-ggml-static = ["system-ggml"]
 mtmd = []
