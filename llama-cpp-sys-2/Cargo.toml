@@ -48,6 +48,7 @@ include = [
     "/llama.cpp/ggml/src/ggml-cuda/**/*",
     "/llama.cpp/ggml/src/ggml-metal/**/*",
     "/llama.cpp/ggml/src/ggml-vulkan/**/*",
+    "/llama.cpp/ggml/src/ggml-opencl/**/*",
     "/llama.cpp/ggml/src/ggml-hip/**/*",
 
     "/llama.cpp/ggml/src/llamafile/sgemm.h",
@@ -93,6 +94,11 @@ cuda-no-vmm = ["cuda"]
 metal = []
 dynamic-link = []
 vulkan = []
+# OpenCL backend (GGML_OPENCL=ON) — the Qualcomm-supported path for Adreno GPUs.
+# The build needs OpenCL headers + a libOpenCL.so to link; on a cross-compile
+# (e.g. Android) point CMake at them via the OPENCL_INCLUDE_DIR / OPENCL_LIBRARY
+# env vars (build.rs forwards them), since FindOpenCL can't locate an SDK.
+opencl = []
 openmp = []
 # Link GNU OpenMP (`libgomp`) statically on GNU targets. This is useful for
 # downstreams that ship self-contained binaries while keeping OpenMP enabled.
