@@ -15,6 +15,7 @@ enum WindowsVariant {
 
 enum AppleVariant {
     MacOS,
+    WatchOS,
     Other,
 }
 
@@ -67,6 +68,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
     } else if target.contains("apple") {
         if target.ends_with("-apple-darwin") {
             Ok((TargetOs::Apple(AppleVariant::MacOS), target))
+        } else if target.contains("watchos") {
+            Ok((TargetOs::Apple(AppleVariant::WatchOS), target))
         } else {
             Ok((TargetOs::Apple(AppleVariant::Other), target))
         }
@@ -674,6 +677,15 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
+    // watchOS has no Metal framework, so disable the Metal backend there.
+    // Also define _DARWIN_C_SOURCE so BSD types (u_int, u_char, u_short) used by
+    // some sources are visible — implicit on macOS/iOS but not on watchOS.
+    if matches!(target_os, TargetOs::Apple(AppleVariant::WatchOS)) {
+        config.define("GGML_METAL", "OFF");
+        config.cflag("-D_DARWIN_C_SOURCE");
+        config.cxxflag("-D_DARWIN_C_SOURCE");
+    }
+
     if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
         && matches!(
             profile.as_str(),
@@ -1156,8 +1168,11 @@ fn main() {
         }
         TargetOs::Apple(ref variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
-            println!("cargo:rustc-link-lib=framework=Metal");
-            println!("cargo:rustc-link-lib=framework=MetalKit");
+            // watchOS has no Metal; skip the Metal frameworks there.
+            if !matches!(variant, AppleVariant::WatchOS) {
+                println!("cargo:rustc-link-lib=framework=Metal");
+                println!("cargo:rustc-link-lib=framework=MetalKit");
+            }
             println!("cargo:rustc-link-lib=framework=Accelerate");
             println!("cargo:rustc-link-lib=c++");
 
@@ -1172,7 +1187,7 @@ fn main() {
                         println!("cargo:rustc-link-search={}", path);
                     }
                 }
-                AppleVariant::Other => (),
+                AppleVariant::WatchOS | AppleVariant::Other => (),
             }
         }
         TargetOs::Android => {
