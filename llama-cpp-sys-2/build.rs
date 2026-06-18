@@ -174,6 +174,40 @@ fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
     files
 }
 
+fn library_file_exists(
+    search_dirs: &[PathBuf],
+    lib_name: &str,
+    build_shared_libs: bool,
+    target_os: &TargetOs,
+) -> bool {
+    let (prefixes, extensions): (&[&str], &[&str]) = match target_os {
+        TargetOs::Windows(_) => (&["", "lib"], &["lib"]),
+        TargetOs::Apple(_) => {
+            if build_shared_libs {
+                (&["lib"], &["dylib"])
+            } else {
+                (&["lib"], &["a"])
+            }
+        }
+        TargetOs::Linux | TargetOs::Android => {
+            if build_shared_libs {
+                (&["lib"], &["so"])
+            } else {
+                (&["lib"], &["a"])
+            }
+        }
+    };
+
+    search_dirs.iter().any(|dir| {
+        prefixes.iter().any(|prefix| {
+            extensions.iter().any(|extension| {
+                dir.join(format!("{prefix}{lib_name}.{extension}"))
+                    .is_file()
+            })
+        })
+    })
+}
+
 fn macos_link_search_path() -> Option<String> {
     let output = Command::new("clang")
         .arg("--print-search-dirs")
@@ -841,6 +875,7 @@ fn main() {
 
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
+        config.define("GGML_CUDA_NCCL", "OFF");
 
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");
@@ -1098,17 +1133,40 @@ fn main() {
             "cargo:rustc-link-search=native={}",
             common_lib_dir.display()
         );
+        let mut common_search_dirs = vec![common_lib_dir.clone()];
         let common_profile_dir = common_lib_dir.join(&profile);
         if common_profile_dir.is_dir() {
             println!(
                 "cargo:rustc-link-search=native={}",
                 common_profile_dir.display()
             );
+            common_search_dirs.push(common_profile_dir);
         }
-        // Newer llama.cpp renamed the common static library `common` ->
-        // `llama-common` and split base utilities into `llama-common-base`.
-        println!("cargo:rustc-link-lib=static=llama-common");
-        println!("cargo:rustc-link-lib=static=llama-common-base");
+
+        if library_file_exists(
+            &common_search_dirs,
+            "llama-common",
+            build_shared_libs,
+            &target_os,
+        ) {
+            println!("cargo:rustc-link-lib={llama_libs_kind}=llama-common");
+            if library_file_exists(
+                &common_search_dirs,
+                "llama-common-base",
+                build_shared_libs,
+                &target_os,
+            ) {
+                println!("cargo:rustc-link-lib={llama_libs_kind}=llama-common-base");
+            }
+        } else if library_file_exists(&common_search_dirs, "common", build_shared_libs, &target_os)
+        {
+            println!("cargo:rustc-link-lib={llama_libs_kind}=common");
+        } else {
+            println!(
+                "cargo:warning=common feature was enabled, but no common library was found in {}",
+                common_lib_dir.display()
+            );
+        }
     }
 
     if cfg!(feature = "system-ggml") {
