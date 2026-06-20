@@ -1,0 +1,18 @@
+[package]
+name = "speculative-mtp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+llama-cpp-2 = { path = "../../llama-cpp-2" }
+clap = { workspace = true, features = ["derive"] }
+anyhow = { workspace = true }
+encoding_rs = { workspace = true }
+
+[features]
+cuda = ["llama-cpp-2/cuda"]
+metal = ["llama-cpp-2/metal"]
+vulkan = ["llama-cpp-2/vulkan"]
+
+[lints]
+workspace = true

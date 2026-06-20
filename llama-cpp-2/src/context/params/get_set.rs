@@ -1,10 +1,31 @@
 use std::num::NonZeroU32;
 
 use super::{
-    KvCacheType, LlamaAttentionType, LlamaContextParams, LlamaPoolingType, RopeScalingType,
+    KvCacheType, LlamaAttentionType, LlamaContextParams, LlamaContextType, LlamaPoolingType,
+    RopeScalingType,
 };
 
 impl LlamaContextParams {
+    /// Set the context type (e.g. [`LlamaContextType::Mtp`] for MTP speculative decoding).
+    ///
+    /// ```rust
+    /// # use llama_cpp_2::context::params::{LlamaContextParams, LlamaContextType};
+    /// let params = LlamaContextParams::default()
+    ///     .with_context_type(LlamaContextType::Mtp);
+    /// assert_eq!(params.context_type(), LlamaContextType::Mtp);
+    /// ```
+    #[must_use]
+    pub fn with_context_type(mut self, ctx_type: LlamaContextType) -> Self {
+        self.context_params.ctx_type = ctx_type.to_raw();
+        self
+    }
+
+    /// Get the context type.
+    #[must_use]
+    pub fn context_type(&self) -> LlamaContextType {
+        LlamaContextType::from_raw(self.context_params.ctx_type)
+    }
+
     /// Set the size of the context
     ///
     /// # Examples

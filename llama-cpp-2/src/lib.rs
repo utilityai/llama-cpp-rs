@@ -34,6 +34,9 @@ pub mod model;
 #[cfg(feature = "mtmd")]
 pub mod mtmd;
 pub mod sampling;
+/// MTP (Multi-Token Prediction) speculative decoding. Requires the `common` feature.
+#[cfg(feature = "common")]
+pub mod speculative;
 pub mod timing;
 pub mod token;
 pub mod token_type;

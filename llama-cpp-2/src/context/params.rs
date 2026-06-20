@@ -246,6 +246,33 @@ impl From<llama_cpp_sys_2::ggml_type> for KvCacheType {
     }
 }
 
+/// The context type, mirroring `llama_context_type`. [`LlamaContextType::Mtp`] selects the
+/// Multi-Token-Prediction (NextN) draft graph used for MTP speculative decoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlamaContextType {
+    /// Standard decoder context (`LLAMA_CONTEXT_TYPE_DEFAULT`).
+    Default,
+    /// MTP / NextN draft context (`LLAMA_CONTEXT_TYPE_MTP`).
+    Mtp,
+}
+
+impl LlamaContextType {
+    pub(crate) fn to_raw(self) -> llama_cpp_sys_2::llama_context_type {
+        match self {
+            Self::Default => llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_DEFAULT,
+            Self::Mtp => llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_MTP,
+        }
+    }
+
+    pub(crate) fn from_raw(raw: llama_cpp_sys_2::llama_context_type) -> Self {
+        if raw == llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_MTP {
+            Self::Mtp
+        } else {
+            Self::Default
+        }
+    }
+}
+
 /// A safe wrapper around `llama_context_params`.
 ///
 /// Generally this should be created with [`Default::default()`] and then modified with `with_*` methods.
@@ -287,5 +314,22 @@ impl Default for LlamaContextParams {
     fn default() -> Self {
         let context_params = unsafe { llama_cpp_sys_2::llama_context_default_params() };
         Self { context_params }
+    }
+}
+
+#[cfg(test)]
+mod context_type_tests {
+    use super::{LlamaContextParams, LlamaContextType};
+
+    #[test]
+    fn context_type_round_trips() {
+        let params = LlamaContextParams::default();
+        assert_eq!(params.context_type(), LlamaContextType::Default);
+        let params = params.with_context_type(LlamaContextType::Mtp);
+        assert_eq!(params.context_type(), LlamaContextType::Mtp);
+        assert_eq!(
+            params.context_params.ctx_type,
+            llama_cpp_sys_2::LLAMA_CONTEXT_TYPE_MTP
+        );
     }
 }

@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 struct llama_model;
 struct llama_sampler;
@@ -60,6 +61,45 @@ int llama_rs_fit_params(
 void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
 
 void llama_rs_string_free(char * ptr);
+
+// ---------------------------------------------------------------------------
+// MTP (Multi-Token Prediction / NextN) speculative decoding.
+// Thin C shim over llama.cpp's C++ `common_speculative` API (libcommon).
+// ---------------------------------------------------------------------------
+
+// Opaque handle; internally a `common_speculative *`.
+typedef struct llama_rs_speculative llama_rs_speculative;
+
+// Build a common_params_speculative{ types={DRAFT_MTP},
+//   draft={ctx_tgt, ctx_dft, n_max, n_min, p_min, backend_sampling} } and init it.
+// Returns NULL on failure (null contexts or C++ exception).
+llama_rs_speculative * llama_rs_speculative_init_mtp(
+    struct llama_context * ctx_tgt,
+    struct llama_context * ctx_dft,
+    int32_t n_max,
+    int32_t n_min,
+    float   p_min,
+    bool    backend_sampling);
+
+void    llama_rs_speculative_free(llama_rs_speculative * spec);
+int32_t llama_rs_speculative_n_max(const llama_rs_speculative * spec);
+bool    llama_rs_speculative_need_embd_nextn(const llama_rs_speculative * spec);
+
+llama_rs_status llama_rs_speculative_begin(
+    llama_rs_speculative * spec, llama_seq_id seq_id,
+    const llama_token * prompt, size_t prompt_len);
+
+llama_rs_status llama_rs_speculative_process(
+    llama_rs_speculative * spec, const struct llama_batch * batch);
+
+llama_rs_status llama_rs_speculative_draft(
+    llama_rs_speculative * spec, llama_seq_id seq_id,
+    llama_pos n_past, llama_token id_last,
+    const llama_token * prompt, size_t prompt_len,
+    llama_token * out_buf, size_t out_cap, size_t * out_len);
+
+llama_rs_status llama_rs_speculative_accept(
+    llama_rs_speculative * spec, llama_seq_id seq_id, uint16_t n_accepted);
 
 #ifdef __cplusplus
 }

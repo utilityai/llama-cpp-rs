@@ -9,6 +9,7 @@
 #include "llama.cpp/common/common.h"
 #include "llama.cpp/common/fit.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
+#include "llama.cpp/common/speculative.h"
 #include "llama.cpp/include/llama.h"
 #include "wrapper_utils.h"
 
@@ -145,4 +146,141 @@ extern "C" int llama_rs_fit_params(
 
 extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx) {
     common_memory_breakdown_print(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// MTP speculative decoding shim over common_speculative.
+// ---------------------------------------------------------------------------
+
+static common_speculative * as_spec(llama_rs_speculative * h) {
+    return reinterpret_cast<common_speculative *>(h);
+}
+
+extern "C" llama_rs_speculative * llama_rs_speculative_init_mtp(
+    struct llama_context * ctx_tgt,
+    struct llama_context * ctx_dft,
+    int32_t n_max,
+    int32_t n_min,
+    float   p_min,
+    bool    backend_sampling) {
+    if (!ctx_tgt || !ctx_dft) {
+        return nullptr;
+    }
+    try {
+        common_params_speculative params;
+        params.types = { COMMON_SPECULATIVE_TYPE_DRAFT_MTP };
+        params.draft.ctx_tgt          = ctx_tgt;
+        params.draft.ctx_dft          = ctx_dft;
+        params.draft.n_max            = n_max;
+        params.draft.n_min            = n_min;
+        params.draft.p_min            = p_min;
+        params.draft.backend_sampling = backend_sampling;
+        common_speculative * spec = common_speculative_init(params, /*n_seq=*/ 1);
+        return reinterpret_cast<llama_rs_speculative *>(spec);
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+extern "C" void llama_rs_speculative_free(llama_rs_speculative * spec) {
+    if (spec) {
+        common_speculative_free(as_spec(spec));
+    }
+}
+
+extern "C" int32_t llama_rs_speculative_n_max(const llama_rs_speculative * spec) {
+    // common_speculative does not expose its configured n_max on the handle; the Rust
+    // wrapper stores n_max from init and uses that to size the draft buffer. Kept for
+    // ABI symmetry; returns -1 (unknown).
+    (void) spec;
+    return -1;
+}
+
+extern "C" bool llama_rs_speculative_need_embd_nextn(const llama_rs_speculative * spec) {
+    if (!spec) {
+        return false;
+    }
+    return common_speculative_need_embd_nextn(as_spec(const_cast<llama_rs_speculative *>(spec)));
+}
+
+extern "C" llama_rs_status llama_rs_speculative_begin(
+    llama_rs_speculative * spec, llama_seq_id seq_id,
+    const llama_token * prompt, size_t prompt_len) {
+    if (!spec) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        llama_tokens p;
+        if (prompt && prompt_len) {
+            p.assign(prompt, prompt + prompt_len);
+        }
+        common_speculative_begin(as_spec(spec), seq_id, p);
+        return LLAMA_RS_STATUS_OK;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
+extern "C" llama_rs_status llama_rs_speculative_process(
+    llama_rs_speculative * spec, const struct llama_batch * batch) {
+    if (!spec || !batch) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        const bool ok = common_speculative_process(as_spec(spec), *batch);
+        return ok ? LLAMA_RS_STATUS_OK : LLAMA_RS_STATUS_EXCEPTION;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
+extern "C" llama_rs_status llama_rs_speculative_draft(
+    llama_rs_speculative * spec, llama_seq_id seq_id,
+    llama_pos n_past, llama_token id_last,
+    const llama_token * prompt, size_t prompt_len,
+    llama_token * out_buf, size_t out_cap, size_t * out_len) {
+    if (!spec || !out_buf || !out_len) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        llama_tokens prompt_vec;
+        if (prompt && prompt_len) {
+            prompt_vec.assign(prompt, prompt + prompt_len);
+        }
+        llama_tokens result_vec;
+
+        common_speculative_draft_params & dp = common_speculative_get_draft_params(as_spec(spec), seq_id);
+        dp.drafting = true;
+        dp.n_max    = -1;
+        dp.n_past   = n_past;
+        dp.id_last  = id_last;
+        dp.prompt   = &prompt_vec;
+        dp.result   = &result_vec;
+
+        common_speculative_draft(as_spec(spec));
+
+        *out_len = result_vec.size();
+        if (result_vec.size() > out_cap) {
+            return LLAMA_RS_STATUS_BUFFER_TOO_SMALL;
+        }
+        if (!result_vec.empty()) {
+            std::memcpy(out_buf, result_vec.data(), result_vec.size() * sizeof(llama_token));
+        }
+        return LLAMA_RS_STATUS_OK;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
+extern "C" llama_rs_status llama_rs_speculative_accept(
+    llama_rs_speculative * spec, llama_seq_id seq_id, uint16_t n_accepted) {
+    if (!spec) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        common_speculative_accept(as_spec(spec), seq_id, n_accepted);
+        return LLAMA_RS_STATUS_OK;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
 }

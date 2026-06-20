@@ -7,7 +7,8 @@ typedef enum llama_rs_status {
     LLAMA_RS_STATUS_OK = 0,
     LLAMA_RS_STATUS_INVALID_ARGUMENT = -1,
     LLAMA_RS_STATUS_ALLOCATION_FAILED = -2,
-    LLAMA_RS_STATUS_EXCEPTION = -3
+    LLAMA_RS_STATUS_EXCEPTION = -3,
+    LLAMA_RS_STATUS_BUFFER_TOO_SMALL = -4
 } llama_rs_status;
 
 #ifdef __cplusplus
