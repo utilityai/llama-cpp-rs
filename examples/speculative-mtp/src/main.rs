@@ -171,7 +171,8 @@ fn run_mtp(
         .new_mtp_context(backend, &ctx_tgt, ctx_params.clone())
         .context("failed to create MTP draft context")?;
 
-    let mut spec = MtpSpeculator::new(&ctx_tgt, &ctx_dft, args.n_draft, 0, 0.0, true)
+    // SAFETY: ctx_tgt and ctx_dft outlive `spec` — all three live until this function returns.
+    let mut spec = unsafe { MtpSpeculator::new(&ctx_tgt, &ctx_dft, args.n_draft, 0, 0.0, true) }
         .context("failed to init MTP speculator")?;
     anyhow::ensure!(
         spec.need_embd_nextn(),

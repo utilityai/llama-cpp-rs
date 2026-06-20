@@ -5,6 +5,7 @@
 //! The target and draft contexts must outlive the [`MtpSpeculator`], which holds raw pointers to
 //! them inside llama.cpp.
 
+use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use crate::context::params::{LlamaContextParams, LlamaContextType};
@@ -80,23 +81,32 @@ impl LlamaModel {
     }
 }
 
-/// A safe handle to an MTP speculator (wraps a `common_speculative *`). The target and draft
-/// contexts passed to [`MtpSpeculator::new`] must outlive it.
+/// A handle to an MTP speculator (wraps a `common_speculative *`). The lifetime `'a` is tied to the
+/// target and draft contexts, which it holds raw pointers to inside llama.cpp and which must
+/// therefore outlive it.
 #[derive(Debug)]
-pub struct MtpSpeculator {
+pub struct MtpSpeculator<'a> {
     handle: NonNull<llama_cpp_sys_2::llama_rs_speculative>,
     n_max: i32,
+    _contexts: PhantomData<&'a ()>,
 }
 
-impl MtpSpeculator {
+impl<'a> MtpSpeculator<'a> {
     /// Initialize an MTP speculator over `target` and `draft` (from [`LlamaModel::new_mtp_context`]).
     /// `n_max`/`n_min` bound the draft length, `p_min` is the minimum draft probability (0.0 =
     /// greedy), and `backend_sampling` offloads draft sampling to the backend.
     ///
+    /// # Safety
+    ///
+    /// The speculator stores raw pointers to `target` and `draft` inside llama.cpp; both contexts
+    /// must remain alive and valid for the speculator's lifetime `'a`. A shared borrow cannot
+    /// express this (the contexts are still mutated, e.g. via `decode`), so the contract is the
+    /// caller's responsibility.
+    ///
     /// # Errors
     ///
     /// Returns [`SpeculativeError::InitFailed`] if `common_speculative_init` returns null.
-    pub fn new(
+    pub unsafe fn new(
         target: &LlamaContext<'_>,
         draft: &LlamaContext<'_>,
         n_max: i32,
@@ -115,7 +125,11 @@ impl MtpSpeculator {
             )
         };
         let handle = NonNull::new(handle).ok_or(SpeculativeError::InitFailed)?;
-        Ok(Self { handle, n_max })
+        Ok(Self {
+            handle,
+            n_max,
+            _contexts: PhantomData,
+        })
     }
 
     /// Whether the speculator needs target NextN embeddings extracted (always true for MTP).
@@ -211,7 +225,7 @@ impl MtpSpeculator {
     }
 }
 
-impl Drop for MtpSpeculator {
+impl Drop for MtpSpeculator<'_> {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::llama_rs_speculative_free(self.handle.as_ptr()) }
     }
