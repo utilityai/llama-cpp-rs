@@ -1,22 +1,9 @@
-//! MTP (Multi-Token Prediction / NextN) speculative decoding.
+//! MTP (Multi-Token Prediction / NextN) speculative decoding via llama.cpp's `common_speculative`
+//! (`draft-mtp`). A single GGUF's embedded NextN head drafts tokens from the target model's own
+//! hidden state, so no separate draft model is loaded.
 //!
-//! This binds llama.cpp's `common_speculative` API (type `draft-mtp`) through the
-//! `llama_rs_speculative_*` C shim in `llama-cpp-sys-2`. MTP uses a single GGUF whose embedded
-//! NextN head drafts tokens from the target model's own hidden state, so no separate draft model
-//! is loaded.
-//!
-//! Usage:
-//! 1. Create the target context with [`crate::model::LlamaModel::new_context`].
-//! 2. Create the MTP draft context with [`crate::model::LlamaModel::new_mtp_context`].
-//! 3. Create an [`MtpSpeculator`] over both.
-//! 4. Prefill the target, then loop: [`MtpSpeculator::draft`] → decode the verify batch →
-//!    [`MtpSpeculator::process`] → accept the matching prefix → [`MtpSpeculator::accept`].
-//!
-//! # Safety contract
-//!
-//! [`MtpSpeculator`] and the MTP draft context hold raw pointers to the target context inside
-//! llama.cpp. The caller must keep the target context (and the model) alive at least as long as
-//! the draft context and the speculator.
+//! The target and draft contexts must outlive the [`MtpSpeculator`], which holds raw pointers to
+//! them inside llama.cpp.
 
 use std::ptr::NonNull;
 
@@ -41,7 +28,7 @@ pub enum SpeculativeError {
         /// capacity of the buffer that was provided
         had: usize,
     },
-    /// A C++ exception (or internal decode failure) was caught at the shim boundary.
+    /// A C++ exception or internal decode failure was caught at the shim boundary.
     #[error("c++ exception or decode failure at speculative shim boundary")]
     Exception,
     /// `common_speculative_init` returned null.
@@ -52,26 +39,26 @@ pub enum SpeculativeError {
     ContextCreationFailed,
 }
 
-pub(crate) fn status_to_result(status: llama_cpp_sys_2::llama_rs_status) -> Result<(), SpeculativeError> {
+pub(crate) fn status_to_result(
+    status: llama_cpp_sys_2::llama_rs_status,
+) -> Result<(), SpeculativeError> {
     match status {
         x if x == llama_cpp_sys_2::LLAMA_RS_STATUS_OK => Ok(()),
         x if x == llama_cpp_sys_2::LLAMA_RS_STATUS_INVALID_ARGUMENT => {
             Err(SpeculativeError::InvalidArgument)
         }
-        // ALLOCATION_FAILED, EXCEPTION, and any unknown code all surface as Exception.
         _ => Err(SpeculativeError::Exception),
     }
 }
 
 impl LlamaModel {
-    /// Create the MTP draft context for `target`.
+    /// Create the MTP draft context for `target`. It runs the NextN graph on the same model with
+    /// `ctx_type = Mtp` and `ctx_other = target`. The returned context borrows the model; the
+    /// caller must keep `target` alive at least as long as it.
     ///
-    /// The draft context runs the NextN graph on the **same model** and shares memory with the
-    /// target context (`ctx_type = Mtp`, `ctx_other = target`). This mirrors the MTP setup in
-    /// llama.cpp's server (`tools/server/server-context.cpp`).
+    /// # Errors
     ///
-    /// The returned context borrows the model. The caller must keep `target` alive at least as
-    /// long as the returned context (it holds a raw pointer to `target`).
+    /// Returns [`SpeculativeError::ContextCreationFailed`] if llama.cpp fails to create the context.
     pub fn new_mtp_context<'a>(
         &'a self,
         _: &LlamaBackend,
@@ -83,17 +70,18 @@ impl LlamaModel {
 
         let embeddings = params.embeddings();
         let ctx = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), params.context_params)
+            llama_cpp_sys_2::llama_new_context_with_model(
+                self.model.as_ptr(),
+                params.context_params,
+            )
         };
         let ctx = NonNull::new(ctx).ok_or(SpeculativeError::ContextCreationFailed)?;
         Ok(LlamaContext::new(self, ctx, embeddings))
     }
 }
 
-/// A safe handle to an MTP speculator (wraps a `common_speculative *`).
-///
-/// See the [module docs](self) for the lifetime/safety contract: the target and draft contexts
-/// must outlive this speculator.
+/// A safe handle to an MTP speculator (wraps a `common_speculative *`). The target and draft
+/// contexts passed to [`MtpSpeculator::new`] must outlive it.
 #[derive(Debug)]
 pub struct MtpSpeculator {
     handle: NonNull<llama_cpp_sys_2::llama_rs_speculative>,
@@ -101,12 +89,13 @@ pub struct MtpSpeculator {
 }
 
 impl MtpSpeculator {
-    /// Initialize an MTP speculator over `target` (the real model context) and `draft` (the MTP
-    /// context from [`LlamaModel::new_mtp_context`]).
+    /// Initialize an MTP speculator over `target` and `draft` (from [`LlamaModel::new_mtp_context`]).
+    /// `n_max`/`n_min` bound the draft length, `p_min` is the minimum draft probability (0.0 =
+    /// greedy), and `backend_sampling` offloads draft sampling to the backend.
     ///
-    /// - `n_max` / `n_min`: max / min draft tokens per step.
-    /// - `p_min`: minimum draft probability (0.0 = greedy drafting).
-    /// - `backend_sampling`: offload draft sampling to the backend (recommended `true`).
+    /// # Errors
+    ///
+    /// Returns [`SpeculativeError::InitFailed`] if `common_speculative_init` returns null.
     pub fn new(
         target: &LlamaContext<'_>,
         draft: &LlamaContext<'_>,
@@ -129,13 +118,17 @@ impl MtpSpeculator {
         Ok(Self { handle, n_max })
     }
 
-    /// True if the speculator needs target NextN embeddings extracted (always true for MTP).
+    /// Whether the speculator needs target NextN embeddings extracted (always true for MTP).
     #[must_use]
     pub fn need_embd_nextn(&self) -> bool {
         unsafe { llama_cpp_sys_2::llama_rs_speculative_need_embd_nextn(self.handle.as_ptr()) }
     }
 
     /// Optionally call once at the start of a generation with the already-decoded prompt tokens.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SpeculativeError`] if the shim call fails.
     pub fn begin(&mut self, seq_id: i32, prompt: &[LlamaToken]) -> Result<(), SpeculativeError> {
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_speculative_begin(
@@ -148,8 +141,12 @@ impl MtpSpeculator {
         status_to_result(status)
     }
 
-    /// Feed the just-decoded target verify batch so the speculator captures the hidden states it
-    /// needs for the next draft. Call this after every `target.decode(...)`.
+    /// Feed the just-decoded target verify batch so the speculator captures the hidden states for
+    /// the next draft. Call after every `target.decode(...)`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SpeculativeError`] if the shim call or the internal draft-context decode fails.
     pub fn process(&mut self, batch: &LlamaBatch) -> Result<(), SpeculativeError> {
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_speculative_process(
@@ -160,10 +157,13 @@ impl MtpSpeculator {
         status_to_result(status)
     }
 
-    /// Generate draft tokens for `seq_id`, seeded from `id_last` at position `n_past`.
+    /// Generate draft tokens for `seq_id`, seeded from `id_last` at position `n_past`. `prompt` is
+    /// the tokens currently in the target context.
     ///
-    /// `prompt` is the full list of tokens currently in the target context (some draft
-    /// implementations consult it; MTP largely relies on the carried hidden state).
+    /// # Errors
+    ///
+    /// Returns [`SpeculativeError::BufferTooSmall`] if the draft exceeds the configured `n_max`, or
+    /// another [`SpeculativeError`] if the shim call fails.
     pub fn draft(
         &mut self,
         seq_id: i32,
@@ -198,8 +198,11 @@ impl MtpSpeculator {
         Ok(buf)
     }
 
-    /// Inform the speculator that `n_accepted` draft tokens were accepted by the target.
-    /// `n_accepted` excludes the bonus/correction token.
+    /// Inform the speculator that `n_accepted` draft tokens were accepted (excludes the bonus token).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SpeculativeError`] if the shim call fails.
     pub fn accept(&mut self, seq_id: i32, n_accepted: u16) -> Result<(), SpeculativeError> {
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_speculative_accept(self.handle.as_ptr(), seq_id, n_accepted)

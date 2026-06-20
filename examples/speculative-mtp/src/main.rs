@@ -1,14 +1,7 @@
 //! MTP (Multi-Token Prediction / NextN) speculative decoding example + benchmark.
 //!
-//! Runs a single-sequence speculative loop using a single GGUF whose embedded NextN head drafts
-//! tokens from the target model's own hidden state. Acceptance is greedy (argmax) and done in
-//! Rust; the MTP head forward runs inside llama.cpp via the `MtpSpeculator` shim.
-//!
-//! `--baseline` runs the same model with plain greedy autoregressive decoding (no speculation),
-//! so the two tok/s numbers are directly comparable.
-//!
-//! For recurrent / hybrid architectures (e.g. qwen35 Gated DeltaNet) the loop relies on
-//! `n_rs_seq` to make partial KV/state rollback cheap; see `--n-rs-seq`.
+//! Uses a single GGUF whose embedded NextN head drafts tokens from the target model's own hidden
+//! state. `--baseline` runs plain greedy decoding for a comparable tok/s.
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -114,7 +107,6 @@ fn main() -> Result<()> {
     }
 }
 
-/// Plain greedy autoregressive decoding (no speculation).
 fn run_baseline(
     backend: &LlamaBackend,
     model: &LlamaModel,
@@ -128,7 +120,6 @@ fn run_baseline(
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut batch = LlamaBatch::new(args.n_ctx as usize, 1);
 
-    // prefill (only the last token needs logits)
     for (i, t) in tokens.iter().enumerate() {
         batch.add(*t, i as i32, &[0], i == tokens.len() - 1)?;
     }
@@ -156,11 +147,16 @@ fn run_baseline(
         ctx.decode(&mut batch).context("decode failed")?;
     }
 
-    report("baseline", generated, generated as u64, generated as u64, t_start);
+    report(
+        "baseline",
+        generated,
+        generated as u64,
+        generated as u64,
+        t_start,
+    );
     Ok(())
 }
 
-/// MTP speculative decoding loop.
 fn run_mtp(
     backend: &LlamaBackend,
     model: &LlamaModel,
@@ -177,20 +173,25 @@ fn run_mtp(
 
     let mut spec = MtpSpeculator::new(&ctx_tgt, &ctx_dft, args.n_draft, 0, 0.0, true)
         .context("failed to init MTP speculator")?;
-    anyhow::ensure!(spec.need_embd_nextn(), "MTP speculator should need nextn embeddings");
+    anyhow::ensure!(
+        spec.need_embd_nextn(),
+        "MTP speculator should need nextn embeddings"
+    );
 
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut batch = LlamaBatch::new(args.n_ctx as usize, 1);
 
-    // Prefill the target on all-but-last prompt token. MTP requires logits at every prompt
-    // position so the speculator can mirror the target hidden state into the draft context.
+    // prefill the target; MTP needs logits at every prompt position
     let prompt_head = &tokens[..tokens.len() - 1];
     for (i, t) in prompt_head.iter().enumerate() {
         batch.add(*t, i as i32, &[0], true)?;
     }
-    ctx_tgt.decode(&mut batch).context("prefill decode failed")?;
+    ctx_tgt
+        .decode(&mut batch)
+        .context("prefill decode failed")?;
     spec.process(&batch).context("prefill process failed")?;
-    spec.begin(0, prompt_head).context("speculative begin failed")?;
+    spec.begin(0, prompt_head)
+        .context("speculative begin failed")?;
 
     let mut id_last = *tokens.last().unwrap();
     let mut n_past = (tokens.len() - 1) as i32;
@@ -207,28 +208,24 @@ fn run_mtp(
     let t_start = Instant::now();
 
     'gen: while generated < args.n_predict {
-        // 1. draft from the current last token (advances ctx_dft tentatively)
         let draft = spec
             .draft(0, n_past, id_last, &prompt_tgt)
             .context("draft failed")?;
         n_drafted += draft.len() as u64;
 
-        // 2. roll back ctx_dft's tentative draft decode so process() can re-decode authoritatively
-        //    (bounded partial seq_rm; works because n_rs_seq >= draft length)
+        // roll back ctx_dft's tentative draft decode so process() can re-decode authoritatively
         ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
 
-        // 3. build + decode the verify batch: [id_last, draft0, draft1, ...]
+        // verify batch: [id_last, draft0, draft1, ...]
         batch.clear();
         batch.add(id_last, n_past, &[0], true)?;
         for (i, d) in draft.iter().enumerate() {
             batch.add(*d, n_past + 1 + i as i32, &[0], true)?;
         }
         ctx_tgt.decode(&mut batch).context("verify decode failed")?;
-
-        // 4. capture target hidden states into ctx_dft for the next draft
         spec.process(&batch).context("process failed")?;
 
-        // 5. greedy acceptance in Rust: longest draft prefix the target agrees with
+        // greedy acceptance: longest draft prefix the target agrees with
         let mut ids: Vec<i32> = Vec::with_capacity(draft.len() + 1);
         let mut i = 0usize;
         loop {
@@ -241,11 +238,8 @@ fn run_mtp(
         }
         let n_acc = (ids.len() - 1) as u16;
         n_accept += u64::from(n_acc);
-
-        // 6. tell the speculator how many drafts were accepted (excludes the bonus token)
         spec.accept(0, n_acc).context("accept failed")?;
 
-        // 7. commit accepted tokens
         let mut eos = false;
         for &t in &ids {
             let tok = LlamaToken(t);
@@ -263,7 +257,7 @@ fn run_mtp(
             }
         }
 
-        // 8. trim the rejected draft tokens from both contexts (bounded partial seq_rm)
+        // trim rejected drafts from both contexts (bounded by n_rs_seq)
         ctx_tgt.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
         ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
 

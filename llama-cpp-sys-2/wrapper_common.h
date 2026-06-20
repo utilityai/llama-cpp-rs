@@ -62,16 +62,10 @@ void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
 
 void llama_rs_string_free(char * ptr);
 
-// ---------------------------------------------------------------------------
-// MTP (Multi-Token Prediction / NextN) speculative decoding.
-// Thin C shim over llama.cpp's C++ `common_speculative` API (libcommon).
-// ---------------------------------------------------------------------------
-
-// Opaque handle; internally a `common_speculative *`.
+// MTP (NextN) speculative decoding shim over llama.cpp's common_speculative (draft-mtp).
+// The handle is internally a common_speculative *.
 typedef struct llama_rs_speculative llama_rs_speculative;
 
-// Build a common_params_speculative{ types={DRAFT_MTP},
-//   draft={ctx_tgt, ctx_dft, n_max, n_min, p_min, backend_sampling} } and init it.
 // Returns NULL on failure (null contexts or C++ exception).
 llama_rs_speculative * llama_rs_speculative_init_mtp(
     struct llama_context * ctx_tgt,
@@ -82,7 +76,6 @@ llama_rs_speculative * llama_rs_speculative_init_mtp(
     bool    backend_sampling);
 
 void    llama_rs_speculative_free(llama_rs_speculative * spec);
-int32_t llama_rs_speculative_n_max(const llama_rs_speculative * spec);
 bool    llama_rs_speculative_need_embd_nextn(const llama_rs_speculative * spec);
 
 llama_rs_status llama_rs_speculative_begin(

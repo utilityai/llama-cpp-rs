@@ -26,11 +26,9 @@ impl LlamaContextParams {
         LlamaContextType::from_raw(self.context_params.ctx_type)
     }
 
-    /// Set the number of recurrent-state snapshots kept per sequence for rollback (0 = no
-    /// rollback). For recurrent / hybrid architectures (e.g. Gated DeltaNet) this enables bounded
-    /// partial `seq_rm`: rolling back up to `n_rs_seq` tokens becomes a cheap snapshot-index
-    /// switch instead of an unsupported operation. Required for speculative decoding on such
-    /// models. Costs `(1 + n_rs_seq)x` the (small) recurrent-state tensor memory. `[EXPERIMENTAL]`
+    /// Set the number of recurrent-state rollback snapshots per sequence (0 = no rollback).
+    /// Enables bounded partial `seq_rm` on recurrent / hybrid architectures, which speculative
+    /// decoding requires. `[EXPERIMENTAL]`
     ///
     /// ```rust
     /// # use llama_cpp_2::context::params::LlamaContextParams;

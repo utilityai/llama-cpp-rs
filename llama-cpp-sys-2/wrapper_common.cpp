@@ -148,10 +148,7 @@ extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx
     common_memory_breakdown_print(ctx);
 }
 
-// ---------------------------------------------------------------------------
 // MTP speculative decoding shim over common_speculative.
-// ---------------------------------------------------------------------------
-
 static common_speculative * as_spec(llama_rs_speculative * h) {
     return reinterpret_cast<common_speculative *>(h);
 }
@@ -186,14 +183,6 @@ extern "C" void llama_rs_speculative_free(llama_rs_speculative * spec) {
     if (spec) {
         common_speculative_free(as_spec(spec));
     }
-}
-
-extern "C" int32_t llama_rs_speculative_n_max(const llama_rs_speculative * spec) {
-    // common_speculative does not expose its configured n_max on the handle; the Rust
-    // wrapper stores n_max from init and uses that to size the draft buffer. Kept for
-    // ABI symmetry; returns -1 (unknown).
-    (void) spec;
-    return -1;
 }
 
 extern "C" bool llama_rs_speculative_need_embd_nextn(const llama_rs_speculative * spec) {
