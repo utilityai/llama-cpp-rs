@@ -17,6 +17,9 @@ pub enum KvCacheConversionError {
     /// Position 1 conversion to i32 failed
     #[error("Provided end position is too large for a i32")]
     P1TooLarge(#[source] TryFromIntError),
+    /// Partial sequence couldn't be removed
+    #[error("Couldn't remove partial sequence")]
+    PartialSequenceRemovalFailed(i32, i32),
 }
 
 impl LlamaContext<'_> {
@@ -114,6 +117,42 @@ impl LlamaContext<'_> {
     }
 
     #[allow(clippy::doc_markdown)]
+    /// Copy all tokens that belong to the specified sequence to another sequence
+    /// If the KV cache is RoPEd, the KV data is updated accordingly:
+    ///   - lazily on next [`LlamaContext::decode`]
+    ///   - explicitly with [`Self::kv_cache_update`]
+    ///
+    /// # Returns
+    /// A `Result` indicating whether the operation was successful.
+    ///
+    /// # Parameters
+    ///
+    /// * `seq_id_src` - The sequence id to copy from. If negative, matches any sequence.
+    /// * `seq_id_dst` - The sequence id to copy to
+    /// * `p0` - The start position of the cache to copy from. If `None`, the entire cache is updated up to `p1`.
+    /// * `p1` - The end position of the cache to copy from. If `None`, the entire cache is updated starting from `p0`.
+    ///
+    /// # Errors
+    /// If either position exceeds [`i32::MAX`].
+    pub fn kv_cache_seq_cp(
+        &mut self,
+        seq_id_src: i32,
+        seq_id_dst: i32,
+        p0: Option<u32>,
+        p1: Option<u32>,
+    ) -> Result<(), KvCacheConversionError> {
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        let mem = unsafe { llama_cpp_sys_2::llama_get_memory(self.context.as_ptr()) };
+        unsafe { llama_cpp_sys_2::llama_memory_seq_cp(mem, seq_id_src, seq_id_dst, p0, p1) };
+        Ok(())
+    }
+
+    #[allow(clippy::doc_markdown)]
     /// Adds relative position "delta" to all tokens that belong to the specified sequence and have positions in `[p0, p1)`
     /// If the KV cache is RoPEd, the KV data is updated accordingly:
     ///   - lazily on next [`LlamaContext::decode`]
@@ -146,6 +185,42 @@ impl LlamaContext<'_> {
             .map_err(KvCacheConversionError::P1TooLarge)?;
         let mem = unsafe { llama_cpp_sys_2::llama_get_memory(self.context.as_ptr()) };
         unsafe { llama_cpp_sys_2::llama_memory_seq_add(mem, seq_id, p0, p1, delta) };
+        Ok(())
+    }
+
+    #[allow(clippy::doc_markdown)]
+    /// Removes all tokens that belong to the specified sequence and have positions in [p0, p1)
+    /// If the KV cache is RoPEd, the KV data is updated accordingly:
+    ///   - lazily on next [`LlamaContext::decode`]
+    ///   - explicitly with [`Self::kv_cache_update`]
+    ///
+    /// # Returns
+    /// A `Result` indicating whether the operation was successful.
+    ///
+    /// # Parameters
+    ///
+    /// * `seq_id` - The sequence id to update
+    /// * `p0` - The start position of the cache to update. If `None`, the entire cache is updated up to `p1`.
+    /// * `p1` - The end position of the cache to update. If `None`, the entire cache is updated starting from `p0`.
+    ///
+    /// # Errors
+    /// If either position exceeds [`i32::MAX`].
+    pub fn kv_cache_seq_rm(
+        &mut self,
+        seq_id: i32,
+        p0: Option<u32>,
+        p1: Option<u32>,
+    ) -> Result<(), KvCacheConversionError> {
+        let p0 = p0
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P0TooLarge)?;
+        let p1 = p1
+            .map_or(Ok(-1), i32::try_from)
+            .map_err(KvCacheConversionError::P1TooLarge)?;
+        let mem = unsafe { llama_cpp_sys_2::llama_get_memory(self.context.as_ptr()) };
+        if !unsafe { llama_cpp_sys_2::llama_memory_seq_rm(mem, seq_id, p0, p1) } {
+            return Err(KvCacheConversionError::PartialSequenceRemovalFailed(p0, p1));
+        }
         Ok(())
     }
 
@@ -183,6 +258,17 @@ impl LlamaContext<'_> {
         let mem = unsafe { llama_cpp_sys_2::llama_get_memory(self.context.as_ptr()) };
         unsafe { llama_cpp_sys_2::llama_memory_seq_div(mem, seq_id, p0, p1, d) }
         Ok(())
+    }
+
+    /// Returns the smallest position present in the KV cache for the specified sequence
+    ///
+    /// # Parameters
+    ///
+    /// * `seq_id` - The sequence id to get the min position for
+    #[must_use]
+    pub fn kv_cache_seq_pos_min(&self, seq_id: i32) -> i32 {
+        let mem = unsafe { llama_cpp_sys_2::llama_get_memory(self.context.as_ptr()) };
+        unsafe { llama_cpp_sys_2::llama_memory_seq_pos_min(mem, seq_id) }
     }
 
     /// Returns the largest position present in the KV cache for the specified sequence
