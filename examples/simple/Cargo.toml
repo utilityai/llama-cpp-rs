@@ -18,6 +18,7 @@ tracing-subscriber = { workspace = true }
 cuda = ["llama-cpp-2/cuda"]
 metal = ["llama-cpp-2/metal"]
 vulkan = ["llama-cpp-2/vulkan"]
+mkl = ["llama-cpp-2/mkl"]
 
 [lints]
 workspace = true

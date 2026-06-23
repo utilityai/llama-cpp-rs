@@ -897,6 +897,16 @@ fn main() {
         // minimal: at runtime the device's own ICD provides the implementation.
     }
 
+    if cfg!(feature = "mkl") {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        assert_eq!(
+            target_arch, "x86_64",
+            "The `mkl` feature requires an x86_64 target; Intel MKL is unavailable for {target_arch}."
+        );
+        config.define("GGML_BLAS", "ON");
+        config.define("GGML_BLAS_VENDOR", "Intel10_64lp");
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
@@ -1089,6 +1099,28 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=amdhip64");
         println!("cargo:rustc-link-lib=dylib=rocblas");
         println!("cargo:rustc-link-lib=dylib=hipblas");
+    }
+
+    if cfg!(feature = "mkl") && !build_shared_libs {
+        println!("cargo:rerun-if-env-changed=MKLROOT");
+
+        let mkl_root = env::var("MKLROOT")
+            .expect("Intel MKL not found. Please install Intel oneAPI/MKL and set MKLROOT.");
+
+        let mut found = false;
+        for sub in ["lib/intel64", "lib"] {
+            let dir = Path::new(&mkl_root).join(sub);
+            if dir.is_dir() {
+                println!("cargo:rustc-link-search=native={}", dir.display());
+                found = true;
+            }
+        }
+        assert!(
+            found,
+            "No MKL library directory found under MKLROOT={mkl_root}"
+        );
+
+        println!("cargo:rustc-link-lib=dylib=mkl_rt");
     }
 
     // Link libraries
