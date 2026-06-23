@@ -15,6 +15,7 @@ enum WindowsVariant {
 
 enum AppleVariant {
     MacOS,
+    WatchOS,
     Other,
 }
 
@@ -67,6 +68,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
     } else if target.contains("apple") {
         if target.ends_with("-apple-darwin") {
             Ok((TargetOs::Apple(AppleVariant::MacOS), target))
+        } else if target.contains("watchos") {
+            Ok((TargetOs::Apple(AppleVariant::WatchOS), target))
         } else {
             Ok((TargetOs::Apple(AppleVariant::Other), target))
         }
@@ -708,6 +711,15 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
+    // watchOS has no Metal framework, so disable the Metal backend there.
+    // Also define _DARWIN_C_SOURCE so BSD types (u_int, u_char, u_short) used by
+    // some sources are visible — implicit on macOS/iOS but not on watchOS.
+    if matches!(target_os, TargetOs::Apple(AppleVariant::WatchOS)) {
+        config.define("GGML_METAL", "OFF");
+        config.cflag("-D_DARWIN_C_SOURCE");
+        config.cxxflag("-D_DARWIN_C_SOURCE");
+    }
+
     if (matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc))
         && matches!(
             profile.as_str(),
@@ -920,6 +932,16 @@ fn main() {
         // minimal: at runtime the device's own ICD provides the implementation.
     }
 
+    if cfg!(feature = "mkl") {
+        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        assert_eq!(
+            target_arch, "x86_64",
+            "The `mkl` feature requires an x86_64 target; Intel MKL is unavailable for {target_arch}."
+        );
+        config.define("GGML_BLAS", "ON");
+        config.define("GGML_BLAS_VENDOR", "Intel10_64lp");
+    }
+
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
@@ -1114,6 +1136,28 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=hipblas");
     }
 
+    if cfg!(feature = "mkl") && !build_shared_libs {
+        println!("cargo:rerun-if-env-changed=MKLROOT");
+
+        let mkl_root = env::var("MKLROOT")
+            .expect("Intel MKL not found. Please install Intel oneAPI/MKL and set MKLROOT.");
+
+        let mut found = false;
+        for sub in ["lib/intel64", "lib"] {
+            let dir = Path::new(&mkl_root).join(sub);
+            if dir.is_dir() {
+                println!("cargo:rustc-link-search=native={}", dir.display());
+                found = true;
+            }
+        }
+        assert!(
+            found,
+            "No MKL library directory found under MKLROOT={mkl_root}"
+        );
+
+        println!("cargo:rustc-link-lib=dylib=mkl_rt");
+    }
+
     // Link libraries
     let llama_libs_kind = if build_shared_libs
         || (cfg!(feature = "system-ggml") && !cfg!(feature = "system-ggml-static"))
@@ -1214,8 +1258,11 @@ fn main() {
         }
         TargetOs::Apple(ref variant) => {
             println!("cargo:rustc-link-lib=framework=Foundation");
-            println!("cargo:rustc-link-lib=framework=Metal");
-            println!("cargo:rustc-link-lib=framework=MetalKit");
+            // watchOS has no Metal; skip the Metal frameworks there.
+            if !matches!(variant, AppleVariant::WatchOS) {
+                println!("cargo:rustc-link-lib=framework=Metal");
+                println!("cargo:rustc-link-lib=framework=MetalKit");
+            }
             println!("cargo:rustc-link-lib=framework=Accelerate");
             println!("cargo:rustc-link-lib=c++");
 
@@ -1230,7 +1277,7 @@ fn main() {
                         println!("cargo:rustc-link-search={}", path);
                     }
                 }
-                AppleVariant::Other => (),
+                AppleVariant::WatchOS | AppleVariant::Other => (),
             }
         }
         TargetOs::Android => {

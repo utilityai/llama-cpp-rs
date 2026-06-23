@@ -99,6 +99,8 @@ vulkan = []
 # (e.g. Android) point CMake at them via the OPENCL_INCLUDE_DIR / OPENCL_LIBRARY
 # env vars (build.rs forwards them), since FindOpenCL can't locate an SDK.
 opencl = []
+# Build the BLAS backend with Intel MKL (x86_64-only; requires MKLROOT set).
+mkl = []
 openmp = []
 # Link GNU OpenMP (`libgomp`) statically on GNU targets. This is useful for
 # downstreams that ship self-contained binaries while keeping OpenMP enabled.
