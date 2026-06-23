@@ -230,6 +230,134 @@ fn is_hidden(e: &DirEntry) -> bool {
         .unwrap_or_default()
 }
 
+fn tool_exists(name: &str) -> bool {
+    std::process::Command::new(name)
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Locate a usable `llvm-ar`: prefer one on PATH, then fall back to the copy
+/// rustup ships in the active toolchain's sysroot.
+fn find_llvm_ar() -> Option<String> {
+    if tool_exists("llvm-ar") {
+        return Some("llvm-ar".to_string());
+    }
+    let sysroot = std::process::Command::new(env::var("RUSTC").unwrap_or_else(|_| "rustc".into()))
+        .arg("--print=sysroot")
+        .output()
+        .ok()
+        .and_then(|o| {
+            o.status
+                .success()
+                .then(|| String::from_utf8(o.stdout).ok())
+                .flatten()
+        })?;
+    let sysroot = sysroot.trim();
+    let target = env::var("TARGET").ok()?;
+    let exe = if cfg!(windows) { ".exe" } else { "" };
+    let candidate = format!("{sysroot}/lib/rustlib/{target}/bin/llvm-ar{exe}");
+    Path::new(&candidate)
+        .exists()
+        .then(|| candidate)
+        .or_else(|| {
+            // Older layouts: tools land in <sysroot>/bin
+            let alt = format!("{sysroot}/bin/llvm-ar{exe}");
+            Path::new(&alt).exists().then_some(alt)
+        })
+}
+
+/// Configure GGML_LTO=ON safely.
+///
+/// CMake's GGML_LTO adds `-flto` to compile flags only — the actual
+/// cross-TU optimization happens when Rust links the static archives
+/// produced by CMake. Rust drives the link through rust-lld, which can
+/// resolve LLVM bitcode but not GCC's LTO format. So we must build with
+/// clang + thin LTO and use llvm-ar/llvm-ranlib (or equivalent) so the
+/// archives carry bitcode lld can read.
+///
+/// If the toolchain isn't available, panic with a clear message rather
+/// than producing a broken build.
+fn configure_lto(config: &mut Config, target_os: &TargetOs) {
+    config.define("GGML_LTO", "ON");
+
+    match target_os {
+        TargetOs::Windows(WindowsVariant::Msvc) => {
+            // MSVC's link-time codegen (`/GL` + `/LTCG`) is not interoperable
+            // with rust-lld's LTO path either. Refuse to build.
+            panic!(
+                "LLAMA_GGML_LTO=1 is not supported on the MSVC target. \
+                 Use the *-windows-gnu target with clang/lld, or unset LLAMA_GGML_LTO."
+            );
+        }
+        TargetOs::Apple(_) => {
+            // Apple Clang + Apple ar/ranlib understand LLVM bitcode natively.
+            // Honor user CC/CXX/AR/RANLIB if set; otherwise the system
+            // defaults already point at the right tools.
+            config.cflag("-flto=thin");
+            config.cxxflag("-flto=thin");
+        }
+        TargetOs::Linux | TargetOs::Android | TargetOs::Windows(WindowsVariant::Other) => {
+            // Linux/Android/MinGW: the system default compiler is usually
+            // GCC, whose `-flto` format rust-lld can't read. Force clang +
+            // llvm-ar so archives carry LLVM bitcode lld understands.
+            // Honor user-provided CC/CXX/AR/RANLIB.
+            let cc_set = env::var("CC").is_ok();
+            let cxx_set = env::var("CXX").is_ok();
+            let ar_set = env::var("AR").is_ok();
+            let ranlib_set = env::var("RANLIB").is_ok();
+
+            if !cc_set && !tool_exists("clang") {
+                panic!(
+                    "LLAMA_GGML_LTO=1 requires clang on PATH (or CC set to a clang-compatible compiler). \
+                     Install clang or unset LLAMA_GGML_LTO."
+                );
+            }
+            if !cxx_set && !tool_exists("clang++") {
+                panic!(
+                    "LLAMA_GGML_LTO=1 requires clang++ on PATH (or CXX set to a clang-compatible compiler). \
+                     Install clang or unset LLAMA_GGML_LTO."
+                );
+            }
+            let llvm_ar = if ar_set {
+                None
+            } else {
+                Some(find_llvm_ar().unwrap_or_else(|| {
+                    panic!(
+                        "LLAMA_GGML_LTO=1 requires llvm-ar on PATH or in the active rustup toolchain \
+                         (or AR set to an LLVM-bitcode-aware archiver). \
+                         Run `rustup component add llvm-tools` or install llvm, or unset LLAMA_GGML_LTO."
+                    );
+                }))
+            };
+
+            if !cc_set {
+                config.define("CMAKE_C_COMPILER", "clang");
+            }
+            if !cxx_set {
+                config.define("CMAKE_CXX_COMPILER", "clang++");
+            }
+            if let Some(ar) = llvm_ar {
+                config.define("CMAKE_AR", ar);
+            }
+            if !ranlib_set {
+                // llvm-ar writes a bitcode-aware symbol table on archive
+                // creation, so the binutils `ranlib` step cmake runs
+                // afterwards is at best redundant and at worst clobbers
+                // the index (BFD doesn't recognize bitcode symbols).
+                // Replace it with a no-op. `/bin/true` exists on Linux,
+                // Android, and MinGW environments we target here.
+                config.define("CMAKE_RANLIB", "/bin/true");
+            }
+            config.cflag("-flto=thin");
+            config.cxxflag("-flto=thin");
+        }
+    }
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -249,10 +377,14 @@ fn main() {
     let static_crt = env::var("LLAMA_STATIC_CRT")
         .map(|v| v == "1")
         .unwrap_or(false);
+    let ggml_lto = env::var("LLAMA_GGML_LTO")
+        .map(|v| v == "1")
+        .unwrap_or(false);
 
     println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
     println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
     println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+    println!("cargo:rerun-if-env-changed=LLAMA_GGML_LTO");
 
     debug_log!("TARGET: {}", target_triple);
     debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
@@ -582,6 +714,10 @@ fn main() {
     );
     config.define("LLAMA_CURL", "OFF");
 
+    if ggml_lto {
+        configure_lto(&mut config, &target_os);
+    }
+
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
         if key.starts_with("CMAKE_") {
@@ -589,7 +725,7 @@ fn main() {
         }
     }
 
-    // extract the target-cpu config value, if specified
+    // extract the target-cpu and tune-cpu config values, if specified
     let target_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
         .ok()
         .and_then(|rustflags| {
@@ -597,6 +733,15 @@ fn main() {
                 .split('\x1f')
                 .find(|f| f.contains("target-cpu="))
                 .and_then(|f| f.split("target-cpu=").nth(1))
+                .map(|s| s.to_string())
+        });
+    let tune_cpu = std::env::var("CARGO_ENCODED_RUSTFLAGS")
+        .ok()
+        .and_then(|rustflags| {
+            rustflags
+                .split('\x1f')
+                .find(|f| f.contains("tune-cpu="))
+                .and_then(|f| f.split("tune-cpu=").nth(1))
                 .map(|s| s.to_string())
         });
 
@@ -614,6 +759,13 @@ fn main() {
             debug_log!("Setting baseline architecture: -march={}", cpu);
             config.cflag(format!("-march={}", cpu));
             config.cxxflag(format!("-march={}", cpu));
+        }
+
+        // if `tune-cpu` is set, forward it as -mtune
+        if let Some(ref cpu) = tune_cpu {
+            debug_log!("Setting tune-cpu: -mtune={}", cpu);
+            config.cflag(format!("-mtune={}", cpu));
+            config.cxxflag(format!("-mtune={}", cpu));
         }
 
         // I expect this env var to always be present
