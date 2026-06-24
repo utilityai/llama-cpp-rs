@@ -147,9 +147,11 @@ fn run_baseline(
         ctx.decode(&mut batch).context("decode failed")?;
     }
 
+    // baseline does one target decode per token, so target_decodes == generated.
     report(
         "baseline",
         generated,
+        generated as u64,
         generated as u64,
         generated as u64,
         t_start,
@@ -201,6 +203,7 @@ fn run_mtp(
 
     let mut n_drafted: u64 = 0;
     let mut n_accept: u64 = 0;
+    let mut n_target_decodes: u64 = 0;
     let mut generated = 0i32;
 
     if !args.quiet {
@@ -228,6 +231,7 @@ fn run_mtp(
             batch.add(*d, n_past + 1 + i as i32, &[0], true)?;
         }
         ctx_tgt.decode(&mut batch).context("verify decode failed")?;
+        n_target_decodes += 1;
         spec.process(&batch).context("process failed")?;
 
         // greedy acceptance: longest draft prefix the target agrees with
@@ -277,11 +281,18 @@ fn run_mtp(
         }
     }
 
-    report("mtp", generated, n_drafted, n_accept, t_start);
+    report("mtp", generated, n_drafted, n_accept, n_target_decodes, t_start);
     Ok(())
 }
 
-fn report(mode: &str, generated: i32, n_drafted: u64, n_accept: u64, t_start: Instant) {
+fn report(
+    mode: &str,
+    generated: i32,
+    n_drafted: u64,
+    n_accept: u64,
+    n_target_decodes: u64,
+    t_start: Instant,
+) {
     let elapsed = t_start.elapsed().as_secs_f64();
     let speed = f64::from(generated) / elapsed;
     if mode == "mtp" {
@@ -290,10 +301,19 @@ fn report(mode: &str, generated: i32, n_drafted: u64, n_accept: u64, t_start: In
         } else {
             0.0
         };
+        // Tokens emitted per target forward pass — the speculative win. A plain decoder
+        // always emits exactly 1.0 token per target decode; > 1.0 means speculation is
+        // amortizing the expensive full-model pass over multiple accepted tokens.
+        let toks_per_decode = if n_target_decodes > 0 {
+            f64::from(generated) / n_target_decodes as f64
+        } else {
+            0.0
+        };
         println!("\n");
         println!(
             "[mtp] generated={generated} n_drafted={n_drafted} n_accept={n_accept} \
-             accept={pct:.1}% time={elapsed:.2}s speed={speed:.1} tok/s"
+             accept={pct:.1}% target_decodes={n_target_decodes} \
+             tok/decode={toks_per_decode:.2} time={elapsed:.2}s speed={speed:.1} tok/s"
         );
     } else {
         println!("\n");
