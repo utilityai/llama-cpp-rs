@@ -1,6 +1,6 @@
-//! MTP (Multi-Token Prediction / NextN) speculative decoding example + benchmark.
+//! MTP (Multi-Token Prediction / `NextN`) speculative decoding example + benchmark.
 //!
-//! Uses a single GGUF whose embedded NextN head drafts tokens from the target model's own hidden
+//! Uses a single GGUF whose embedded `NextN` head drafts tokens from the target model's own hidden
 //! state. `--baseline` runs plain greedy decoding for a comparable tok/s.
 #![allow(
     clippy::cast_possible_truncation,
@@ -27,7 +27,7 @@ use llama_cpp_2::token::LlamaToken;
 #[derive(Parser, Debug)]
 #[command(about = "MTP speculative decoding example + benchmark")]
 struct Args {
-    /// Path to the MTP GGUF (with embedded NextN head).
+    /// Path to the MTP GGUF (with embedded `NextN` head).
     #[arg(long)]
     model: PathBuf,
     /// Prompt.
@@ -45,7 +45,7 @@ struct Args {
     /// GPU layers to offload (0 = CPU only).
     #[arg(long, default_value_t = 0)]
     n_gpu_layers: u32,
-    /// Recurrent-state rollback snapshots per seq (0 = auto = n_draft + 4).
+    /// Recurrent-state rollback snapshots per seq (0 = auto = `n_draft` + 4).
     #[arg(long, default_value_t = 0)]
     n_rs_seq: u32,
     /// Run plain greedy decoding (no speculation) for a baseline tok/s.
@@ -167,8 +167,9 @@ fn run_mtp(
     let mut ctx_tgt = model
         .new_context(backend, ctx_params.clone())
         .context("failed to create target context")?;
-    let mut ctx_dft = model
-        .new_mtp_context(backend, &ctx_tgt, ctx_params.clone())
+    // SAFETY: ctx_tgt outlives ctx_dft — both live until this function returns, so the raw
+    // `ctx_other` pointer the draft context holds into ctx_tgt stays valid.
+    let mut ctx_dft = unsafe { model.new_mtp_context(backend, &ctx_tgt, ctx_params.clone()) }
         .context("failed to create MTP draft context")?;
 
     // SAFETY: ctx_tgt and ctx_dft outlive `spec` — all three live until this function returns.
@@ -215,7 +216,10 @@ fn run_mtp(
         n_drafted += draft.len() as u64;
 
         // roll back ctx_dft's tentative draft decode so process() can re-decode authoritatively
-        ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
+        anyhow::ensure!(
+            ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?,
+            "draft-context rollback failed (n_rs_seq too small for recurrent state?)"
+        );
 
         // verify batch: [id_last, draft0, draft1, ...]
         batch.clear();
@@ -259,8 +263,14 @@ fn run_mtp(
         }
 
         // trim rejected drafts from both contexts (bounded by n_rs_seq)
-        ctx_tgt.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
-        ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?;
+        anyhow::ensure!(
+            ctx_tgt.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?,
+            "target-context draft trim failed (n_rs_seq too small for recurrent state?)"
+        );
+        anyhow::ensure!(
+            ctx_dft.clear_kv_cache_seq(Some(0), Some(n_past as u32), None)?,
+            "draft-context draft trim failed (n_rs_seq too small for recurrent state?)"
+        );
 
         if eos {
             break 'gen;

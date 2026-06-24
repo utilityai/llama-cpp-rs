@@ -45,9 +45,8 @@ fn mtp_generates_and_drafts() {
         .with_n_rs_seq((n_draft + 4) as u32);
 
     let mut ctx_tgt = model.new_context(&backend, ctx_params.clone()).unwrap();
-    let mut ctx_dft = model
-        .new_mtp_context(&backend, &ctx_tgt, ctx_params)
-        .unwrap();
+    // SAFETY: ctx_tgt outlives ctx_dft (both dropped at end of test).
+    let mut ctx_dft = unsafe { model.new_mtp_context(&backend, &ctx_tgt, ctx_params) }.unwrap();
 
     // SAFETY: both contexts outlive `spec` (all dropped at end of test).
     let mut spec =
@@ -79,9 +78,12 @@ fn mtp_generates_and_drafts() {
         let draft = spec.draft(0, n_past, id_last, &prompt_tgt).unwrap();
         n_drafted += draft.len() as u64;
 
-        ctx_dft
-            .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
-            .unwrap();
+        assert!(
+            ctx_dft
+                .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
+                .unwrap(),
+            "draft-context rollback failed"
+        );
 
         batch.clear();
         batch.add(id_last, n_past, &[0], true).unwrap();
@@ -115,12 +117,18 @@ fn mtp_generates_and_drafts() {
             }
         }
 
-        ctx_tgt
-            .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
-            .unwrap();
-        ctx_dft
-            .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
-            .unwrap();
+        assert!(
+            ctx_tgt
+                .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
+                .unwrap(),
+            "target-context draft trim failed"
+        );
+        assert!(
+            ctx_dft
+                .clear_kv_cache_seq(Some(0), Some(n_past as u32), None)
+                .unwrap(),
+            "draft-context draft trim failed"
+        );
     }
 
     eprintln!("generated={generated} n_drafted={n_drafted} n_accept={n_accept}");

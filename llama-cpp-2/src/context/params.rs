@@ -247,12 +247,12 @@ impl From<llama_cpp_sys_2::ggml_type> for KvCacheType {
 }
 
 /// The context type, mirroring `llama_context_type`. [`LlamaContextType::Mtp`] selects the
-/// Multi-Token-Prediction (NextN) draft graph used for MTP speculative decoding.
+/// Multi-Token-Prediction (`NextN`) draft graph used for MTP speculative decoding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LlamaContextType {
     /// Standard decoder context (`LLAMA_CONTEXT_TYPE_DEFAULT`).
     Default,
-    /// MTP / NextN draft context (`LLAMA_CONTEXT_TYPE_MTP`).
+    /// MTP / `NextN` draft context (`LLAMA_CONTEXT_TYPE_MTP`).
     Mtp,
 }
 

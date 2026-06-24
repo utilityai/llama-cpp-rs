@@ -1,5 +1,5 @@
-//! MTP (Multi-Token Prediction / NextN) speculative decoding via llama.cpp's `common_speculative`
-//! (`draft-mtp`). A single GGUF's embedded NextN head drafts tokens from the target model's own
+//! MTP (Multi-Token Prediction / `NextN`) speculative decoding via llama.cpp's `common_speculative`
+//! (`draft-mtp`). A single GGUF's embedded `NextN` head drafts tokens from the target model's own
 //! hidden state, so no separate draft model is loaded.
 //!
 //! The target and draft contexts must outlive the [`MtpSpeculator`], which holds raw pointers to
@@ -53,14 +53,22 @@ pub(crate) fn status_to_result(
 }
 
 impl LlamaModel {
-    /// Create the MTP draft context for `target`. It runs the NextN graph on the same model with
-    /// `ctx_type = Mtp` and `ctx_other = target`. The returned context borrows the model; the
-    /// caller must keep `target` alive at least as long as it.
+    /// Create the MTP draft context for `target`. It runs the `NextN` graph on the same model with
+    /// `ctx_type = Mtp` and `ctx_other = target`. The returned context borrows the model.
+    ///
+    /// # Safety
+    ///
+    /// The draft context stores a raw pointer to `target` (`ctx_other`) inside llama.cpp, but the
+    /// returned context's lifetime is tied only to the model, not to `target`. The caller must keep
+    /// `target` alive and valid for at least as long as the returned context, otherwise any use of
+    /// the draft context (e.g. via [`MtpSpeculator`]) dereferences freed memory. A shared borrow of
+    /// `target` cannot express this, since `target` must still be mutated (e.g. via `decode`) while
+    /// the draft context lives, so the contract is the caller's responsibility.
     ///
     /// # Errors
     ///
     /// Returns [`SpeculativeError::ContextCreationFailed`] if llama.cpp fails to create the context.
-    pub fn new_mtp_context<'a>(
+    pub unsafe fn new_mtp_context<'a>(
         &'a self,
         _: &LlamaBackend,
         target: &LlamaContext<'_>,
@@ -91,7 +99,7 @@ pub struct MtpSpeculator<'a> {
     _contexts: PhantomData<&'a ()>,
 }
 
-impl<'a> MtpSpeculator<'a> {
+impl MtpSpeculator<'_> {
     /// Initialize an MTP speculator over `target` and `draft` (from [`LlamaModel::new_mtp_context`]).
     /// `n_max`/`n_min` bound the draft length, `p_min` is the minimum draft probability (0.0 =
     /// greedy), and `backend_sampling` offloads draft sampling to the backend.
@@ -132,7 +140,7 @@ impl<'a> MtpSpeculator<'a> {
         })
     }
 
-    /// Whether the speculator needs target NextN embeddings extracted (always true for MTP).
+    /// Whether the speculator needs target `NextN` embeddings extracted (always true for MTP).
     #[must_use]
     pub fn need_embd_nextn(&self) -> bool {
         unsafe { llama_cpp_sys_2::llama_rs_speculative_need_embd_nextn(self.handle.as_ptr()) }
