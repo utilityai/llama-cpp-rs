@@ -56,17 +56,6 @@ cargo run -p speculative-mtp --release --features metal -- \
 
 Vulkan: same as above with `--features vulkan`.
 
-### CUDA build note (NCCL)
-
-llama.cpp defaults `GGML_CUDA_NCCL=ON`. If the CUDA toolkit + NCCL are installed, `ggml-cuda`
-compiles NCCL calls but `llama-cpp-sys-2`'s build script does not add `nccl` to the link line, so the
-link fails with `undefined symbol: nccl*`. Until that is fixed in `build.rs` (link `nccl`, or pass
-`-DGGML_CUDA_NCCL=OFF`), work around it with:
-
-```bash
-RUSTFLAGS="-Clink-arg=-lnccl" cargo run -p speculative-mtp --release --features cuda -- ...
-```
-
 ## Flags
 
 - `--n-draft N` — max draft tokens per step (default 4).

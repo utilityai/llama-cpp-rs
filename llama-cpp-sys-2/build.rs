@@ -854,6 +854,14 @@ fn main() {
     if cfg!(feature = "cuda") {
         config.define("GGML_CUDA", "ON");
 
+        // Disable NCCL. It is only used for multi-GPU collective communication, which this
+        // crate's single-process inference never invokes. Upstream defaults GGML_CUDA_NCCL=ON,
+        // so when NCCL is installed `ggml-cuda` is compiled against it and references `nccl*`
+        // symbols — but the static link line assembled below never adds `-lnccl`, so the final
+        // link fails with `undefined symbol: nccl*`. Turning it off keeps `cargo build
+        // --features cuda` working regardless of whether NCCL is present on the host.
+        config.define("GGML_CUDA_NCCL", "OFF");
+
         if cfg!(feature = "cuda-no-vmm") {
             config.define("GGML_CUDA_NO_VMM", "ON");
         }
