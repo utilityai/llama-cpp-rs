@@ -1,7 +1,7 @@
 use std::ptr;
 
-use crate::error::SamplerApplyError;
-use crate::error::TokenSamplingError;
+use crate::error::sampler_apply_error::SamplerApplyError;
+use crate::error::token_sampling_error::TokenSamplingError;
 use crate::sampling::LlamaSampler;
 use crate::token::data::LlamaTokenData;
 
@@ -19,13 +19,11 @@ fn sampler_apply_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_ERROR_STRING_ALLOCATION_FAILED => {
             Err(SamplerApplyError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(SamplerApplyError::Reported { message })
         }
-        other => {
-            unreachable!("llama_rs_sampler_apply returned unrecognized status {other}")
-        }
+        other => Err(SamplerApplyError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -118,8 +116,8 @@ impl LlamaTokenDataArray {
 
     /// # Errors
     ///
-    /// Returns [`SamplerApplyError`] if the sampler pointer is null, the vendored
-    /// sampler runs out of memory, or it throws a C++ exception while applying.
+    /// Returns [`SamplerApplyError`] if the sampler pointer is null, the sampler
+    /// runs out of memory, or it throws a C++ exception while applying.
     pub fn apply_sampler(&mut self, sampler: &LlamaSampler) -> Result<(), SamplerApplyError> {
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
@@ -162,7 +160,7 @@ impl LlamaTokenDataArray {
 
 #[cfg(test)]
 mod tests {
-    use crate::error::SamplerApplyError;
+    use crate::error::sampler_apply_error::SamplerApplyError;
     use crate::token::LlamaToken;
     use crate::token::data::LlamaTokenData;
 
@@ -184,7 +182,7 @@ mod tests {
     fn sampler_apply_status_cxx_exception_returns_reported_with_unknown_message() {
         assert_eq!(
             sampler_apply_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_VENDORED_THREW_CXX_EXCEPTION,
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_APPLY_THREW_CXX_EXCEPTION,
                 std::ptr::null_mut(),
             ),
             Err(SamplerApplyError::Reported {
@@ -194,11 +192,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_sampler_apply returned unrecognized status")]
-    fn sampler_apply_status_unrecognized_panics() {
-        let _ = sampler_apply_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_sampler_apply_status::MAX,
-            std::ptr::null_mut(),
+    fn sampler_apply_status_unrecognized_returns_unrecognized_status_error() {
+        assert_eq!(
+            sampler_apply_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_sampler_apply_status::MAX,
+                std::ptr::null_mut(),
+            ),
+            Err(SamplerApplyError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_sampler_apply_status::MAX
+            }),
         );
     }
 

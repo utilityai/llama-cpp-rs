@@ -1,11 +1,11 @@
 use anyhow::Result;
 use anyhow::bail;
-use llama_cpp_bindings::ChatMessageParseOutcome;
-use llama_cpp_bindings::ChatTemplateError;
-use llama_cpp_bindings::model::LlamaChatMessage;
+use llama_cpp_bindings::chat_message_parse_outcome::ChatMessageParseOutcome;
+use llama_cpp_bindings::error::chat_template_error::ChatTemplateError;
+use llama_cpp_bindings::model::llama_chat_message::LlamaChatMessage;
 use llama_cpp_bindings_tests::build_user_prompt_with_media_marker::build_user_prompt_with_media_marker;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),
@@ -429,7 +429,7 @@ fn parses_malformed_tools_json_returns_tools_json_invalid_error(
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonInvalid(
+        Err(llama_cpp_bindings::error::parse_chat_message_error::ParseChatMessageError::ToolsJsonInvalid(
             _
         ))
     ));
@@ -481,7 +481,7 @@ fn parses_non_array_tools_json_returns_tools_json_not_array_error(
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonNotArray)
+        Err(llama_cpp_bindings::error::parse_chat_message_error::ParseChatMessageError::ToolsJsonNotArray)
     ));
     Ok(())
 }
@@ -531,7 +531,7 @@ fn parses_with_tools_null_byte_returns_tools_json_invalid_error(
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ToolsJsonInvalid(
+        Err(llama_cpp_bindings::error::parse_chat_message_error::ParseChatMessageError::ToolsJsonInvalid(
             _
         ))
     ));
@@ -583,7 +583,7 @@ fn parses_with_input_null_byte_returns_tools_serialization_error(
 
     assert!(matches!(
         result,
-        Err(llama_cpp_bindings::ParseChatMessageError::ToolsSerialization(_))
+        Err(llama_cpp_bindings::error::parse_chat_message_error::ParseChatMessageError::ToolsSerialization(_))
     ));
     Ok(())
 }

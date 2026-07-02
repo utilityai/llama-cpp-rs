@@ -2,12 +2,12 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Result;
-use llama_cpp_bindings::LlamaLoraAdapterInitError;
-use llama_cpp_bindings::LlamaModelLoadError;
+use llama_cpp_bindings::error::llama_lora_adapter_init_error::LlamaLoraAdapterInitError;
+use llama_cpp_bindings::error::llama_model_load_error::LlamaModelLoadError;
 use llama_cpp_bindings::model::LlamaModel;
 use llama_cpp_bindings::model::params::LlamaModelParams;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),

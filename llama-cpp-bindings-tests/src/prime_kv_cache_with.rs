@@ -1,8 +1,8 @@
 use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::AddBos;
-use llama_cpp_test_harness::LlamaFixture;
+use llama_cpp_bindings::model::add_bos::AddBos;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
 
 /// # Errors
 /// Forwards tokenization, batch construction, and [`LlamaContext::decode`] errors verbatim.

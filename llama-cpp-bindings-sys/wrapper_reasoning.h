@@ -14,7 +14,7 @@ typedef enum llama_rs_detect_reasoning_markers_status {
     LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_CLOSE_ARG,
     LLAMA_RS_DETECT_REASONING_MARKERS_NULL_OUT_ERROR_ARG,
     LLAMA_RS_DETECT_REASONING_MARKERS_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_DETECT_REASONING_MARKERS_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_DETECT_REASONING_MARKERS_THREW_CXX_EXCEPTION,
 } llama_rs_detect_reasoning_markers_status;
 
 llama_rs_detect_reasoning_markers_status llama_rs_detect_reasoning_markers(
@@ -32,7 +32,7 @@ typedef enum llama_rs_render_chat_template_status {
     LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_CHAT_TEMPLATE,
     LLAMA_RS_RENDER_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB,
     LLAMA_RS_RENDER_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_RENDER_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_RENDER_CHAT_TEMPLATE_THREW_CXX_EXCEPTION,
 } llama_rs_render_chat_template_status;
 
 llama_rs_render_chat_template_status llama_rs_render_chat_template(

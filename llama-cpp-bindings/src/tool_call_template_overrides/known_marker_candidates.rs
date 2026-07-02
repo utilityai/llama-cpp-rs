@@ -1,4 +1,4 @@
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 
 use crate::tool_call_template_overrides::gemma4_call_block::Gemma4CallBlockOverride;
 use crate::tool_call_template_overrides::glm47_key_value_tags::Glm47KeyValueTagsOverride;
@@ -21,7 +21,7 @@ pub fn known_marker_candidates() -> Vec<ToolCallMarkers> {
 mod tests {
     use std::collections::HashSet;
 
-    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
 
     use super::known_marker_candidates;
 

@@ -1,8 +1,8 @@
-use llama_cpp_bindings_types::JsonObjectShape;
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ToolCallArguments;
+use llama_cpp_bindings_types::json_object_shape::JsonObjectShape;
+use llama_cpp_bindings_types::parsed_tool_call::ParsedToolCall;
+use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
 
-use crate::error::JsonObjectFailure;
+use crate::error::json_object_failure::JsonObjectFailure;
 
 fn try_parse_one_object(
     input: &str,
@@ -78,12 +78,12 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::JsonObjectShape;
-    use llama_cpp_bindings_types::ToolCallArguments;
+    use llama_cpp_bindings_types::json_object_shape::JsonObjectShape;
+    use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
     use serde_json::json;
 
     use super::parse;
-    use crate::error::JsonObjectFailure;
+    use crate::error::json_object_failure::JsonObjectFailure;
 
     fn qwen3_shape() -> JsonObjectShape {
         JsonObjectShape {

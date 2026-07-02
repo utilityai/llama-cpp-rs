@@ -10,9 +10,12 @@ autotests = false
 [dependencies]
 anyhow = { workspace = true }
 encoding_rs = { workspace = true }
+inventory = { workspace = true }
 llama-cpp-bindings = { workspace = true }
 llama-cpp-bindings-sys = { workspace = true }
+llama-cpp-bindings-types = { workspace = true }
 llama-cpp-test-harness = { workspace = true }
+llama-cpp-test-harness-macros = { workspace = true }
 serde_json = { workspace = true }
 
 [[test]]

@@ -4,19 +4,19 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
-use llama_cpp_bindings::DecodeError;
-use llama_cpp_bindings::LogitsError;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::context::kv_cache::KvCacheConversionError;
-use llama_cpp_bindings::error::KvCacheSeqAddError;
-use llama_cpp_bindings::error::KvCacheSeqDivError;
+use llama_cpp_bindings::error::decode_error::DecodeError;
+use llama_cpp_bindings::error::kv_cache_seq_add_error::KvCacheSeqAddError;
+use llama_cpp_bindings::error::kv_cache_seq_div_error::KvCacheSeqDivError;
+use llama_cpp_bindings::error::logits_error::LogitsError;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaLoraAdapter;
+use llama_cpp_bindings::model::add_bos::AddBos;
+use llama_cpp_bindings::model::llama_lora_adapter::LlamaLoraAdapter;
 use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
 use llama_cpp_bindings_tests::prime_kv_cache_with::prime_kv_cache_with;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),

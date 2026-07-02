@@ -79,13 +79,13 @@ fn split_fn_and_pass_through(items: Vec<Item>) -> syn::Result<(ItemFn, Vec<Item>
 fn build_model_source_literal(source: &ParsedSource) -> TokenStream {
     match source {
         ParsedSource::HuggingFace { repo, file } => quote! {
-            ::llama_cpp_test_harness::ModelSource::HuggingFace {
+            ::llama_cpp_test_harness::model_source::ModelSource::HuggingFace {
                 repo: #repo,
                 file: #file,
             }
         },
         ParsedSource::LocalPath(path) => quote! {
-            ::llama_cpp_test_harness::ModelSource::LocalPath(#path)
+            ::llama_cpp_test_harness::model_source::ModelSource::LocalPath(#path)
         },
     }
 }
@@ -94,13 +94,13 @@ fn build_mmproj_source_literal(source: Option<&ParsedSource>) -> TokenStream {
     match source {
         None => quote! { ::core::option::Option::None },
         Some(ParsedSource::HuggingFace { repo, file }) => quote! {
-            ::core::option::Option::Some(::llama_cpp_test_harness::MmprojSource::HuggingFace {
+            ::core::option::Option::Some(::llama_cpp_test_harness::mmproj_source::MmprojSource::HuggingFace {
                 repo: #repo,
                 file: #file,
             })
         },
         Some(ParsedSource::LocalPath(path)) => quote! {
-            ::core::option::Option::Some(::llama_cpp_test_harness::MmprojSource::LocalPath(#path))
+            ::core::option::Option::Some(::llama_cpp_test_harness::mmproj_source::MmprojSource::LocalPath(#path))
         },
     }
 }
@@ -127,19 +127,19 @@ fn build_registration(args: &ParsedArgs, fn_name: &Ident) -> TokenStream {
     );
 
     quote! {
-        ::llama_cpp_test_harness::inventory::submit! {
-            ::llama_cpp_test_harness::LlamaTestRegistration {
+        ::inventory::submit! {
+            ::llama_cpp_test_harness::llama_test_registration::LlamaTestRegistration {
                 name: #trial_name,
-                key: ::llama_cpp_test_harness::LoadKey {
+                key: ::llama_cpp_test_harness::load_key::LoadKey {
                     model_source: #model_source_literal,
                     mmproj_source: #mmproj_source_literal,
-                    model_load_params: ::llama_cpp_test_harness::ModelLoadParams {
+                    model_load_params: ::llama_cpp_test_harness::model_load_params::ModelLoadParams {
                         n_gpu_layers: #gpu_layers,
                         use_mmap: #use_mmap,
                         use_mlock: #use_mlock,
                     },
                 },
-                context_params: ::llama_cpp_test_harness::ContextParams {
+                context_params: ::llama_cpp_test_harness::context_params::ContextParams {
                     n_ctx: #context_size,
                     n_batch: #logical_batch,
                     n_ubatch: #physical_batch,

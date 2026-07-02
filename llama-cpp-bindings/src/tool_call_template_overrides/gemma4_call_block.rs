@@ -1,7 +1,7 @@
-use llama_cpp_bindings_types::PairedQuoteShape;
-use llama_cpp_bindings_types::ToolCallArgsShape;
-use llama_cpp_bindings_types::ToolCallMarkers;
-use llama_cpp_bindings_types::ToolCallValueQuote;
+use llama_cpp_bindings_types::paired_quote_shape::PairedQuoteShape;
+use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
+use llama_cpp_bindings_types::tool_call_value_quote::ToolCallValueQuote;
 
 pub struct Gemma4CallBlockOverride;
 
@@ -34,14 +34,14 @@ impl Gemma4CallBlockOverride {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
 
     use super::Gemma4CallBlockOverride;
 
     #[test]
     fn detects_gemma4_template_with_tool_call_call_literal() {
-        use llama_cpp_bindings_types::PairedQuoteShape;
-        use llama_cpp_bindings_types::ToolCallValueQuote;
+        use llama_cpp_bindings_types::paired_quote_shape::PairedQuoteShape;
+        use llama_cpp_bindings_types::tool_call_value_quote::ToolCallValueQuote;
 
         let template = "...{{- '<|tool_call>call:' + function['name'] + '{' -}}...";
         let markers =

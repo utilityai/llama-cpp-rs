@@ -1,11 +1,11 @@
 use std::ffi::c_void;
 use std::sync::Arc;
 
-use llama_cpp_error_recorder::RecordedError;
-use llama_cpp_error_recorder::record;
+use llama_cpp_error_recorder::record::record;
+use llama_cpp_error_recorder::recorded_error::RecordedError;
 use toktrie::ApproximateTokEnv;
 
-use crate::GrammarError;
+use crate::error::grammar_error::GrammarError;
 use crate::grammar_matcher::GrammarMatcher;
 use crate::mask_outcome::MaskOutcome;
 use crate::model::LlamaModel;

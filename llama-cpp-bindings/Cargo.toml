@@ -12,6 +12,7 @@ enumflags2 = { workspace = true }
 llama-cpp-bindings-sys = { workspace = true }
 llama-cpp-bindings-types = { workspace = true }
 llama-cpp-error-recorder = { workspace = true }
+llama-cpp-gbnf = { workspace = true }
 llama-cpp-log-decoder = { workspace = true }
 llguidance = { workspace = true }
 log = { workspace = true }
@@ -36,8 +37,6 @@ rocm = ["llama-cpp-bindings-sys/rocm"]
 # Only has an impact on Android.
 android-shared-stdcxx = ["llama-cpp-bindings-sys/shared-stdcxx"]
 android-static-stdcxx = ["llama-cpp-bindings-sys/static-stdcxx"]
-system-ggml = ["llama-cpp-bindings-sys/system-ggml"]
-system-ggml-static = ["system-ggml", "llama-cpp-bindings-sys/system-ggml-static"]
 
 [target.'cfg(all(target_os = "macos", any(target_arch = "aarch64", target_arch = "arm64")))'.dependencies]
 llama-cpp-bindings-sys = { workspace = true, features = ["metal"] }

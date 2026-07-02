@@ -4,7 +4,7 @@ use anyhow::Result;
 use llama_cpp_bindings::context::LlamaContext;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::mtmd::MtmdContext;
+use llama_cpp_bindings::mtmd::mtmd_context::MtmdContext;
 
 use crate::context_params::ContextParams;
 

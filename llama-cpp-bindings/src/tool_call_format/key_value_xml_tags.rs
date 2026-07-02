@@ -1,12 +1,12 @@
-use llama_cpp_bindings_types::KeyValueXmlTagsShape;
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ToolCallArguments;
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::key_value_xml_tags_shape::KeyValueXmlTagsShape;
+use llama_cpp_bindings_types::parsed_tool_call::ParsedToolCall;
+use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 use nom::IResult;
 use nom::Parser;
 use nom::bytes::complete::take_until;
 
-use crate::error::KeyValueXmlTagsFailure;
+use crate::error::key_value_xml_tags_failure::KeyValueXmlTagsFailure;
 
 enum ParseStep<'body> {
     Done,
@@ -172,14 +172,14 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::KeyValueXmlTagsShape;
-    use llama_cpp_bindings_types::ToolCallArgsShape;
-    use llama_cpp_bindings_types::ToolCallArguments;
-    use llama_cpp_bindings_types::ToolCallMarkers;
+    use llama_cpp_bindings_types::key_value_xml_tags_shape::KeyValueXmlTagsShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+    use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+    use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
     use serde_json::json;
 
     use super::parse;
-    use crate::error::KeyValueXmlTagsFailure;
+    use crate::error::key_value_xml_tags_failure::KeyValueXmlTagsFailure;
 
     fn glm47_markers() -> ToolCallMarkers {
         ToolCallMarkers {

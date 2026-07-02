@@ -1,4 +1,4 @@
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 
 use crate::tool_call_template_overrides::gemma4_call_block::Gemma4CallBlockOverride;
 use crate::tool_call_template_overrides::glm47_key_value_tags::Glm47KeyValueTagsOverride;

@@ -1,6 +1,6 @@
-use llama_cpp_bindings_types::KeyValueXmlTagsShape;
-use llama_cpp_bindings_types::ToolCallArgsShape;
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::key_value_xml_tags_shape::KeyValueXmlTagsShape;
+use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 
 pub struct Glm47KeyValueTagsOverride;
 
@@ -32,8 +32,8 @@ impl Glm47KeyValueTagsOverride {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::KeyValueXmlTagsShape;
-    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::key_value_xml_tags_shape::KeyValueXmlTagsShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
 
     use super::Glm47KeyValueTagsOverride;
 

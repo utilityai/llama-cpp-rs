@@ -9,9 +9,14 @@ node_modules: package-lock.json
 package-lock.json: package.json
 	npm install --package-lock-only
 
+.PHONY: clean
+clean:
+	cargo clean
+	rm -rf node_modules
+
 .PHONY: clean.cmake
 clean.cmake:
-	rm -rf target/llama-cpp-cmake-build
+	rm -rf target/*/llama-cpp-cmake-build
 
 .PHONY: clippy
 clippy:
@@ -28,6 +33,8 @@ coverage: node_modules
 		--workspace-root $(CURDIR) \
 		--gated llama-cpp-bindings=98 \
 		--gated llama-cpp-error-recorder=100 \
+		--gated llama-cpp-gbnf=100 \
+		--gated llama-cpp-gbnf-sys=100 \
 		--gated llama-cpp-log-decoder=100 \
 		--gated llama-cpp-bindings-types=100 \
 		--gated llama-cpp-test-harness=99 \
@@ -83,4 +90,4 @@ test.llms: clippy test.harness test.unit
 
 .PHONY: test.unit
 test.unit: clippy
-	cargo test -p llama-cpp-log-decoder -p llama-cpp-bindings $(DEVICE_FEATURE)
+	cargo test -p llama-cpp-gbnf -p llama-cpp-gbnf-sys -p llama-cpp-log-decoder -p llama-cpp-bindings $(DEVICE_FEATURE)

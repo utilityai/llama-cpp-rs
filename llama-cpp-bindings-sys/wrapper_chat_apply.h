@@ -19,7 +19,7 @@ typedef enum llama_rs_apply_chat_template_status {
     LLAMA_RS_APPLY_CHAT_TEMPLATE_MODEL_HAS_NO_VOCAB,
     LLAMA_RS_APPLY_CHAT_TEMPLATE_TEMPLATE_APPLICATION_FAILED,
     LLAMA_RS_APPLY_CHAT_TEMPLATE_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_APPLY_CHAT_TEMPLATE_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_APPLY_CHAT_TEMPLATE_THREW_CXX_EXCEPTION,
 } llama_rs_apply_chat_template_status;
 
 llama_rs_apply_chat_template_status llama_rs_apply_chat_template(

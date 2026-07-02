@@ -1,4 +1,4 @@
-use llama_cpp_bindings_types::ParsedChatMessage;
+use llama_cpp_bindings_types::parsed_chat_message::ParsedChatMessage;
 
 use crate::raw_chat_message::RawChatMessage;
 
@@ -10,7 +10,7 @@ pub enum ChatMessageParseOutcome {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::ParsedChatMessage;
+    use llama_cpp_bindings_types::parsed_chat_message::ParsedChatMessage;
 
     use super::ChatMessageParseOutcome;
     use crate::raw_chat_message::RawChatMessage;

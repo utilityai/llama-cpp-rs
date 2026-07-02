@@ -2,6 +2,7 @@ use std::env;
 use std::path::Path;
 
 use crate::debug_log;
+use crate::ggml_system_paths::GgmlSystemPaths;
 use crate::library_name_extraction::extract_lib_names;
 use crate::target_os::{AppleVariant, TargetOs, WindowsVariant};
 
@@ -12,14 +13,22 @@ pub fn link_libraries(
     target_triple: &str,
     build_shared_libs: bool,
     profile: &str,
+    ggml_system: Option<&GgmlSystemPaths>,
 ) {
     emit_search_paths(cmake_dir, build_dir);
     link_system_ggml_paths(build_dir);
+    emit_shared_ggml_search_path(ggml_system);
     link_cmake_built_libraries(cmake_dir, build_shared_libs, profile);
     link_cuda_libraries(build_shared_libs);
     link_rocm_libraries(build_shared_libs);
     link_openmp(target_triple);
     link_platform_system_libraries(target_os);
+}
+
+fn emit_shared_ggml_search_path(ggml_system: Option<&GgmlSystemPaths>) {
+    if let Some(ggml) = ggml_system {
+        println!("cargo:rustc-link-search=native={}", ggml.lib_dir.display());
+    }
 }
 
 fn emit_search_paths(cmake_dir: &Path, build_dir: &Path) {
@@ -123,6 +132,18 @@ fn link_system_ggml_libraries(link_kind: &str) {
     println!("cargo:rustc-link-lib={link_kind}=ggml");
     println!("cargo:rustc-link-lib={link_kind}=ggml-base");
     println!("cargo:rustc-link-lib={link_kind}=ggml-cpu");
+
+    if cfg!(feature = "cuda") {
+        println!("cargo:rustc-link-lib={link_kind}=ggml-cuda");
+    }
+
+    if cfg!(feature = "vulkan") {
+        println!("cargo:rustc-link-lib={link_kind}=ggml-vulkan");
+    }
+
+    if cfg!(feature = "rocm") {
+        println!("cargo:rustc-link-lib={link_kind}=ggml-hip");
+    }
 }
 
 fn link_cuda_libraries(build_shared_libs: bool) {

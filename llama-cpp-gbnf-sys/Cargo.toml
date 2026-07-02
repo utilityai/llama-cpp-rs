@@ -1,0 +1,24 @@
+[package]
+name = "llama-cpp-gbnf-sys"
+description = "Raw FFI to the vendored llama.cpp GBNF grammar parser and validator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "llama_cpp_gbnf"
+
+[dependencies]
+llama-cpp-ggml-sys = { workspace = true }
+
+[build-dependencies]
+llama-cpp-bindings-build = { workspace = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"

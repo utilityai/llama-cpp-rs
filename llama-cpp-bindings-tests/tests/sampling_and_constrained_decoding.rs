@@ -5,23 +5,23 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
-use llama_cpp_bindings::GrammarError;
-use llama_cpp_bindings::SampledToken;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::ggml_time_us;
-use llama_cpp_bindings::json_schema_to_grammar;
+use llama_cpp_bindings::error::grammar_error::GrammarError;
+use llama_cpp_bindings::ggml_time_us::ggml_time_us;
+use llama_cpp_bindings::json_schema_to_grammar::json_schema_to_grammar;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::llguidance_sampler::create_llg_sampler;
-use llama_cpp_bindings::model::AddBos;
-use llama_cpp_bindings::model::LlamaChatMessage;
+use llama_cpp_bindings::model::add_bos::AddBos;
+use llama_cpp_bindings::model::llama_chat_message::LlamaChatMessage;
+use llama_cpp_bindings::sampled_token::SampledToken;
 use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
 use llama_cpp_bindings::sampled_token_section::SampledTokenSection;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings::streaming_markers::StreamingMarkers;
 use llama_cpp_bindings::token::LlamaToken;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF", "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf"),

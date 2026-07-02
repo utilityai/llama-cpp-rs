@@ -1,10 +1,10 @@
-use llama_cpp_bindings_types::PairedQuoteShape;
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ToolCallArguments;
-use llama_cpp_bindings_types::ToolCallMarkers;
-use llama_cpp_bindings_types::ToolCallValueQuote;
+use llama_cpp_bindings_types::paired_quote_shape::PairedQuoteShape;
+use llama_cpp_bindings_types::parsed_tool_call::ParsedToolCall;
+use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
+use llama_cpp_bindings_types::tool_call_value_quote::ToolCallValueQuote;
 
-use crate::error::PairedQuoteFailure;
+use crate::error::paired_quote_failure::PairedQuoteFailure;
 
 enum ParseStep<'body> {
     Done,
@@ -217,15 +217,15 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::PairedQuoteShape;
-    use llama_cpp_bindings_types::ToolCallArgsShape;
-    use llama_cpp_bindings_types::ToolCallArguments;
-    use llama_cpp_bindings_types::ToolCallMarkers;
-    use llama_cpp_bindings_types::ToolCallValueQuote;
+    use llama_cpp_bindings_types::paired_quote_shape::PairedQuoteShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+    use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+    use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
+    use llama_cpp_bindings_types::tool_call_value_quote::ToolCallValueQuote;
     use serde_json::json;
 
     use super::parse;
-    use crate::error::PairedQuoteFailure;
+    use crate::error::paired_quote_failure::PairedQuoteFailure;
 
     fn gemma4_markers() -> ToolCallMarkers {
         ToolCallMarkers {

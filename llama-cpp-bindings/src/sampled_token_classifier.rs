@@ -3,28 +3,27 @@ use std::collections::VecDeque;
 use llama_cpp_bindings_sys::llama_pos;
 use llama_cpp_bindings_sys::llama_seq_id;
 
-use llama_cpp_bindings_types::TokenUsage;
-use llama_cpp_bindings_types::TokenUsageError;
+use llama_cpp_bindings_types::token_usage::TokenUsage;
+use llama_cpp_bindings_types::token_usage_error::TokenUsageError;
 
 use crate::batch_add_error::BatchAddError;
 use crate::context::LlamaContext;
-use crate::error::EvalMultimodalChunksError;
-use crate::error::SampleError;
-use crate::error::TokenToStringError;
+use crate::error::eval_multimodal_chunks_error::EvalMultimodalChunksError;
+use crate::error::sample_error::SampleError;
+use crate::error::token_to_string_error::TokenToStringError;
 use crate::eval_multimodal_chunks_params::EvalMultimodalChunksParams;
+use crate::ingest_outcome::IngestOutcome;
 use crate::llama_batch::LlamaBatch;
 use crate::marker_kind::MarkerKind;
 use crate::model::LlamaModel;
-use crate::mtmd::MtmdContext;
-use crate::mtmd::MtmdInputChunks;
+use crate::mtmd::mtmd_context::MtmdContext;
+use crate::mtmd::mtmd_input_chunks::MtmdInputChunks;
 use crate::sampled_token::SampledToken;
+use crate::sampled_token_section::SampledTokenSection;
 use crate::sampling::LlamaSampler;
 use crate::streaming_json_probe::JsonProbeOutcome;
 use crate::streaming_markers::StreamingMarkers;
 use crate::token::LlamaToken;
-
-pub use crate::ingest_outcome::IngestOutcome;
-pub use crate::sampled_token_section::SampledTokenSection;
 
 #[derive(Clone, Debug)]
 struct PendingToken {
@@ -563,7 +562,7 @@ mod tests {
             pending: std::collections::VecDeque::new(),
             section: SampledTokenSection::Pending,
             pending_prompt_tokens: 0,
-            usage: llama_cpp_bindings_types::TokenUsage::new(),
+            usage: llama_cpp_bindings_types::token_usage::TokenUsage::new(),
             probe_mode: ProbeMode::Idle,
         }
     }

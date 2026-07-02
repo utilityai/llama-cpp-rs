@@ -1,8 +1,7 @@
 use std::ffi::c_char;
 
+use crate::llama_backend_device_type::LlamaBackendDeviceType;
 use crate::llama_backend_device_type::device_type_from_raw;
-
-pub use crate::llama_backend_device_type::LlamaBackendDeviceType;
 
 #[derive(Debug, Clone)]
 pub struct LlamaBackendDevice {

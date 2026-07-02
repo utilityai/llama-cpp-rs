@@ -1,6 +1,6 @@
-use crate::mtmd::MtmdInputChunk;
-use crate::mtmd::MtmdInputChunkType;
-use crate::mtmd::MtmdInputChunkTypeError;
+use crate::mtmd::mtmd_input_chunk::MtmdInputChunk;
+use crate::mtmd::mtmd_input_chunk_type::MtmdInputChunkType;
+use crate::mtmd::mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 use crate::sampled_token_classifier::SampledTokenClassifier;
 
 /// # Errors

@@ -2,16 +2,21 @@ use std::borrow::Borrow;
 use std::ffi::{CString, c_char};
 use std::fmt::{Debug, Formatter};
 
-use llama_cpp_error_recorder::ErrorScope;
-use llama_cpp_error_recorder::RecordedError;
+use llama_cpp_error_recorder::error_scope::ErrorScope;
+use llama_cpp_error_recorder::recorded_error::RecordedError;
+use llama_cpp_gbnf::gbnf_grammar::GbnfGrammar;
+use llama_cpp_gbnf::gbnf_parse_error::GbnfParseError;
 
 use crate::context::LlamaContext;
+use crate::error::grammar_error::GrammarError;
+use crate::error::sample_error::SampleError;
+use crate::error::sampler_accept_error::SamplerAcceptError;
+use crate::error::sampling_error::SamplingError;
 use crate::ffi_error_reader::read_and_free_cpp_error;
 use crate::model::LlamaModel;
 use crate::token::LlamaToken;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
-use crate::{GrammarError, SampleError, SamplerAcceptError, SamplingError};
 
 fn check_sampler_accept_status(
     status: llama_cpp_bindings_sys::llama_rs_sampler_accept_status,
@@ -22,11 +27,11 @@ fn check_sampler_accept_status(
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_ERROR_STRING_ALLOCATION_FAILED => {
             Err(SamplerAcceptError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(SamplerAcceptError::GrammarStateCorrupted { message })
         }
-        other => unreachable!("llama_rs_sampler_accept returned unrecognized status {other}"),
+        other => Err(SamplerAcceptError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -40,11 +45,11 @@ fn sampler_sample_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(SampleError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(SampleError::Reported { message })
         }
-        other => unreachable!("llama_rs_sampler_sample returned unrecognized status {other}"),
+        other => Err(SampleError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -55,19 +60,17 @@ fn sampler_init_grammar_status_to_result(
 ) -> Result<LlamaSampler, GrammarError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_OK => Ok(LlamaSampler { sampler }),
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_COMPILATION_FAILED => {
             Err(GrammarError::GrammarMalformed)
         }
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_ERROR_STRING_ALLOCATION_FAILED => {
             Err(GrammarError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(GrammarError::Reported { message })
         }
-        other => {
-            unreachable!("llama_rs_sampler_init_grammar returned unrecognized status {other}")
-        }
+        other => Err(GrammarError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -80,18 +83,18 @@ fn sampler_init_grammar_lazy_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_OK => {
             Ok(LlamaSampler { sampler })
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_COMPILATION_FAILED => {
             Err(GrammarError::LazyGrammarMalformed)
         }
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_ERROR_STRING_ALLOCATION_FAILED => {
             Err(GrammarError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(GrammarError::Reported { message })
         }
         other => {
-            unreachable!("llama_rs_sampler_init_grammar_lazy returned unrecognized status {other}")
+            Err(GrammarError::UnrecognizedStatusCode { code: other })
         }
     }
 }
@@ -105,7 +108,7 @@ fn sampler_init_grammar_lazy_patterns_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_OK => {
             Ok(LlamaSampler { sampler })
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_COMPILATION_FAILED => {
             Err(GrammarError::LazyPatternsGrammarMalformed)
         }
         llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_ERROR_STRING_ALLOCATION_FAILED => {
@@ -115,13 +118,11 @@ fn sampler_init_grammar_lazy_patterns_status_to_result(
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(GrammarError::InvalidTriggerPattern { message })
         }
-        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(error_ptr) };
             Err(GrammarError::Reported { message })
         }
-        other => unreachable!(
-            "llama_rs_sampler_init_grammar_lazy_patterns returned unrecognized status {other}"
-        ),
+        other => Err(GrammarError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -451,7 +452,9 @@ impl LlamaSampler {
         grammar_str: &str,
         grammar_root: &str,
     ) -> Result<(CString, CString), GrammarError> {
-        if !grammar_str.contains(grammar_root) {
+        if let Err(GbnfParseError::RootSymbolMissing { .. }) =
+            GbnfGrammar::parse(grammar_str, grammar_root)
+        {
             return Err(GrammarError::RootNotFound);
         }
 
@@ -593,14 +596,14 @@ mod tests {
     use std::ffi::CString;
     use std::mem::Discriminant;
 
-    use llama_cpp_error_recorder::RecordedError;
+    use llama_cpp_error_recorder::recorded_error::RecordedError;
 
     use super::LlamaSampler;
     use super::grammar_callback_error_to_accept_result;
     use super::grammar_callback_error_to_result;
-    use crate::GrammarError;
-    use crate::SampleError;
-    use crate::SamplerAcceptError;
+    use crate::error::grammar_error::GrammarError;
+    use crate::error::sample_error::SampleError;
+    use crate::error::sampler_accept_error::SamplerAcceptError;
 
     #[test]
     fn grammar_callback_error_to_result_maps_recorded_error() {
@@ -758,8 +761,8 @@ mod tests {
 
     #[test]
     fn apply_with_null_sampler_surfaces_sampler_apply_error() {
-        use crate::error::SampleError;
-        use crate::error::SamplerApplyError;
+        use crate::error::sample_error::SampleError;
+        use crate::error::sampler_apply_error::SamplerApplyError;
         use crate::token::LlamaToken;
         use crate::token::data::LlamaTokenData;
         use crate::token::data_array::LlamaTokenDataArray;
@@ -888,7 +891,7 @@ mod tests {
     #[test]
     fn check_sampler_accept_status_exception_maps_to_typed_variant() {
         let err = super::check_sampler_accept_status(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
         )
         .unwrap_err();
@@ -911,11 +914,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_sampler_accept returned unrecognized status")]
-    fn check_sampler_accept_status_unrecognized_panics() {
-        let _result = super::check_sampler_accept_status(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG,
-            std::ptr::null_mut(),
+    fn check_sampler_accept_status_unrecognized_returns_unrecognized_status_error() {
+        assert_eq!(
+            super::check_sampler_accept_status(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG,
+                std::ptr::null_mut(),
+            ),
+            Err(SamplerAcceptError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_ACCEPT_NULL_SAMPLER_ARG
+            }),
         );
     }
 
@@ -933,7 +940,7 @@ mod tests {
     #[test]
     fn sampler_sample_status_exception_maps_to_reported() {
         let result = super::sampler_sample_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_THREW_CXX_EXCEPTION,
             -1,
             std::ptr::null_mut(),
         );
@@ -947,19 +954,23 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_sampler_sample returned unrecognized status")]
-    fn sampler_sample_status_unrecognized_panics() {
-        let _result = super::sampler_sample_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG,
-            -1,
-            std::ptr::null_mut(),
+    fn sampler_sample_status_unrecognized_returns_unrecognized_status_error() {
+        assert_eq!(
+            super::sampler_sample_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG,
+                -1,
+                std::ptr::null_mut(),
+            ),
+            Err(SampleError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_SAMPLE_NULL_CTX_ARG
+            }),
         );
     }
 
     #[test]
     fn sampler_init_grammar_status_null_maps_to_grammar_malformed() {
         let result = super::sampler_init_grammar_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_RETURNED_NULL,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_COMPILATION_FAILED,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -981,7 +992,7 @@ mod tests {
     #[test]
     fn sampler_init_grammar_status_exception_maps_to_reported() {
         let result = super::sampler_init_grammar_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -995,19 +1006,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_sampler_init_grammar returned unrecognized status")]
-    fn sampler_init_grammar_status_unrecognized_panics() {
-        let _result = super::sampler_init_grammar_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        );
+    fn sampler_init_grammar_status_unrecognized_returns_unrecognized_status_error() {
+        assert!(matches!(
+            super::sampler_init_grammar_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_NULL_OUT_SAMPLER_ARG,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ),
+            Err(GrammarError::UnrecognizedStatusCode { .. })
+        ));
     }
 
     #[test]
     fn sampler_init_grammar_lazy_status_null_maps_to_lazy_grammar_malformed() {
         let result = super::sampler_init_grammar_lazy_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_RETURNED_NULL,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_COMPILATION_FAILED,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -1029,7 +1042,7 @@ mod tests {
     #[test]
     fn sampler_init_grammar_lazy_status_exception_maps_to_reported() {
         let result = super::sampler_init_grammar_lazy_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -1043,19 +1056,21 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_sampler_init_grammar_lazy returned unrecognized status")]
-    fn sampler_init_grammar_lazy_status_unrecognized_panics() {
-        let _result = super::sampler_init_grammar_lazy_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        );
+    fn sampler_init_grammar_lazy_status_unrecognized_returns_unrecognized_status_error() {
+        assert!(matches!(
+            super::sampler_init_grammar_lazy_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_NULL_OUT_SAMPLER_ARG,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ),
+            Err(GrammarError::UnrecognizedStatusCode { .. })
+        ));
     }
 
     #[test]
     fn sampler_init_grammar_lazy_patterns_status_null_maps_to_lazy_patterns_grammar_malformed() {
         let result = super::sampler_init_grammar_lazy_patterns_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_RETURNED_NULL,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_COMPILATION_FAILED,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -1080,7 +1095,7 @@ mod tests {
     #[test]
     fn sampler_init_grammar_lazy_patterns_status_exception_maps_to_reported() {
         let result = super::sampler_init_grammar_lazy_patterns_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -1094,15 +1109,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(
-        expected = "llama_rs_sampler_init_grammar_lazy_patterns returned unrecognized status"
-    )]
-    fn sampler_init_grammar_lazy_patterns_status_unrecognized_panics() {
-        let _result = super::sampler_init_grammar_lazy_patterns_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        );
+    fn sampler_init_grammar_lazy_patterns_status_unrecognized_returns_error() {
+        assert!(matches!(
+            super::sampler_init_grammar_lazy_patterns_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_SAMPLER_INIT_GRAMMAR_LAZY_PATTERNS_NULL_OUT_SAMPLER_ARG,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ),
+            Err(GrammarError::UnrecognizedStatusCode { .. })
+        ));
     }
 
     #[test]

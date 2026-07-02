@@ -8,17 +8,21 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use crate::context::params::LlamaContextParams;
+use crate::error::decode_error::DecodeError;
+use crate::error::embeddings_error::EmbeddingsError;
+use crate::error::encode_error::EncodeError;
+use crate::error::llama_context_load_error::LlamaContextLoadError;
+use crate::error::llama_lora_adapter_remove_error::LlamaLoraAdapterRemoveError;
+use crate::error::llama_lora_adapter_set_error::LlamaLoraAdapterSetError;
+use crate::error::logits_error::LogitsError;
 use crate::llama_backend::LlamaBackend;
 use crate::llama_batch::LlamaBatch;
-use crate::model::{LlamaLoraAdapter, LlamaModel};
+use crate::model::LlamaModel;
+use crate::model::llama_lora_adapter::LlamaLoraAdapter;
 use crate::timing::LlamaTimings;
 use crate::token::LlamaToken;
 use crate::token::data::LlamaTokenData;
 use crate::token::data_array::LlamaTokenDataArray;
-use crate::{
-    DecodeError, EmbeddingsError, EncodeError, LlamaContextLoadError, LlamaLoraAdapterRemoveError,
-    LlamaLoraAdapterSetError, LogitsError,
-};
 
 const fn check_lora_set_result(err_code: i32) -> Result<(), LlamaLoraAdapterSetError> {
     if err_code != 0 {
@@ -45,36 +49,32 @@ fn new_context_with_model_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_OK => {
             NonNull::new(out_ctx).ok_or(LlamaContextLoadError::Unconstructible)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL => {
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_CREATION_FAILED => {
             Err(LlamaContextLoadError::Unconstructible)
         }
         llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_ERROR_STRING_ALLOCATION_FAILED => {
             Err(LlamaContextLoadError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(LlamaContextLoadError::Reported { message })
         }
-        other => {
-            unreachable!("llama_rs_new_context_with_model returned unrecognized status {other}")
-        }
+        other => Err(LlamaContextLoadError::UnrecognizedStatusCode { code: other }),
     }
 }
 
 fn decode_status_to_result(
     status: llama_cpp_bindings_sys::llama_rs_decode_status,
-    out_vendored_return_code: i32,
+    out_return_code: i32,
     out_error: *mut std::os::raw::c_char,
 ) -> Result<(), DecodeError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_DECODE_OK => Ok(()),
-        llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE => {
-            let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
-                unreachable!(
-                    "llama_rs_decode reported a nonzero return code but the value was zero"
-                )
-            });
-            Err(DecodeError::from(code))
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_RETURNED_ERROR_CODE => {
+            NonZeroI32::new(out_return_code).map_or(
+                Err(DecodeError::UnrecognizedStatusCode { code: status }),
+                |code| Err(DecodeError::from(code)),
+            )
         }
         llama_cpp_bindings_sys::LLAMA_RS_DECODE_OUT_OF_MEMORY => {
             Err(DecodeError::DecodeOutOfMemory)
@@ -83,17 +83,17 @@ fn decode_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_DECODE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(DecodeError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_DECODE_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(DecodeError::Reported { message })
         }
-        other => unreachable!("llama_rs_decode returned unrecognized status {other}"),
+        other => Err(DecodeError::UnrecognizedStatusCode { code: other }),
     }
 }
 
 fn encode_status_to_result(
     status: llama_cpp_bindings_sys::llama_rs_encode_status,
-    out_vendored_return_code: i32,
+    out_return_code: i32,
     out_error: *mut std::os::raw::c_char,
 ) -> Result<(), EncodeError> {
     match status {
@@ -101,13 +101,11 @@ fn encode_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_ENCODE_MODEL_HAS_NO_ENCODER => {
             Err(EncodeError::ModelHasNoEncoder)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE => {
-            let code = NonZeroI32::new(out_vendored_return_code).unwrap_or_else(|| {
-                unreachable!(
-                    "llama_rs_encode reported a nonzero return code but the value was zero"
-                )
-            });
-            Err(EncodeError::from(code))
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_RETURNED_ERROR_CODE => {
+            NonZeroI32::new(out_return_code).map_or(
+                Err(EncodeError::UnrecognizedStatusCode { code: status }),
+                |code| Err(EncodeError::from(code)),
+            )
         }
         llama_cpp_bindings_sys::LLAMA_RS_ENCODE_OUT_OF_MEMORY => {
             Err(EncodeError::EncodeOutOfMemory)
@@ -116,11 +114,11 @@ fn encode_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_ENCODE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(EncodeError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_ENCODE_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(EncodeError::Reported { message })
         }
-        other => unreachable!("llama_rs_encode returned unrecognized status {other}"),
+        other => Err(EncodeError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -288,17 +286,17 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - `DecodeError` if the decoding failed.
     pub fn decode(&mut self, batch: &mut LlamaBatch) -> Result<(), DecodeError> {
-        let mut out_vendored_return_code: i32 = 0;
+        let mut out_return_code: i32 = 0;
         let mut out_error: *mut std::os::raw::c_char = std::ptr::null_mut();
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_decode(
                 self.context.as_ptr(),
                 batch.llama_batch,
-                &raw mut out_vendored_return_code,
+                &raw mut out_return_code,
                 &raw mut out_error,
             )
         };
-        decode_status_to_result(status, out_vendored_return_code, out_error)?;
+        decode_status_to_result(status, out_return_code, out_error)?;
 
         self.initialized_logits
             .clone_from(&batch.initialized_logits);
@@ -310,17 +308,17 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - `EncodeError` if the encoding failed.
     pub fn encode(&mut self, batch: &mut LlamaBatch) -> Result<(), EncodeError> {
-        let mut out_vendored_return_code: i32 = 0;
+        let mut out_return_code: i32 = 0;
         let mut out_error: *mut std::os::raw::c_char = std::ptr::null_mut();
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_encode(
                 self.context.as_ptr(),
                 batch.llama_batch,
-                &raw mut out_vendored_return_code,
+                &raw mut out_return_code,
                 &raw mut out_error,
             )
         };
-        encode_status_to_result(status, out_vendored_return_code, out_error)?;
+        encode_status_to_result(status, out_return_code, out_error)?;
 
         self.initialized_logits
             .clone_from(&batch.initialized_logits);
@@ -515,12 +513,12 @@ impl Drop for LlamaContext<'_> {
 
 #[cfg(test)]
 mod unit_tests {
-    use crate::DecodeError;
-    use crate::EncodeError;
-    use crate::LlamaContextLoadError;
-    use crate::LlamaLoraAdapterRemoveError;
-    use crate::LlamaLoraAdapterSetError;
-    use crate::LogitsError;
+    use crate::error::decode_error::DecodeError;
+    use crate::error::encode_error::EncodeError;
+    use crate::error::llama_context_load_error::LlamaContextLoadError;
+    use crate::error::llama_lora_adapter_remove_error::LlamaLoraAdapterRemoveError;
+    use crate::error::llama_lora_adapter_set_error::LlamaLoraAdapterSetError;
+    use crate::error::logits_error::LogitsError;
 
     use super::{
         check_lora_remove_result, check_lora_set_result, decode_status_to_result,
@@ -564,9 +562,9 @@ mod unit_tests {
     }
 
     #[test]
-    fn new_context_vendored_returned_null_maps_unconstructible() {
+    fn new_context_creation_failed_maps_unconstructible() {
         let result = new_context_with_model_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_RETURNED_NULL,
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_CREATION_FAILED,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -588,7 +586,7 @@ mod unit_tests {
     #[test]
     fn new_context_cxx_exception_maps_reported() {
         let result = new_context_with_model_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_NEW_CONTEXT_WITH_MODEL_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
         );
@@ -602,19 +600,23 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_new_context_with_model returned unrecognized status")]
-    fn new_context_unrecognized_status_panics() {
-        let _result = new_context_with_model_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_new_context_with_model_status::MAX,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
+    fn new_context_unrecognized_status_returns_unrecognized_status_error() {
+        assert_eq!(
+            new_context_with_model_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_new_context_with_model_status::MAX,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ),
+            Err(LlamaContextLoadError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_new_context_with_model_status::MAX
+            }),
         );
     }
 
     #[test]
     fn decode_nonzero_code_maps_from_code() {
         let result = decode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE,
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_RETURNED_ERROR_CODE,
             1,
             std::ptr::null_mut(),
         );
@@ -658,7 +660,7 @@ mod unit_tests {
     #[test]
     fn decode_cxx_exception_maps_reported() {
         let result = decode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_DECODE_THREW_CXX_EXCEPTION,
             0,
             std::ptr::null_mut(),
         );
@@ -672,22 +674,30 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_decode reported a nonzero return code")]
-    fn decode_nonzero_code_with_zero_value_panics() {
-        let _result = decode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_DECODE_VENDORED_RETURNED_NONZERO_CODE,
-            0,
-            std::ptr::null_mut(),
+    fn decode_nonzero_code_with_zero_value_returns_unrecognized_status_error() {
+        assert_eq!(
+            decode_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_DECODE_RETURNED_ERROR_CODE,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(DecodeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::LLAMA_RS_DECODE_RETURNED_ERROR_CODE,
+            }),
         );
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_decode returned unrecognized status")]
-    fn decode_unrecognized_status_panics() {
-        let _result = decode_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_decode_status::MAX,
-            0,
-            std::ptr::null_mut(),
+    fn decode_unrecognized_status_returns_unrecognized_status_error() {
+        assert_eq!(
+            decode_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_decode_status::MAX,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(DecodeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_decode_status::MAX
+            }),
         );
     }
 
@@ -705,7 +715,7 @@ mod unit_tests {
     #[test]
     fn encode_nonzero_code_maps_from_code() {
         let result = encode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE,
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_RETURNED_ERROR_CODE,
             1,
             std::ptr::null_mut(),
         );
@@ -749,7 +759,7 @@ mod unit_tests {
     #[test]
     fn encode_cxx_exception_maps_reported() {
         let result = encode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_THREW_CXX_EXCEPTION,
             0,
             std::ptr::null_mut(),
         );
@@ -763,22 +773,30 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_encode reported a nonzero return code")]
-    fn encode_nonzero_code_with_zero_value_panics() {
-        let _result = encode_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_ENCODE_VENDORED_RETURNED_NONZERO_CODE,
-            0,
-            std::ptr::null_mut(),
+    fn encode_nonzero_code_with_zero_value_returns_unrecognized_status_error() {
+        assert_eq!(
+            encode_status_to_result(
+                llama_cpp_bindings_sys::LLAMA_RS_ENCODE_RETURNED_ERROR_CODE,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(EncodeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::LLAMA_RS_ENCODE_RETURNED_ERROR_CODE,
+            }),
         );
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_encode returned unrecognized status")]
-    fn encode_unrecognized_status_panics() {
-        let _result = encode_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_encode_status::MAX,
-            0,
-            std::ptr::null_mut(),
+    fn encode_unrecognized_status_returns_unrecognized_status_error() {
+        assert_eq!(
+            encode_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_encode_status::MAX,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(EncodeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_encode_status::MAX
+            }),
         );
     }
 

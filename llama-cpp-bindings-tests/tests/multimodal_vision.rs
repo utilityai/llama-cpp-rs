@@ -1,29 +1,29 @@
 use anyhow::Context;
 use anyhow::Result;
-use llama_cpp_bindings::EvalMultimodalChunksParams;
-use llama_cpp_bindings::SampledToken;
-use llama_cpp_bindings::SampledTokenClassifier;
-use llama_cpp_bindings::TokenUsage;
 use llama_cpp_bindings::context::LlamaContext;
+use llama_cpp_bindings::eval_multimodal_chunks_params::EvalMultimodalChunksParams;
 use llama_cpp_bindings::ingest_prompt_chunk::ingest_prompt_chunk;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::mtmd::MtmdBitmap;
-use llama_cpp_bindings::mtmd::MtmdContext;
-use llama_cpp_bindings::mtmd::MtmdContextParams;
-use llama_cpp_bindings::mtmd::MtmdEvalError;
-use llama_cpp_bindings::mtmd::MtmdInputChunkType;
-use llama_cpp_bindings::mtmd::MtmdInputChunks;
-use llama_cpp_bindings::mtmd::MtmdInputText;
-use llama_cpp_bindings::mtmd::mtmd_default_marker;
+use llama_cpp_bindings::mtmd::mtmd_bitmap::MtmdBitmap;
+use llama_cpp_bindings::mtmd::mtmd_context::MtmdContext;
+use llama_cpp_bindings::mtmd::mtmd_context_params::MtmdContextParams;
+use llama_cpp_bindings::mtmd::mtmd_default_marker::mtmd_default_marker;
+use llama_cpp_bindings::mtmd::mtmd_eval_error::MtmdEvalError;
+use llama_cpp_bindings::mtmd::mtmd_input_chunk_type::MtmdInputChunkType;
+use llama_cpp_bindings::mtmd::mtmd_input_chunks::MtmdInputChunks;
+use llama_cpp_bindings::mtmd::mtmd_input_text::MtmdInputText;
+use llama_cpp_bindings::sampled_token::SampledToken;
+use llama_cpp_bindings::sampled_token_classifier::SampledTokenClassifier;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_sys::llama_pos;
 use llama_cpp_bindings_tests::build_user_prompt_with_media_marker::build_user_prompt_with_media_marker;
 use llama_cpp_bindings_tests::chunk_token_breakdown::ChunkTokenBreakdown;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_bindings_tests::fixtures_dir::fixtures_dir;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_bindings_types::token_usage::TokenUsage;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 #[llama_test(
     model_source = HuggingFace("unsloth/Qwen3.5-0.8B-GGUF", "Qwen3.5-0.8B-Q4_K_M.gguf"),
@@ -1415,7 +1415,9 @@ fn text_chunk_drives_marker_state_machine_to_reasoning(fixture: &LlamaFixture<'_
         ingest_prompt_chunk(&mut classifier, &chunk)?;
     }
 
-    if classifier.current_section() != llama_cpp_bindings::SampledTokenSection::Reasoning {
+    if classifier.current_section()
+        != llama_cpp_bindings::sampled_token_section::SampledTokenSection::Reasoning
+    {
         anyhow::bail!(
             "text chunk replay must transition the classifier section to Reasoning when the \
              prompt opens a `<think>` block; got {:?}",

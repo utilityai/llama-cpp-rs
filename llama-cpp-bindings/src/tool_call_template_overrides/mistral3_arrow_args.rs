@@ -1,6 +1,6 @@
-use llama_cpp_bindings_types::BracketedJsonShape;
-use llama_cpp_bindings_types::ToolCallArgsShape;
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::bracketed_json_shape::BracketedJsonShape;
+use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 
 pub struct Mistral3ArrowArgsOverride;
 
@@ -29,8 +29,8 @@ impl Mistral3ArrowArgsOverride {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::BracketedJsonShape;
-    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::bracketed_json_shape::BracketedJsonShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
 
     use super::Mistral3ArrowArgsOverride;
 

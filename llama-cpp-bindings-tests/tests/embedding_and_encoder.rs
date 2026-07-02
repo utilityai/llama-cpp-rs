@@ -5,12 +5,12 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
 use llama_cpp_bindings::context::LlamaContext;
-use llama_cpp_bindings::ggml_time_us;
+use llama_cpp_bindings::ggml_time_us::ggml_time_us;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::AddBos;
+use llama_cpp_bindings::model::add_bos::AddBos;
 use llama_cpp_bindings_tests::prime_kv_cache::prime_kv_cache;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
 fn normalize(input: &[f32]) -> Vec<f32> {
     let magnitude = input

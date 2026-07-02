@@ -3,9 +3,10 @@ use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::ptr::null;
 
-use crate::LlamaCppError;
 use crate::context::params::LlamaContextParams;
-use crate::error::{FitError, ModelParamsError};
+use crate::error::fit_error::FitError;
+use crate::error::llama_cpp_error::LlamaCppError;
+use crate::error::model_params_error::ModelParamsError;
 use crate::model::llama_split_mode_parse_error::LlamaSplitModeParseError;
 use crate::model::params::fit_result::FitResult;
 use crate::model::params::kv_overrides::KvOverrides;
@@ -266,7 +267,7 @@ impl LlamaModelParams {
         for dev in self.devices.iter_mut() {
             *dev = std::ptr::null_mut();
         }
-        let max_devices = crate::max_devices().min(LLAMA_CPP_MAX_DEVICES);
+        let max_devices = crate::max_devices::max_devices().min(LLAMA_CPP_MAX_DEVICES);
         if devices.len() > max_devices {
             return Err(LlamaCppError::MaxDevicesExceeded(max_devices));
         }
@@ -290,13 +291,11 @@ fn fit_params_status_to_result(
 ) -> Result<(), FitError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_OK => Ok(()),
-        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE => {
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_DOES_NOT_FIT => {
             Err(FitError::NoFittingMemoryLayout)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR => {
-            Err(FitError::Aborted)
-        }
-        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE => {
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_HARD_ERROR => Err(FitError::Aborted),
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_UNRECOGNIZED_STATUS_CODE => {
             Err(FitError::UnknownStatus {
                 code: out_unrecognized_status_code,
             })
@@ -304,18 +303,18 @@ fn fit_params_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_ERROR_STRING_ALLOCATION_FAILED => {
             Err(FitError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_THREW_CXX_EXCEPTION => {
             let message = unsafe { crate::ffi_error_reader::read_and_free_cpp_error(out_error) };
             Err(FitError::Reported { message })
         }
-        other => unreachable!("llama_rs_fit_params returned unrecognized wrapper status: {other}"),
+        other => Err(FitError::UnrecognizedStatusCode { code: other }),
     }
 }
 
 impl LlamaModelParams {
     /// # Errors
     ///
-    /// Returns one of the [`FitError`] variants matching the vendored wrapper's status code.
+    /// Returns one of the [`FitError`] variants matching the wrapper's status code.
     pub fn fit_params(
         mut self: Pin<&mut Self>,
         model_path: &CStr,
@@ -563,7 +562,9 @@ mod tests {
 
         assert_eq!(
             std::mem::discriminant(&result.unwrap_err()),
-            std::mem::discriminant(&crate::LlamaCppError::BackendDeviceNotFound(0)),
+            std::mem::discriminant(
+                &crate::error::llama_cpp_error::LlamaCppError::BackendDeviceNotFound(0)
+            ),
         );
     }
 
@@ -586,7 +587,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            crate::error::ModelParamsError::SlotNotEmpty
+            crate::error::model_params_error::ModelParamsError::SlotNotEmpty
         );
     }
 
@@ -617,7 +618,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            crate::error::ModelParamsError::SlotNotEmpty
+            crate::error::model_params_error::ModelParamsError::SlotNotEmpty
         );
     }
 
@@ -670,10 +671,12 @@ mod tests {
 
         assert_eq!(
             std::mem::discriminant(&result.unwrap_err()),
-            std::mem::discriminant(&crate::error::ModelParamsError::InvalidCharacterInKey {
-                byte: 0,
-                reason: String::new(),
-            }),
+            std::mem::discriminant(
+                &crate::error::model_params_error::ModelParamsError::InvalidCharacterInKey {
+                    byte: 0,
+                    reason: String::new(),
+                }
+            ),
         );
     }
 
@@ -687,10 +690,12 @@ mod tests {
 
         assert_eq!(
             std::mem::discriminant(&result.unwrap_err()),
-            std::mem::discriminant(&crate::error::ModelParamsError::InvalidCharacterInKey {
-                byte: 0,
-                reason: String::new(),
-            }),
+            std::mem::discriminant(
+                &crate::error::model_params_error::ModelParamsError::InvalidCharacterInKey {
+                    byte: 0,
+                    reason: String::new(),
+                }
+            ),
         );
     }
 
@@ -708,7 +713,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            crate::error::ModelParamsError::NoAvailableSlot
+            crate::error::model_params_error::ModelParamsError::NoAvailableSlot
         );
     }
 
@@ -722,7 +727,7 @@ mod tests {
 
         assert_eq!(
             result.unwrap_err(),
-            crate::error::ModelParamsError::NoAvailableSlot
+            crate::error::model_params_error::ModelParamsError::NoAvailableSlot
         );
     }
 
@@ -730,13 +735,13 @@ mod tests {
     #[serial_test::serial]
     fn fit_params_invalid_model_path_returns_error() {
         use crate::context::params::LlamaContextParams;
-        use crate::error::FitError;
+        use crate::error::fit_error::FitError;
         use crate::llama_backend::LlamaBackend;
 
         let _backend = LlamaBackend::init();
         let mut params = std::pin::pin!(LlamaModelParams::default());
         let mut context_params = LlamaContextParams::default();
-        let mut margins = vec![0usize; crate::max_devices()];
+        let mut margins = vec![0usize; crate::max_devices::max_devices()];
 
         let bogus_path = c"/nonexistent/path/to/model.gguf";
         let result = params.as_mut().fit_params(
@@ -767,36 +772,39 @@ mod tests {
     #[test]
     fn fit_params_status_reported_failure_returns_no_fitting_memory_layout() {
         let result = super::fit_params_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_FAILURE,
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_DOES_NOT_FIT,
             0,
             std::ptr::null_mut(),
         );
 
-        assert_eq!(result, Err(crate::error::FitError::NoFittingMemoryLayout));
+        assert_eq!(
+            result,
+            Err(crate::error::fit_error::FitError::NoFittingMemoryLayout)
+        );
     }
 
     #[test]
     fn fit_params_status_reported_error_returns_aborted() {
         let result = super::fit_params_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_REPORTED_ERROR,
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_HARD_ERROR,
             0,
             std::ptr::null_mut(),
         );
 
-        assert_eq!(result, Err(crate::error::FitError::Aborted));
+        assert_eq!(result, Err(crate::error::fit_error::FitError::Aborted));
     }
 
     #[test]
     fn fit_params_status_unrecognized_code_returns_unknown_status() {
         let result = super::fit_params_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_RETURNED_UNRECOGNIZED_STATUS_CODE,
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_UNRECOGNIZED_STATUS_CODE,
             42,
             std::ptr::null_mut(),
         );
 
         assert_eq!(
             result,
-            Err(crate::error::FitError::UnknownStatus { code: 42 })
+            Err(crate::error::fit_error::FitError::UnknownStatus { code: 42 })
         );
     }
 
@@ -808,32 +816,39 @@ mod tests {
             std::ptr::null_mut(),
         );
 
-        assert_eq!(result, Err(crate::error::FitError::NotEnoughMemory));
+        assert_eq!(
+            result,
+            Err(crate::error::fit_error::FitError::NotEnoughMemory)
+        );
     }
 
     #[test]
     fn fit_params_status_cxx_exception_returns_reported_with_unknown_error() {
         let result = super::fit_params_status_to_result(
-            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_FIT_PARAMS_THREW_CXX_EXCEPTION,
             0,
             std::ptr::null_mut(),
         );
 
         assert_eq!(
             result,
-            Err(crate::error::FitError::Reported {
+            Err(crate::error::fit_error::FitError::Reported {
                 message: "unknown error".to_owned()
             })
         );
     }
 
     #[test]
-    #[should_panic(expected = "unrecognized wrapper status")]
-    fn fit_params_status_out_of_range_panics() {
-        let _ = super::fit_params_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_fit_params_status::MAX,
-            0,
-            std::ptr::null_mut(),
+    fn fit_params_status_out_of_range_returns_unrecognized_status_error() {
+        assert_eq!(
+            super::fit_params_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_fit_params_status::MAX,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(crate::error::fit_error::FitError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_fit_params_status::MAX
+            }),
         );
     }
 }

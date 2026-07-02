@@ -1,6 +1,13 @@
 #![cfg_attr(
     not(test),
-    deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
 )]
 
 pub mod batch_add_error;
@@ -60,40 +67,3 @@ pub mod token;
 pub mod tool_call_format;
 pub mod tool_call_marker_pair;
 pub mod tool_call_template_overrides;
-
-pub use error::{
-    ApplyChatTemplateError, ChatTemplateError, DecodeError, EmbeddingsError, EncodeError,
-    EvalMultimodalChunksError, GrammarError, JsonSchemaToGrammarError, KvCacheSeqAddError,
-    KvCacheSeqDivError, LlamaContextLoadError, LlamaCppError, LlamaLoraAdapterInitError,
-    LlamaLoraAdapterRemoveError, LlamaLoraAdapterSetError, LlamaModelLoadError, LogitsError,
-    MarkerDetectionError, MetaValError, ModelParamsError, NewLlamaChatMessageError,
-    ParseChatMessageError, Result, SampleError, SamplerAcceptError, SamplingError,
-    StringToTokenError, TokenSamplingError, TokenToStringError,
-};
-
-pub use chat_message_parse_outcome::ChatMessageParseOutcome;
-pub use eval_multimodal_chunks_params::EvalMultimodalChunksParams;
-pub use llama_backend_device::{LlamaBackendDevice, list_llama_ggml_backend_devices};
-pub use llama_backend_device_type::LlamaBackendDeviceType;
-pub use llama_cpp_bindings_types::{
-    BracketedJsonShape, KeyValueXmlTagsShape, PairedQuoteShape, ParsedChatMessage, ParsedToolCall,
-    ReasoningMarkers, TokenUsage, TokenUsageError, ToolCallArgsShape, ToolCallArguments,
-    ToolCallMarkers, ToolCallValueQuote, XmlTagsShape,
-};
-pub use raw_chat_message::RawChatMessage;
-pub use sampled_token::SampledToken;
-pub use sampled_token_classifier::SampledTokenClassifier;
-pub use sampled_token_section::SampledTokenSection;
-
-pub use ffi_status_is_ok::status_is_ok;
-pub use ffi_status_to_i32::status_to_i32;
-pub use ggml_time_us::ggml_time_us;
-pub use ingest_prompt_chunk::ingest_prompt_chunk;
-pub use json_schema_to_grammar::json_schema_to_grammar;
-pub use llama_time_us::llama_time_us;
-pub use max_devices::max_devices;
-pub use mlock_supported::mlock_supported;
-pub use mmap_supported::mmap_supported;
-
-pub use log_options::LogOptions;
-pub use send_logs_to_log::send_logs_to_log;

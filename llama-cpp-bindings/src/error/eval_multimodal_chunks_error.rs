@@ -1,4 +1,4 @@
-use crate::mtmd::MtmdEvalError;
+use crate::mtmd::mtmd_eval_error::MtmdEvalError;
 use crate::mtmd::mtmd_input_chunk_type_error::MtmdInputChunkTypeError;
 
 #[derive(Debug, thiserror::Error)]

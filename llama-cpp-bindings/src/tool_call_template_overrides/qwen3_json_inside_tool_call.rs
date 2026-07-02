@@ -1,6 +1,6 @@
-use llama_cpp_bindings_types::JsonObjectShape;
-use llama_cpp_bindings_types::ToolCallArgsShape;
-use llama_cpp_bindings_types::ToolCallMarkers;
+use llama_cpp_bindings_types::json_object_shape::JsonObjectShape;
+use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
+use llama_cpp_bindings_types::tool_call_markers::ToolCallMarkers;
 
 pub struct Qwen3JsonInsideToolCallOverride;
 
@@ -34,8 +34,8 @@ impl Qwen3JsonInsideToolCallOverride {
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::JsonObjectShape;
-    use llama_cpp_bindings_types::ToolCallArgsShape;
+    use llama_cpp_bindings_types::json_object_shape::JsonObjectShape;
+    use llama_cpp_bindings_types::tool_call_args_shape::ToolCallArgsShape;
 
     use super::Qwen3JsonInsideToolCallOverride;
 

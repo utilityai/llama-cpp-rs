@@ -6,10 +6,10 @@ use libtest_mimic::Failed;
 use libtest_mimic::Trial;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 
-use crate::ModelSource;
 use crate::llama_fixture::LlamaFixture;
 use crate::llama_test_registration::LlamaTestRegistration;
 use crate::load_key::LoadKey;
+use crate::model_source::ModelSource;
 use crate::phase_state::PhaseState;
 
 fn source_label(source: ModelSource) -> String {
@@ -83,9 +83,9 @@ impl ExecutionPhase {
 
 #[cfg(test)]
 mod tests {
-    use crate::ModelSource;
     use crate::load_key::LoadKey;
     use crate::model_load_params::ModelLoadParams;
+    use crate::model_source::ModelSource;
 
     use super::ExecutionPhase;
 

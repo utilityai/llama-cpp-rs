@@ -1,11 +1,11 @@
-use llama_cpp_bindings_types::ParsedToolCall;
-use llama_cpp_bindings_types::ToolCallArguments;
-use llama_cpp_bindings_types::XmlTagsShape;
+use llama_cpp_bindings_types::parsed_tool_call::ParsedToolCall;
+use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+use llama_cpp_bindings_types::xml_tags_shape::XmlTagsShape;
 use nom::IResult;
 use nom::Parser;
 use nom::bytes::complete::take_until;
 
-use crate::error::XmlFunctionTagsFailure;
+use crate::error::xml_function_tags_failure::XmlFunctionTagsFailure;
 
 const fn shape_is_complete(shape: &XmlTagsShape) -> bool {
     !shape.function_open_prefix.is_empty()
@@ -174,12 +174,12 @@ pub fn parse(
 
 #[cfg(test)]
 mod tests {
-    use llama_cpp_bindings_types::ToolCallArguments;
-    use llama_cpp_bindings_types::XmlTagsShape;
+    use llama_cpp_bindings_types::tool_call_arguments::ToolCallArguments;
+    use llama_cpp_bindings_types::xml_tags_shape::XmlTagsShape;
     use serde_json::json;
 
     use super::parse;
-    use crate::error::XmlFunctionTagsFailure;
+    use crate::error::xml_function_tags_failure::XmlFunctionTagsFailure;
 
     fn xml_shape() -> XmlTagsShape {
         XmlTagsShape {

@@ -1,7 +1,7 @@
 use anyhow::Result;
-use llama_cpp_bindings::model::LlamaChatMessage;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::mtmd::mtmd_default_marker;
+use llama_cpp_bindings::model::llama_chat_message::LlamaChatMessage;
+use llama_cpp_bindings::mtmd::mtmd_default_marker::mtmd_default_marker;
 
 /// # Errors
 ///

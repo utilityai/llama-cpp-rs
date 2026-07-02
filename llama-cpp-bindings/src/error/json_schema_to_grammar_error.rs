@@ -13,4 +13,6 @@ pub enum JsonSchemaToGrammarError {
     Reported { message: String },
     #[error("grammar returned by json_schema_to_grammar is not valid UTF-8")]
     GrammarNotUtf8(#[from] FromUtf8Error),
+    #[error("the FFI wrapper returned an unrecognized status code {code}")]
+    UnrecognizedStatusCode { code: u32 },
 }

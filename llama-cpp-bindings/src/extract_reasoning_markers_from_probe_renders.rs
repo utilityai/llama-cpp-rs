@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use crate::ReasoningMarkers;
+use llama_cpp_bindings_types::reasoning_markers::ReasoningMarkers;
 
 const REASON_PROBE: &str = "__PADDLER_REASON_PROBE_3F4A8C__";
 const RESPONSE_PROBE: &str = "__PADDLER_RESPONSE_PROBE_3F4A8C__";

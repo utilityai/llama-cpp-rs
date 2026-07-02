@@ -4,8 +4,8 @@ pub enum SamplerApplyError {
     NullSampler,
     #[error("the sampler ran out of memory while applying to the token data array")]
     NotEnoughMemory,
-    #[error(
-        "the vendored sampler threw a C++ exception while applying to the token data array: {message}"
-    )]
+    #[error("the sampler threw a C++ exception while applying to the token data array: {message}")]
     Reported { message: String },
+    #[error("the FFI wrapper returned an unrecognized status code {code}")]
+    UnrecognizedStatusCode { code: u32 },
 }

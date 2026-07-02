@@ -4,7 +4,8 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use crate::context::LlamaContext;
-use crate::error::{KvCacheSeqAddError, KvCacheSeqDivError};
+use crate::error::kv_cache_seq_add_error::KvCacheSeqAddError;
+use crate::error::kv_cache_seq_div_error::KvCacheSeqDivError;
 use crate::ffi_error_reader::read_and_free_cpp_error;
 
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
@@ -32,11 +33,11 @@ fn kv_cache_seq_add_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_ERROR_STRING_ALLOCATION_FAILED => {
             Err(KvCacheSeqAddError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(out_error) };
             Err(KvCacheSeqAddError::Reported { message })
         }
-        other => unreachable!("llama_rs_memory_seq_add returned unrecognized status {other}"),
+        other => Err(KvCacheSeqAddError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -55,11 +56,11 @@ fn kv_cache_seq_div_status_to_result(
         llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_ERROR_STRING_ALLOCATION_FAILED => {
             Err(KvCacheSeqDivError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(out_error) };
             Err(KvCacheSeqDivError::Reported { message })
         }
-        other => unreachable!("llama_rs_memory_seq_div returned unrecognized status {other}"),
+        other => Err(KvCacheSeqDivError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -197,7 +198,8 @@ mod tests {
 
     use super::kv_cache_seq_add_status_to_result;
     use super::kv_cache_seq_div_status_to_result;
-    use crate::error::{KvCacheSeqAddError, KvCacheSeqDivError};
+    use crate::error::kv_cache_seq_add_error::KvCacheSeqAddError;
+    use crate::error::kv_cache_seq_div_error::KvCacheSeqDivError;
 
     #[test]
     fn add_ok_status_maps_to_ok() {
@@ -243,10 +245,10 @@ mod tests {
     }
 
     #[test]
-    fn add_vendored_exception_status_maps_to_reported_with_unknown_message() {
+    fn add_exception_status_maps_to_reported_with_unknown_message() {
         assert_eq!(
             kv_cache_seq_add_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_VENDORED_THREW_CXX_EXCEPTION,
+                llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_ADD_THREW_CXX_EXCEPTION,
                 ptr::null_mut(),
             ),
             Err(KvCacheSeqAddError::Reported {
@@ -256,11 +258,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_memory_seq_add returned unrecognized status")]
-    fn add_unrecognized_status_panics() {
-        let _ = kv_cache_seq_add_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_memory_seq_add_status::MAX,
-            ptr::null_mut(),
+    fn add_unrecognized_status_returns_unrecognized_status_error() {
+        assert_eq!(
+            kv_cache_seq_add_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_memory_seq_add_status::MAX,
+                ptr::null_mut(),
+            ),
+            Err(KvCacheSeqAddError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_memory_seq_add_status::MAX
+            }),
         );
     }
 
@@ -308,10 +314,10 @@ mod tests {
     }
 
     #[test]
-    fn div_vendored_exception_status_maps_to_reported_with_unknown_message() {
+    fn div_exception_status_maps_to_reported_with_unknown_message() {
         assert_eq!(
             kv_cache_seq_div_status_to_result(
-                llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_VENDORED_THREW_CXX_EXCEPTION,
+                llama_cpp_bindings_sys::LLAMA_RS_MEMORY_SEQ_DIV_THREW_CXX_EXCEPTION,
                 ptr::null_mut(),
             ),
             Err(KvCacheSeqDivError::Reported {
@@ -321,11 +327,15 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_memory_seq_div returned unrecognized status")]
-    fn div_unrecognized_status_panics() {
-        let _ = kv_cache_seq_div_status_to_result(
-            llama_cpp_bindings_sys::llama_rs_memory_seq_div_status::MAX,
-            ptr::null_mut(),
+    fn div_unrecognized_status_returns_unrecognized_status_error() {
+        assert_eq!(
+            kv_cache_seq_div_status_to_result(
+                llama_cpp_bindings_sys::llama_rs_memory_seq_div_status::MAX,
+                ptr::null_mut(),
+            ),
+            Err(KvCacheSeqDivError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_memory_seq_div_status::MAX
+            }),
         );
     }
 }

@@ -1,21 +1,21 @@
 use anyhow::Context;
 use anyhow::Result;
-use llama_cpp_bindings::EvalMultimodalChunksParams;
 use llama_cpp_bindings::context::LlamaContext;
+use llama_cpp_bindings::eval_multimodal_chunks_params::EvalMultimodalChunksParams;
 use llama_cpp_bindings::llama_batch::LlamaBatch;
-use llama_cpp_bindings::model::LlamaChatMessage;
-use llama_cpp_bindings::mtmd::MtmdBitmap;
-use llama_cpp_bindings::mtmd::MtmdInputText;
-use llama_cpp_bindings::mtmd::mtmd_default_marker;
+use llama_cpp_bindings::model::llama_chat_message::LlamaChatMessage;
+use llama_cpp_bindings::mtmd::mtmd_bitmap::MtmdBitmap;
+use llama_cpp_bindings::mtmd::mtmd_default_marker::mtmd_default_marker;
+use llama_cpp_bindings::mtmd::mtmd_input_text::MtmdInputText;
 use llama_cpp_bindings::sampling::LlamaSampler;
 use llama_cpp_bindings_tests::classify_sample_loop::ClassifySampleLoop;
 use llama_cpp_bindings_tests::fixtures_dir::fixtures_dir;
-use llama_cpp_test_harness::LlamaFixture;
-use llama_cpp_test_harness::llama_test;
+use llama_cpp_test_harness::llama_fixture::LlamaFixture;
+use llama_cpp_test_harness_macros::llama_test;
 
-const TRANSCRIBE_SYSTEM_PROMPT: &str = "You are a speech transcription assistant. Transcribe the user's audio verbatim, \
-     replying with only the exact words spoken.";
-const TRANSCRIBE_INSTRUCTION: &str = "Transcribe the speech in this audio word for word.";
+const TRANSCRIBE_SYSTEM_PROMPT: &str =
+    "You are a helpful assistant that can hear audio and write down the words that are spoken.";
+const TRANSCRIBE_INSTRUCTION: &str = "What words are spoken in this audio?";
 
 fn assert_audio_transcription_contains(
     fixture: &LlamaFixture<'_>,

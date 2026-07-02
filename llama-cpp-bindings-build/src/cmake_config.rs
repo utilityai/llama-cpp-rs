@@ -5,17 +5,18 @@ use cmake::Config;
 
 use crate::BuildContext;
 use crate::android_ndk::AndroidNdk;
-use crate::debug_log;
+use crate::cmake_common;
+use crate::ggml_cmake_options;
 use crate::target_os::{TargetOs, WindowsVariant};
 
 pub fn configure_and_build(context: &BuildContext) -> PathBuf {
     let mut config = Config::new(&context.llama_src);
 
     configure_base_defines(&mut config);
-    pass_cmake_env_vars(&mut config);
-    configure_compiler_launchers(&mut config);
-    configure_cpu_features(&mut config, &context.target_triple);
-    configure_shared_libs(&mut config, context.build_shared_libs);
+    cmake_common::pass_cmake_env_vars(&mut config);
+    cmake_common::configure_compiler_launchers(&mut config);
+    ggml_cmake_options::configure_cpu_features(&mut config, &context.target_triple);
+    cmake_common::configure_shared_libs(&mut config, context.build_shared_libs);
     configure_platform_specific(
         &mut config,
         &context.target_os,
@@ -23,9 +24,19 @@ pub fn configure_and_build(context: &BuildContext) -> PathBuf {
         &context.profile,
         context.android_ndk.as_ref(),
     );
-    configure_gpu_backends(&mut config, &context.target_os);
-    configure_openmp(&mut config, &context.target_os);
+    ggml_cmake_options::configure_gpu_backends(&mut config, &context.target_os);
+    ggml_cmake_options::configure_openmp(&mut config, &context.target_os);
     configure_system_ggml(&mut config);
+
+    if let Some(ggml) = context.ggml_system.as_ref() {
+        config.define(
+            "ggml_DIR",
+            ggml.cmake_dir
+                .to_str()
+                .expect("ggml cmake directory must be valid UTF-8"),
+        );
+    }
+
     let backends_dir = configure_dynamic_backends(&mut config, &context.cmake_dir);
 
     config.static_crt(context.static_crt);
@@ -77,120 +88,6 @@ fn configure_base_defines(config: &mut Config) {
     config.cxxflag("-w");
 }
 
-fn configure_compiler_launchers(config: &mut Config) {
-    println!("cargo:rerun-if-env-changed=LLAMA_DISABLE_CCACHE");
-
-    if env::var("LLAMA_DISABLE_CCACHE").is_ok() {
-        return;
-    }
-
-    let Some(ccache) = which("ccache") else {
-        return;
-    };
-
-    let ccache_str = ccache.display().to_string();
-    debug_log!("Using ccache for compilation: {ccache_str}");
-
-    config.define("CMAKE_C_COMPILER_LAUNCHER", &ccache_str);
-    config.define("CMAKE_CXX_COMPILER_LAUNCHER", &ccache_str);
-    config.define("CMAKE_CUDA_COMPILER_LAUNCHER", &ccache_str);
-}
-
-fn which(program: &str) -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-
-    for entry in env::split_paths(&path) {
-        let candidate = entry.join(program);
-
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    None
-}
-
-fn pass_cmake_env_vars(config: &mut Config) {
-    for (key, value) in env::vars() {
-        if key.starts_with("CMAKE_") {
-            config.define(&key, &value);
-        }
-    }
-}
-
-fn configure_cpu_features(config: &mut Config, target_triple: &str) {
-    let target_cpu = env::var("CARGO_ENCODED_RUSTFLAGS")
-        .ok()
-        .and_then(|rustflags| {
-            rustflags
-                .split('\x1f')
-                .find(|flag| flag.contains("target-cpu="))
-                .and_then(|flag| flag.split("target-cpu=").nth(1))
-                .map(std::string::ToString::to_string)
-        });
-
-    if target_cpu.as_deref() == Some("native") {
-        debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
-        config.define("GGML_NATIVE", "ON");
-
-        return;
-    }
-
-    config.define("GGML_NATIVE", "OFF");
-
-    if let Some(ref cpu) = target_cpu {
-        debug_log!("Setting baseline architecture: -march={}", cpu);
-        config.cflag(format!("-march={cpu}"));
-        config.cxxflag(format!("-march={cpu}"));
-    }
-
-    let features = env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
-    debug_log!("Compiling with target features: {}", features);
-
-    for feature in features.split(',') {
-        if let Some(ggml_flag) = map_cpu_feature_to_ggml(feature) {
-            config.define(ggml_flag, "ON");
-        }
-    }
-
-    if target_triple.contains("aarch64")
-        && target_triple.contains("linux")
-        && target_cpu.as_deref() != Some("native")
-    {
-        config.define("GGML_CPU_ARM_ARCH", "armv8-a");
-    }
-}
-
-fn map_cpu_feature_to_ggml(feature: &str) -> Option<&'static str> {
-    match feature {
-        "avx" => Some("GGML_AVX"),
-        "avx2" => Some("GGML_AVX2"),
-        "avx512bf16" => Some("GGML_AVX512_BF16"),
-        "avx512vbmi" => Some("GGML_AVX512_VBMI"),
-        "avx512vnni" => Some("GGML_AVX512_VNNI"),
-        "avxvnni" => Some("GGML_AVX_VNNI"),
-        "bmi2" => Some("GGML_BMI2"),
-        "f16c" => Some("GGML_F16C"),
-        "fma" => Some("GGML_FMA"),
-        "sse4.2" => Some("GGML_SSE42"),
-        _ => {
-            debug_log!(
-                "Unrecognized cpu feature: '{}' - skipping GGML config for it.",
-                feature
-            );
-
-            None
-        }
-    }
-}
-
-fn configure_shared_libs(config: &mut Config, build_shared_libs: bool) {
-    config.define(
-        "BUILD_SHARED_LIBS",
-        if build_shared_libs { "ON" } else { "OFF" },
-    );
-}
-
 fn configure_platform_specific(
     config: &mut Config,
     target_os: &TargetOs,
@@ -201,7 +98,7 @@ fn configure_platform_specific(
     match target_os {
         TargetOs::Apple(_) => {
             config.define("GGML_BLAS", "OFF");
-            override_archive_commands_for_apple_ar(config);
+            cmake_common::override_archive_commands_for_apple_ar(config);
         }
         TargetOs::Windows(WindowsVariant::Msvc) => {
             config.cflag("/w");
@@ -259,23 +156,6 @@ fn configure_android_cmake(config: &mut Config, ndk: &AndroidNdk, _target_triple
     println!("cargo:rustc-link-lib=android");
 }
 
-fn override_archive_commands_for_apple_ar(config: &mut Config) {
-    for language in ["C", "CXX", "OBJC", "OBJCXX"] {
-        config.define(
-            format!("CMAKE_{language}_ARCHIVE_CREATE"),
-            "<CMAKE_AR> qc <TARGET> <LINK_FLAGS> <OBJECTS>",
-        );
-        config.define(
-            format!("CMAKE_{language}_ARCHIVE_APPEND"),
-            "<CMAKE_AR> q <TARGET> <LINK_FLAGS> <OBJECTS>",
-        );
-        config.define(
-            format!("CMAKE_{language}_ARCHIVE_FINISH"),
-            "<CMAKE_RANLIB> <TARGET>",
-        );
-    }
-}
-
 fn configure_android_arch_flags(config: &mut Config, abi: &str) {
     match abi {
         "arm64-v8a" => {
@@ -300,60 +180,6 @@ fn configure_android_arch_flags(config: &mut Config, abi: &str) {
         }
         _ => {}
     }
-}
-
-fn configure_gpu_backends(config: &mut Config, target_os: &TargetOs) {
-    if cfg!(feature = "vulkan") {
-        config.define("GGML_VULKAN", "ON");
-        configure_vulkan_linking(config, target_os);
-    }
-
-    if cfg!(feature = "cuda") {
-        config.define("GGML_CUDA", "ON");
-
-        if cfg!(feature = "cuda-no-vmm") {
-            config.define("GGML_CUDA_NO_VMM", "ON");
-        }
-    }
-
-    if cfg!(feature = "rocm") {
-        config.define("GGML_HIP", "ON");
-    }
-}
-
-fn configure_vulkan_linking(config: &mut Config, target_os: &TargetOs) {
-    match target_os {
-        TargetOs::Windows(_) => {
-            let vulkan_path = env::var("VULKAN_SDK")
-                .expect("Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set");
-            let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
-
-            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-            println!("cargo:rustc-link-lib=vulkan-1");
-
-            // SAFETY: build scripts are single-threaded, so modifying env is safe.
-            unsafe { env::set_var("TrackFileAccess", "false") };
-
-            config.cflag("/FS");
-            config.cxxflag("/FS");
-        }
-        TargetOs::Linux => {
-            if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
-                let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
-
-                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-            }
-
-            println!("cargo:rustc-link-lib=vulkan");
-        }
-        _ => (),
-    }
-}
-
-fn configure_openmp(config: &mut Config, target_os: &TargetOs) {
-    let openmp_enabled = cfg!(feature = "openmp") && !target_os.is_android();
-
-    config.define("GGML_OPENMP", if openmp_enabled { "ON" } else { "OFF" });
 }
 
 fn configure_system_ggml(config: &mut Config) {

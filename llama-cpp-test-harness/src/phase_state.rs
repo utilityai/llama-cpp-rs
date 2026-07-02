@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::mtmd::MtmdContext;
+use llama_cpp_bindings::mtmd::mtmd_context::MtmdContext;
 
 pub struct PhaseState {
     pub mtmd_context: Option<MtmdContext>,

@@ -3,8 +3,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use llama_cpp_bindings::llama_backend::LlamaBackend;
 use llama_cpp_bindings::model::LlamaModel;
-use llama_cpp_bindings::mtmd::MtmdContext;
-use llama_cpp_bindings::mtmd::MtmdContextParams;
+use llama_cpp_bindings::mtmd::mtmd_context::MtmdContext;
+use llama_cpp_bindings::mtmd::mtmd_context_params::MtmdContextParams;
 
 use crate::mmproj_source::MmprojSource;
 use crate::model_load_params::ModelLoadParams;

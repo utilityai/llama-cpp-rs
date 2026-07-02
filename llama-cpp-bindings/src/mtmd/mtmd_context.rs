@@ -21,13 +21,13 @@ fn map_tokenize_status(
 ) -> Result<(), MtmdTokenizeError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_OK => Ok(()),
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT => {
             Err(MtmdTokenizeError::BitmapCountDoesNotMatchMarkerCount)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_IMAGE_PREPROCESSING_ERROR => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_IMAGE_PREPROCESSING_ERROR => {
             Err(MtmdTokenizeError::MediaPreprocessingFailed)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_RETURNED_UNDOCUMENTED_NONZERO_CODE => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_UNDOCUMENTED_ERROR_CODE => {
             Err(MtmdTokenizeError::UnknownStatus {
                 code: undocumented_return_code,
             })
@@ -35,35 +35,32 @@ fn map_tokenize_status(
         llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(MtmdTokenizeError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(out_error) };
             Err(MtmdTokenizeError::Reported { message })
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO => unreachable!("llama_rs_mtmd_tokenize NULL_BITMAPS_ARG: Rust always passes a non-null bitmaps pointer when count > 0"),
-        other => unreachable!("llama_rs_mtmd_tokenize returned unrecognized status: {other}"),
+        other => Err(MtmdTokenizeError::UnrecognizedStatusCode { code: other }),
     }
 }
 
 fn map_encode_chunk_status(
     status: llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status,
-    vendored_return_code: i32,
+    return_code: i32,
     out_error: *mut c_char,
 ) -> Result<(), MtmdEncodeError> {
     match status {
         llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_OK => Ok(()),
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_RETURNED_NONZERO_CODE => {
-            Err(MtmdEncodeError::EncodingFailed {
-                code: vendored_return_code,
-            })
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_RETURNED_ERROR_CODE => {
+            Err(MtmdEncodeError::EncodingFailed { code: return_code })
         }
         llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_ERROR_STRING_ALLOCATION_FAILED => {
             Err(MtmdEncodeError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(out_error) };
             Err(MtmdEncodeError::Reported { message })
         }
-        other => unreachable!("llama_rs_mtmd_encode_chunk returned unrecognized status: {other}"),
+        other => Err(MtmdEncodeError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -80,7 +77,7 @@ fn map_init_from_file_status(
             })?;
             Ok(MtmdContext { context })
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_RETURNED_NULL => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_INITIALIZATION_FAILED => {
             Err(MtmdInitError::Unloadable {
                 path: std::path::PathBuf::from(mmproj_path),
             })
@@ -88,13 +85,11 @@ fn map_init_from_file_status(
         llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_ERROR_STRING_ALLOCATION_FAILED => {
             Err(MtmdInitError::NotEnoughMemory)
         }
-        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION => {
+        llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_THREW_CXX_EXCEPTION => {
             let message = unsafe { read_and_free_cpp_error(out_error) };
             Err(MtmdInitError::Reported { message })
         }
-        other => {
-            unreachable!("llama_rs_mtmd_init_from_file returned unrecognized status: {other}")
-        }
+        other => Err(MtmdInitError::UnrecognizedStatusCode { code: other }),
     }
 }
 
@@ -210,19 +205,19 @@ impl MtmdContext {
     ///
     /// Returns an [`MtmdEncodeError`] variant matching the wrapper's status code.
     pub fn encode_chunk(&self, chunk: &MtmdInputChunk) -> Result<(), MtmdEncodeError> {
-        let mut out_vendored_return_code: i32 = 0;
+        let mut out_return_code: i32 = 0;
         let mut out_error: *mut c_char = std::ptr::null_mut();
 
         let status = unsafe {
             llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk(
                 self.context.as_ptr(),
                 chunk.chunk.as_ptr(),
-                &raw mut out_vendored_return_code,
+                &raw mut out_return_code,
                 &raw mut out_error,
             )
         };
 
-        map_encode_chunk_status(status, out_vendored_return_code, out_error)
+        map_encode_chunk_status(status, out_return_code, out_error)
     }
 }
 
@@ -244,7 +239,7 @@ mod unit_tests {
     #[test]
     fn tokenize_status_maps_bitmap_count_mismatch() {
         let result = map_tokenize_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_BITMAP_COUNT_DOES_NOT_MATCH_MARKER_COUNT,
             0,
             std::ptr::null_mut(),
         );
@@ -258,7 +253,7 @@ mod unit_tests {
     #[test]
     fn tokenize_status_maps_media_preprocessing_failed() {
         let result = map_tokenize_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_REPORTED_IMAGE_PREPROCESSING_ERROR,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_IMAGE_PREPROCESSING_ERROR,
             0,
             std::ptr::null_mut(),
         );
@@ -269,7 +264,7 @@ mod unit_tests {
     #[test]
     fn tokenize_status_maps_unknown_status_with_value() {
         let result = map_tokenize_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_RETURNED_UNDOCUMENTED_NONZERO_CODE,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_UNDOCUMENTED_ERROR_CODE,
             42,
             std::ptr::null_mut(),
         );
@@ -302,7 +297,7 @@ mod unit_tests {
     #[test]
     fn encode_chunk_status_maps_encoding_failed_with_code() {
         let result = map_encode_chunk_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_RETURNED_NONZERO_CODE,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_RETURNED_ERROR_CODE,
             5,
             std::ptr::null_mut(),
         );
@@ -324,7 +319,7 @@ mod unit_tests {
     #[test]
     fn tokenize_status_maps_cxx_exception_to_reported() {
         let result = map_tokenize_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_THREW_CXX_EXCEPTION,
             0,
             std::ptr::null_mut(),
         );
@@ -338,22 +333,30 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "NULL_BITMAPS_ARG")]
-    fn tokenize_status_null_bitmaps_arg_panics() {
-        let _result = map_tokenize_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO,
-            0,
-            std::ptr::null_mut(),
+    fn tokenize_status_null_bitmaps_arg_returns_unrecognized_status_error() {
+        assert_eq!(
+            map_tokenize_status(
+                llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(MtmdTokenizeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::LLAMA_RS_MTMD_TOKENIZE_NULL_BITMAPS_ARG_WHEN_NUM_BITMAPS_NONZERO,
+            }),
         );
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_mtmd_tokenize returned unrecognized status")]
-    fn tokenize_status_unrecognized_panics() {
-        let _result = map_tokenize_status(
-            llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status::MAX,
-            0,
-            std::ptr::null_mut(),
+    fn tokenize_status_unrecognized_returns_unrecognized_status_error() {
+        assert_eq!(
+            map_tokenize_status(
+                llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status::MAX,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(MtmdTokenizeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_mtmd_tokenize_status::MAX
+            }),
         );
     }
 
@@ -371,7 +374,7 @@ mod unit_tests {
     #[test]
     fn encode_chunk_status_maps_cxx_exception_to_reported() {
         let result = map_encode_chunk_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_ENCODE_CHUNK_THREW_CXX_EXCEPTION,
             0,
             std::ptr::null_mut(),
         );
@@ -385,12 +388,16 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_mtmd_encode_chunk returned unrecognized status")]
-    fn encode_chunk_status_unrecognized_panics() {
-        let _result = map_encode_chunk_status(
-            llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status::MAX,
-            0,
-            std::ptr::null_mut(),
+    fn encode_chunk_status_unrecognized_returns_unrecognized_status_error() {
+        assert_eq!(
+            map_encode_chunk_status(
+                llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status::MAX,
+                0,
+                std::ptr::null_mut(),
+            ),
+            Err(MtmdEncodeError::UnrecognizedStatusCode {
+                code: llama_cpp_bindings_sys::llama_rs_mtmd_encode_chunk_status::MAX
+            }),
         );
     }
 
@@ -426,7 +433,7 @@ mod unit_tests {
     #[test]
     fn init_from_file_status_maps_cxx_exception_to_reported() {
         let result = map_init_from_file_status(
-            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_VENDORED_THREW_CXX_EXCEPTION,
+            llama_cpp_bindings_sys::LLAMA_RS_MTMD_INIT_FROM_FILE_THREW_CXX_EXCEPTION,
             std::ptr::null_mut(),
             std::ptr::null_mut(),
             "mmproj.gguf",
@@ -441,13 +448,15 @@ mod unit_tests {
     }
 
     #[test]
-    #[should_panic(expected = "llama_rs_mtmd_init_from_file returned unrecognized status")]
-    fn init_from_file_status_unrecognized_panics() {
-        let _result = map_init_from_file_status(
-            llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file_status::MAX,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            "mmproj.gguf",
-        );
+    fn init_from_file_status_unrecognized_returns_unrecognized_status_error() {
+        assert!(matches!(
+            map_init_from_file_status(
+                llama_cpp_bindings_sys::llama_rs_mtmd_init_from_file_status::MAX,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                "mmproj.gguf",
+            ),
+            Err(MtmdInitError::UnrecognizedStatusCode { .. })
+        ));
     }
 }

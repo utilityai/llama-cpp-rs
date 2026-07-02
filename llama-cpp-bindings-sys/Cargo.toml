@@ -67,20 +67,19 @@ include = [
 ]
 
 [dependencies]
+llama-cpp-ggml-sys = { workspace = true }
 
 [build-dependencies]
-llama-cpp-bindings-build = { workspace = true, features = [] }
+llama-cpp-bindings-build = { workspace = true, features = ["system-ggml-static"] }
 
 [features]
-cuda = ["llama-cpp-bindings-build/cuda"]
-cuda-no-vmm = ["cuda", "llama-cpp-bindings-build/cuda-no-vmm"]
+cuda = ["llama-cpp-bindings-build/cuda", "llama-cpp-ggml-sys/cuda"]
+cuda-no-vmm = ["cuda", "llama-cpp-bindings-build/cuda-no-vmm", "llama-cpp-ggml-sys/cuda-no-vmm"]
 metal = ["llama-cpp-bindings-build/metal"]
 dynamic-link = ["llama-cpp-bindings-build/dynamic-link"]
 dynamic-backends = ["dynamic-link", "llama-cpp-bindings-build/dynamic-backends"]
-vulkan = ["llama-cpp-bindings-build/vulkan"]
-openmp = ["llama-cpp-bindings-build/openmp"]
-rocm = ["llama-cpp-bindings-build/rocm"]
+vulkan = ["llama-cpp-bindings-build/vulkan", "llama-cpp-ggml-sys/vulkan"]
+openmp = ["llama-cpp-bindings-build/openmp", "llama-cpp-ggml-sys/openmp"]
+rocm = ["llama-cpp-bindings-build/rocm", "llama-cpp-ggml-sys/rocm"]
 shared-stdcxx = ["llama-cpp-bindings-build/shared-stdcxx"]
 static-stdcxx = ["llama-cpp-bindings-build/static-stdcxx"]
-system-ggml = ["llama-cpp-bindings-build/system-ggml"]
-system-ggml-static = ["system-ggml", "llama-cpp-bindings-build/system-ggml-static"]

@@ -6,20 +6,10 @@ paths:
 
 # Rust Standards
 
-- Do not inline import paths unless necessary. Prefer to use `use` statements in Rust files instead of inline paths to imported modules. The exception would be `error.rs` type modules that handle lib-level error structs.
 - Always use explicit lifetime variable names (do not use `'a` and such, use descriptive names like `'message` or similar)
-- Always use explicit generic parameter names (never use single letter names like `T` for generics, prefix all of them with `T`, however). For example, use `TMessage` instead of `T`, etc.
-- Do not use `pub(crate)` in Rust; in case of doubt, just make things public.
-- In Rust, never ignore errors with `Err(_)`; always make sure you are matching an expected error variant instead.
-- Never use `.expect`, or `.unwrap`. In Rust, if a function can fail, use a matching Result (can be from the anyhow crate) instead. In case of doubt on this, ask. Allow `.expect` in mutex lock poison checks, or when integrating CPP libraries into Rust.
-- Always make sure mutex locks are held for the shortest possible time.
-- Always specify Rust dependencies in root Cargo.toml, then use workspace versions of packages in workspace members.
-- In Rust, when implementing a `new` method in a struct, prefer to use a struct with a parameter list instead of multiple function arguments. It should be easier to maintain.
-- Always check the project with Clippy.
-- Always format the code with `cargo fmt`.
-- Each file must contain at most a single struct, or single enum. For readability split those into multiple modules. You can still keep multiple private function helpers.
-- Never use Result<> as a function argument.
-- Never forward Result in enums if you can instead create a targeted error enum. It is always better to signal the specific issue, so it can be handled downstream.
+- Always use descriptive parameter names (never use single letter names for generics
+- Each file must contain at most a single struct, or single enum, or a single public function (at most one of any of those).
+- Each file must contain at most a single public item. You can still keep multiple private function helpers. Files need to be named after their public item.
 - Always destructure structs in arguments if possible.
 
 # Code Style
@@ -29,8 +19,8 @@ Imports/uses must not be mixed with other kinds of rust syntax.
 Each file needs to follow this order: 
 1. `pub mod`/`mod` exports 
 2. vendor crate `use` 
-2. project crate `use` 
-3. local crate `use` 
-4. private function helpers
-5. private struct helpers
-6. single public export
+3. project crate `use` 
+4. local crate `use` 
+5. private function helpers
+6. private struct helpers
+7. single public export

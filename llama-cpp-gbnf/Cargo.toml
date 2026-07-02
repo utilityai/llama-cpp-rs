@@ -1,0 +1,21 @@
+[package]
+name = "llama-cpp-gbnf"
+description = "Standalone, model-free GBNF grammar validator built on llama.cpp's real parser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+llama-cpp-gbnf-sys = { workspace = true }
+thiserror = { workspace = true }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"

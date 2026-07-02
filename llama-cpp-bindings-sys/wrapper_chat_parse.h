@@ -23,7 +23,7 @@ typedef enum llama_rs_chat_parser_create_status {
     LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_CHAT_TEMPLATE,
     LLAMA_RS_CHAT_PARSER_CREATE_MODEL_HAS_NO_VOCAB,
     LLAMA_RS_CHAT_PARSER_CREATE_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_CHAT_PARSER_CREATE_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_CHAT_PARSER_CREATE_THREW_CXX_EXCEPTION,
 } llama_rs_chat_parser_create_status;
 
 llama_rs_chat_parser_create_status llama_rs_chat_parser_create(
@@ -50,7 +50,7 @@ typedef enum llama_rs_parse_chat_message_status {
     LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_HANDLE_ARG,
     LLAMA_RS_PARSE_CHAT_MESSAGE_NULL_OUT_ERROR_ARG,
     LLAMA_RS_PARSE_CHAT_MESSAGE_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSE_CHAT_MESSAGE_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSE_CHAT_MESSAGE_THREW_CXX_EXCEPTION,
 } llama_rs_parse_chat_message_status;
 
 llama_rs_parse_chat_message_status llama_rs_parse_chat_message(
@@ -76,7 +76,7 @@ typedef enum llama_rs_parsed_chat_tool_call_count_status {
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_HANDLE_ARG,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_NULL_OUT_COUNT_ARG,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_COUNT_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_tool_call_count_status;
 
 llama_rs_parsed_chat_tool_call_count_status llama_rs_parsed_chat_tool_call_count(
@@ -90,7 +90,7 @@ typedef enum llama_rs_parsed_chat_tool_call_id_status {
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_NULL_OUT_STRING_ARG,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_INDEX_OUT_OF_BOUNDS,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ID_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_tool_call_id_status;
 
 llama_rs_parsed_chat_tool_call_id_status llama_rs_parsed_chat_tool_call_id(
@@ -105,7 +105,7 @@ typedef enum llama_rs_parsed_chat_tool_call_name_status {
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_NULL_OUT_STRING_ARG,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_INDEX_OUT_OF_BOUNDS,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_NAME_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_tool_call_name_status;
 
 llama_rs_parsed_chat_tool_call_name_status llama_rs_parsed_chat_tool_call_name(
@@ -120,7 +120,7 @@ typedef enum llama_rs_parsed_chat_tool_call_arguments_status {
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_NULL_OUT_STRING_ARG,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_INDEX_OUT_OF_BOUNDS,
     LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_TOOL_CALL_ARGUMENTS_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_tool_call_arguments_status;
 
 llama_rs_parsed_chat_tool_call_arguments_status llama_rs_parsed_chat_tool_call_arguments(
@@ -134,7 +134,7 @@ typedef enum llama_rs_parsed_chat_content_status {
     LLAMA_RS_PARSED_CHAT_CONTENT_NULL_HANDLE_ARG,
     LLAMA_RS_PARSED_CHAT_CONTENT_NULL_OUT_STRING_ARG,
     LLAMA_RS_PARSED_CHAT_CONTENT_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_CONTENT_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_CONTENT_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_content_status;
 
 llama_rs_parsed_chat_content_status llama_rs_parsed_chat_content(
@@ -147,7 +147,7 @@ typedef enum llama_rs_parsed_chat_reasoning_content_status {
     LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_HANDLE_ARG,
     LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_NULL_OUT_STRING_ARG,
     LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_ERROR_STRING_ALLOCATION_FAILED,
-    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_VENDORED_THREW_CXX_EXCEPTION,
+    LLAMA_RS_PARSED_CHAT_REASONING_CONTENT_THREW_CXX_EXCEPTION,
 } llama_rs_parsed_chat_reasoning_content_status;
 
 llama_rs_parsed_chat_reasoning_content_status llama_rs_parsed_chat_reasoning_content(

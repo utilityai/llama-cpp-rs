@@ -1170,6 +1170,7 @@ dependencies = [
  "llama-cpp-bindings-sys",
  "llama-cpp-bindings-types",
  "llama-cpp-error-recorder",
+ "llama-cpp-gbnf",
  "llama-cpp-log-decoder",
  "llguidance",
  "log",
@@ -1198,6 +1199,7 @@ name = "llama-cpp-bindings-sys"
 version = "0.9.0"
 dependencies = [
  "llama-cpp-bindings-build",
+ "llama-cpp-ggml-sys",
 ]
 
 [[package]]
@@ -1206,9 +1208,12 @@ version = "0.9.0"
 dependencies = [
  "anyhow",
  "encoding_rs",
+ "inventory",
  "llama-cpp-bindings",
  "llama-cpp-bindings-sys",
+ "llama-cpp-bindings-types",
  "llama-cpp-test-harness",
+ "llama-cpp-test-harness-macros",
  "serde_json",
 ]
 
@@ -1224,6 +1229,29 @@ dependencies = [
 [[package]]
 name = "llama-cpp-error-recorder"
 version = "0.9.0"
+
+[[package]]
+name = "llama-cpp-gbnf"
+version = "0.9.0"
+dependencies = [
+ "llama-cpp-gbnf-sys",
+ "thiserror",
+]
+
+[[package]]
+name = "llama-cpp-gbnf-sys"
+version = "0.9.0"
+dependencies = [
+ "llama-cpp-bindings-build",
+ "llama-cpp-ggml-sys",
+]
+
+[[package]]
+name = "llama-cpp-ggml-sys"
+version = "0.9.0"
+dependencies = [
+ "llama-cpp-bindings-build",
+]
 
 [[package]]
 name = "llama-cpp-log-decoder"

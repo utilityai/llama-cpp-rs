@@ -1,0 +1,28 @@
+[package]
+name = "llama-cpp-ggml-sys"
+description = "Builds the vendored llama.cpp ggml library once from the shared submodule for reuse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+links = "ggml"
+
+[build-dependencies]
+llama-cpp-bindings-build = { workspace = true }
+
+[features]
+cuda = ["llama-cpp-bindings-build/cuda"]
+cuda-no-vmm = ["llama-cpp-bindings-build/cuda-no-vmm"]
+vulkan = ["llama-cpp-bindings-build/vulkan"]
+rocm = ["llama-cpp-bindings-build/rocm"]
+openmp = ["llama-cpp-bindings-build/openmp"]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
