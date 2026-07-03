@@ -814,6 +814,32 @@ impl LlamaModel {
         Ok(LlamaContext::new(self, context, params.embeddings()))
     }
 
+    /// Create a new context bound to another context via llama.cpp's `ctx_other` field.
+    ///
+    /// This is required for MTP speculative decoding when the target model's
+    /// architecture uses `LLM_ARCH_GEMMA4_ASSISTANT`, which asserts that the draft
+    /// context references the target context so KV state can be shared.
+    ///
+    /// # Errors
+    ///
+    /// See [`LlamaContextLoadError`].
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new_context_with_other<'a>(
+        &'a self,
+        _: &LlamaBackend,
+        params: LlamaContextParams,
+        ctx_other: &LlamaContext<'_>,
+    ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
+        let mut context_params = params.context_params;
+        context_params.ctx_other = ctx_other.context.as_ptr();
+        let context = unsafe {
+            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
+        };
+        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+
+        Ok(LlamaContext::new(self, context, params.embeddings()))
+    }
+
     /// Apply the models chat template to some messages.
     /// See <https://github.com/ggerganov/llama.cpp/wiki/Templates-supported-by-llama_chat_apply_template>
     ///
