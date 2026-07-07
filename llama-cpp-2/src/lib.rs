@@ -135,6 +135,19 @@ pub enum LlamaContextLoadError {
     NullReturn,
 }
 
+/// Errors from the sequence-state save/restore API.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum StateSeqError {
+    /// llama.cpp read or wrote a different number of bytes than expected.
+    #[error("state seq size mismatch: expected {expected}, actual {actual}")]
+    SizeMismatch {
+        /// Number of bytes the caller expected to transfer.
+        expected: usize,
+        /// Number of bytes llama.cpp actually transferred.
+        actual: usize,
+    },
+}
+
 /// Failed to decode a batch.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum DecodeError {
