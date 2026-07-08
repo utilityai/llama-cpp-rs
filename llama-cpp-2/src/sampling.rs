@@ -416,6 +416,31 @@ impl LlamaSampler {
         crate::llguidance_sampler::create_llg_sampler(model, grammar_kind, grammar_data)
     }
 
+    /// `LLGuidance` sampler with caller-supplied slice regexes.
+    ///
+    /// Identical to [`llguidance`][Self::llguidance] but builds the `ParserFactory` with
+    /// the provided `slices` instead of the default JSON-focused regexes. Each regex
+    /// string describes a token sub-set; matching positions skip the full vocabulary
+    /// trie-walk. Pass an empty slice to disable the optimization entirely.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GrammarError`] if the grammar is invalid or the sampler cannot be initialized.
+    #[cfg(feature = "llguidance")]
+    pub fn llguidance_with_slices(
+        model: &LlamaModel,
+        grammar_kind: &str,
+        grammar_data: &str,
+        slices: &[String],
+    ) -> Result<Self, GrammarError> {
+        crate::llguidance_sampler::create_llg_sampler_with_slices(
+            model,
+            grammar_kind,
+            grammar_data,
+            slices,
+        )
+    }
+
     fn sanitize_grammar_strings(
         grammar_str: &str,
         grammar_root: &str,

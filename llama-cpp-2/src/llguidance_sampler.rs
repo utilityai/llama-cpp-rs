@@ -145,6 +145,11 @@ static mut LLG_SAMPLER_I: llama_cpp_sys_2::llama_sampler_i = llama_cpp_sys_2::ll
 };
 
 /// Create an llguidance-based constrained decoding sampler.
+///
+/// Uses `ParserFactory::new_simple`, which pre-builds a `SlicedBiasComputer` with the
+/// four general JSON regexes. Prefer [`create_llg_sampler_with_slices`] when you know
+/// which token sub-sets are valid for your grammar — it can cut per-token constraint
+/// cost significantly on large vocabularies.
 pub(crate) fn create_llg_sampler(
     model: &LlamaModel,
     grammar_kind: &str,
@@ -156,6 +161,46 @@ pub(crate) fn create_llg_sampler(
     let factory = llguidance::ParserFactory::new_simple(&tok_env_dyn)
         .map_err(|_| GrammarError::NullGrammar)?;
 
+    finish_llg_sampler(tok_env, factory, grammar_kind, grammar_data)
+}
+
+/// Create an llguidance-based constrained decoding sampler with caller-supplied slice regexes.
+///
+/// `slices` is a list of regex strings. At startup, each regex is matched against the
+/// entire vocabulary and the matching tokens are stored in a pre-built bitmask. During
+/// inference, whenever only tokens matching a slice regex could be valid at the current
+/// position, llguidance uses that bitmask directly instead of walking the full vocabulary
+/// trie — cutting per-token cost significantly on large vocabularies.
+///
+/// Pass an empty slice list to disable the optimization entirely (falls back to a full
+/// trie walk on every token). Use [`llguidance::SlicedBiasComputer::general_slices`] for
+/// JSON-heavy grammars, or supply custom patterns suited to your output format
+/// (e.g. `[^<>{},:]+` for delimiter-bounded formats like Gemma-4 tool calls).
+pub(crate) fn create_llg_sampler_with_slices(
+    model: &LlamaModel,
+    grammar_kind: &str,
+    grammar_data: &str,
+    slices: &[String],
+) -> Result<LlamaSampler, GrammarError> {
+    let tok_env = build_tok_env(model);
+    let tok_env_dyn: Arc<dyn toktrie::TokenizerEnv + Sync> = tok_env.clone();
+
+    let factory = llguidance::ParserFactory::new(
+        &tok_env_dyn,
+        toktrie::InferenceCapabilities::default(),
+        slices,
+    )
+    .map_err(|_| GrammarError::NullGrammar)?;
+
+    finish_llg_sampler(tok_env, factory, grammar_kind, grammar_data)
+}
+
+fn finish_llg_sampler(
+    tok_env: Arc<ApproximateTokEnv>,
+    factory: llguidance::ParserFactory,
+    grammar_kind: &str,
+    grammar_data: &str,
+) -> Result<LlamaSampler, GrammarError> {
     let grammar = llguidance::api::TopLevelGrammar::from_tagged_str(grammar_kind, grammar_data)
         .map_err(|_| GrammarError::NullGrammar)?;
 
