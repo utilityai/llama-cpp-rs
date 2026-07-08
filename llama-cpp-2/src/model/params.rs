@@ -3,7 +3,7 @@
 use crate::context::params::LlamaContextParams;
 use crate::model::params::kv_overrides::KvOverrides;
 use crate::LlamaCppError;
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, c_void, CStr};
 use std::fmt::{Debug, Formatter};
 use std::pin::Pin;
 use std::ptr::null;
@@ -150,6 +150,7 @@ pub struct LlamaModelParams {
     buft_overrides: Vec<llama_cpp_sys_2::llama_model_tensor_buft_override>,
     devices: Pin<Box<[llama_cpp_sys_2::ggml_backend_dev_t; LLAMA_CPP_MAX_DEVICES]>>,
     tensor_split: Vec<f32>,
+    progress_callback: Option<Box<dyn FnMut(f32) -> bool>>,
 }
 
 impl Debug for LlamaModelParams {
@@ -285,6 +286,36 @@ impl LlamaModelParams {
 
         // set the pointer to the (potentially) new vector
         self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
+    }
+
+    /// Returns the tensor-name patterns of the buffer-type overrides currently set on these
+    /// parameters, in order.
+    ///
+    /// This is the read-only counterpart to [`add_cpu_buft_override`](Self::add_cpu_buft_override)
+    /// and [`add_cpu_moe_override`](Self::add_cpu_moe_override). After
+    /// [`fit_params`](Self::fit_params) it reflects the overrides the auto-fit chose — for example
+    /// the routed-expert tensors (`blk.<N>.ffn_(up|down|gate_up|gate)_(ch|)exps`) a
+    /// mixture-of-experts fit assigns to the CPU buffer type to make the model fit. Returns an empty
+    /// vector when no overrides are set. The trailing null-terminator entry the override list
+    /// carries is skipped; only entries with a non-null pattern are returned.
+    #[must_use]
+    pub fn tensor_buft_override_patterns(&self) -> Vec<String> {
+        self.buft_overrides
+            .iter()
+            .filter(|o| !o.pattern.is_null())
+            .map(|o| {
+                // SAFETY: a non-null `pattern` is a NUL-terminated C string. For fit-produced
+                // overrides it points into process-lifetime function-local `static` storage in
+                // llama.cpp's `common/fit.cpp`, so it is always valid to read here. For overrides set
+                // via `add_cpu_buft_override` the pointer is borrowed from the caller's `&CStr` with
+                // no lifetime tie recorded on the params, so that setter's callers are responsible
+                // for keeping the string alive at least as long as the params; every in-tree caller
+                // passes a `'static` literal. In both cases the string outlives this `&self` borrow.
+                unsafe { CStr::from_ptr(o.pattern) }
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
     }
 }
 
@@ -556,6 +587,26 @@ impl LlamaModelParams {
     pub fn no_alloc(&self) -> bool {
         self.params.no_alloc
     }
+
+    /// Sets a callback invoked during loading with progress in `0.0..=1.0`.
+    /// Returning `false` aborts the load (it then fails with `NullResult`).
+    #[must_use]
+    pub fn with_progress_callback<F: FnMut(f32) -> bool + 'static>(mut self, callback: F) -> Self {
+        unsafe extern "C" fn trampoline<F: FnMut(f32) -> bool>(
+            progress: f32,
+            user_data: *mut c_void,
+        ) -> bool {
+            let callback = unsafe { &mut *user_data.cast::<F>() };
+            callback(progress)
+        }
+
+        let mut callback = Box::new(callback);
+        self.params.progress_callback_user_data =
+            std::ptr::from_mut(&mut *callback).cast::<c_void>();
+        self.params.progress_callback = Some(trampoline::<F>);
+        self.progress_callback = Some(callback);
+        self
+    }
 }
 
 /// Default parameters for `LlamaModel`. (as defined in llama.cpp by `llama_model_default_params`)
@@ -591,13 +642,37 @@ impl Default for LlamaModelParams {
             }],
             devices: Box::pin([std::ptr::null_mut(); 16]),
             tensor_split: Vec::new(),
+            progress_callback: None,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::LlamaSplitMode;
+    use super::{LlamaModelParams, LlamaSplitMode};
+    use std::pin::pin;
+
+    #[test]
+    fn tensor_buft_override_patterns_empty_by_default() {
+        // Fresh params carry only the null-terminator entry, so no patterns are reported.
+        assert!(LlamaModelParams::default()
+            .tensor_buft_override_patterns()
+            .is_empty());
+    }
+
+    #[test]
+    fn tensor_buft_override_patterns_reads_back_added_override() {
+        // The getter is the read-only counterpart to the setter: the override added is reported and
+        // the trailing null terminator is skipped. This mirrors how `fit_params` populates the same
+        // buffer for the auto-fit's MoE expert offload (`add_cpu_moe_override` uses the same expert
+        // tensor pattern shape the fit emits).
+        let mut params = pin!(LlamaModelParams::default());
+        params.as_mut().add_cpu_moe_override();
+        assert_eq!(
+            params.tensor_buft_override_patterns(),
+            vec!["\\.ffn_(up|down|gate)_(ch|)exps".to_owned()],
+        );
+    }
 
     #[test]
     fn tensor_split_mode_round_trips() {
@@ -613,5 +688,30 @@ mod tests {
             i32::from(LlamaSplitMode::Tensor),
             llama_cpp_sys_2::LLAMA_SPLIT_MODE_TENSOR as i32
         );
+    }
+
+    #[test]
+    fn progress_callback_round_trips_and_can_abort() {
+        use super::LlamaModelParams;
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        let calls = Rc::new(Cell::new(0_u32));
+        let counter = Rc::clone(&calls);
+        let params = LlamaModelParams::default().with_progress_callback(move |_progress| {
+            counter.set(counter.get() + 1);
+            false
+        });
+
+        assert!(params.params.progress_callback.is_some());
+        assert!(!params.params.progress_callback_user_data.is_null());
+
+        let trampoline = params.params.progress_callback.unwrap();
+        let user_data = params.params.progress_callback_user_data;
+        let first = unsafe { trampoline(0.5, user_data) };
+        let second = unsafe { trampoline(1.0, user_data) };
+
+        assert!(!first && !second, "returning false signals an abort");
+        assert_eq!(calls.get(), 2);
     }
 }
