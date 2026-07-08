@@ -824,7 +824,7 @@ impl LlamaModel {
     ///
     /// See [`LlamaContextLoadError`].
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new_context_with_other<'a>(
+    pub fn new_context_with_ctx_other<'a>(
         &'a self,
         _: &LlamaBackend,
         params: LlamaContextParams,
