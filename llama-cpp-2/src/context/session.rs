@@ -19,6 +19,12 @@ impl LlamaStateSeqFlags {
     /// without affecting the KV cache.
     pub const PARTIAL_ONLY: LlamaStateSeqFlags = LlamaStateSeqFlags(1);
 
+    /// Keep the copied data on device (GPU) memory rather than host.
+    ///
+    /// Getting the state for a `seq_id` with this flag invalidates all
+    /// prior states obtained for that `seq_id` with this flag set.
+    pub const ON_DEVICE: LlamaStateSeqFlags = LlamaStateSeqFlags(2);
+
     /// Create an empty flags set.
     pub const fn empty() -> LlamaStateSeqFlags {
         LlamaStateSeqFlags(0)
@@ -27,6 +33,11 @@ impl LlamaStateSeqFlags {
     /// Get the raw flags value.
     pub const fn bits(&self) -> u32 {
         self.0
+    }
+
+    /// Construct from raw bits.
+    pub const fn from_bits(bits: u32) -> LlamaStateSeqFlags {
+        LlamaStateSeqFlags(bits)
     }
 
     /// Check if a flag is set.
@@ -38,6 +49,13 @@ impl LlamaStateSeqFlags {
 impl Default for LlamaStateSeqFlags {
     fn default() -> Self {
         Self::empty()
+    }
+}
+
+impl std::ops::BitOr for LlamaStateSeqFlags {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 }
 

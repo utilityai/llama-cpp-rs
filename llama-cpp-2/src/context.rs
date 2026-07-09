@@ -20,6 +20,8 @@ pub mod kv_cache;
 pub mod params;
 pub mod session;
 
+use crate::context::session::LlamaStateSeqFlags;
+
 /// Safe wrapper around `llama_context`.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaContext<'a> {
@@ -369,29 +371,19 @@ impl<'model> LlamaContext<'model> {
         unsafe { llama_cpp_sys_2::llama_rs_memory_breakdown_print(self.context.as_ptr()) }
     }
 
-    /// Query the serialized state size for `seq_id` with the given flags.
-    ///
-    /// Wraps `llama_state_seq_get_size_ext`.
-    #[must_use]
-    pub fn state_seq_size(&self, seq_id: i32, flags: LlamaStateSeqFlags) -> usize {
-        unsafe {
-            llama_cpp_sys_2::llama_state_seq_get_size_ext(
-                self.context.as_ptr(),
-                seq_id,
-                flags.bits(),
-            )
-        }
-    }
-
-    /// Serialize sequence `seq_id`'s state into a new `Vec<u8>`.
+    /// Serialize sequence `seq_id`'s state into an opaque [`SeqState`].
     ///
     /// Enables save/restore of context state at arbitrary points in a
     /// sequence. This is particularly useful on architectures where
     /// `clear_kv_cache_seq` cannot roll back partial state (Mamba, RWKV,
     /// Gated Delta Networks, and other recurrent / hybrid-recurrent
     /// models): pair with [`LlamaStateSeqFlags::PARTIAL_ONLY`] to save
-    /// just the running recurrent and SWA state, then restore it to
-    /// effectively "rewind" the sequence.
+    /// just the running recurrent and SWA state, then restore it via
+    /// [`Self::state_seq_set`] to effectively "rewind" the sequence.
+    ///
+    /// The returned [`SeqState`] is opaque — its bytes cannot be
+    /// inspected or forged from safe code, so [`Self::state_seq_set`]
+    /// only ever sees data produced by this method.
     ///
     /// Wraps `llama_state_seq_get_data_ext`.
     ///
@@ -403,13 +395,19 @@ impl<'model> LlamaContext<'model> {
         &self,
         seq_id: i32,
         flags: LlamaStateSeqFlags,
-    ) -> Result<Vec<u8>, crate::StateSeqError> {
-        let size = self.state_seq_size(seq_id, flags);
-        let mut buf = vec![0u8; size];
+    ) -> Result<SeqState, crate::StateSeqError> {
+        let size = unsafe {
+            llama_cpp_sys_2::llama_state_seq_get_size_ext(
+                self.context.as_ptr(),
+                seq_id,
+                flags.bits(),
+            )
+        };
+        let mut bytes = vec![0u8; size];
         let n = unsafe {
             llama_cpp_sys_2::llama_state_seq_get_data_ext(
                 self.context.as_ptr(),
-                buf.as_mut_ptr(),
+                bytes.as_mut_ptr(),
                 size,
                 seq_id,
                 flags.bits(),
@@ -421,36 +419,41 @@ impl<'model> LlamaContext<'model> {
                 actual: n,
             });
         }
-        Ok(buf)
+        Ok(SeqState { bytes, flags })
     }
 
-    /// Restore sequence `seq_id`'s state from a buffer previously produced
-    /// by [`Self::state_seq_get`].
+    /// Restore sequence state previously captured by [`Self::state_seq_get`]
+    /// into `seq_id`.
+    ///
+    /// Cross-sequence restore (`seq_id` different from the sequence the
+    /// state was captured from) is supported — llama.cpp treats the
+    /// destination sequence id independently of the source.
     ///
     /// Wraps `llama_state_seq_set_data_ext`.
     ///
     /// # Errors
     ///
     /// Returns [`StateSeqError::SizeMismatch`] if llama.cpp reads a
-    /// different number of bytes than the buffer contains.
+    /// different number of bytes than the state buffer contains — this
+    /// covers shape mismatches (different `n_ctx`, `n_layer`, quantization,
+    /// etc.) that llama.cpp's own deserializer detects and aborts on.
     pub fn state_seq_set(
         &mut self,
-        data: &[u8],
+        state: &SeqState,
         seq_id: i32,
-        flags: LlamaStateSeqFlags,
     ) -> Result<(), crate::StateSeqError> {
         let n = unsafe {
             llama_cpp_sys_2::llama_state_seq_set_data_ext(
                 self.context.as_ptr(),
-                data.as_ptr(),
-                data.len(),
+                state.bytes.as_ptr(),
+                state.bytes.len(),
                 seq_id,
-                flags.bits(),
+                state.flags.bits(),
             )
         };
-        if n != data.len() {
+        if n != state.bytes.len() {
             return Err(crate::StateSeqError::SizeMismatch {
-                expected: data.len(),
+                expected: state.bytes.len(),
                 actual: n,
             });
         }
@@ -458,50 +461,44 @@ impl<'model> LlamaContext<'model> {
     }
 }
 
-/// Bitflags for the `state_seq_*` family of functions on [`LlamaContext`].
+/// Opaque, immutable snapshot of a single sequence's state.
 ///
-/// Corresponds to `LLAMA_STATE_SEQ_FLAGS_*` bit constants in llama.h.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
-pub struct LlamaStateSeqFlags(u32);
+/// Produced by [`LlamaContext::state_seq_get`] and consumed by
+/// [`LlamaContext::state_seq_set`]. Bytes cannot be constructed, forged,
+/// or mutated from safe code — the only way to obtain a `SeqState` is
+/// via a get call, which guarantees the payload came from llama.cpp
+/// itself. Combined with llama.cpp's own shape validation on the
+/// deserialize path, this closes the "arbitrary bytes into C parser"
+/// unsoundness that motivates the unsafe raw setters.
+///
+/// The state carries the flag set it was captured with; restore uses
+/// those same flags automatically so the byte layout always matches.
+#[derive(Clone)]
+pub struct SeqState {
+    bytes: Vec<u8>,
+    flags: LlamaStateSeqFlags,
+}
 
-impl LlamaStateSeqFlags {
-    /// Empty flag set.
-    pub const NONE: Self = Self(0);
-
-    /// Save/restore only "partial" state: the SWA window and any recurrent
-    /// running state. The full attention KV cache is not included.
-    ///
-    /// Required for rewinding sequence state on architectures where
-    /// `clear_kv_cache_seq` cannot unroll the running state — Mamba, RWKV,
-    /// Gated Delta Networks, and other recurrent or hybrid-recurrent models.
-    /// The full attention KV cache stays position-addressable, so combining
-    /// a partial-state restore with a subsequent `clear_kv_cache_seq` on
-    /// the discarded position range fully reverts the sequence.
-    pub const PARTIAL_ONLY: Self = Self(1);
-
-    /// Keep the copied data on device (GPU) memory rather than host.
-    ///
-    /// Getting the state for a `seq_id` with this flag invalidates all
-    /// prior states obtained for that `seq_id` with this flag set.
-    pub const ON_DEVICE: Self = Self(2);
-
-    /// Raw bit representation.
+impl SeqState {
+    /// The flag set that was used to capture this state.
     #[must_use]
-    pub const fn bits(self) -> u32 {
-        self.0
+    pub fn flags(&self) -> LlamaStateSeqFlags {
+        self.flags
     }
 
-    /// Construct from raw bits.
+    /// Size in bytes of the serialized state.
     #[must_use]
-    pub const fn from_bits(bits: u32) -> Self {
-        Self(bits)
+    pub fn byte_len(&self) -> usize {
+        self.bytes.len()
     }
 }
 
-impl std::ops::BitOr for LlamaStateSeqFlags {
-    type Output = Self;
-    fn bitor(self, other: Self) -> Self {
-        Self(self.0 | other.0)
+impl Debug for SeqState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SeqState")
+            .field("byte_len", &self.bytes.len())
+            .field("flags", &self.flags)
+            .finish()
     }
 }
 

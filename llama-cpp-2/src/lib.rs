@@ -41,6 +41,7 @@ pub mod token;
 pub mod token_type;
 
 pub use crate::context::session::LlamaStateSeqFlags;
+pub use crate::context::SeqState;
 
 #[cfg(feature = "common")]
 pub(crate) fn status_is_ok(status: llama_cpp_sys_2::llama_rs_status) -> bool {
