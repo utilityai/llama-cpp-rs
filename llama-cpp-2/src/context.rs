@@ -7,6 +7,7 @@ use std::slice;
 
 use crate::llama_batch::LlamaBatch;
 use crate::model::{LlamaLoraAdapter, LlamaModel};
+use crate::sampling::LlamaSampler;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
 use crate::token::data_array::LlamaTokenDataArray;
@@ -28,6 +29,8 @@ pub struct LlamaContext<'a> {
     pub model: &'a LlamaModel,
     initialized_logits: Vec<i32>,
     embeddings_enabled: bool,
+    /// Backend samplers kept alive for the context's lifetime.
+    _backend_samplers: Vec<(i32, LlamaSampler)>,
 }
 
 impl Debug for LlamaContext<'_> {
@@ -49,6 +52,22 @@ impl<'model> LlamaContext<'model> {
             model: llama_model,
             initialized_logits: Vec::new(),
             embeddings_enabled,
+            _backend_samplers: Vec::new(),
+        }
+    }
+
+    pub(crate) fn with_samplers(
+        llama_model: &'model LlamaModel,
+        llama_context: NonNull<llama_cpp_sys_2::llama_context>,
+        embeddings_enabled: bool,
+        backend_samplers: Vec<(i32, LlamaSampler)>,
+    ) -> Self {
+        Self {
+            context: llama_context,
+            model: llama_model,
+            initialized_logits: Vec::new(),
+            embeddings_enabled,
+            _backend_samplers: backend_samplers,
         }
     }
 
