@@ -382,6 +382,29 @@ impl<'model> LlamaContext<'model> {
         Ok(())
     }
 
+    /// Get the backend-sampled token at the given index.
+    ///
+    /// This is part of the experimental backend sampling API. Only usable
+    /// when the context was created with at least one `llama_sampler_seq_config`.
+    ///
+    /// Returns `None` if no token was sampled at the given index
+    /// (i.e. the C API returned `LLAMA_TOKEN_NULL`).
+    ///
+    /// # Arguments
+    ///
+    /// * `i` - The token index, matching the order from the batch.
+    #[must_use]
+    pub fn sampled_token_ith(&self, i: i32) -> Option<LlamaToken> {
+        let token =
+            unsafe { llama_cpp_sys_2::llama_get_sampled_token_ith(self.context.as_ptr(), i) };
+        // LLAMA_TOKEN_NULL is #define'd as -1 in llama.h (not exposed by bindgen)
+        if token == -1 {
+            None
+        } else {
+            Some(LlamaToken(token))
+        }
+    }
+
     /// Print a breakdown of per-device memory use to the default logger.
     #[cfg(feature = "common")]
     pub fn print_memory_breakdown(&self) {
