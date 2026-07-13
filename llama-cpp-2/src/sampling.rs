@@ -404,12 +404,6 @@ impl LlamaSampler {
     /// Uses the `llguidance` and `toktrie` Rust crates to enforce grammar constraints
     /// during token sampling. Supports JSON schema, regex, Lark, and other grammar types.
     ///
-    /// This covers the simple default case (llguidance's general-purpose JSON slices).
-    /// For custom slice regexes or other `ParserFactory` configuration, build your own
-    /// `llguidance::Matcher` using [`LlamaSampler::llguidance_tok_env`] and the
-    /// `llguidance` crate directly, then pass it to
-    /// [`LlamaSampler::llguidance_from_matcher`] instead.
-    ///
     /// # Errors
     ///
     /// Returns [`GrammarError`] if the grammar is invalid or the sampler cannot be initialized.
@@ -422,28 +416,29 @@ impl LlamaSampler {
         crate::llguidance_sampler::create_llg_sampler(model, grammar_kind, grammar_data)
     }
 
-    /// Builds the `toktrie` tokenizer environment for `model`.
+    /// `LLGuidance` sampler with caller-supplied slice regexes.
     ///
-    /// Use this to construct your own `llguidance::ParserFactory` (with any slice
-    /// regexes, inference capabilities, or other configuration llguidance supports) and,
-    /// from it, a `llguidance::Matcher` to pass to
-    /// [`LlamaSampler::llguidance_from_matcher`].
-    #[cfg(feature = "llguidance")]
-    #[must_use]
-    pub fn llguidance_tok_env(model: &LlamaModel) -> toktrie::TokEnv {
-        crate::llguidance_sampler::llguidance_build_tok_env(model)
-    }
-
-    /// Wraps an already-built `llguidance::Matcher` into a `LlamaSampler`.
+    /// Identical to [`llguidance`][Self::llguidance] but builds the `ParserFactory` with
+    /// the provided `slices` instead of the default JSON-focused regexes. Each regex
+    /// string describes a token sub-set; matching positions skip the full vocabulary
+    /// trie-walk. Pass an empty slice to disable the optimization entirely.
     ///
-    /// This is the generic entry point for any llguidance configuration this crate
-    /// doesn't special-case: build the `Matcher` yourself (via
-    /// [`LlamaSampler::llguidance_tok_env`] and the `llguidance` crate directly), and this
-    /// just adapts it into a sampler usable in a [`LlamaSampler::chain`].
+    /// # Errors
+    ///
+    /// Returns [`GrammarError`] if the grammar is invalid or the sampler cannot be initialized.
     #[cfg(feature = "llguidance")]
-    #[must_use]
-    pub fn llguidance_from_matcher(matcher: llguidance::Matcher) -> Self {
-        crate::llguidance_sampler::create_llg_sampler_from_matcher(matcher)
+    pub fn llguidance_with_slices(
+        model: &LlamaModel,
+        grammar_kind: &str,
+        grammar_data: &str,
+        slices: &[String],
+    ) -> Result<Self, GrammarError> {
+        crate::llguidance_sampler::create_llg_sampler_with_slices(
+            model,
+            grammar_kind,
+            grammar_data,
+            slices,
+        )
     }
 
     fn sanitize_grammar_strings(
