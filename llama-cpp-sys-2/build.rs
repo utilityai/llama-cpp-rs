@@ -100,7 +100,9 @@ fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 fn extract_lib_names(out_dir: &Path, build_shared_libs: bool, target_os: &TargetOs) -> Vec<String> {
     let lib_pattern = match target_os {
-        TargetOs::Windows(_) => "*.lib",
+        // MSVC emits .lib; the GNU (MinGW) toolchain emits .a static archives.
+        TargetOs::Windows(WindowsVariant::Msvc) => "*.lib",
+        TargetOs::Windows(_) => "*.a",
         TargetOs::Apple(_) => {
             if build_shared_libs {
                 "*.dylib"
@@ -867,11 +869,15 @@ fn main() {
                 // limit configuration set in the windows registry.
                 // I'm not sure why that's a thing, but this makes my builds work.
                 // (crates that depend on llama-cpp-rs w/ vulkan easily exceed the default PATH_MAX on windows)
-                env::set_var("TrackFileAccess", "false");
-                // since we disabled TrackFileAccess, we can now run into problems with parallel
-                // access to pdb files. /FS solves this.
-                config.cflag("/FS");
-                config.cxxflag("/FS");
+                // MSVC-only: MSBuild FileTracker and /FS do not exist on the GNU (MinGW)
+                // toolchain — gcc parses "/FS" as a linker input path and fails.
+                if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+                    env::set_var("TrackFileAccess", "false");
+                    // since we disabled TrackFileAccess, we can now run into problems with parallel
+                    // access to pdb files. /FS solves this.
+                    config.cflag("/FS");
+                    config.cxxflag("/FS");
+                }
             }
             TargetOs::Linux => {
                 // If we are not using system provided vulkan SDK, add vulkan libs for linking
