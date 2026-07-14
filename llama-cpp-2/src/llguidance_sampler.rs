@@ -19,6 +19,14 @@ use crate::token::LlamaToken;
 /// inference capabilities, or other configuration llguidance supports) and, from it, a
 /// `llguidance::Matcher` to convert into a [`LlamaSampler`] via `LlamaSampler::from`.
 ///
+/// # Cost
+///
+/// This walks the entire vocabulary and detokenizes every token id to build a `TokTrie`
+/// (up to two `token_to_piece_bytes` FFI calls per token) — expect this to take on the
+/// order of hundreds of milliseconds for large vocabularies. Build it once per model and
+/// reuse the result (it's an `Arc`-backed [`TokEnv`], so cloning is cheap) across every
+/// grammar and request; don't call this per-request or per-grammar.
+/// 
 /// This mirrors the logic in upstream `llguidance.cpp` — for each token:
 /// - Try normal detokenize (special=false)
 /// - If empty, detokenize with special=true and prefix with 0xFF marker byte
