@@ -571,7 +571,8 @@ impl LlamaModelParams {
         }
 
         let mut callback = Box::new(callback);
-        self.params.progress_callback_user_data = std::ptr::from_mut(&mut *callback).cast::<c_void>();
+        self.params.progress_callback_user_data =
+            std::ptr::from_mut(&mut *callback).cast::<c_void>();
         self.params.progress_callback = Some(trampoline::<F>);
         self.progress_callback = Some(callback);
         self

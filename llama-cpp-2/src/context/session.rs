@@ -585,11 +585,7 @@ impl LlamaContext<'_> {
         flags: LlamaStateSeqFlags,
     ) -> Result<SeqState, crate::StateSeqError> {
         let size = unsafe {
-            llama_cpp_sys_2::llama_state_seq_get_size_ext(
-                self.context.as_ptr(),
-                seq_id,
-                flags.0,
-            )
+            llama_cpp_sys_2::llama_state_seq_get_size_ext(self.context.as_ptr(), seq_id, flags.0)
         };
         let mut bytes = vec![0u8; size];
         let n = unsafe {
