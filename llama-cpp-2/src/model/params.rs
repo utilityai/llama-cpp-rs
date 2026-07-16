@@ -287,6 +287,36 @@ impl LlamaModelParams {
         // set the pointer to the (potentially) new vector
         self.params.tensor_buft_overrides = self.buft_overrides.as_ptr();
     }
+
+    /// Returns the tensor-name patterns of the buffer-type overrides currently set on these
+    /// parameters, in order.
+    ///
+    /// This is the read-only counterpart to [`add_cpu_buft_override`](Self::add_cpu_buft_override)
+    /// and [`add_cpu_moe_override`](Self::add_cpu_moe_override). After
+    /// [`fit_params`](Self::fit_params) it reflects the overrides the auto-fit chose — for example
+    /// the routed-expert tensors (`blk.<N>.ffn_(up|down|gate_up|gate)_(ch|)exps`) a
+    /// mixture-of-experts fit assigns to the CPU buffer type to make the model fit. Returns an empty
+    /// vector when no overrides are set. The trailing null-terminator entry the override list
+    /// carries is skipped; only entries with a non-null pattern are returned.
+    #[must_use]
+    pub fn tensor_buft_override_patterns(&self) -> Vec<String> {
+        self.buft_overrides
+            .iter()
+            .filter(|o| !o.pattern.is_null())
+            .map(|o| {
+                // SAFETY: a non-null `pattern` is a NUL-terminated C string. For fit-produced
+                // overrides it points into process-lifetime function-local `static` storage in
+                // llama.cpp's `common/fit.cpp`, so it is always valid to read here. For overrides set
+                // via `add_cpu_buft_override` the pointer is borrowed from the caller's `&CStr` with
+                // no lifetime tie recorded on the params, so that setter's callers are responsible
+                // for keeping the string alive at least as long as the params; every in-tree caller
+                // passes a `'static` literal. In both cases the string outlives this `&self` borrow.
+                unsafe { CStr::from_ptr(o.pattern) }
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect()
+    }
 }
 
 #[cfg(feature = "common")]
@@ -619,7 +649,30 @@ impl Default for LlamaModelParams {
 
 #[cfg(test)]
 mod tests {
-    use super::LlamaSplitMode;
+    use super::{LlamaModelParams, LlamaSplitMode};
+    use std::pin::pin;
+
+    #[test]
+    fn tensor_buft_override_patterns_empty_by_default() {
+        // Fresh params carry only the null-terminator entry, so no patterns are reported.
+        assert!(LlamaModelParams::default()
+            .tensor_buft_override_patterns()
+            .is_empty());
+    }
+
+    #[test]
+    fn tensor_buft_override_patterns_reads_back_added_override() {
+        // The getter is the read-only counterpart to the setter: the override added is reported and
+        // the trailing null terminator is skipped. This mirrors how `fit_params` populates the same
+        // buffer for the auto-fit's MoE expert offload (`add_cpu_moe_override` uses the same expert
+        // tensor pattern shape the fit emits).
+        let mut params = pin!(LlamaModelParams::default());
+        params.as_mut().add_cpu_moe_override();
+        assert_eq!(
+            params.tensor_buft_override_patterns(),
+            vec!["\\.ffn_(up|down|gate)_(ch|)exps".to_owned()],
+        );
+    }
 
     #[test]
     fn tensor_split_mode_round_trips() {
