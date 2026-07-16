@@ -40,7 +40,7 @@ pub mod timing;
 pub mod token;
 pub mod token_type;
 
-pub use crate::context::session::LlamaStateSeqFlags;
+pub use crate::context::session::{LlamaStateSeqFlags, SeqState};
 
 #[cfg(feature = "common")]
 pub(crate) fn status_is_ok(status: llama_cpp_sys_2::llama_rs_status) -> bool {
@@ -133,6 +133,19 @@ pub enum LlamaContextLoadError {
     /// llama.cpp returned null
     #[error("null reference from llama.cpp")]
     NullReturn,
+}
+
+/// Errors from the sequence-state save/restore API.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+pub enum StateSeqError {
+    /// llama.cpp read or wrote a different number of bytes than expected.
+    #[error("state seq size mismatch: expected {expected}, actual {actual}")]
+    SizeMismatch {
+        /// Number of bytes the caller expected to transfer.
+        expected: usize,
+        /// Number of bytes llama.cpp actually transferred.
+        actual: usize,
+    },
 }
 
 /// Failed to decode a batch.
