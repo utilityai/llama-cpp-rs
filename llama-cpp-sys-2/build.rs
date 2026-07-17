@@ -815,6 +815,16 @@ fn main() {
             "arm64-v8a" => {
                 config.cflag("-march=armv8-a");
                 config.cxxflag("-march=armv8-a");
+                // Allow overriding ggml-cpu's Arm architecture, e.g. to enable the
+                // int8 dot-product / matmul kernels (`armv8.2-a+dotprod`,
+                // `armv8.6-a+i8mm`) on capable devices — Q4_K_M is several times
+                // faster with them. Opt-in via the `GGML_CPU_ARM_ARCH` env var so the
+                // default (`armv8-a`) is unchanged; this mirrors the Linux aarch64
+                // path, which already sets `GGML_CPU_ARM_ARCH`.
+                println!("cargo:rerun-if-env-changed=GGML_CPU_ARM_ARCH");
+                if let Ok(arch) = std::env::var("GGML_CPU_ARM_ARCH") {
+                    config.define("GGML_CPU_ARM_ARCH", &arch);
+                }
             }
             "armeabi-v7a" => {
                 config.cflag("-march=armv7-a");
