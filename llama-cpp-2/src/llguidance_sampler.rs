@@ -69,10 +69,12 @@ pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
     Arc::new(ApproximateTokEnv::new(trie))
 }
 
+/// Internal state for the llguidance sampler.
+struct LlgContext {
+    matcher: Matcher,
+}
+
 // --- extern "C" vtable callbacks ---
-//
-// `ctx` is a boxed `llguidance::Matcher` directly — it owns its own tokenizer environment
-// and parser state internally, so no extra wrapper struct is needed.
 
 unsafe extern "C" fn llg_name(
     _smpl: *const llama_cpp_sys_2::llama_sampler,
@@ -84,18 +86,18 @@ unsafe extern "C" fn llg_accept(
     smpl: *mut llama_cpp_sys_2::llama_sampler,
     token: llama_cpp_sys_2::llama_token,
 ) {
-    let matcher = unsafe { &mut *(*smpl).ctx.cast::<Matcher>() };
-    let _ = matcher.consume_token(token.cast_unsigned());
+    let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
+    let _ = ctx.matcher.consume_token(token.cast_unsigned());
 }
 
 unsafe extern "C" fn llg_apply(
     smpl: *mut llama_cpp_sys_2::llama_sampler,
     cur_p: *mut llama_cpp_sys_2::llama_token_data_array,
 ) {
-    let matcher = unsafe { &mut *(*smpl).ctx.cast::<Matcher>() };
+    let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
     let cur_p = unsafe { &mut *cur_p };
 
-    let Ok(mask) = matcher.compute_mask_or_eos() else {
+    let Ok(mask) = ctx.matcher.compute_mask_or_eos() else {
         return;
     };
 
@@ -108,25 +110,27 @@ unsafe extern "C" fn llg_apply(
 }
 
 unsafe extern "C" fn llg_reset(smpl: *mut llama_cpp_sys_2::llama_sampler) {
-    let matcher = unsafe { &mut *(*smpl).ctx.cast::<Matcher>() };
-    let _ = matcher.reset();
+    let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
+    let _ = ctx.matcher.reset();
 }
 
 unsafe extern "C" fn llg_clone(
     smpl: *const llama_cpp_sys_2::llama_sampler,
 ) -> *mut llama_cpp_sys_2::llama_sampler {
-    let matcher = unsafe { &*(*smpl).ctx.cast::<Matcher>() };
-    let new_matcher = Box::new(matcher.deep_clone());
+    let ctx = unsafe { &*(*smpl).ctx.cast::<LlgContext>() };
+    let new_ctx = Box::new(LlgContext {
+        matcher: ctx.matcher.deep_clone(),
+    });
     unsafe {
         llama_cpp_sys_2::llama_sampler_init(
             &raw mut LLG_SAMPLER_I,
-            Box::into_raw(new_matcher).cast::<c_void>(),
+            Box::into_raw(new_ctx).cast::<c_void>(),
         )
     }
 }
 
 unsafe extern "C" fn llg_free(smpl: *mut llama_cpp_sys_2::llama_sampler) {
-    let ctx_ptr = unsafe { (*smpl).ctx.cast::<Matcher>() };
+    let ctx_ptr = unsafe { (*smpl).ctx.cast::<LlgContext>() };
     if !ctx_ptr.is_null() {
         drop(unsafe { Box::from_raw(ctx_ptr) });
     }
@@ -154,7 +158,7 @@ static mut LLG_SAMPLER_I: llama_cpp_sys_2::llama_sampler_i = llama_cpp_sys_2::ll
 /// built.
 impl From<Matcher> for LlamaSampler {
     fn from(matcher: Matcher) -> Self {
-        let ctx = Box::new(matcher);
+        let ctx = Box::new(LlgContext { matcher });
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init(
                 &raw mut LLG_SAMPLER_I,
