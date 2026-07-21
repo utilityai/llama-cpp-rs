@@ -1243,11 +1243,9 @@ fn main() {
     match target_os {
         TargetOs::Windows(WindowsVariant::Msvc) => {
             println!("cargo:rustc-link-lib=advapi32");
-            let crt_static = env::var("CARGO_CFG_TARGET_FEATURE")
-                .unwrap_or_default()
-                .contains("crt-static");
-            if cfg!(debug_assertions) {
-                if crt_static {
+            let lib_is_debug = profile.eq_ignore_ascii_case("debug");
+            if lib_is_debug {
+                if static_crt {
                     println!("cargo:rustc-link-lib=libcmtd");
                 } else {
                     println!("cargo:rustc-link-lib=dylib=msvcrtd");
