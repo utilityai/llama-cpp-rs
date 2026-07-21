@@ -7,27 +7,30 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 use llguidance::Matcher;
-use toktrie::{ApproximateTokEnv, TokRxInfo, TokTrie};
+use toktrie::{ApproximateTokEnv, TokEnv, TokRxInfo, TokTrie};
 
 use crate::model::LlamaModel;
 use crate::sampling::LlamaSampler;
 use crate::token::LlamaToken;
-use crate::GrammarError;
-
-/// Internal state for the llguidance sampler.
-struct LlgContext {
-    matcher: Matcher,
-    tok_env: Arc<ApproximateTokEnv>,
-    grammar_kind: String,
-    grammar_data: String,
-}
 
 /// Build a [`toktrie::TokEnv`] from a [`LlamaModel`]'s vocabulary.
 ///
+/// Use this to construct your own `llguidance::ParserFactory` (with any slice regexes,
+/// inference capabilities, or other configuration llguidance supports) and, from it, a
+/// `llguidance::Matcher` to convert into a [`LlamaSampler`] via `LlamaSampler::from`.
+///
+/// # Cost
+///
+/// This walks the entire vocabulary and detokenizes every token id to build a `TokTrie`
+/// (up to two `token_to_piece_bytes` FFI calls per token) — expect this to take on the
+/// order of hundreds of milliseconds for large vocabularies. Build it once per model and
+/// reuse the result (it's an `Arc`-backed [`TokEnv`], so cloning is cheap) across every
+/// grammar and request; don't call this per-request or per-grammar.
+/// 
 /// This mirrors the logic in upstream `llguidance.cpp` — for each token:
 /// - Try normal detokenize (special=false)
 /// - If empty, detokenize with special=true and prefix with 0xFF marker byte
-fn build_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
+pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
     let n_vocab = model.n_vocab().cast_unsigned();
     let tok_eos = {
         let eot = unsafe { llama_cpp_sys_2::llama_vocab_eot(model.vocab_ptr()) };
@@ -64,6 +67,11 @@ fn build_tok_env(model: &LlamaModel) -> Arc<ApproximateTokEnv> {
 
     let trie = TokTrie::from(&info, &words);
     Arc::new(ApproximateTokEnv::new(trie))
+}
+
+/// Internal state for the llguidance sampler.
+struct LlgContext {
+    matcher: Matcher,
 }
 
 // --- extern "C" vtable callbacks ---
@@ -112,9 +120,6 @@ unsafe extern "C" fn llg_clone(
     let ctx = unsafe { &*(*smpl).ctx.cast::<LlgContext>() };
     let new_ctx = Box::new(LlgContext {
         matcher: ctx.matcher.deep_clone(),
-        tok_env: Arc::clone(&ctx.tok_env),
-        grammar_kind: ctx.grammar_kind.clone(),
-        grammar_data: ctx.grammar_data.clone(),
     });
     unsafe {
         llama_cpp_sys_2::llama_sampler_init(
@@ -144,44 +149,22 @@ static mut LLG_SAMPLER_I: llama_cpp_sys_2::llama_sampler_i = llama_cpp_sys_2::ll
     backend_set_input: None,
 };
 
-/// Create an llguidance-based constrained decoding sampler.
-pub(crate) fn create_llg_sampler(
-    model: &LlamaModel,
-    grammar_kind: &str,
-    grammar_data: &str,
-) -> Result<LlamaSampler, GrammarError> {
-    let tok_env = build_tok_env(model);
-    let tok_env_dyn: Arc<dyn toktrie::TokenizerEnv + Sync> = tok_env.clone();
-
-    let factory = llguidance::ParserFactory::new_simple(&tok_env_dyn)
-        .map_err(|_| GrammarError::NullGrammar)?;
-
-    let grammar = llguidance::api::TopLevelGrammar::from_tagged_str(grammar_kind, grammar_data)
-        .map_err(|_| GrammarError::NullGrammar)?;
-
-    let parser = factory
-        .create_parser(grammar)
-        .map_err(|_| GrammarError::NullGrammar)?;
-
-    let matcher = Matcher::new(Ok(parser));
-
-    let ctx = Box::new(LlgContext {
-        matcher,
-        tok_env,
-        grammar_kind: grammar_kind.to_string(),
-        grammar_data: grammar_data.to_string(),
-    });
-
-    let sampler = unsafe {
-        llama_cpp_sys_2::llama_sampler_init(
-            &raw mut LLG_SAMPLER_I,
-            Box::into_raw(ctx).cast::<c_void>(),
-        )
-    };
-
-    if sampler.is_null() {
-        Err(GrammarError::NullGrammar)
-    } else {
-        Ok(LlamaSampler { sampler })
+/// Wraps an already-built [`llguidance::Matcher`] into a [`LlamaSampler`].
+///
+/// Build a [`TokEnv`] via [`llguidance_build_tok_env`], your own `llguidance::ParserFactory`
+/// (with whatever slices, inference capabilities, or other llguidance configuration you
+/// need), and parse your grammar into a `Matcher` — then convert it here. This only adapts
+/// the `Matcher` into the `llama_sampler` vtable; it has no opinion on how the `Matcher` was
+/// built.
+impl From<Matcher> for LlamaSampler {
+    fn from(matcher: Matcher) -> Self {
+        let ctx = Box::new(LlgContext { matcher });
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_init(
+                &raw mut LLG_SAMPLER_I,
+                Box::into_raw(ctx).cast::<c_void>(),
+            )
+        };
+        LlamaSampler { sampler }
     }
 }

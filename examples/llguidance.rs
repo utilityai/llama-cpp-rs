@@ -13,6 +13,8 @@ use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::sampling::LlamaSampler;
+use llguidance::api::TopLevelGrammar;
+use llguidance::{Matcher, ParserFactory};
 use std::io::Write;
 
 fn main() {
@@ -51,9 +53,15 @@ fn main() {
   "required": ["city", "temperature"]
 }"#;
 
-    // Initialize LLGuidance sampler with "json" kind
-    let llg_sampler = LlamaSampler::llguidance(&model, "json", schema)
-        .expect("failed to initialize llguidance sampler");
+    // Build an LLGuidance sampler by getting the tok_env for our model (llama-cpp-2)
+    // and use plain `llguidance` to build the grammar, parser -> matcher -> sampler. 
+    let grammar = TopLevelGrammar::from_tagged_str("json", schema).expect("invalid grammar");
+    let tok_env = LlamaSampler::llguidance_tok_env(&model);
+    let factory = ParserFactory::new_simple(&tok_env).expect("failed to build parser factory");
+    let parser = factory.create_parser(grammar).expect("failed to create parser");
+    let matcher = Matcher::new(Ok(parser));
+
+    let llg_sampler = LlamaSampler::from(matcher);
 
     // We must use a sampler chain that ends with a selector (like greedy or dist)
     let mut sampler = LlamaSampler::chain_simple([llg_sampler, LlamaSampler::greedy()]);
