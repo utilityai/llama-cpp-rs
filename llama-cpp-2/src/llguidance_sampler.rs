@@ -100,6 +100,11 @@ unsafe extern "C" fn llg_accept(
     token: llama_cpp_sys_2::llama_token,
 ) {
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
+    // Consuming a token into an already-stopped parser errors and permanently
+    // poisons the matcher (reset() can't clear it), so skip it.
+    if ctx.matcher.is_stopped() {
+        return;
+    }
     let _ = ctx.matcher.consume_token(token.cast_unsigned());
 }
 
