@@ -11,6 +11,7 @@ use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
+use crate::sampling::LlamaSampler;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
 use crate::{
@@ -838,6 +839,63 @@ impl LlamaModel {
         let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::new(self, context, params.embeddings()))
+    }
+
+    /// Creates a new context with backend samplers attached for specific sequences.
+    ///
+    /// Ownership of the samplers is transferred to the context, ensuring they remain
+    /// alive for the context's lifetime. Only samplers that support backend execution
+    /// (greedy, dist, temp, top_k, top_p, min_p, logit_bias) will run on the backend.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - Context parameters
+    /// * `samplers` - Iterator of `(seq_id, sampler)` pairs where sampler must be a chain
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let sampler = LlamaSampler::chain([
+    ///     LlamaSampler::min_p(0.01, 64),
+    ///     LlamaSampler::temp(0.1),
+    ///     LlamaSampler::dist(42),
+    /// ], false);
+    ///
+    /// let ctx = model.new_context_with_samplers(
+    ///     &backend,
+    ///     ctx_params,
+    ///     [(0, sampler)],
+    /// )?;
+    /// ```
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new_context_with_samplers<'a>(
+        &'a self,
+        _: &LlamaBackend,
+        params: LlamaContextParams,
+        samplers: impl IntoIterator<Item = (i32, LlamaSampler)>,
+    ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
+        let samplers: Vec<_> = samplers.into_iter().collect();
+        let mut context_params = params.context_params;
+
+        let mut sampler_configs: Vec<llama_cpp_sys_2::llama_sampler_seq_config> = samplers
+            .iter()
+            .map(|(seq_id, sampler)| llama_cpp_sys_2::llama_sampler_seq_config {
+                seq_id: *seq_id,
+                sampler: sampler.sampler,
+            })
+            .collect();
+
+        if !sampler_configs.is_empty() {
+            context_params.samplers = sampler_configs.as_mut_ptr();
+            context_params.n_samplers = sampler_configs.len();
+        }
+
+        let context = unsafe {
+            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
+        };
+        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+
+        Ok(LlamaContext::with_samplers(self, context, params.embeddings(), samplers))
     }
 
     /// Apply the models chat template to some messages.
