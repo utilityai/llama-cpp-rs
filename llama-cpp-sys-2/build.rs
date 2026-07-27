@@ -259,6 +259,128 @@ fn validate_android_ndk(ndk_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Android NDK toolchain facts derived from the environment for a given Rust target
+/// triple. Shared by the bindgen setup (clang args) and the Vulkan backend build (CMake
+/// cache vars) so the two agree on which NDK, sysroot, arch and API level to use.
+struct AndroidToolchain {
+    /// NDK root (e.g. the value of `ANDROID_NDK`).
+    ndk: String,
+    /// `<ndk>/toolchains/llvm/prebuilt/<host_tag>`
+    toolchain_path: String,
+    /// `<toolchain_path>/sysroot`
+    sysroot: String,
+    /// NDK sysroot arch directory / triple, e.g. `aarch64-linux-android`.
+    arch_triple: &'static str,
+    /// CMake `ANDROID_ABI` name, e.g. `arm64-v8a`.
+    abi: &'static str,
+    /// Android API level (numeric), e.g. `28`.
+    api: String,
+}
+
+fn android_toolchain(target_triple: &str) -> AndroidToolchain {
+    // NDK path: explicit env vars first, then auto-detect the newest NDK under the SDK.
+    let ndk = env::var("ANDROID_NDK")
+        .or_else(|_| env::var("ANDROID_NDK_ROOT"))
+        .or_else(|_| env::var("NDK_ROOT"))
+        .or_else(|_| env::var("CARGO_NDK_ANDROID_NDK"))
+        .or_else(|_| {
+            if let Some(home) = env::home_dir() {
+                let android_home = env::var("ANDROID_HOME")
+                    .or_else(|_| env::var("ANDROID_SDK_ROOT"))
+                    .unwrap_or_else(|_| format!("{}/Android/Sdk", home.display()));
+                let ndk_dir = format!("{}/ndk", android_home);
+                if let Ok(entries) = std::fs::read_dir(&ndk_dir) {
+                    let mut versions: Vec<_> = entries
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+                        .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+                        .collect();
+                    versions.sort();
+                    if let Some(latest) = versions.last() {
+                        return Ok(format!("{}/{}", ndk_dir, latest));
+                    }
+                }
+            }
+            Err(env::VarError::NotPresent)
+        })
+        .unwrap_or_else(|_| {
+            panic!(
+                "Android NDK not found. Please set one of: ANDROID_NDK, NDK_ROOT, ANDROID_NDK_ROOT\n\
+                 Current target: {target_triple}\n\
+                 Download from: https://developer.android.com/ndk/downloads"
+            )
+        });
+
+    if let Err(e) = validate_android_ndk(&ndk) {
+        panic!("{e}");
+    }
+
+    // API level: ANDROID_API_LEVEL, else the numeric part of ANDROID_PLATFORM (`android-NN`).
+    let api = env::var("ANDROID_API_LEVEL")
+        .or_else(|_| env::var("ANDROID_PLATFORM").map(|p| p.replace("android-", "")))
+        .or_else(|_| env::var("CARGO_NDK_ANDROID_PLATFORM").map(|p| p.replace("android-", "")))
+        .unwrap_or_else(|_| "28".to_string());
+
+    let host_tag = if cfg!(target_os = "macos") {
+        "darwin-x86_64"
+    } else if cfg!(target_os = "linux") {
+        "linux-x86_64"
+    } else if cfg!(target_os = "windows") {
+        "windows-x86_64"
+    } else {
+        panic!("Unsupported host platform for Android NDK");
+    };
+
+    // Both the sysroot arch triple (used for header/lib paths) and the CMake ABI name.
+    let (arch_triple, abi) = if target_triple.contains("aarch64") {
+        ("aarch64-linux-android", "arm64-v8a")
+    } else if target_triple.contains("armv7") {
+        ("arm-linux-androideabi", "armeabi-v7a")
+    } else if target_triple.contains("x86_64") {
+        ("x86_64-linux-android", "x86_64")
+    } else if target_triple.contains("i686") {
+        ("i686-linux-android", "x86")
+    } else {
+        panic!(
+            "Unsupported Android target: {target_triple}\n\
+             Supported: aarch64-linux-android, armv7-linux-androideabi, \
+             i686-linux-android, x86_64-linux-android"
+        );
+    };
+
+    let toolchain_path = format!("{ndk}/toolchains/llvm/prebuilt/{host_tag}");
+    if !Path::new(&toolchain_path).exists() {
+        panic!(
+            "Android NDK toolchain not found at: {toolchain_path}\n\
+             Please ensure you have the correct Android NDK for your platform."
+        );
+    }
+    let sysroot = format!("{toolchain_path}/sysroot");
+
+    // Any NDK / platform env change should re-trigger the build (all Android steps depend
+    // on these), so emit the directives here rather than in one specific call site.
+    for var in [
+        "ANDROID_NDK",
+        "ANDROID_NDK_ROOT",
+        "NDK_ROOT",
+        "CARGO_NDK_ANDROID_NDK",
+        "ANDROID_PLATFORM",
+        "ANDROID_API_LEVEL",
+        "CARGO_NDK_ANDROID_PLATFORM",
+    ] {
+        println!("cargo:rerun-if-env-changed={var}");
+    }
+
+    AndroidToolchain {
+        ndk,
+        toolchain_path,
+        sysroot,
+        arch_triple,
+        abi,
+        api,
+    }
+}
+
 fn is_hidden(e: &DirEntry) -> bool {
     e.file_name()
         .to_str()
@@ -366,88 +488,11 @@ fn main() {
 
     // Configure Android-specific bindgen settings
     if matches!(target_os, TargetOs::Android) {
-        // Detect Android NDK from environment variables
-        let android_ndk = env::var("ANDROID_NDK")
-            .or_else(|_| env::var("ANDROID_NDK_ROOT"))
-            .or_else(|_| env::var("NDK_ROOT"))
-            .or_else(|_| env::var("CARGO_NDK_ANDROID_NDK"))
-            .or_else(|_| {
-                // Try to auto-detect NDK from Android SDK
-                if let Some(home) = env::home_dir() {
-                    let android_home = env::var("ANDROID_HOME")
-                        .or_else(|_| env::var("ANDROID_SDK_ROOT"))
-                        .unwrap_or_else(|_| format!("{}/Android/Sdk", home.display()));
-
-                    let ndk_dir = format!("{}/ndk", android_home);
-                    if let Ok(entries) = std::fs::read_dir(&ndk_dir) {
-                        let mut versions: Vec<_> = entries
-                            .filter_map(|e| e.ok())
-                            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
-                            .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
-                            .collect();
-                        versions.sort();
-                        if let Some(latest) = versions.last() {
-                            return Ok(format!("{}/{}", ndk_dir, latest));
-                        }
-                    }
-                }
-                Err(env::VarError::NotPresent)
-            })
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Android NDK not found. Please set one of: ANDROID_NDK, NDK_ROOT, ANDROID_NDK_ROOT\n\
-                     Current target: {}\n\
-                     Download from: https://developer.android.com/ndk/downloads",
-                    target_triple
-                );
-            });
-
-        // Get Android API level
-        let android_api = env::var("ANDROID_API_LEVEL")
-            .or_else(|_| env::var("ANDROID_PLATFORM").map(|p| p.replace("android-", "")))
-            .or_else(|_| env::var("CARGO_NDK_ANDROID_PLATFORM").map(|p| p.replace("android-", "")))
-            .unwrap_or_else(|_| "28".to_string());
-
-        // Determine host platform
-        let host_tag = if cfg!(target_os = "macos") {
-            "darwin-x86_64"
-        } else if cfg!(target_os = "linux") {
-            "linux-x86_64"
-        } else if cfg!(target_os = "windows") {
-            "windows-x86_64"
-        } else {
-            panic!("Unsupported host platform for Android NDK");
-        };
-
-        // Map Rust target to Android architecture
-        let android_target_prefix = if target_triple.contains("aarch64") {
-            "aarch64-linux-android"
-        } else if target_triple.contains("armv7") {
-            "arm-linux-androideabi"
-        } else if target_triple.contains("x86_64") {
-            "x86_64-linux-android"
-        } else if target_triple.contains("i686") {
-            "i686-linux-android"
-        } else {
-            panic!("Unsupported Android target: {}", target_triple);
-        };
-
-        // Setup Android toolchain paths
-        let toolchain_path = format!("{}/toolchains/llvm/prebuilt/{}", android_ndk, host_tag);
-        let sysroot = format!("{}/sysroot", toolchain_path);
-
-        // Validate toolchain existence
-        if !std::path::Path::new(&toolchain_path).exists() {
-            panic!(
-                "Android NDK toolchain not found at: {}\n\
-                 Please ensure you have the correct Android NDK for your platform.",
-                toolchain_path
-            );
-        }
+        let tc = android_toolchain(&target_triple);
 
         // Find clang builtin includes
         let clang_builtin_includes = {
-            let clang_lib_path = format!("{}/lib/clang", toolchain_path);
+            let clang_lib_path = format!("{}/lib/clang", tc.toolchain_path);
             std::fs::read_dir(&clang_lib_path).ok().and_then(|entries| {
                 entries
                     .filter_map(|e| e.ok())
@@ -473,8 +518,8 @@ fn main() {
 
         // Configure bindgen for Android
         bindings_builder = bindings_builder
-            .clang_arg(format!("--sysroot={}", sysroot))
-            .clang_arg(format!("-D__ANDROID_API__={}", android_api))
+            .clang_arg(format!("--sysroot={}", tc.sysroot))
+            .clang_arg(format!("-D__ANDROID_API__={}", tc.api))
             .clang_arg("-D__ANDROID__");
 
         // Add include paths in correct order
@@ -486,9 +531,9 @@ fn main() {
 
         bindings_builder = bindings_builder
             .clang_arg("-isystem")
-            .clang_arg(format!("{}/usr/include/{}", sysroot, android_target_prefix))
+            .clang_arg(format!("{}/usr/include/{}", tc.sysroot, tc.arch_triple))
             .clang_arg("-isystem")
-            .clang_arg(format!("{}/usr/include", sysroot))
+            .clang_arg(format!("{}/usr/include", tc.sysroot))
             .clang_arg("-include")
             .clang_arg("stdbool.h")
             .clang_arg("-include")
@@ -746,60 +791,15 @@ fn main() {
             panic!("Features 'shared-stdcxx' and 'static-stdcxx' are mutually exclusive");
         }
 
-        // Android NDK Build Configuration
-        let android_ndk = env::var("ANDROID_NDK")
-            .or_else(|_| env::var("NDK_ROOT"))
-            .or_else(|_| env::var("ANDROID_NDK_ROOT"))
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Android NDK not found. Please set one of: ANDROID_NDK, NDK_ROOT, ANDROID_NDK_ROOT\n\
-                     Download from: https://developer.android.com/ndk/downloads"
-                );
-            });
+        let tc = android_toolchain(&target_triple);
 
-        // Validate NDK installation
-        if let Err(error) = validate_android_ndk(&android_ndk) {
-            panic!("Android NDK validation failed: {}", error);
-        }
-
-        // Rerun build script if NDK environment variables change
-        println!("cargo:rerun-if-env-changed=ANDROID_NDK");
-        println!("cargo:rerun-if-env-changed=NDK_ROOT");
-        println!("cargo:rerun-if-env-changed=ANDROID_NDK_ROOT");
-
-        // Set CMake toolchain file for Android
-        let toolchain_file = format!("{}/build/cmake/android.toolchain.cmake", android_ndk);
-        config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
-
-        // Configure Android platform (API level)
-        let android_platform = env::var("ANDROID_PLATFORM").unwrap_or_else(|_| {
-            env::var("ANDROID_API_LEVEL")
-                .map(|level| format!("android-{}", level))
-                .unwrap_or_else(|_| "android-28".to_string())
-        });
-
-        println!("cargo:rerun-if-env-changed=ANDROID_PLATFORM");
-        println!("cargo:rerun-if-env-changed=ANDROID_API_LEVEL");
-        config.define("ANDROID_PLATFORM", &android_platform);
-
-        // Map Rust target to Android ABI
-        let android_abi = if target_triple.contains("aarch64") {
-            "arm64-v8a"
-        } else if target_triple.contains("armv7") {
-            "armeabi-v7a"
-        } else if target_triple.contains("x86_64") {
-            "x86_64"
-        } else if target_triple.contains("i686") {
-            "x86"
-        } else {
-            panic!(
-                "Unsupported Android target: {}\n\
-                 Supported targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android",
-                target_triple
-            );
-        };
-
-        config.define("ANDROID_ABI", android_abi);
+        // CMake cross-compile toolchain file + target platform/ABI selection.
+        config.define(
+            "CMAKE_TOOLCHAIN_FILE",
+            format!("{}/build/cmake/android.toolchain.cmake", tc.ndk),
+        );
+        config.define("ANDROID_PLATFORM", format!("android-{}", tc.api));
+        config.define("ANDROID_ABI", tc.abi);
 
         // Configure C++ standard library linkage for Android.
         // By default, the NDK toolchain uses c++_shared.
@@ -811,7 +811,7 @@ fn main() {
         }
 
         // Configure architecture-specific compiler flags
-        match android_abi {
+        match tc.abi {
             "arm64-v8a" => {
                 config.cflag("-march=armv8-a");
                 config.cxxflag("-march=armv8-a");
@@ -885,6 +885,71 @@ fn main() {
                     let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
                     println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
                 }
+                println!("cargo:rustc-link-lib=vulkan");
+            }
+            TargetOs::Android => {
+                // Cross-compiling the Vulkan backend for Android needs a few things the NDK
+                // toolchain can't supply on its own, because its CMake toolchain re-roots
+                // find_package() into the NDK sysroot (so FindVulkan / find_package(SPIRV-Headers)
+                // can't discover host packages):
+                //
+                //   * Vulkan headers WITH the C++ bindings (`vulkan/vulkan.hpp`). The NDK ships
+                //     only the C headers, but ggml-vulkan is C++ — so the caller points
+                //     VULKAN_INCLUDE_DIR at a full Vulkan-Hpp header set (e.g. a `vulkan-headers`
+                //     package). It may be newer than the device loader; the loader is compatible.
+                //   * SPIRV-Headers (ggml-vulkan does `find_package(SPIRV-Headers CONFIG)` and
+                //     `#include <spirv/unified1/spirv.hpp>`). SPIRV_HEADERS_DIR points at the dir
+                //     holding SPIRV-HeadersConfig.cmake; the headers are added to the compile line
+                //     (defaulting to alongside the Vulkan headers, e.g. /usr/include).
+                //
+                // The Vulkan *loader* to link against is in the NDK sysroot (per-API
+                // libvulkan.so) and `glslc` is a host tool on PATH, so both are auto-detected.
+                // The device provides the real driver at runtime.
+                let tc = android_toolchain(&target_triple);
+
+                // Headers with the C++ bindings — the NDK lacks vulkan.hpp.
+                let vk_include = env::var("VULKAN_INCLUDE_DIR").expect(
+                    "the Vulkan backend for Android requires VULKAN_INCLUDE_DIR to point at \
+                     Vulkan headers that include <vulkan/vulkan.hpp> (the NDK ships only the C \
+                     headers)",
+                );
+                config.define("Vulkan_INCLUDE_DIR", &vk_include);
+
+                // Loader from the NDK sysroot; the device supplies the driver at runtime.
+                config.define(
+                    "Vulkan_LIBRARY",
+                    format!(
+                        "{}/usr/lib/{}/{}/libvulkan.so",
+                        tc.sysroot, tc.arch_triple, tc.api
+                    ),
+                );
+
+                // Host shader compiler for the vulkan-shaders-gen build tool.
+                let glslc = env::var("VULKAN_GLSLC")
+                    .ok()
+                    .or_else(|| {
+                        env::var_os("PATH").and_then(|paths| {
+                            env::split_paths(&paths)
+                                .map(|p| p.join("glslc"))
+                                .find(|p| p.exists())
+                                .map(|p| p.to_string_lossy().into_owned())
+                        })
+                    })
+                    .expect("the Vulkan backend for Android requires `glslc` on PATH or VULKAN_GLSLC");
+                config.define("Vulkan_GLSLC_EXECUTABLE", glslc);
+
+                // SPIRV-Headers: the CONFIG package plus its include dir on the compile line
+                // (the CONFIG target's interface include is not propagated under the toolchain).
+                let spirv_dir = env::var("SPIRV_HEADERS_DIR").expect(
+                    "the Vulkan backend for Android requires SPIRV_HEADERS_DIR to point at the \
+                     directory containing SPIRV-HeadersConfig.cmake",
+                );
+                config.define("SPIRV-Headers_DIR", spirv_dir);
+                let spirv_include = env::var("SPIRV_HEADERS_INCLUDE_DIR").unwrap_or(vk_include);
+                config.cflag(format!("-I{spirv_include}"));
+                config.cxxflag(format!("-I{spirv_include}"));
+
+                // Resolved from the device's libvulkan.so at load time.
                 println!("cargo:rustc-link-lib=vulkan");
             }
             _ => (),
