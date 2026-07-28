@@ -296,7 +296,6 @@ impl LlamaSampler {
     }
 
     /// Grammar sampler
-    #[cfg(feature = "common")]
     #[must_use]
     pub fn grammar(
         model: &LlamaModel,
@@ -306,8 +305,17 @@ impl LlamaSampler {
         let (grammar_str, grammar_root) =
             Self::sanitize_grammar_strings(grammar_str, grammar_root)?;
 
+        #[cfg(feature = "common")]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_rs_sampler_init_grammar(
+                model.vocab_ptr(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+            )
+        };
+        #[cfg(not(feature = "common"))]
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_init_grammar(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
@@ -364,7 +372,12 @@ impl LlamaSampler {
     /// Trigger patterns are regular expressions matched from the start of the
     /// generation output. The grammar sampler will be fed content starting from
     /// the first match group.
-    #[cfg(feature = "common")]
+    ///
+    /// Without the `common` feature there is no C++ shim to catch exceptions,
+    /// and `llama.cpp` builds a `std::regex` from each trigger pattern, so an
+    /// invalid pattern aborts instead of returning
+    /// [`GrammarError::NullGrammar`]. An unparseable grammar is reported with a
+    /// null pointer either way.
     #[must_use]
     pub fn grammar_lazy_patterns(
         model: &LlamaModel,
@@ -380,8 +393,21 @@ impl LlamaSampler {
         let mut trigger_pattern_ptrs: Vec<*const c_char> =
             trigger_patterns.iter().map(|cs| cs.as_ptr()).collect();
 
+        #[cfg(feature = "common")]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy_patterns(
+                model.vocab_ptr(),
+                grammar_str.as_ptr(),
+                grammar_root.as_ptr(),
+                trigger_pattern_ptrs.as_mut_ptr(),
+                trigger_pattern_ptrs.len(),
+                trigger_tokens.as_ptr().cast(),
+                trigger_tokens.len(),
+            )
+        };
+        #[cfg(not(feature = "common"))]
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_init_grammar_lazy_patterns(
                 model.vocab_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
