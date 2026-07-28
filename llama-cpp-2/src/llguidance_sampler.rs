@@ -42,9 +42,16 @@ pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
     };
     let info = TokRxInfo::new(n_vocab, tok_eos);
 
+    // Collect the full EOG set during the vocab walk (`tok_eos` first, so it
+    // stays the primary EOS). Registered via `with_eos_tokens` below.
+    let mut eog_tokens = vec![tok_eos];
+
     let mut words = Vec::with_capacity(n_vocab as usize);
     for i in 0..n_vocab.cast_signed() {
         let token = LlamaToken(i);
+        if model.is_eog_token(token) && i.cast_unsigned() != tok_eos {
+            eog_tokens.push(i.cast_unsigned());
+        }
         let bytes = model
             .token_to_piece_bytes(token, 32, false, None)
             .unwrap_or_default();
@@ -65,7 +72,13 @@ pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
         }
     }
 
-    let trie = TokTrie::from(&info, &words);
+    // Register the whole EOG set, not just the primary `tok_eos`: llguidance only
+    // unmasks registered EOS tokens at grammar accepting states, so a model that
+    // ends via a secondary EOG token (e.g. gemma4's `<eos>` after a tool call)
+    // would otherwise be unable to stop and loop until the context overflows.
+    // Mirrors llama.cpp's GBNF sampler, which unmasks all EOG at accepting states.
+    let trie = TokTrie::from(&info, &words).with_eos_tokens(&eog_tokens);
+
     Arc::new(ApproximateTokEnv::new(trie))
 }
 
@@ -87,6 +100,11 @@ unsafe extern "C" fn llg_accept(
     token: llama_cpp_sys_2::llama_token,
 ) {
     let ctx = unsafe { &mut *(*smpl).ctx.cast::<LlgContext>() };
+    // Consuming a token into an already-stopped parser errors and permanently
+    // poisons the matcher (reset() can't clear it), so skip it.
+    if ctx.matcher.is_stopped() {
+        return;
+    }
     let _ = ctx.matcher.consume_token(token.cast_unsigned());
 }
 
