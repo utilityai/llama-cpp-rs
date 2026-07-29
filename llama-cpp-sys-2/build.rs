@@ -935,7 +935,9 @@ fn main() {
                                 .map(|p| p.to_string_lossy().into_owned())
                         })
                     })
-                    .expect("the Vulkan backend for Android requires `glslc` on PATH or VULKAN_GLSLC");
+                    .expect(
+                        "the Vulkan backend for Android requires `glslc` on PATH or VULKAN_GLSLC",
+                    );
                 config.define("Vulkan_GLSLC_EXECUTABLE", glslc);
 
                 // SPIRV-Headers: the CONFIG package plus its include dir on the compile line
