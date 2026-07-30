@@ -431,6 +431,15 @@ pub enum SamplerAcceptError {
     FfiError(i32),
 }
 
+/// Failed to apply a sampler or sample a token.
+#[derive(Debug, thiserror::Error)]
+pub enum SamplerSampleError {
+    /// llama.cpp returned an error code (e.g. it threw a C++ exception, such as
+    /// a grammar masking every candidate, which was caught at the FFI boundary).
+    #[error("ffi error {0}")]
+    FfiError(i32),
+}
+
 /// Get the time in microseconds according to ggml
 ///
 /// ```

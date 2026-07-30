@@ -124,6 +124,40 @@ extern "C" llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sample
     }
 }
 
+extern "C" llama_rs_status llama_rs_sampler_sample(
+    struct llama_sampler * sampler,
+    struct llama_context * ctx,
+    int32_t idx,
+    llama_token * out_token) {
+    if (!sampler || !ctx || !out_token) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        *out_token = llama_sampler_sample(sampler, ctx, idx);
+        return LLAMA_RS_STATUS_OK;
+    } catch (const std::exception &) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
+extern "C" llama_rs_status llama_rs_sampler_apply(
+    struct llama_sampler * sampler,
+    llama_token_data_array * cur_p) {
+    if (!sampler || !cur_p) {
+        return LLAMA_RS_STATUS_INVALID_ARGUMENT;
+    }
+    try {
+        llama_sampler_apply(sampler, cur_p);
+        return LLAMA_RS_STATUS_OK;
+    } catch (const std::exception &) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    } catch (...) {
+        return LLAMA_RS_STATUS_EXCEPTION;
+    }
+}
+
 // Thin pass-through to llama.cpp's common_fit_params (a C++ symbol in libcommon).
 // Returns common_params_fit_status as an int: 0 = success, 1 = failure, 2 = error.
 extern "C" int llama_rs_fit_params(
