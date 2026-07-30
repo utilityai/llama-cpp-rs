@@ -129,6 +129,28 @@ impl LlamaTokenDataArray {
         }
     }
 
+    /// Modifies the data array by applying a sampler to it, returning an error
+    /// instead of aborting the process when llama.cpp throws during apply (for
+    /// example, a grammar that masks every remaining candidate). See
+    /// [`crate::sampling::LlamaSampler::try_sample`] for the same guarantee on
+    /// the combined sample path.
+    #[cfg(feature = "common")]
+    pub fn try_apply_sampler(
+        &mut self,
+        sampler: &LlamaSampler,
+    ) -> Result<(), crate::SamplerSampleError> {
+        let status = unsafe {
+            self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
+                llama_cpp_sys_2::llama_rs_sampler_apply(sampler.sampler, c_llama_token_data_array)
+            })
+        };
+        if crate::status_is_ok(status) {
+            Ok(())
+        } else {
+            Err(crate::SamplerSampleError::FfiError(status))
+        }
+    }
+
     /// Modifies the data array by applying a sampler to it
     #[must_use]
     pub fn with_sampler(mut self, sampler: &mut LlamaSampler) -> Self {

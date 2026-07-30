@@ -11,6 +11,8 @@ use crate::status_is_ok;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::logit_bias::LlamaLogitBias;
 use crate::token::LlamaToken;
+#[cfg(feature = "common")]
+use crate::SamplerSampleError;
 use crate::{GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
@@ -33,6 +35,36 @@ impl LlamaSampler {
         };
 
         LlamaToken(token)
+    }
+
+    /// Try to sample and accept a token from the idx-th output of the last evaluation.
+    ///
+    /// Unlike [`Self::sample`], this returns an error instead of aborting the process
+    /// when llama.cpp throws during sampling. This happens, for example, when the
+    /// sampler chain leaves an empty candidate set (a grammar placed after a
+    /// truncation sampler such as top-k can mask every surviving token). The C++
+    /// exception would otherwise unwind across the FFI boundary, which Rust cannot
+    /// catch, killing the process.
+    #[cfg(feature = "common")]
+    pub fn try_sample(
+        &mut self,
+        ctx: &LlamaContext,
+        idx: i32,
+    ) -> Result<LlamaToken, SamplerSampleError> {
+        let mut token = 0;
+        let status = unsafe {
+            llama_cpp_sys_2::llama_rs_sampler_sample(
+                self.sampler,
+                ctx.context.as_ptr(),
+                idx,
+                &mut token,
+            )
+        };
+        if status_is_ok(status) {
+            Ok(LlamaToken(token))
+        } else {
+            Err(SamplerSampleError::FfiError(status))
+        }
     }
 
     /// Applies this sampler to a [`LlamaTokenDataArray`].
