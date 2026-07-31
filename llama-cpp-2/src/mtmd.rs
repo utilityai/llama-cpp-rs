@@ -291,6 +291,7 @@ impl MtmdContext {
         let text_cstring = CString::new(text.text)?;
         let input_text = llama_cpp_sys_2::mtmd_input_text {
             text: text_cstring.as_ptr(),
+            text_len: text_cstring.as_bytes().len(),
             add_special: text.add_special,
             parse_special: text.parse_special,
         };
@@ -477,7 +478,11 @@ impl MtmdBitmap {
         placeholder: bool,
     ) -> Result<Self, MtmdBitmapError> {
         let path_cstr = CString::new(path)?;
-        let bitmap = unsafe {
+        // This helper now returns a wrapper struct (bitmap + an optional video
+        // decoding context) instead of a bare pointer. `video_ctx` is only set
+        // when MTMD_VIDEO is enabled at compile time; this crate does not build
+        // with it on, so it is always null here and only the bitmap matters.
+        let wrapper = unsafe {
             llama_cpp_sys_2::mtmd_helper_bitmap_init_from_file(
                 ctx.context.as_ptr(),
                 path_cstr.as_ptr(),
@@ -485,7 +490,7 @@ impl MtmdBitmap {
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
@@ -519,7 +524,9 @@ impl MtmdBitmap {
         data: &[u8],
         placeholder: bool,
     ) -> Result<Self, MtmdBitmapError> {
-        let bitmap = unsafe {
+        // See the comment in `from_file`: this returns a wrapper struct now, and
+        // `video_ctx` is always null since MTMD_VIDEO is not enabled in this build.
+        let wrapper = unsafe {
             llama_cpp_sys_2::mtmd_helper_bitmap_init_from_buf(
                 ctx.context.as_ptr(),
                 data.as_ptr(),
@@ -528,7 +535,7 @@ impl MtmdBitmap {
             )
         };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
