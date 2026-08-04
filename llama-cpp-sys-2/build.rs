@@ -1001,6 +1001,18 @@ fn main() {
         println!("cargo:backends_dir={}", out_dir.join("backends").display());
     }
 
+    // The CMake build installs a ggml package config. Tell the dependent crates where it
+    // is, in the DEP_LLAMA_GGML_CMAKE_DIR variable. A dependent crate that also builds
+    // ggml can put this path in CMAKE_PREFIX_PATH and use this ggml. Then there is only
+    // one ggml in the program. Two copies of ggml in one program cause duplicate symbols.
+    for libdir in ["lib64", "lib"] {
+        let cmake_dir = out_dir.join(libdir).join("cmake");
+        if cmake_dir.join("ggml").is_dir() {
+            println!("cargo:ggml_cmake_dir={}", cmake_dir.display());
+            break;
+        }
+    }
+
     // Build mtmd directly with cc::Build, bypassing the cmake tools build.
     // Using LLAMA_BUILD_TOOLS=ON would pull in all tools (batched-bench, quantize, etc.)
     // and their CMakeLists.txt files, which are not included in the crate package.
