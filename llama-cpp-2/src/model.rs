@@ -589,6 +589,22 @@ impl LlamaModel {
         unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
     }
 
+    /// The model's *output* embedding width (`n_embd_out`). This is the width
+    /// llama.cpp actually extracts embeddings at — `n_embd` and `n_embd_out`
+    /// diverge when `{arch}.embedding_length_out` is present (deepstack models
+    /// like qwen3vl). Returns a `c_int` for maximum compatibility.
+    #[must_use]
+    pub fn n_embd_out(&self) -> c_int {
+        unsafe { llama_cpp_sys_2::llama_model_n_embd_out(self.model.as_ptr()) }
+    }
+
+    /// The model's classification output width (`n_cls_out`, default 1) — the
+    /// width of a RANK-pooled embeddings read (llama.h:1029).
+    #[must_use]
+    pub fn n_cls_out(&self) -> u32 {
+        unsafe { llama_cpp_sys_2::llama_model_n_cls_out(self.model.as_ptr()) }
+    }
+
     /// Returns the total size of all the tensors in the model in bytes.
     pub fn size(&self) -> u64 {
         unsafe { llama_cpp_sys_2::llama_model_size(self.model.as_ptr()) }

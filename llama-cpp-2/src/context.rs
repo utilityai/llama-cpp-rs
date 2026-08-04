@@ -140,7 +140,9 @@ impl<'model> LlamaContext<'model> {
     /// # Returns
     ///
     /// A slice containing the embeddings for the last decoded batch.
-    /// The size corresponds to the `n_embd` parameter of the context's model.
+    /// The size is the pooling-derived output width: `n_cls_out` for RANK,
+    /// `n_embd_out` otherwise — NOT `n_embd` (llama.h:1029 /
+    /// llama-context.cpp's extraction switch).
     ///
     /// # Errors
     ///
@@ -156,9 +158,6 @@ impl<'model> LlamaContext<'model> {
             return Err(EmbeddingsError::NotEnabled);
         }
 
-        let n_embd =
-            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
-
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_seq(self.context.as_ptr(), i);
 
@@ -166,7 +165,7 @@ impl<'model> LlamaContext<'model> {
             if embedding.is_null() {
                 Err(EmbeddingsError::NonePoolType)
             } else {
-                Ok(slice::from_raw_parts(embedding, n_embd))
+                Ok(slice::from_raw_parts(embedding, self.embeddings_out_len()))
             }
         }
     }
@@ -176,7 +175,9 @@ impl<'model> LlamaContext<'model> {
     /// # Returns
     ///
     /// A slice containing the embeddings for the last decoded batch of the given token.
-    /// The size corresponds to the `n_embd` parameter of the context's model.
+    /// The size is the pooling-derived output width: `n_cls_out` for RANK,
+    /// `n_embd_out` otherwise — NOT `n_embd` (llama.h:1029 /
+    /// llama-context.cpp's extraction switch).
     ///
     /// # Errors
     ///
@@ -192,17 +193,30 @@ impl<'model> LlamaContext<'model> {
             return Err(EmbeddingsError::NotEnabled);
         }
 
-        let n_embd =
-            usize::try_from(self.model.n_embd()).expect("n_embd does not fit into a usize");
-
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_ith(self.context.as_ptr(), i);
             // Technically also possible whenever `i >= batch.n_tokens`, but no good way of checking `n_tokens` here.
             if embedding.is_null() {
                 Err(EmbeddingsError::LogitsNotEnabled)
             } else {
-                Ok(slice::from_raw_parts(embedding, n_embd))
+                Ok(slice::from_raw_parts(embedding, self.embeddings_out_len()))
             }
+        }
+    }
+
+    /// The correct output width for an embeddings read, keyed on the context's
+    /// LIVE pooling type rather than the model's `n_embd`.
+    ///
+    /// RANK reads return `float[n_cls_out]` (default 1) per llama.h:1029; every
+    /// other pooling mode extracts at `n_embd_out` per llama-context.cpp's
+    /// extraction switch (which diverges from `n_embd` whenever
+    /// `{arch}.embedding_length_out` is present).
+    fn embeddings_out_len(&self) -> usize {
+        let pooling = unsafe { llama_cpp_sys_2::llama_pooling_type(self.context.as_ptr()) };
+        if pooling == llama_cpp_sys_2::LLAMA_POOLING_TYPE_RANK {
+            usize::try_from(self.model.n_cls_out()).expect("n_cls_out does not fit into a usize")
+        } else {
+            usize::try_from(self.model.n_embd_out()).expect("n_embd_out does not fit into a usize")
         }
     }
 
