@@ -559,6 +559,44 @@ impl LlamaModelParams {
         self
     }
 
+    /// Sets each device's share of the model, parallel to
+    /// [`with_devices`](Self::with_devices).
+    ///
+    /// Shares are relative, so they need not sum to one. An empty slice clears the split and
+    /// restores llama.cpp's default, which distributes in proportion to free memory. The
+    /// slice is padded with zeroes to `llama_max_devices()`, as the C API requires.
+    ///
+    /// The pointer handed to llama.cpp addresses the `Vec`'s heap buffer, not this struct, so
+    /// it survives the moves that builder chaining performs.
+    ///
+    /// # Errors
+    /// Returns `LlamaCppError::MaxDevicesExceeded` if `split` is longer than
+    /// `llama_max_devices()`.
+    pub fn with_tensor_split(mut self, split: &[f32]) -> Result<Self, LlamaCppError> {
+        if split.is_empty() {
+            self.tensor_split.clear();
+            self.params.tensor_split = null::<f32>();
+            return Ok(self);
+        }
+        let max_devices = crate::max_devices();
+        if split.len() > max_devices {
+            return Err(LlamaCppError::MaxDevicesExceeded(max_devices));
+        }
+        self.tensor_split.clear();
+        self.tensor_split.extend_from_slice(split);
+        self.tensor_split.resize(max_devices, 0.0);
+        self.params.tensor_split = self.tensor_split.as_ptr();
+        Ok(self)
+    }
+
+    /// Each device's share of the model, as last set by
+    /// [`with_tensor_split`](Self::with_tensor_split). Empty when the split is llama.cpp's
+    /// free-memory default.
+    #[must_use]
+    pub fn tensor_split(&self) -> &[f32] {
+        &self.tensor_split
+    }
+
     /// sets `devices`
     ///
     /// The devices are specified as indices that correspond to the ggml backend device indices.
@@ -699,6 +737,32 @@ mod tests {
             params.tensor_buft_override_patterns(),
             vec!["\\.ffn_(up|down|gate)_(ch|)exps".to_owned()],
         );
+    }
+
+    #[test]
+    fn tensor_split_round_trips_and_pads() {
+        use super::LlamaModelParams;
+        let max = crate::max_devices();
+        let params = LlamaModelParams::default()
+            .with_tensor_split(&[0.25, 0.75])
+            .expect("two devices is under any max");
+        assert_eq!(params.tensor_split().len(), max);
+        assert_eq!(&params.tensor_split()[..2], &[0.25, 0.75]);
+        assert!(params.tensor_split()[2..].iter().all(|share| *share == 0.0));
+
+        // The pointer must survive the moves builder chaining performs.
+        let params = params.with_n_gpu_layers(99);
+        assert_eq!(&params.tensor_split()[..2], &[0.25, 0.75]);
+
+        let cleared = params.with_tensor_split(&[]).expect("empty clears");
+        assert!(cleared.tensor_split().is_empty());
+    }
+
+    #[test]
+    fn tensor_split_rejects_more_devices_than_llama_supports() {
+        use super::LlamaModelParams;
+        let too_many = vec![1.0_f32; crate::max_devices() + 1];
+        assert!(LlamaModelParams::default().with_tensor_split(&too_many).is_err());
     }
 
     #[test]
