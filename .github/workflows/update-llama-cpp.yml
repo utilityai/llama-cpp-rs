@@ -23,6 +23,8 @@ jobs:
         run: git checkout -b update-llama-cpp-${{ env.DATE }}
       - name: Update submodules
         run: git submodule update --remote
+      - name: Update bindings
+        run: cargo run --bin generate-bindings
       - name: Config git
         run: |
           git config --global user.email "marcus@utilityai.ca"

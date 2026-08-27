@@ -677,6 +677,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "generate-bindings"
+version = "0.1.0"
+dependencies = [
+ "bindgen",
+ "find-msvc-tools",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1177,7 +1185,6 @@ dependencies = [
 name = "llama-cpp-sys-2"
 version = "0.1.155"
 dependencies = [
- "bindgen",
  "cc",
  "cmake",
  "find_cuda_helper",

@@ -8,11 +8,9 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 links = "llama"
 
 include = [
-    "wrapper.h",
     "wrapper_common.h",
     "wrapper_common.cpp",
     "wrapper_utils.h",
-    "wrapper_mtmd.h",
     "build.rs",
     "/src",
 
@@ -34,7 +32,7 @@ include = [
     "/llama.cpp/tools/mtmd/debug/*.h",
     "/llama.cpp/tools/mtmd/debug/*.cpp",
 
-    "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
+    "/llama.cpp/convert_hf_to_gguf.py",    # Yes, it's required
     "/llama.cpp/common/build-info.cpp.in",
 
     "/llama.cpp/ggml/src/ggml-cuda.cu",
@@ -73,7 +71,6 @@ include = [
 [dependencies]
 
 [build-dependencies]
-bindgen = { workspace = true }
 cc = { workspace = true, features = ["parallel"] }
 cmake = "0.1"
 find_cuda_helper = "0.2.0"

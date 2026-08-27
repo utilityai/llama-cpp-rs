@@ -1,0 +1,12 @@
+[package]
+name = "generate-bindings"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+bindgen = { workspace = true }
+find-msvc-tools = "0.1.11"
+
+[lints]
+workspace = true
