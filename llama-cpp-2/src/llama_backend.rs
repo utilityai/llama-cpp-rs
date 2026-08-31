@@ -63,11 +63,12 @@ impl LlamaBackend {
     /// ```
     #[tracing::instrument(skip_all)]
     pub fn init_numa(strategy: NumaStrategy) -> crate::Result<LlamaBackend> {
-        Self::mark_init()?;
+        // Initialize backends first, then NUMA.
+        let this = Self::init()?;
         unsafe {
             llama_cpp_sys_2::llama_numa_init(llama_cpp_sys_2::ggml_numa_strategy::from(strategy));
         }
-        Ok(LlamaBackend {})
+        Ok(this)
     }
 
     /// Was the code built for a GPU backend & is a supported one available.
