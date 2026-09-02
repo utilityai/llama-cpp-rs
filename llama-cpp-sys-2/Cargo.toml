@@ -50,6 +50,7 @@ include = [
     "/llama.cpp/ggml/src/ggml-vulkan/**/*",
     "/llama.cpp/ggml/src/ggml-opencl/**/*",
     "/llama.cpp/ggml/src/ggml-hip/**/*",
+    "/llama.cpp/ggml/src/ggml-webgpu/**/*",
 
     "/llama.cpp/ggml/src/llamafile/sgemm.h",
     "/llama.cpp/ggml/src/llamafile/sgemm.cpp",
