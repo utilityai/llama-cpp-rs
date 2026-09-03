@@ -362,7 +362,7 @@ impl Drop for MtmdContext {
 /// Represents bitmap data for images or audio that can be processed
 /// by the multimodal system. For images, data is stored in RGB format.
 /// For audio, data is stored as PCM F32 samples.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MtmdBitmap {
     bitmap: Ptr<llama_cpp_sys_2::mtmd_bitmap>,
 }
