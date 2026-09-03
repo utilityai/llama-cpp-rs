@@ -2,7 +2,6 @@ use core::fmt;
 use std::ptr::NonNull;
 
 #[repr(transparent)]
-#[derive(Clone)]
 pub(crate) struct Ptr<T: ?Sized>(NonNull<T>);
 
 impl<T: ?Sized> Ptr<T> {
