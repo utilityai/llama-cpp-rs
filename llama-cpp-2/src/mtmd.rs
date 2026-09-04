@@ -163,8 +163,14 @@ pub struct MtmdContext {
     context: Ptr<llama_cpp_sys_2::mtmd_context>,
 }
 
-// MtmdContext is thread safe
+// SAFETY: `mtmd_context` tokenization is thread safe.
+//
+// Note that evaluation and encoding is not thread-safe, but we ensure this
+// doesn't happen on multiple threads by making those methods take `&mut`.
 unsafe impl Send for MtmdContext {}
+// SAFETY: Same as above.
+// Unlike `LlamaContext`, this context doesn't need to synchronize at various
+// points, so there's no danger there.
 unsafe impl Sync for MtmdContext {}
 
 impl MtmdContext {
@@ -365,8 +371,9 @@ pub struct MtmdBitmap {
     bitmap: Ptr<llama_cpp_sys_2::mtmd_bitmap>,
 }
 
-// MtmdBitmap is thread safe
+// SAFETY: `mtmd_bitmap` is thread safe.
 unsafe impl Send for MtmdBitmap {}
+// SAFETY: Same as above.
 unsafe impl Sync for MtmdBitmap {}
 
 impl MtmdBitmap {
@@ -634,6 +641,11 @@ pub struct MtmdInputChunks {
     chunks: Ptr<llama_cpp_sys_2::mtmd_input_chunks>,
 }
 
+// SAFETY: `mtmd_input_chunks` is thread-safe, it's just a list of chunks.
+unsafe impl Send for MtmdInputChunks {}
+// SAFETY: Same as above.
+unsafe impl Sync for MtmdInputChunks {}
+
 impl Default for MtmdInputChunks {
     fn default() -> Self {
         Self::new()
@@ -811,6 +823,11 @@ pub struct MtmdInputChunk<'a> {
     owned: bool,
     phantom: PhantomData<&'a MtmdInputChunks>,
 }
+
+// SAFETY: `mtmd_input_chunks` is thread-safe, it's POD.
+unsafe impl Send for MtmdInputChunk<'_> {}
+// SAFETY: Same as above.
+unsafe impl Sync for MtmdInputChunk<'_> {}
 
 impl MtmdInputChunk<'_> {
     /// Get the type of this chunk

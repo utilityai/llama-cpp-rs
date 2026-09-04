@@ -37,6 +37,12 @@ pub struct LlamaContext<'a> {
     data: PhantomData<Cell<()>>,
 }
 
+// SAFETY: The context itself isn't inherently bound to any particular thread.
+//
+// A lot of operations mutate internal state though (`ctx->synchronize()`),
+// which means that this cannot be `Sync`, see `synchronizable_ptr` below.
+unsafe impl Send for LlamaContext<'_> {}
+
 impl Debug for LlamaContext<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LlamaContext")
@@ -444,4 +450,13 @@ impl Drop for LlamaContext<'_> {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::llama_free(self.context.as_mut_ptr()) }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static_assertions::assert_impl_all!(LlamaContext<'static>: Send);
+    // This would be unsound, see `impl Send for LlamaContext`.
+    static_assertions::assert_not_impl_any!(LlamaContext<'static>: Sync);
 }

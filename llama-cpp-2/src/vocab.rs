@@ -25,6 +25,7 @@ pub struct LlamaVocab<'model> {
 
 // SAFETY: The vocabulary is immutable.
 unsafe impl Send for LlamaVocab<'_> {}
+// SAFETY: Same as above.
 unsafe impl Sync for LlamaVocab<'_> {}
 
 impl<'model> LlamaVocab<'model> {

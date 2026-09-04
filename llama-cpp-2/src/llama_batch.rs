@@ -15,6 +15,11 @@ pub struct LlamaBatch<'a> {
     phantom: PhantomData<&'a [LlamaToken]>,
 }
 
+// SAFETY: The batch is POD, with getters using `&` and setters using `&mut`.
+unsafe impl Send for LlamaBatch<'_> {}
+// SAFETY: Same as above.
+unsafe impl Sync for LlamaBatch<'_> {}
+
 /// Errors that can occur when adding a token to a batch.
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum BatchAddError {

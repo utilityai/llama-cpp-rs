@@ -29,6 +29,13 @@ pub struct LlamaModel {
     pub(crate) model: Ptr<llama_cpp_sys_2::llama_model>,
 }
 
+// SAFETY: The model is immutable except for methods where it's passed as `&mut`.
+//
+// FIXME(madsmtm): Apart from `llama_new_context_with_model`, which mutates.
+unsafe impl Send for LlamaModel {}
+// SAFETY: Same as above.
+unsafe impl Sync for LlamaModel {}
+
 /// A safe wrapper around `llama_lora_adapter`.
 #[derive(Debug)]
 #[repr(transparent)]
@@ -36,6 +43,11 @@ pub struct LlamaModel {
 pub struct LlamaLoraAdapter {
     pub(crate) lora_adapter: Ptr<llama_cpp_sys_2::llama_adapter_lora>,
 }
+
+// SAFETY: The lora is immutable.
+unsafe impl Send for LlamaLoraAdapter {}
+// SAFETY: Same as above.
+unsafe impl Sync for LlamaLoraAdapter {}
 
 /// A performance-friendly wrapper around [`LlamaModel::chat_template`] which is then
 /// fed into [`LlamaModel::apply_chat_template`] to convert a list of messages into an LLM
@@ -102,11 +114,6 @@ pub enum RopeType {
     Vision,
 }
 
-unsafe impl Send for LlamaModel {}
-
-unsafe impl Sync for LlamaModel {}
-
-#[allow(deprecated)]
 impl LlamaModel {
     /// Get the model's vocabulary.
     #[must_use]
