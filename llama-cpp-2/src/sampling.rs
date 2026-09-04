@@ -20,6 +20,14 @@ pub struct LlamaSampler {
     pub(crate) sampler: Ptr<llama_cpp_sys_2::llama_sampler>,
 }
 
+// SAFETY: Samplers are safe to clone and drop from any thread.
+//
+// (It is not safe to _use_ them from multiple threads at a time, but we
+// disallow that by using `&mut` in those methods).
+unsafe impl Send for LlamaSampler {}
+// SAFETY: Same as above.
+unsafe impl Sync for LlamaSampler {}
+
 impl fmt::Debug for LlamaSampler {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("LlamaSampler");

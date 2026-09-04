@@ -17,6 +17,11 @@ pub struct GgufContext {
     ctx: Ptr<llama_cpp_sys_2::gguf_context>,
 }
 
+// SAFETY: `gguf_context` is mostly POD. Getters use `&`, setters use `&mut`.
+unsafe impl Send for GgufContext {}
+// SAFETY: Same as above.
+unsafe impl Sync for GgufContext {}
+
 impl GgufContext {
     /// Open a GGUF file and parse its metadata header.
     ///

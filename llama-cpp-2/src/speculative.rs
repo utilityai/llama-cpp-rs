@@ -56,6 +56,10 @@ pub struct MtpSpeculative<'model> {
     n_max: usize,
 }
 
+// SAFETY: Similar to `LlamaContext`; not bound to any particular thread, but
+// also cannot be used from multiple threads at a time.
+unsafe impl Send for MtpSpeculative<'_> {}
+
 impl<'model> MtpSpeculative<'model> {
     /// Create a new MTP speculative helper from a target context and an MTP
     /// draft context.
@@ -212,4 +216,13 @@ fn status_to_result(status: llama_cpp_sys_2::llama_rs_status) -> Result<(), MtpS
     } else {
         Err(MtpSpeculativeError::Status(status as i32))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static_assertions::assert_impl_all!(MtpSpeculative<'static>: Send);
+    // This would be unsound, see `impl Send for MtpSpeculative`.
+    static_assertions::assert_not_impl_any!(MtpSpeculative<'static>: Sync);
 }

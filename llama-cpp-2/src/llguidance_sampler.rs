@@ -184,3 +184,12 @@ impl From<Matcher> for LlamaSampler {
         LlamaSampler::from_raw(sampler).expect("failed creating sampler")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Important for soundness, `LlamaSampler` is thread-safe so this must be
+    // as well.
+    static_assertions::assert_impl_all!(LlgContext: Send, Sync);
+}
