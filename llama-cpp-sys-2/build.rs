@@ -14,7 +14,6 @@ enum WindowsVariant {
 }
 
 enum AppleVariant {
-    MacOS,
     WatchOS,
     Other,
 }
@@ -66,9 +65,7 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
             Ok((TargetOs::Windows(WindowsVariant::Other), target))
         }
     } else if target.contains("apple") {
-        if target.ends_with("-apple-darwin") {
-            Ok((TargetOs::Apple(AppleVariant::MacOS), target))
-        } else if target.contains("watchos") {
+        if target.contains("watchos") {
             Ok((TargetOs::Apple(AppleVariant::WatchOS), target))
         } else {
             Ok((TargetOs::Apple(AppleVariant::Other), target))
@@ -211,30 +208,6 @@ fn library_file_exists(
             })
         })
     })
-}
-
-fn macos_link_search_path() -> Option<String> {
-    let output = Command::new("clang")
-        .arg("--print-search-dirs")
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        println!(
-            "failed to run 'clang --print-search-dirs', continuing without a link search path"
-        );
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        if line.contains("libraries: =") {
-            let path = line.split('=').nth(1)?;
-            return Some(format!("{}/lib/darwin", path));
-        }
-    }
-
-    println!("failed to determine link search path, continuing without it");
-    None
 }
 
 fn validate_android_ndk(ndk_path: &str) -> Result<(), String> {
@@ -1374,20 +1347,6 @@ fn main() {
             }
             println!("cargo:rustc-link-lib=framework=Accelerate");
             println!("cargo:rustc-link-lib=c++");
-
-            match variant {
-                AppleVariant::MacOS => {
-                    // On (older) OSX we need to link against the clang runtime,
-                    // which is hidden in some non-default path.
-                    //
-                    // More details at https://github.com/alexcrichton/curl-rust/issues/279.
-                    if let Some(path) = macos_link_search_path() {
-                        println!("cargo:rustc-link-lib=clang_rt.osx");
-                        println!("cargo:rustc-link-search={}", path);
-                    }
-                }
-                AppleVariant::WatchOS | AppleVariant::Other => (),
-            }
         }
         TargetOs::Android => {
             if cfg!(feature = "static-stdcxx") {
