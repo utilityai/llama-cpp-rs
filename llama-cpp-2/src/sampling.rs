@@ -1,8 +1,8 @@
 //! Safe wrapper around `llama_sampler`.
 
 use std::borrow::Borrow;
-use std::ffi::{c_char, CString};
-use std::fmt::{Debug, Formatter};
+use std::ffi::{c_char, c_int, CStr, CString};
+use std::fmt;
 use std::mem::ManuallyDrop;
 
 use crate::context::LlamaContext;
@@ -20,9 +20,17 @@ pub struct LlamaSampler {
     pub(crate) sampler: Ptr<llama_cpp_sys_2::llama_sampler>,
 }
 
-impl Debug for LlamaSampler {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LlamaSamplerChain").finish()
+impl fmt::Debug for LlamaSampler {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_struct("LlamaSampler");
+
+        f.field("name", &self.name().unwrap_or(c"(NULL)"));
+
+        if let Some(chain) = self.as_chain() {
+            f.field("chain", &chain);
+        }
+
+        f.finish()
     }
 }
 
@@ -39,6 +47,20 @@ impl LlamaSampler {
     pub(crate) fn from_raw(ptr: *mut llama_cpp_sys_2::llama_sampler) -> Option<Self> {
         let sampler = Ptr::new(ptr)?;
         Some(Self { sampler })
+    }
+
+    /// Returns `Some(...)` if the sampler is a `llama_sampler_chain`.
+    #[inline]
+    fn as_chain(&self) -> Option<LlamaSamplerChain<'_>> {
+        let chain = unsafe {
+            llama_cpp_sys_2::llama_sampler_chain_get(self.sampler.as_mut_ptr_unsound(), -1)
+        };
+
+        if chain.is_null() {
+            None
+        } else {
+            Some(LlamaSamplerChain(self))
+        }
     }
 
     /// The name of the sampler, if any.
@@ -692,5 +714,64 @@ impl LlamaSampler {
 impl Drop for LlamaSampler {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::llama_sampler_free(self.sampler.as_mut_ptr()) };
+    }
+}
+
+/// Small helper for iterating over `llama_sampler_chain`.
+struct LlamaSamplerChain<'a>(&'a LlamaSampler);
+
+impl fmt::Debug for LlamaSamplerChain<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut f = f.debug_list();
+        for i in 0..self.n() {
+            // SAFETY: The sampler is only used in this scope.
+            let sampler = unsafe { self.get(i) }.expect("sampler chain must have sampler");
+            f.entry(&&*sampler);
+        }
+        f.finish()
+    }
+}
+
+impl LlamaSamplerChain<'_> {
+    fn n(&self) -> c_int {
+        unsafe { llama_cpp_sys_2::llama_sampler_chain_n(self.0.sampler.as_ptr()) }
+    }
+
+    /// # Safety
+    ///
+    /// The lifetime of the returned value is tied to `&self`, it must not be
+    /// used beyond that.
+    unsafe fn get(&self, i: c_int) -> Option<ManuallyDrop<LlamaSampler>> {
+        let sampler = unsafe {
+            llama_cpp_sys_2::llama_sampler_chain_get(self.0.sampler.as_mut_ptr_unsound(), i)
+        };
+        // Should only return `None` if out of bounds, we've checked all the
+        // other requirements.
+        let sampler = LlamaSampler::from_raw(sampler)?;
+
+        // HACK: Wrap in `ManuallyDrop`, the lifetime of the sampler is tied
+        // to `&self`.
+        Some(ManuallyDrop::new(sampler))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug() {
+        let sampler = LlamaSampler::greedy();
+        assert_eq!(r#"LlamaSampler { name: "greedy" }"#, format!("{sampler:?}"));
+
+        let sampler = LlamaSampler::chain_simple([
+            LlamaSampler::dist(1234),
+            LlamaSampler::greedy(),
+            LlamaSampler::chain_simple([LlamaSampler::min_p(1.0, 2)]),
+        ]);
+        assert_eq!(
+            r#"LlamaSampler { name: "chain", chain: [LlamaSampler { name: "dist" }, LlamaSampler { name: "greedy" }, LlamaSampler { name: "chain", chain: [LlamaSampler { name: "min-p" }] }] }"#,
+            format!("{sampler:?}")
+        );
     }
 }
