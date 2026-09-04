@@ -41,6 +41,17 @@ impl LlamaSampler {
         Some(Self { sampler })
     }
 
+    /// The name of the sampler, if any.
+    #[inline]
+    pub fn name(&self) -> Option<&CStr> {
+        let ptr = unsafe { llama_cpp_sys_2::llama_sampler_name(self.sampler.as_ptr()) };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(unsafe { CStr::from_ptr(ptr) })
+        }
+    }
+
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
     pub fn sample(&mut self, ctx: &LlamaContext<'_>, idx: i32) -> LlamaToken {
