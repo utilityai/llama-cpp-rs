@@ -26,6 +26,14 @@ impl Debug for LlamaSampler {
     }
 }
 
+impl Clone for LlamaSampler {
+    fn clone(&self) -> Self {
+        let ptr = unsafe { llama_cpp_sys_2::llama_sampler_clone(self.sampler.as_ptr()) };
+        let sampler = Ptr::new(ptr).expect("failed cloning sampler");
+        Self { sampler }
+    }
+}
+
 impl LlamaSampler {
     #[inline]
     pub(crate) fn from_raw(ptr: *mut llama_cpp_sys_2::llama_sampler) -> Option<Self> {
