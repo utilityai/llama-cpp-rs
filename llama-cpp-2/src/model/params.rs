@@ -615,6 +615,19 @@ impl LlamaModelParams {
         self.params.no_alloc
     }
 
+    /// Sets whether to load bundled multi-token prediction (MTP) tensors.
+    #[must_use]
+    pub fn with_load_mtp(mut self, load_mtp: bool) -> Self {
+        self.params.load_mtp = load_mtp;
+        self
+    }
+
+    /// Returns whether bundled multi-token prediction (MTP) tensors are loaded.
+    #[must_use]
+    pub fn load_mtp(&self) -> bool {
+        self.params.load_mtp
+    }
+
     /// Sets a callback invoked during loading with progress in `0.0..=1.0`.
     /// Returning `false` aborts the load (it then fails with `NullResult`).
     #[must_use]
@@ -649,6 +662,7 @@ impl LlamaModelParams {
 /// assert_eq!(params.split_mode(), Ok(LlamaSplitMode::Layer), "split_mode should be LAYER");
 /// assert_eq!(params.devices().len(), 0, "devices should be empty");
 /// assert_eq!(params.no_alloc(), false, "no_alloc should be false");
+/// assert_eq!(params.load_mtp(), false, "load_mtp should be false");
 /// ```
 impl Default for LlamaModelParams {
     fn default() -> Self {
@@ -715,6 +729,18 @@ mod tests {
             i32::from(LlamaSplitMode::Tensor),
             llama_cpp_sys_2::LLAMA_SPLIT_MODE_TENSOR as i32
         );
+    }
+
+    #[test]
+    fn load_mtp_round_trips() {
+        let params = LlamaModelParams::default();
+        assert!(!params.load_mtp());
+
+        let params = params.with_load_mtp(true);
+        assert!(params.load_mtp());
+
+        let params = params.with_load_mtp(false);
+        assert!(!params.load_mtp());
     }
 
     #[test]
