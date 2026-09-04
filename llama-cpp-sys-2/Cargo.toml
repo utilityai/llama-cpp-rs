@@ -8,6 +8,8 @@ repository = "https://github.com/utilityai/llama-cpp-rs"
 links = "llama"
 
 include = [
+    # Our files
+    "README.md",
     "wrapper.h",
     "wrapper_common.h",
     "wrapper_common.cpp",
@@ -16,56 +18,32 @@ include = [
     "build.rs",
     "/src",
 
-    "/llama.cpp/common/**/*.h",
-    "/llama.cpp/common/**/*.hpp",
-    "/llama.cpp/common/**/*.cpp",
-    "/llama.cpp/ggml/include/*.h",
-    "/llama.cpp/ggml/src/*.h",
-    "/llama.cpp/ggml/src/*.c",
-    "/llama.cpp/ggml/src/*.cpp",
-    "/llama.cpp/src/*.h",
-    "/llama.cpp/src/*.cpp",
-    "/llama.cpp/src/models/*.h",
-    "/llama.cpp/src/models/*.cpp",
-    "/llama.cpp/tools/mtmd/*.h",
-    "/llama.cpp/tools/mtmd/*.cpp",
-    "/llama.cpp/tools/mtmd/models/*.h",
-    "/llama.cpp/tools/mtmd/models/*.cpp",
-    "/llama.cpp/tools/mtmd/debug/*.h",
-    "/llama.cpp/tools/mtmd/debug/*.cpp",
+    # Everything needed for building GGML (CMake, include and src)
+    #
+    # `llama.cpp` already only includes the most important stuff
+    # from https://github.com/ggml-org/ggml.
+    "/llama.cpp/ggml",
 
-    "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
-    "/llama.cpp/common/build-info.cpp.in",
+    # lLama.cpp's own sources.
+    "/llama.cpp/include",
+    "/llama.cpp/common",
+    "/llama.cpp/src",
 
-    "/llama.cpp/ggml/src/ggml-cuda.cu",
-    "/llama.cpp/ggml/src/ggml-metal.m",
-    "/llama.cpp/ggml/src/ggml-metal.metal",
+    # mtmd sources. Contains tests files that we don't want, so those
+    # are filtered out.
+    "/llama.cpp/tools/mtmd/**/*.h",
+    "/llama.cpp/tools/mtmd/**/*.cpp",
+    "/llama.cpp/tools/mtmd/**/CMakeLists.txt",
 
-    "/llama.cpp/include/llama.h",
-    "/llama.cpp/include/llama-cpp.h",
-
-    "/llama.cpp/ggml/src/ggml-cpu/**/*",
-    "/llama.cpp/ggml/src/ggml-cuda/**/*",
-    "/llama.cpp/ggml/src/ggml-metal/**/*",
-    "/llama.cpp/ggml/src/ggml-vulkan/**/*",
-    "/llama.cpp/ggml/src/ggml-opencl/**/*",
-    "/llama.cpp/ggml/src/ggml-hip/**/*",
-
-    "/llama.cpp/ggml/src/llamafile/sgemm.h",
-    "/llama.cpp/ggml/src/llamafile/sgemm.cpp",
-
-    "/llama.cpp/pocs",
+    # Vendored sources.
     "/llama.cpp/vendor",
 
+    # Various build files
+    "/llama.cpp/convert_hf_to_gguf.py", # Yes, it's required
+    "/llama.cpp/pocs",
     "/llama.cpp/CMakeLists.txt",
-    "/llama.cpp/common/CMakeLists.txt",
-    "/llama.cpp/ggml/CMakeLists.txt",
-    "/llama.cpp/ggml/src/CMakeLists.txt",
-    "/llama.cpp/src/CMakeLists.txt",
-
     "/llama.cpp/cmake",
-    "/llama.cpp/ggml/cmake",
-    "/llama.cpp/common/cmake",
+    "/llama.cpp/tools/CMakeLists.txt",
 ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
