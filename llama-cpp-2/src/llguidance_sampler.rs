@@ -181,6 +181,6 @@ impl From<Matcher> for LlamaSampler {
                 Box::into_raw(ctx).cast::<c_void>(),
             )
         };
-        LlamaSampler { sampler }
+        LlamaSampler::from_raw(sampler).expect("failed creating sampler")
     }
 }
