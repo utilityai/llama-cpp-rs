@@ -56,6 +56,7 @@ int llama_rs_fit_params(
     struct llama_model_tensor_buft_override * tensor_buft_overrides,
     size_t * margins,
     uint32_t n_ctx_min,
+    const void * extra,
     enum ggml_log_level log_level);
 
 void llama_rs_memory_breakdown_print(const struct llama_context * ctx);
