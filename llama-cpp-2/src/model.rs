@@ -898,15 +898,15 @@ impl LlamaModel {
         params: LlamaContextParams,
         samplers: impl IntoIterator<Item = (i32, LlamaSampler)>,
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
-        let samplers: Vec<_> = samplers.into_iter().collect();
+        let mut samplers: Vec<_> = samplers.into_iter().collect();
         let mut context_params = params.context_params;
 
         let mut sampler_configs: Vec<llama_cpp_sys_2::llama_sampler_seq_config> = samplers
-            .iter()
+            .iter_mut()
             .map(
                 |(seq_id, sampler)| llama_cpp_sys_2::llama_sampler_seq_config {
                     seq_id: *seq_id,
-                    sampler: sampler.sampler,
+                    sampler: sampler.sampler.as_mut_ptr(),
                 },
             )
             .collect();

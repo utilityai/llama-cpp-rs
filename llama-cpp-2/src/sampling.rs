@@ -3,9 +3,11 @@
 use std::borrow::Borrow;
 use std::ffi::{c_char, CString};
 use std::fmt::{Debug, Formatter};
+use std::mem::ManuallyDrop;
 
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+use crate::ptr::Ptr;
 #[cfg(feature = "common")]
 use crate::status_is_ok;
 use crate::token::data_array::LlamaTokenDataArray;
@@ -15,7 +17,7 @@ use crate::{GrammarError, SamplerAcceptError};
 
 /// A safe wrapper around `llama_sampler`.
 pub struct LlamaSampler {
-    pub(crate) sampler: *mut llama_cpp_sys_2::llama_sampler,
+    pub(crate) sampler: Ptr<llama_cpp_sys_2::llama_sampler>,
 }
 
 impl Debug for LlamaSampler {
@@ -25,18 +27,28 @@ impl Debug for LlamaSampler {
 }
 
 impl LlamaSampler {
+    #[inline]
+    pub(crate) fn from_raw(ptr: *mut llama_cpp_sys_2::llama_sampler) -> Option<Self> {
+        let sampler = Ptr::new(ptr)?;
+        Some(Self { sampler })
+    }
+
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
     pub fn sample(&mut self, ctx: &mut LlamaContext, idx: i32) -> LlamaToken {
         let token = unsafe {
-            llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.context.as_mut_ptr(), idx)
+            llama_cpp_sys_2::llama_sampler_sample(
+                self.sampler.as_mut_ptr(),
+                ctx.context.as_mut_ptr(),
+                idx,
+            )
         };
 
         LlamaToken(token)
     }
 
     /// Applies this sampler to a [`LlamaTokenDataArray`].
-    pub fn apply(&self, data_array: &mut LlamaTokenDataArray) {
+    pub fn apply(&mut self, data_array: &mut LlamaTokenDataArray) {
         data_array.apply_sampler(self);
     }
 
@@ -49,7 +61,7 @@ impl LlamaSampler {
         }
         #[cfg(not(feature = "common"))]
         unsafe {
-            llama_cpp_sys_2::llama_sampler_accept(self.sampler, token.0);
+            llama_cpp_sys_2::llama_sampler_accept(self.sampler.as_mut_ptr(), token.0);
         }
     }
 
@@ -76,7 +88,7 @@ impl LlamaSampler {
     #[cfg(feature = "common")]
     pub fn try_accept(&mut self, token: LlamaToken) -> Result<(), SamplerAcceptError> {
         let sampler_result =
-            unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler, token.0) };
+            unsafe { llama_cpp_sys_2::llama_rs_sampler_accept(self.sampler.as_mut_ptr(), token.0) };
         if status_is_ok(sampler_result) {
             Ok(())
         } else {
@@ -89,7 +101,7 @@ impl LlamaSampler {
     /// This can be useful when you want to start fresh with a sampler without creating a new instance.
     pub fn reset(&mut self) {
         unsafe {
-            llama_cpp_sys_2::llama_sampler_reset(self.sampler);
+            llama_cpp_sys_2::llama_sampler_reset(self.sampler.as_mut_ptr());
         }
     }
 
@@ -101,7 +113,7 @@ impl LlamaSampler {
     /// - For all other samplers: returns 0xFFFFFFFF
     #[must_use]
     pub fn get_seed(&self) -> u32 {
-        unsafe { llama_cpp_sys_2::llama_sampler_get_seed(self.sampler) }
+        unsafe { llama_cpp_sys_2::llama_sampler_get_seed(self.sampler.as_ptr()) }
     }
 
     /// Combines a list of samplers into a single sampler that applies each component sampler one
@@ -112,21 +124,25 @@ impl LlamaSampler {
     /// [`LlamaSampler::mirostat_v2`].
     #[must_use]
     pub fn chain(samplers: impl IntoIterator<Item = Self>, no_perf: bool) -> Self {
-        unsafe {
-            let chain = llama_cpp_sys_2::llama_sampler_chain_init(
-                llama_cpp_sys_2::llama_sampler_chain_params { no_perf },
-            );
+        let params = llama_cpp_sys_2::llama_sampler_chain_params { no_perf };
 
-            for sampler in samplers {
-                llama_cpp_sys_2::llama_sampler_chain_add(chain, sampler.sampler);
+        let chain = unsafe { llama_cpp_sys_2::llama_sampler_chain_init(params) };
+        let mut chain = Ptr::new(chain).expect("failed allocating sampler chain");
 
-                // Do not call `llama_sampler_free` on the sampler, as the internal sampler is now
-                // owned by the chain
-                std::mem::forget(sampler);
-            }
+        for sampler in samplers {
+            // Do not call `llama_sampler_free` on the sampler, we want to
+            // transfer ownership to the chain.
+            let mut sampler = ManuallyDrop::new(sampler);
 
-            Self { sampler: chain }
+            unsafe {
+                llama_cpp_sys_2::llama_sampler_chain_add(
+                    chain.as_mut_ptr(),
+                    sampler.sampler.as_mut_ptr(),
+                )
+            };
         }
+
+        Self { sampler: chain }
     }
 
     /// Same as [`Self::chain`] with `no_perf = false`.
@@ -193,7 +209,7 @@ impl LlamaSampler {
     #[must_use]
     pub fn temp(t: f32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_temp(t) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Dynamic temperature implementation (a.k.a. entropy) described in the paper
@@ -201,7 +217,7 @@ impl LlamaSampler {
     #[must_use]
     pub fn temp_ext(t: f32, delta: f32, exponent: f32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_temp_ext(t, delta, exponent) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Top-K sampling described in academic paper "The Curious Case of Neural Text Degeneration"
@@ -232,7 +248,7 @@ impl LlamaSampler {
     #[must_use]
     pub fn top_k(k: i32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_top_k(k) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Top-nσ sampling as described in academic paper "Top-nσ: Not All Logits Are You Need"
@@ -263,14 +279,14 @@ impl LlamaSampler {
     #[must_use]
     pub fn top_n_sigma(n: f32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_top_n_sigma(n) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Locally Typical Sampling implementation described in the paper <https://arxiv.org/abs/2202.00666>.
     #[must_use]
     pub fn typical(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_typical(p, min_keep) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Nucleus sampling described in academic paper "The Curious Case of Neural Text Degeneration"
@@ -278,21 +294,21 @@ impl LlamaSampler {
     #[must_use]
     pub fn top_p(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_top_p(p, min_keep) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Minimum P sampling as described in <https://github.com/ggerganov/llama.cpp/pull/3841>
     #[must_use]
     pub fn min_p(p: f32, min_keep: usize) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_min_p(p, min_keep) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// XTC sampler as described in <https://github.com/oobabooga/text-generation-webui/pull/6335>
     #[must_use]
     pub fn xtc(p: f32, t: f32, min_keep: usize, seed: u32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_xtc(p, t, min_keep, seed) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Grammar sampler
@@ -325,7 +341,7 @@ impl LlamaSampler {
         if sampler.is_null() {
             Err(GrammarError::NullGrammar)
         } else {
-            Ok(Self { sampler })
+            Ok(Self::from_raw(sampler).unwrap())
         }
     }
 
@@ -363,7 +379,7 @@ impl LlamaSampler {
         if sampler.is_null() {
             Err(GrammarError::NullGrammar)
         } else {
-            Ok(Self { sampler })
+            Ok(Self::from_raw(sampler).unwrap())
         }
     }
 
@@ -421,7 +437,7 @@ impl LlamaSampler {
         if sampler.is_null() {
             Err(GrammarError::NullGrammar)
         } else {
-            Ok(Self { sampler })
+            Ok(Self::from_raw(sampler).unwrap())
         }
     }
 
@@ -518,7 +534,7 @@ impl LlamaSampler {
                 seq_breaker_pointers.len(),
             )
         };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Penalizes tokens for being present in the context.
@@ -548,7 +564,7 @@ impl LlamaSampler {
                 penalty_present,
             )
         };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Mirostat 1.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
@@ -570,7 +586,7 @@ impl LlamaSampler {
     pub fn mirostat(n_vocab: i32, seed: u32, tau: f32, eta: f32, m: i32) -> Self {
         let sampler =
             unsafe { llama_cpp_sys_2::llama_sampler_init_mirostat(n_vocab, seed, tau, eta, m) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Mirostat 2.0 algorithm described in the paper <https://arxiv.org/abs/2007.14966>. Uses tokens instead of words.
@@ -586,14 +602,14 @@ impl LlamaSampler {
     #[must_use]
     pub fn mirostat_v2(seed: u32, tau: f32, eta: f32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_mirostat_v2(seed, tau, eta) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Selects a token at random based on each token's probabilities
     #[must_use]
     pub fn dist(seed: u32) -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_dist(seed) };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Selects the most likely token
@@ -620,7 +636,7 @@ impl LlamaSampler {
     #[must_use]
     pub fn greedy() -> Self {
         let sampler = unsafe { llama_cpp_sys_2::llama_sampler_init_greedy() };
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 
     /// Creates a sampler that applies bias values to specific tokens during sampling.
@@ -650,14 +666,12 @@ impl LlamaSampler {
             llama_cpp_sys_2::llama_sampler_init_logit_bias(n_vocab, biases.len() as i32, data)
         };
 
-        Self { sampler }
+        Self::from_raw(sampler).expect("failed allocating sampler")
     }
 }
 
 impl Drop for LlamaSampler {
     fn drop(&mut self) {
-        unsafe {
-            llama_cpp_sys_2::llama_sampler_free(self.sampler);
-        }
+        unsafe { llama_cpp_sys_2::llama_sampler_free(self.sampler.as_mut_ptr()) };
     }
 }

@@ -121,10 +121,13 @@ impl LlamaTokenDataArray {
     }
 
     /// Modifies the data array by applying a sampler to it
-    pub fn apply_sampler(&mut self, sampler: &LlamaSampler) {
+    pub fn apply_sampler(&mut self, sampler: &mut LlamaSampler) {
         unsafe {
             self.modify_as_c_llama_token_data_array(|c_llama_token_data_array| {
-                llama_cpp_sys_2::llama_sampler_apply(sampler.sampler, c_llama_token_data_array);
+                llama_cpp_sys_2::llama_sampler_apply(
+                    sampler.sampler.as_mut_ptr(),
+                    c_llama_token_data_array,
+                );
             });
         }
     }
@@ -141,7 +144,7 @@ impl LlamaTokenDataArray {
     /// # Panics
     /// If the internal llama.cpp sampler fails to select a token.
     pub fn sample_token(&mut self, seed: u32) -> LlamaToken {
-        self.apply_sampler(&LlamaSampler::dist(seed));
+        self.apply_sampler(&mut LlamaSampler::dist(seed));
         self.selected_token()
             .expect("Dist sampler failed to select a token!")
     }
@@ -151,7 +154,7 @@ impl LlamaTokenDataArray {
     /// # Panics
     /// If the internal llama.cpp sampler fails to select a token.
     pub fn sample_token_greedy(&mut self) -> LlamaToken {
-        self.apply_sampler(&LlamaSampler::greedy());
+        self.apply_sampler(&mut LlamaSampler::greedy());
         self.selected_token()
             .expect("Greedy sampler failed to select a token!")
     }
