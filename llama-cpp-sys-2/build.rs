@@ -403,7 +403,18 @@ fn main() {
     let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
         .map(|v| v == "1")
         .unwrap_or(build_shared_libs);
-    let profile = env::var("LLAMA_LIB_PROFILE").unwrap_or("Release".to_string());
+
+    // Default to compiling llama.cpp in release mode (though with debug info
+    // if requested).
+    //
+    // This can be overwritten with `CMAKE_BUILD_TYPE` or `LLAMA_LIB_PROFILE`.
+    let profile = if std::env::var("DEBUG").unwrap() == "true" {
+        "RelWithDebInfo".to_string()
+    } else {
+        "Release".to_string()
+    };
+    let profile = env::var("LLAMA_LIB_PROFILE").unwrap_or(profile);
+
     let static_crt = env::var("LLAMA_STATIC_CRT")
         .map(|v| v == "1")
         .unwrap_or(false);
