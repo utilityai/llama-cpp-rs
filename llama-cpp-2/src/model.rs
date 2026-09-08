@@ -3,14 +3,13 @@ use std::ffi::{c_char, CStr, CString};
 use std::num::NonZeroU16;
 use std::os::raw::c_int;
 use std::path::Path;
-use std::ptr::{self, NonNull};
-use std::slice;
 use std::str::Utf8Error;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
+use crate::ptr::Ptr;
 use crate::sampling::LlamaSampler;
 use crate::token::LlamaToken;
 use crate::token_type::{LlamaTokenAttr, LlamaTokenAttrs};
@@ -27,7 +26,7 @@ pub mod params;
 #[repr(transparent)]
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaModel {
-    pub(crate) model: NonNull<llama_cpp_sys_2::llama_model>,
+    pub(crate) model: Ptr<llama_cpp_sys_2::llama_model>,
 }
 
 /// A safe wrapper around `llama_lora_adapter`.
@@ -35,7 +34,7 @@ pub struct LlamaModel {
 #[repr(transparent)]
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaLoraAdapter {
-    pub(crate) lora_adapter: NonNull<llama_cpp_sys_2::llama_adapter_lora>,
+    pub(crate) lora_adapter: Ptr<llama_cpp_sys_2::llama_adapter_lora>,
 }
 
 /// A performance-friendly wrapper around [`LlamaModel::chat_template`] which is then
@@ -768,7 +767,7 @@ impl LlamaModel {
         let llama_model =
             unsafe { llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params) };
 
-        let model = NonNull::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
+        let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 
         tracing::debug!(?path, "Loaded model");
         Ok(LlamaModel { model })
@@ -780,7 +779,7 @@ impl LlamaModel {
     ///
     /// See [`LlamaLoraAdapterInitError`] for more information.
     pub fn lora_adapter_init(
-        &self,
+        &mut self,
         path: impl AsRef<Path>,
     ) -> Result<LlamaLoraAdapter, LlamaLoraAdapterInitError> {
         let path = path.as_ref();
@@ -793,10 +792,11 @@ impl LlamaModel {
             ))?;
 
         let cstr = CString::new(path)?;
-        let adapter =
-            unsafe { llama_cpp_sys_2::llama_adapter_lora_init(self.model.as_ptr(), cstr.as_ptr()) };
+        let adapter = unsafe {
+            llama_cpp_sys_2::llama_adapter_lora_init(self.model.as_mut_ptr(), cstr.as_ptr())
+        };
 
-        let adapter = NonNull::new(adapter).ok_or(LlamaLoraAdapterInitError::NullResult)?;
+        let adapter = Ptr::new(adapter).ok_or(LlamaLoraAdapterInitError::NullResult)?;
 
         tracing::debug!(?path, "Initialized lora adapter");
         Ok(LlamaLoraAdapter {
@@ -817,10 +817,18 @@ impl LlamaModel {
         params: LlamaContextParams,
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let context_params = params.context_params;
+        // Constructing multiple contexts from a model in parallel is actually
+        // unsound, since `llama_new_context_with_model` mutates the model's
+        // `n_ctx_train` in some cases:
+        // <https://github.com/ggml-org/llama.cpp/blob/f45576aa86c07d60d346b469651a098a15cc4f81/src/llama-context.cpp#L3751>
+        // FIXME(madsmtm): Make this sound!
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
+            llama_cpp_sys_2::llama_new_context_with_model(
+                self.model.as_mut_ptr_unsound(),
+                context_params,
+            )
         };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+        let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::new(self, context, params.embeddings()))
     }
@@ -842,11 +850,17 @@ impl LlamaModel {
         ctx_other: &LlamaContext<'_>,
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let mut context_params = params.context_params;
-        context_params.ctx_other = ctx_other.context.as_ptr();
+        // FIXME(madsmtm): Use `.as_ptr()` after:
+        // https://github.com/ggml-org/llama.cpp/pull/28316
+        context_params.ctx_other = unsafe { ctx_other.context.as_mut_ptr_unsound() };
+        // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
+            llama_cpp_sys_2::llama_new_context_with_model(
+                self.model.as_mut_ptr_unsound(),
+                context_params,
+            )
         };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+        let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::new(self, context, params.embeddings()))
     }
@@ -884,15 +898,15 @@ impl LlamaModel {
         params: LlamaContextParams,
         samplers: impl IntoIterator<Item = (i32, LlamaSampler)>,
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
-        let samplers: Vec<_> = samplers.into_iter().collect();
+        let mut samplers: Vec<_> = samplers.into_iter().collect();
         let mut context_params = params.context_params;
 
         let mut sampler_configs: Vec<llama_cpp_sys_2::llama_sampler_seq_config> = samplers
-            .iter()
+            .iter_mut()
             .map(
                 |(seq_id, sampler)| llama_cpp_sys_2::llama_sampler_seq_config {
                     seq_id: *seq_id,
-                    sampler: sampler.sampler,
+                    sampler: sampler.sampler.as_mut_ptr(),
                 },
             )
             .collect();
@@ -902,10 +916,14 @@ impl LlamaModel {
             context_params.n_samplers = sampler_configs.len();
         }
 
+        // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(self.model.as_ptr(), context_params)
+            llama_cpp_sys_2::llama_new_context_with_model(
+                self.model.as_mut_ptr_unsound(),
+                context_params,
+            )
         };
-        let context = NonNull::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
+        let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
         Ok(LlamaContext::with_samplers(
             self,
@@ -1032,7 +1050,7 @@ where
 
 impl Drop for LlamaModel {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::llama_free_model(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_free_model(self.model.as_mut_ptr()) }
     }
 }
 

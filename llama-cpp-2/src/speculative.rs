@@ -1,9 +1,8 @@
 //! Experimental wrappers for llama.cpp speculative decoding helpers.
 
-use std::ptr::NonNull;
-
 use crate::context::LlamaContext;
 use crate::llama_batch::LlamaBatch;
+use crate::ptr::Ptr;
 use crate::status_is_ok;
 use crate::token::LlamaToken;
 
@@ -51,7 +50,7 @@ pub enum MtpSpeculativeError {
 /// Batches passed to [`Self::process`] must therefore contain only sequence 0.
 #[derive(Debug)]
 pub struct MtpSpeculative<'model> {
-    raw: NonNull<llama_cpp_sys_2::llama_rs_mtp_speculative>,
+    raw: Ptr<llama_cpp_sys_2::llama_rs_mtp_speculative>,
     target_context: LlamaContext<'model>,
     draft_context: LlamaContext<'model>,
     n_max: usize,
@@ -66,8 +65,8 @@ impl<'model> MtpSpeculative<'model> {
     /// Returns an error if parameters are invalid or llama.cpp cannot
     /// initialize the speculative implementation for the loaded model.
     pub fn new(
-        target_context: LlamaContext<'model>,
-        draft_context: LlamaContext<'model>,
+        mut target_context: LlamaContext<'model>,
+        mut draft_context: LlamaContext<'model>,
         params: MtpSpeculativeParams,
     ) -> Result<Self, MtpSpeculativeError> {
         if params.n_max <= 0 || params.n_min < 0 || params.n_min > params.n_max {
@@ -78,14 +77,14 @@ impl<'model> MtpSpeculative<'model> {
 
         let raw = unsafe {
             llama_cpp_sys_2::llama_rs_mtp_speculative_init(
-                target_context.context.as_ptr(),
-                draft_context.context.as_ptr(),
+                target_context.context.as_mut_ptr(),
+                draft_context.context.as_mut_ptr(),
                 params.n_max,
                 params.n_min,
                 params.p_min,
             )
         };
-        let raw = NonNull::new(raw).ok_or(MtpSpeculativeError::InitFailed)?;
+        let raw = Ptr::new(raw).ok_or(MtpSpeculativeError::InitFailed)?;
 
         Ok(Self {
             raw,
@@ -120,7 +119,7 @@ impl<'model> MtpSpeculative<'model> {
         let prompt = tokens_to_raw(prompt_tokens);
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_mtp_speculative_begin(
-                self.raw.as_ptr(),
+                self.raw.as_mut_ptr(),
                 prompt.as_ptr(),
                 prompt.len(),
             )
@@ -138,7 +137,7 @@ impl<'model> MtpSpeculative<'model> {
     pub fn process(&mut self, batch: &LlamaBatch<'_>) -> Result<(), MtpSpeculativeError> {
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_mtp_speculative_process(
-                self.raw.as_ptr(),
+                self.raw.as_mut_ptr(),
                 std::ptr::from_ref(&batch.llama_batch),
             )
         };
@@ -166,7 +165,7 @@ impl<'model> MtpSpeculative<'model> {
         let mut out_len = 0_usize;
         let status = unsafe {
             llama_cpp_sys_2::llama_rs_mtp_speculative_draft(
-                self.raw.as_ptr(),
+                self.raw.as_mut_ptr(),
                 n_past,
                 id_last.0,
                 prompt.as_ptr(),
@@ -191,7 +190,7 @@ impl<'model> MtpSpeculative<'model> {
     /// Returns an error if llama.cpp rejects the call.
     pub fn accept(&mut self, n_accepted: u16) -> Result<(), MtpSpeculativeError> {
         let status = unsafe {
-            llama_cpp_sys_2::llama_rs_mtp_speculative_accept(self.raw.as_ptr(), n_accepted)
+            llama_cpp_sys_2::llama_rs_mtp_speculative_accept(self.raw.as_mut_ptr(), n_accepted)
         };
         status_to_result(status)
     }
@@ -199,9 +198,7 @@ impl<'model> MtpSpeculative<'model> {
 
 impl Drop for MtpSpeculative<'_> {
     fn drop(&mut self) {
-        unsafe {
-            llama_cpp_sys_2::llama_rs_mtp_speculative_free(self.raw.as_ptr());
-        }
+        unsafe { llama_cpp_sys_2::llama_rs_mtp_speculative_free(self.raw.as_mut_ptr()) }
     }
 }
 
