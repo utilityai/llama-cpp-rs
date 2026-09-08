@@ -27,9 +27,9 @@ impl Debug for LlamaSampler {
 impl LlamaSampler {
     /// Sample and accept a token from the idx-th output of the last evaluation
     #[must_use]
-    pub fn sample(&mut self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
+    pub fn sample(&mut self, ctx: &mut LlamaContext, idx: i32) -> LlamaToken {
         let token = unsafe {
-            llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.context.as_ptr(), idx)
+            llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.context.as_mut_ptr(), idx)
         };
 
         LlamaToken(token)

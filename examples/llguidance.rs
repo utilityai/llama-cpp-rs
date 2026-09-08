@@ -75,7 +75,7 @@ fn main() {
     std::io::stdout().flush().unwrap();
 
     while n_cur <= 128 {
-        let token = sampler.sample(&ctx, batch.n_tokens() - 1);
+        let token = sampler.sample(&mut ctx, batch.n_tokens() - 1);
 
         if token == model.token_eos() {
             break;

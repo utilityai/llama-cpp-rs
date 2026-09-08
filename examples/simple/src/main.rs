@@ -329,7 +329,7 @@ either reduce n_len or increase n_ctx"
     while n_cur <= n_len {
         // sample the next token
         {
-            let token = sampler.sample(&ctx, batch.n_tokens() - 1);
+            let token = sampler.sample(&mut ctx, batch.n_tokens() - 1);
 
             sampler.accept(token);
 
