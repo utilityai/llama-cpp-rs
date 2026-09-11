@@ -630,9 +630,15 @@ fn main() {
             common_wrapper_build.flag("/std:c++17");
         }
 
-        // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
-        // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
-        if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
+        // Suppress cc's automatic C++ stdlib link when this build script already
+        // emits an explicit `cargo:rustc-link-lib` for it. Otherwise Apple
+        // gets duplicate `-lc++` (cc defaults to `c++` there, and we println
+        // the same flag below), which has segfaulted clang under memory pressure.
+        // Android static-stdcxx still needs this so we can link `c++_static`
+        // instead of cc's default `c++_shared`.
+        if matches!(target_os, TargetOs::Apple(_))
+            || (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
+        {
             common_wrapper_build.cpp_link_stdlib(None);
         }
 
@@ -1112,9 +1118,12 @@ fn main() {
             mtmd_build.flag("/std:c++17");
         }
 
-        // When static-stdcxx is enabled on Android, suppress the cc crate's automatic
-        // C++ stdlib linking (which defaults to c++_shared) so we can link c++_static instead.
-        if matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx") {
+        // Same rationale as the common wrapper: Apple emits an explicit
+        // `cargo:rustc-link-lib=c++` below, and Android static-stdcxx emits
+        // `c++_static` instead of cc's default `c++_shared`.
+        if matches!(target_os, TargetOs::Apple(_))
+            || (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
+        {
             mtmd_build.cpp_link_stdlib(None);
         }
 
