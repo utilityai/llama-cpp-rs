@@ -180,12 +180,6 @@ impl Drop for LlamaBackend {
     }
 }
 
-/// Compile-time path to the built GGML backend modules directory.
-/// Populated by build.rs from `DEP_LLAMA_BACKENDS_DIR` (emitted by llama-cpp-sys-2).
-/// None on static builds or when the feature is disabled.
-#[cfg(feature = "dynamic-backends")]
-pub const BACKENDS_DIR: Option<&str> = option_env!("GGML_BACKENDS_DIR");
-
 /// Load GGML backend modules from the given directory.
 ///
 /// Call this before [`LlamaBackend::init`] to enable runtime hardware selection
@@ -203,7 +197,7 @@ pub fn load_backends_from_path(path: &std::path::Path) {
 /// that have not set `GGML_BACKENDS_DIR`).
 #[cfg(feature = "dynamic-backends")]
 pub fn load_backends() {
-    if let Some(dir) = BACKENDS_DIR {
+    if let Some(dir) = llama_cpp_sys_2::BACKENDS_DIR {
         load_backends_from_path(std::path::Path::new(dir));
     }
 }

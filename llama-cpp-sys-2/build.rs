@@ -1064,6 +1064,13 @@ fn main() {
         config.define("GGML_CPU_ALL_VARIANTS", "ON");
         config.define("GGML_BACKEND_DIR", backends_dir.to_str().unwrap());
         // BUILD_SHARED_LIBS=ON is already set above via the dynamic-link feature.
+        println!(
+            "cargo:rustc-env=GGML_BACKENDS_DIR={}",
+            backends_dir.display()
+        );
+
+        // Expose backends dir to direct dependencies as `DEP_LLAMA_BACKENDS_DIR`.
+        println!("cargo:backends_dir={}", out_dir.join("backends").display());
     }
 
     // General
@@ -1073,10 +1080,6 @@ fn main() {
         .always_configure(false);
 
     let build_dir = config.build();
-
-    if cfg!(feature = "dynamic-backends") {
-        println!("cargo:backends_dir={}", out_dir.join("backends").display());
-    }
 
     // The CMake build installs a ggml package config. Tell the dependent crates where it
     // is, in the DEP_LLAMA_GGML_CMAKE_DIR variable. A dependent crate that also builds
