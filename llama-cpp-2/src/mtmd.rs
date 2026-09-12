@@ -6,6 +6,7 @@
 //! # Warning
 //! This API is experimental and subject to breaking changes.
 use std::ffi::{CStr, CString};
+use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::slice;
 
@@ -337,7 +338,7 @@ impl MtmdContext {
     /// # Errors
     ///
     /// Returns `MtmdEncodeError::EncodeFailure` if encoding fails.
-    pub fn encode_chunk(&self, chunk: &MtmdInputChunk) -> Result<(), MtmdEncodeError> {
+    pub fn encode_chunk(&self, chunk: &MtmdInputChunk<'_>) -> Result<(), MtmdEncodeError> {
         let result = unsafe {
             llama_cpp_sys_2::mtmd_encode_chunk(self.context.as_ptr(), chunk.chunk.as_ptr())
         };
@@ -673,9 +674,31 @@ impl MtmdInputChunks {
         self.len() == 0
     }
 
-    /// Get a chunk by index
+    /// Get a chunk by index.
+    ///
+    /// The returned chunk borrows from this collection. Dropping the collection
+    /// while a borrowed chunk is still in use is a compile error. Use
+    /// [`MtmdInputChunk::copy`] if you need a chunk that outlives the collection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use llama_cpp_2::mtmd::MtmdInputChunks;
+    ///
+    /// let chunks = MtmdInputChunks::new();
+    /// assert!(chunks.get(0).is_none());
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use llama_cpp_2::mtmd::MtmdInputChunks;
+    ///
+    /// let chunks = MtmdInputChunks::new();
+    /// let chunk = chunks.get(0);
+    /// drop(chunks);
+    /// let _ = chunk;
+    /// ```
     #[must_use]
-    pub fn get(&self, index: usize) -> Option<MtmdInputChunk> {
+    pub fn get(&self, index: usize) -> Option<MtmdInputChunk<'_>> {
         if index >= self.len() {
             return None;
         }
@@ -687,6 +710,7 @@ impl MtmdInputChunks {
         NonNull::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
             chunk: ptr,
             owned: false,
+            phantom: PhantomData,
         })
     }
 
@@ -777,13 +801,18 @@ impl Drop for MtmdInputChunks {
 /// Represents a single chunk of input data, which can be either text tokens,
 /// image tokens, or audio tokens. The chunk type determines what kind of
 /// data and operations are available.
+///
+/// `'a` is the lifetime of the [`MtmdInputChunks`] this chunk was borrowed
+/// from via [`MtmdInputChunks::get`]. [`MtmdInputChunk::copy`] returns an
+/// owned chunk with a `'static` lifetime that is freed independently.
 #[derive(Debug)]
-pub struct MtmdInputChunk {
+pub struct MtmdInputChunk<'a> {
     pub(crate) chunk: NonNull<llama_cpp_sys_2::mtmd_input_chunk>,
     owned: bool,
+    phantom: PhantomData<&'a MtmdInputChunks>,
 }
 
-impl MtmdInputChunk {
+impl MtmdInputChunk<'_> {
     /// Get the type of this chunk
     #[must_use]
     pub fn chunk_type(&self) -> MtmdInputChunkType {
@@ -860,6 +889,9 @@ impl MtmdInputChunk {
     /// (e.g., KV cache management) by moving the chunk ownership to your own code.
     /// Remember to ensure the copied chunk is properly freed when you're done with it.
     ///
+    /// The copy does not borrow from the original collection, so it can
+    /// outlive the [`MtmdInputChunks`] this chunk was taken from.
+    ///
     /// # Returns
     ///
     /// Returns an owned copy of the chunk.
@@ -867,14 +899,18 @@ impl MtmdInputChunk {
     /// # Errors
     ///
     /// Returns `MtmdInputChunkError::NullResult` if copying fails.
-    pub fn copy(&self) -> Result<Self, MtmdInputChunkError> {
+    pub fn copy(&self) -> Result<MtmdInputChunk<'static>, MtmdInputChunkError> {
         let chunk = unsafe { llama_cpp_sys_2::mtmd_input_chunk_copy(self.chunk.as_ptr()) };
         let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
-        Ok(Self { chunk, owned: true })
+        Ok(MtmdInputChunk {
+            chunk,
+            owned: true,
+            phantom: PhantomData,
+        })
     }
 }
 
-impl Drop for MtmdInputChunk {
+impl Drop for MtmdInputChunk<'_> {
     fn drop(&mut self) {
         if self.owned {
             unsafe { llama_cpp_sys_2::mtmd_input_chunk_free(self.chunk.as_ptr()) }
