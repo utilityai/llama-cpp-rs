@@ -882,7 +882,22 @@ fn main() {
         // If the target-cpu is not specified as native, we take off the native ARM64 support.
         // It is useful in docker environments where the native feature is not enabled.
         config.define("GGML_NATIVE", "OFF");
-        config.define("GGML_CPU_ARM_ARCH", "armv8-a");
+
+        // ...but do NOT pin a single architecture when `dynamic-backends` is on:
+        // that feature sets GGML_CPU_ALL_VARIANTS, and ggml rejects the pair
+        //     "Cannot use both GGML_CPU_ARM_ARCH and GGML_CPU_ALL_VARIANTS"
+        // (ggml/src/CMakeLists.txt), so every non-native aarch64 Linux build with
+        // the feature enabled fails at configure time. `target-cpu=native` is the
+        // only value that skips this block, and it is unusable for a distributed
+        // artifact because it compiles for the build machine's own CPU.
+        //
+        // Leaving the variable unset is what the feature wants anyway:
+        // GGML_CPU_ALL_VARIANTS builds armv8.0 through armv9.2 and dispatches on
+        // the host's capabilities at load time, which is strictly better than the
+        // fixed armv8-a baseline this line would otherwise impose.
+        if !cfg!(feature = "dynamic-backends") {
+            config.define("GGML_CPU_ARM_ARCH", "armv8-a");
+        }
     }
 
     if cfg!(feature = "vulkan") {
