@@ -780,6 +780,21 @@ fn main() {
         config.define("GGML_BLAS", "OFF");
     }
 
+    // wasm32-wasip2 / cognition path: caller sets
+    // GGML_WEBGPU_HEADER_ONLY_INCLUDE_DIR to a directory holding
+    // webgpu/webgpu.h + webgpu/webgpu_cpp.h.  When set, we flip
+    // the CMake option on and pass the include dir through — the
+    // ggml-webgpu build then bypasses find_package(Dawn) and
+    // expects `wgpu*` symbols to be linked in externally (by
+    // the caller's C shim; see cognition-webgpu-c-shim).
+    println!("cargo:rerun-if-env-changed=GGML_WEBGPU_HEADER_ONLY_INCLUDE_DIR");
+    if let Ok(include_dir) = env::var("GGML_WEBGPU_HEADER_ONLY_INCLUDE_DIR") {
+        if !include_dir.is_empty() {
+            config.define("GGML_WEBGPU_HEADER_ONLY", "ON");
+            config.define("GGML_WEBGPU_HEADER_ONLY_INCLUDE_DIR", &include_dir);
+        }
+    }
+
     // watchOS has no Metal framework, so disable the Metal backend there.
     // Also define _DARWIN_C_SOURCE so BSD types (u_int, u_char, u_short) used by
     // some sources are visible — implicit on macOS/iOS but not on watchOS.
