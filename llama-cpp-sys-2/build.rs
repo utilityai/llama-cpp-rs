@@ -517,7 +517,10 @@ fn main() {
         };
 
         // Configure bindgen for Android
+        // Recent NDK headers reject unversioned target triples, and bindgen's
+        // default `--target` (derived from `TARGET`) carries no API level.
         bindings_builder = bindings_builder
+            .clang_arg(format!("--target={}{}", target_triple, tc.api))
             .clang_arg(format!("--sysroot={}", tc.sysroot))
             .clang_arg(format!("-D__ANDROID_API__={}", tc.api))
             .clang_arg("-D__ANDROID__");
