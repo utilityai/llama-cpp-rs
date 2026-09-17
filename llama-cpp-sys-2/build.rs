@@ -1044,6 +1044,10 @@ fn main() {
         config.define("GGML_OPENMP", "OFF");
     }
 
+    if cfg!(feature = "mtmd") {
+        config.define("LLAMA_BUILD_MTMD", "ON");
+    }
+
     if cfg!(feature = "system-ggml") {
         config.define("LLAMA_USE_SYSTEM_GGML", "ON");
     }
@@ -1082,55 +1086,6 @@ fn main() {
             println!("cargo:ggml_cmake_dir={}", cmake_dir.display());
             break;
         }
-    }
-
-    // Build mtmd directly with cc::Build, bypassing the cmake tools build.
-    // Using LLAMA_BUILD_TOOLS=ON would pull in all tools (batched-bench, quantize, etc.)
-    // and their CMakeLists.txt files, which are not included in the crate package.
-    if cfg!(feature = "mtmd") {
-        let mtmd_src = llama_src.join("tools/mtmd");
-        let mut mtmd_build = cc::Build::new();
-        mtmd_build
-            .cpp(true)
-            .include(&mtmd_src)
-            .include(&llama_src)
-            .include(llama_src.join("include"))
-            .include(llama_src.join("ggml/include"))
-            .include(llama_src.join("common"))
-            .include(llama_src.join("vendor"))
-            .flag_if_supported("-std=c++17")
-            .flag_if_supported("-Wno-cast-qual")
-            .pic(true);
-
-        if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-            mtmd_build.flag("/std:c++17");
-        }
-
-        // Same rationale as the common wrapper: Apple emits an explicit
-        // `cargo:rustc-link-lib=c++` below, and Android static-stdcxx emits
-        // `c++_static` instead of cc's default `c++_shared`.
-        if matches!(target_os, TargetOs::Apple(_))
-            || (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
-        {
-            mtmd_build.cpp_link_stdlib(None);
-        }
-
-        // Collect all .cpp files in tools/mtmd and its subdirectories
-        for entry in glob(mtmd_src.join("**/*.cpp").to_str().unwrap()).unwrap() {
-            match entry {
-                Ok(path) => {
-                    // Skip CLI / deprecation-warning binaries — we only want the library sources
-                    let filename = path.file_name().unwrap().to_str().unwrap();
-                    if filename == "mtmd-cli.cpp" || filename == "deprecation-warning.cpp" {
-                        continue;
-                    }
-                    mtmd_build.file(&path);
-                }
-                Err(e) => println!("cargo:warning=mtmd glob error: {}", e),
-            }
-        }
-
-        mtmd_build.compile("mtmd");
     }
 
     // Search paths
