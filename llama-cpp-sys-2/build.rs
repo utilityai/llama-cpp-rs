@@ -541,14 +541,6 @@ fn main() {
             .clang_arg("stdbool.h")
             .clang_arg("-include")
             .clang_arg("stdint.h");
-
-        // Set additional clang args for cargo ndk compatibility
-        if env::var("CARGO_SUBCOMMAND").as_deref() == Ok("ndk") {
-            std::env::set_var(
-                "BINDGEN_EXTRA_CLANG_ARGS",
-                format!("--target={}", target_triple),
-            );
-        }
     }
 
     // Fix bindgen header discovery on Windows MSVC
