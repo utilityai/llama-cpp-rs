@@ -95,72 +95,81 @@ fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(target_dir.to_path_buf())
 }
 
-fn extract_lib_names(out_dir: &Path, build_shared_libs: bool, target_os: &TargetOs) -> Vec<String> {
-    let lib_pattern = match target_os {
+/// Filename prefix used for libraries on this platform.
+///
+/// This is similar to [`std::env::consts::DLL_PREFIX`].
+fn lib_prefix(target_os: &TargetOs, _shared: bool) -> &'static str {
+    match target_os {
+        // TODO: WASM on non-emscripten also don't have this.
+        TargetOs::Windows(WindowsVariant::Msvc) => "",
+        _ => "lib",
+    }
+}
+
+/// Filename suffix used for libraries on this platform.
+///
+/// This is similar to [`std::env::consts::DLL_SUFFIX`].
+fn lib_suffix(target_os: &TargetOs, shared: bool) -> &'static str {
+    match target_os {
         // MSVC emits .lib; the GNU (MinGW) toolchain emits .a static archives.
-        TargetOs::Windows(WindowsVariant::Msvc) => "*.lib",
-        TargetOs::Windows(_) => "*.a",
+        TargetOs::Windows(WindowsVariant::Msvc) => ".lib",
+        TargetOs::Windows(_) => ".a",
         TargetOs::Apple(_) => {
-            if build_shared_libs {
-                "*.dylib"
+            if shared {
+                ".dylib"
             } else {
-                "*.a"
+                ".a"
             }
         }
         TargetOs::Linux | TargetOs::Android => {
-            if build_shared_libs {
-                "*.so"
+            if shared {
+                ".so"
             } else {
-                "*.a"
+                ".a"
             }
         }
-    };
-    let libs_dir = out_dir.join("lib*");
-    let pattern = libs_dir.join(lib_pattern);
+    }
+}
+
+fn extract_lib_names(dir_pattern: &Path, target_os: &TargetOs, shared: bool) -> Vec<PathBuf> {
+    let pattern = dir_pattern.join(format!(
+        "{}*{}",
+        lib_prefix(target_os, shared),
+        lib_suffix(target_os, shared)
+    ));
     debug_log!("Extract libs {}", pattern.display());
 
-    let mut lib_names: Vec<String> = Vec::new();
+    let mut libs = Vec::new();
 
     // Process the libraries based on the pattern
     for entry in glob(pattern.to_str().unwrap()).unwrap() {
         match entry {
-            Ok(path) => {
-                let stem = path.file_stem().unwrap();
-                let stem_str = stem.to_str().unwrap();
-
-                // Remove the "lib" prefix if present
-                let lib_name = if stem_str.starts_with("lib") {
-                    stem_str.strip_prefix("lib").unwrap_or(stem_str)
-                } else {
-                    if path.extension() == Some(std::ffi::OsStr::new("a")) {
-                        let target = path.parent().unwrap().join(format!("lib{}.a", stem_str));
-                        std::fs::rename(&path, &target).unwrap_or_else(|e| {
-                            panic!("Failed to rename {path:?} to {target:?}: {e:?}");
-                        })
-                    }
-                    stem_str
-                };
-                lib_names.push(lib_name.to_string());
-            }
+            Ok(path) => libs.push(path),
             Err(e) => println!("cargo:warning=error={}", e),
         }
     }
-    lib_names
+
+    libs
+}
+
+/// Remove the extension and "lib" prefix (if present) from the path's file name.
+fn lib_name(path: &Path) -> &str {
+    let stem = path.file_stem().unwrap();
+    let stem_str = stem.to_str().unwrap();
+    stem_str.strip_prefix("lib").unwrap_or(stem_str)
 }
 
 fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
-    let shared_lib_pattern = match target_os {
-        TargetOs::Windows(_) => "*.dll",
-        TargetOs::Apple(_) => "*.dylib",
-        TargetOs::Linux | TargetOs::Android => "*.so",
-    };
-
     let shared_libs_dir = match target_os {
         TargetOs::Windows(_) => "bin",
         _ => "lib",
     };
     let libs_dir = out_dir.join(shared_libs_dir);
-    let pattern = libs_dir.join(shared_lib_pattern);
+    let pattern = libs_dir.join(format!(
+        "{}*{}",
+        lib_prefix(target_os, true),
+        lib_suffix(target_os, true)
+    ));
     debug_log!("Extract lib assets {}", pattern.display());
     let mut files = Vec::new();
 
@@ -179,34 +188,16 @@ fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
 fn library_file_exists(
     search_dirs: &[PathBuf],
     lib_name: &str,
-    build_shared_libs: bool,
+    shared: bool,
     target_os: &TargetOs,
 ) -> bool {
-    let (prefixes, extensions): (&[&str], &[&str]) = match target_os {
-        TargetOs::Windows(_) => (&["", "lib"], &["lib"]),
-        TargetOs::Apple(_) => {
-            if build_shared_libs {
-                (&["lib"], &["dylib"])
-            } else {
-                (&["lib"], &["a"])
-            }
-        }
-        TargetOs::Linux | TargetOs::Android => {
-            if build_shared_libs {
-                (&["lib"], &["so"])
-            } else {
-                (&["lib"], &["a"])
-            }
-        }
-    };
-
     search_dirs.iter().any(|dir| {
-        prefixes.iter().any(|prefix| {
-            extensions.iter().any(|extension| {
-                dir.join(format!("{prefix}{lib_name}.{extension}"))
-                    .is_file()
-            })
-        })
+        dir.join(format!(
+            "{}{lib_name}{}",
+            lib_prefix(target_os, shared),
+            lib_suffix(target_os, shared)
+        ))
+        .is_file()
     })
 }
 
@@ -1266,6 +1257,28 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=mkl_rt");
     }
 
+    // MTMD depends on the hashing functionality.
+    if cfg!(feature = "mtmd") && !build_shared_libs {
+        let dir = build_dir
+            .join("build")
+            .join("vendor")
+            .join("hash")
+            .join("**");
+        let vendor_hash_libs = extract_lib_names(&dir, &target_os, false);
+        assert_eq!(
+            vendor_hash_libs.len(),
+            1,
+            "unknown vendor-hash archive found in {dir:?}: {vendor_hash_libs:?}",
+        );
+
+        let lib = &vendor_hash_libs[0];
+        println!(
+            "cargo:rustc-link-search=native={}",
+            lib.parent().unwrap().display()
+        );
+        println!("cargo:rustc-link-lib=static={}", lib_name(lib));
+    }
+
     // Link libraries
     let llama_libs_kind = if build_shared_libs
         || (cfg!(feature = "system-ggml") && !cfg!(feature = "system-ggml-static"))
@@ -1275,7 +1288,7 @@ fn main() {
         "static"
     };
 
-    let llama_libs = extract_lib_names(&out_dir, build_shared_libs, &target_os);
+    let llama_libs = extract_lib_names(&out_dir.join("lib*"), &target_os, build_shared_libs);
 
     assert_ne!(llama_libs.len(), 0);
 
@@ -1327,7 +1340,11 @@ fn main() {
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
     }
     for lib in llama_libs {
-        let link = format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib);
+        let link = format!(
+            "cargo:rustc-link-lib={}={}",
+            llama_libs_kind,
+            lib_name(&lib)
+        );
         debug_log!("LINK {link}",);
         println!("{link}",);
     }
