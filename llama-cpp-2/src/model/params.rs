@@ -406,6 +406,7 @@ impl LlamaModelParams {
                 self.buft_overrides.as_mut_ptr(),
                 margins.as_mut_ptr(),
                 n_ctx_min,
+                std::ptr::null_mut(),
                 log_level,
             )
         };

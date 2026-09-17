@@ -133,6 +133,7 @@ extern "C" int llama_rs_fit_params(
     struct llama_model_tensor_buft_override * tensor_buft_overrides,
     size_t * margins,
     uint32_t n_ctx_min,
+    const void * extra,
     enum ggml_log_level log_level) {
     return static_cast<int>(common_fit_params(
         path_model,
@@ -142,6 +143,7 @@ extern "C" int llama_rs_fit_params(
         tensor_buft_overrides,
         margins,
         n_ctx_min,
+        static_cast<const common_fit_extra_model *>(extra),
         log_level));
 }
 
