@@ -31,9 +31,11 @@ jobs:
         with:
           components: clippy, rustfmt
       - name: Clippy
-        run: cargo clippy
+        run: cargo clippy -vv
       - name: Fmt
         run: cargo fmt --check
+      - name: Build
+        run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
       - name: Dry-Run Publishing
@@ -69,7 +71,7 @@ jobs:
           echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --bin simple --features cuda
+        run: cargo build --bin simple --features cuda -vv
   mac:
     name: Check that it builds on mac
     runs-on: macos-latest
@@ -81,7 +83,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --features sampler,mtmd,llguidance
+        run: cargo build --features sampler,mtmd,llguidance -vv
   windows:
     name: Check that it builds on windows
     runs-on: windows-latest
@@ -93,6 +95,6 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --features sampler,mtmd,llguidance
+        run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
