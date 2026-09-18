@@ -38,16 +38,16 @@ jobs:
         run: cargo test --features sampler,mtmd,llguidance
       - name: Dry-Run Publishing
         run: RUST_BACKTRACE=1 cargo publish --workspace --verbose --dry-run
-  cuda:
-    name: Check that it builds on ${{ matrix.name }}
+  arm64:
+    name: Check that it builds on various targets (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
         include:
-          - name: CUDA ARM64
+          - name: linux/arm64
             runner: ubuntu-26.04-arm
             cuda-repo: ubuntu2604/sbsa
-          - name: CUDA x86_64
+          - name: linux/amd64
             runner: ubuntu-26.04 # x86_64
             cuda-repo: ubuntu2604/x86_64
     steps:
