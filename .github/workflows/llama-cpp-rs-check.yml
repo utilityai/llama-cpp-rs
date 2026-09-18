@@ -38,27 +38,38 @@ jobs:
         run: cargo test --features sampler,mtmd,llguidance
       - name: Dry-Run Publishing
         run: RUST_BACKTRACE=1 cargo publish --workspace --verbose --dry-run
-  arm64:
-    name: Check that it builds on various targets
-    runs-on: ubuntu-latest
+  cuda:
+    name: Check that it builds on ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
-        target: [ linux/arm64, linux/amd64 ]
+        include:
+          - name: CUDA ARM64
+            runner: ubuntu-26.04-arm
+            cuda-repo: ubuntu2604/sbsa
+          - name: CUDA x86_64
+            runner: ubuntu-26.04 # x86_64
+            cuda-repo: ubuntu2604/x86_64
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a
         with:
-          platforms: arm64,amd64
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+          submodules: recursive
+      - name: Install Compile Deps
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run:
+          sudo apt-get update && sudo apt-get install -y build-essential curl libssl-dev libclang-dev pkg-config cmake git
+      - name: Install CUDA Toolkit
+        run: |
+          curl -fsSLO https://developer.download.nvidia.com/compute/cuda/repos/${{ matrix.cuda-repo }}/cuda-keyring_1.1-1_all.deb
+          sudo dpkg -i cuda-keyring_1.1-1_all.deb
+          sudo apt-get update
+          sudo apt-get install -y cuda-toolkit-13-4
+          echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
+      - uses: dtolnay/rust-toolchain@stable
       - name: Build
-        uses: docker/build-push-action@v7
-        with:
-          file: test-build.Dockerfile
-          target: base-cuda
-          platforms: ${{ matrix.target }}
+        run: cargo build --bin simple --features cuda
   mac:
     name: Check that it builds on mac
     runs-on: macos-latest
