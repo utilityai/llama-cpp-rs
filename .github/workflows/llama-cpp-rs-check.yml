@@ -44,6 +44,10 @@ jobs:
   arm64:
     name: Check that it builds on various targets (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_CUDA_COMPILER_LAUNCHER: ccache
     strategy:
       matrix:
         include:
@@ -62,7 +66,7 @@ jobs:
         env:
           DEBIAN_FRONTEND: noninteractive
         run:
-          sudo apt-get update && sudo apt-get install -y build-essential curl libssl-dev libclang-dev pkg-config cmake git
+          sudo apt-get update && sudo apt-get install -y build-essential curl libssl-dev libclang-dev pkg-config cmake git ccache
       - name: Install CUDA Toolkit
         run: |
           curl -fsSLO https://developer.download.nvidia.com/compute/cuda/repos/${{ matrix.cuda-repo }}/cuda-keyring_1.1-1_all.deb
@@ -72,8 +76,11 @@ jobs:
           echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: ~/.cache/ccache
       - name: Build
         run: cargo build --bin simple --features cuda -vv
+      - run: ccache --show-stats
   mac:
     name: Check that it builds on mac
     runs-on: macos-latest
