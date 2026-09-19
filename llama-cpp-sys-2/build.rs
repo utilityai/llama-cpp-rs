@@ -694,9 +694,9 @@ fn main() {
             config.cxxflag(format!("-march={}", cpu));
         }
 
-        // I expect this env var to always be present
-        let features = std::env::var("CARGO_CFG_TARGET_FEATURE")
-            .expect("Env var CARGO_CFG_TARGET_FEATURE not found.");
+        // cargo only sets this when at least one target feature is enabled, which
+        // is not the case on e.g. powerpc64/powerpc64le
+        let features = std::env::var("CARGO_CFG_TARGET_FEATURE").unwrap_or_default();
         debug_log!("Compiling with target features: {}", features);
 
         // list of rust target_features here:
