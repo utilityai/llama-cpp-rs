@@ -462,6 +462,8 @@ fn is_hidden(e: &DirEntry) -> bool {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+
     let (target_os, target_triple) =
         parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -961,37 +963,18 @@ fn main() {
     }
 
     if matches!(target_os, TargetOs::Emscripten) {
+        assert!(!build_shared_libs, "WASM only supports static linking");
+
         // Set CMake toolchain file for Emscripten
         let toolchain_file = detect_emscripten_cmake_toolchain();
         config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
 
-        // Safety net: explicitly set compilers
-        config.define("CMAKE_C_COMPILER", "emcc");
-        config.define("CMAKE_CXX_COMPILER", "em++");
-
-        // Wasm only supports static linking
-        config.define("BUILD_SHARED_LIBS", "OFF");
-
-        // CPU-only: disable all GPU/accelerator backends
-        config.define("GGML_VULKAN", "OFF");
-        config.define("GGML_CUDA", "OFF");
-        config.define("GGML_HIP", "OFF");
-        config.define("GGML_OPENCL", "OFF");
-        config.define("GGML_SYCL", "OFF");
-        config.define("GGML_KOMPUTE", "OFF");
-        config.define("GGML_RPC", "OFF");
-        config.define("GGML_METAL", "OFF");
-        config.define("GGML_ACCELERATE", "OFF");
-        config.define("GGML_LLAMAFILE", "OFF");
-        config.define("GGML_OPENMP", "OFF");
-        config.define("GGML_CPU_HBM", "OFF");
-
-        // Enable CPU backend
-        config.define("GGML_CPU", "ON");
-
-        // Disable wasm64/memory64 — we target wasm32 and Rust's wasm32-unknown-emscripten
-        // linker cannot process wasm64 object files.
-        config.define("LLAMA_WASM_MEM64", "OFF");
+        let mem64 = match &*target_arch {
+            "wasm32" => "OFF",
+            "wasm64" => "ON",
+            _ => panic!("unsupported WASM arch: {target_arch}"),
+        };
+        config.define("LLAMA_WASM_MEM64", mem64);
     }
 
     if matches!(target_os, TargetOs::Linux)
@@ -1172,7 +1155,6 @@ fn main() {
     }
 
     if cfg!(feature = "mkl") {
-        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         assert_eq!(
             target_arch, "x86_64",
             "The `mkl` feature requires an x86_64 target; Intel MKL is unavailable for {target_arch}."
