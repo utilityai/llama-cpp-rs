@@ -406,7 +406,11 @@ fn detect_emscripten_sysroot() -> String {
 ///
 /// FIXME(madsmtm): Upstream this into `cmake-rs`.
 fn detect_emscripten_cmake_toolchain() -> String {
-    let toolchain_rel = "cmake/Modules/Platform/Emscripten.cmake";
+    let toolchain_rel = PathBuf::new()
+        .join("cmake")
+        .join("Modules")
+        .join("Platform")
+        .join("Emscripten.cmake");
 
     // Primary: EMSDK env var
     println!("cargo:rerun-if-env-changed=EMSDK");
@@ -414,7 +418,7 @@ fn detect_emscripten_cmake_toolchain() -> String {
         let candidate = PathBuf::from(&emsdk)
             .join("upstream")
             .join("emscripten")
-            .join(toolchain_rel);
+            .join(&toolchain_rel);
         if candidate.exists() {
             debug_log!("detected Emscripten CMake toolchain from EMSDK: {candidate:?}");
             return candidate.to_string_lossy().into_owned();
@@ -428,13 +432,13 @@ fn detect_emscripten_cmake_toolchain() -> String {
             // emcc is at <prefix>/bin/emcc — go up to <prefix>
             if let Some(prefix) = resolved.parent().and_then(|p| p.parent()) {
                 // Nix / system packages: <prefix>/share/emscripten/cmake/...
-                let candidate = prefix.join("share/emscripten").join(toolchain_rel);
+                let candidate = prefix.join("share").join("emscripten").join(&toolchain_rel);
                 if candidate.exists() {
                     debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
                     return candidate.to_string_lossy().into_owned();
                 }
                 // emsdk layout: <prefix>/cmake/...
-                let candidate = prefix.join(toolchain_rel);
+                let candidate = prefix.join(&toolchain_rel);
                 if candidate.exists() {
                     debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
                     return candidate.to_string_lossy().into_owned();
