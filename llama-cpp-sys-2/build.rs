@@ -18,12 +18,17 @@ enum AppleVariant {
     Other,
 }
 
+enum WasmVariant {
+    Emscripten,
+    // TODO: At some point WASI?
+}
+
 enum TargetOs {
     Windows(WindowsVariant),
     Apple(AppleVariant),
     Linux,
     Android,
-    Emscripten,
+    Wasm(WasmVariant),
 }
 
 macro_rules! debug_log {
@@ -82,7 +87,7 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
     } else if target.contains("linux") {
         Ok((TargetOs::Linux, target))
     } else if target.contains("emscripten") {
-        Ok((TargetOs::Emscripten, target))
+        Ok((TargetOs::Wasm(WasmVariant::Emscripten), target))
     } else {
         Err(target)
     }
@@ -124,7 +129,7 @@ fn lib_suffix(target_os: &TargetOs, shared: bool) -> &'static str {
                 ".a"
             }
         }
-        TargetOs::Linux | TargetOs::Android | TargetOs::Emscripten => {
+        TargetOs::Linux | TargetOs::Android | TargetOs::Wasm(WasmVariant::Emscripten) => {
             if shared {
                 ".so"
             } else {
@@ -633,7 +638,7 @@ fn main() {
     }
 
     // Configure Emscripten-specific bindgen settings
-    if matches!(target_os, TargetOs::Emscripten) {
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
         let sysroot = detect_emscripten_sysroot();
         bindings_builder = bindings_builder
             .clang_arg(format!("--sysroot={}", sysroot))
@@ -799,7 +804,7 @@ fn main() {
         });
 
     // Emscripten doesn't use -march or x86/ARM feature flags — emcc handles SIMD128 internally.
-    if matches!(target_os, TargetOs::Emscripten) {
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
         config.define("GGML_NATIVE", "OFF");
     } else if target_cpu == Some("native".into()) {
         debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
@@ -973,12 +978,13 @@ fn main() {
         println!("cargo:rustc-link-lib=android");
     }
 
-    if matches!(target_os, TargetOs::Emscripten) {
+    if let TargetOs::Wasm(wasm_variant) = &target_os {
         assert!(!build_shared_libs, "WASM only supports static linking");
 
-        // Set CMake toolchain file for Emscripten
-        let toolchain_file = detect_emscripten_cmake_toolchain();
-        config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
+        if matches!(wasm_variant, WasmVariant::Emscripten) {
+            let toolchain_file = detect_emscripten_cmake_toolchain();
+            config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
+        }
 
         let mem64 = match &*target_arch {
             "wasm32" => "OFF",
@@ -1177,7 +1183,7 @@ fn main() {
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android | TargetOs::Emscripten) {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android | TargetOs::Wasm(_)) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
@@ -1505,7 +1511,7 @@ fn main() {
             // When neither feature is set, the cc crate handles C++ stdlib
             // linking automatically (defaults to c++_shared on Android).
         }
-        TargetOs::Emscripten => {
+        TargetOs::Wasm(WasmVariant::Emscripten) => {
             // Emscripten handles all C++ stdlib linking internally via emcc.
         }
         _ => (),
