@@ -125,7 +125,7 @@ jobs:
           ./emsdk/emsdk activate ${EMSCRIPTEN_VERSION}
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rust-src
+          components: rust-src, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Build
         # Needs to use build-std, see:
