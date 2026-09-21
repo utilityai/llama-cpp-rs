@@ -981,6 +981,8 @@ fn main() {
             _ => panic!("unsupported WASM arch: {target_arch}"),
         };
         config.define("LLAMA_WASM_MEM64", mem64);
+
+        config.define("GGML_WEBGPU", "ON");
     }
 
     if matches!(target_os, TargetOs::Linux)
