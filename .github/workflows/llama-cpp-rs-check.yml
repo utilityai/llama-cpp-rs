@@ -109,3 +109,32 @@ jobs:
         run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
+  emscripten:
+    name: Check that building for Emscripten works
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+      - name: Install Emscripten
+        run: |
+          EMSCRIPTEN_VERSION="6.0.9"
+          git clone https://github.com/emscripten-core/emsdk.git --branch ${EMSCRIPTEN_VERSION}
+          ./emsdk/emsdk install ${EMSCRIPTEN_VERSION}
+          ./emsdk/emsdk activate ${EMSCRIPTEN_VERSION}
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        # Needs to use build-std, see:
+        # https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-emscripten.html#emscripten-abi-compatibility
+        #
+        # Also only tests that we can build the main and the -sys package,
+        # intentionally doesn't try to build tests and examples because those
+        # depend on packages that don't support WASM (or at least not easily,
+        # like OpenSSL).
+        run: |
+          source ./emsdk/emsdk_env.sh
+          cargo +nightly -Zbuild-std build --target wasm32-unknown-emscripten --features sampler,mtmd,llguidance -vv -pllama-cpp-2
