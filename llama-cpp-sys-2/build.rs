@@ -970,6 +970,9 @@ fn main() {
     if let TargetOs::Wasm(wasm_variant) = &target_os {
         assert!(!build_shared_libs, "WASM only supports static linking");
 
+        // Disable OpenSSL, it's hard to link with both WASI and Emscripten.
+        config.define("LLAMA_OPENSSL", "OFF");
+
         if matches!(wasm_variant, WasmVariant::Emscripten) {
             let toolchain_file = detect_emscripten_cmake_toolchain();
             config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
