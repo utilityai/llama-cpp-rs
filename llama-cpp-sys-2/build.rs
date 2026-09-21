@@ -976,6 +976,12 @@ fn main() {
         if matches!(wasm_variant, WasmVariant::Emscripten) {
             let toolchain_file = detect_emscripten_cmake_toolchain();
             config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
+
+            // Make Emscripten.cmake set `CMAKE_SYSTEM_PROCESSOR` to something
+            // that llama.cpp understands, instead of the bogus x86 that it
+            // defaults to for (apparent) compatibility with OpenCV.
+            // https://github.com/emscripten-core/emscripten/blob/d6c521a7f05449857c76bd99e396895583cf2083/cmake/Modules/Platform/Emscripten.cmake#L30-L37
+            config.define("EMSCRIPTEN_SYSTEM_PROCESSOR", &target_arch);
         }
 
         let mem64 = match &*target_arch {
