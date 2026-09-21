@@ -348,12 +348,26 @@ fn android_toolchain(target_triple: &str) -> AndroidToolchain {
     }
 }
 
-/// Auto-detect the Emscripten sysroot by parsing `emcc --cflags`.
-/// Falls back to `$EMSDK/upstream/emscripten/cache/sysroot` if parsing fails.
+/// Find the sysroot in `$EMSDK/upstream/emscripten/cache/sysroot`, and if
+/// that fails, try to detect it by parsing `emcc --cflags`.
 ///
 /// FIXME(madsmtm): Upstream this into `bindgen`.
 fn detect_emscripten_sysroot() -> String {
-    // Primary: parse --sysroot= from emcc --cflags
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let sysroot = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join("cache")
+            .join("sysroot");
+        if sysroot.exists() {
+            debug_log!("detected Emscripten sysroot from EMSDK env: {sysroot:?}");
+            return sysroot.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: parse --sysroot= from emcc --cflags
     match Command::new("emcc").arg("--cflags").output() {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -382,32 +396,32 @@ fn detect_emscripten_sysroot() -> String {
         Err(e) => debug_log!("failed to run emcc --cflags: {e}"),
     }
 
-    // Fallback: EMSDK env var
-    println!("cargo:rerun-if-env-changed=EMSDK");
-    if let Ok(emsdk) = env::var("EMSDK") {
-        let sysroot = PathBuf::from(&emsdk)
-            .join("upstream")
-            .join("emscripten")
-            .join("cache")
-            .join("sysroot");
-        if sysroot.exists() {
-            debug_log!("detected Emscripten sysroot from EMSDK env: {sysroot:?}");
-            return sysroot.to_string_lossy().into_owned();
-        }
-    }
-
     panic!(
         "could not detect Emscripten sysroot, ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
     )
 }
 
-/// Find the Emscripten CMake toolchain file by locating `emcc` on PATH.
+/// Find the CMake toolchain file in `$EMSDK/upstream/emscripten/cmake`, and
+/// if that fails, try to detect it by locating `emcc` in `PATH`.
 ///
 /// FIXME(madsmtm): Upstream this into `cmake-rs`.
 fn detect_emscripten_cmake_toolchain() -> String {
     let toolchain_rel = "cmake/Modules/Platform/Emscripten.cmake";
 
-    // Primary: find emcc, resolve symlinks, look for toolchain relative to its prefix
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let candidate = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join(toolchain_rel);
+        if candidate.exists() {
+            debug_log!("detected Emscripten CMake toolchain from EMSDK: {candidate:?}");
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: find emcc, resolve symlinks, look for toolchain relative to its prefix
     if let Ok(output) = Command::new("which").arg("emcc").output() {
         let emcc_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if let Ok(resolved) = std::fs::canonicalize(&emcc_str) {
@@ -426,19 +440,6 @@ fn detect_emscripten_cmake_toolchain() -> String {
                     return candidate.to_string_lossy().into_owned();
                 }
             }
-        }
-    }
-
-    // Fallback: EMSDK env var
-    println!("cargo:rerun-if-env-changed=EMSDK");
-    if let Ok(emsdk) = env::var("EMSDK") {
-        let candidate = PathBuf::from(&emsdk)
-            .join("upstream")
-            .join("emscripten")
-            .join(toolchain_rel);
-        if candidate.exists() {
-            debug_log!("detected Emscripten CMake toolchain from EMSDK: {candidate:?}");
-            return candidate.to_string_lossy().into_owned();
         }
     }
 
