@@ -7,14 +7,6 @@ pub type ggml_abort_callback_t =
 extern "C" {
     pub fn ggml_set_abort_callback(callback: ggml_abort_callback_t) -> ggml_abort_callback_t;
 }
-extern "C" {
-    pub fn ggml_abort(
-        file: *const ::std::os::raw::c_char,
-        line: ::std::os::raw::c_int,
-        fmt: *const ::std::os::raw::c_char,
-        ...
-    );
-}
 pub const GGML_STATUS_ALLOC_FAILED: ggml_status = -2;
 pub const GGML_STATUS_FAILED: ggml_status = -1;
 pub const GGML_STATUS_SUCCESS: ggml_status = 0;
