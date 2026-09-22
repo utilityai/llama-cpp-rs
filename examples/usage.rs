@@ -13,7 +13,6 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
-use llama_cpp_2::model::{AddBos, Special};
 use llama_cpp_2::sampling::LlamaSampler;
 use std::io::Write;
 
@@ -32,9 +31,7 @@ fn main() {
     let mut ctx = model
         .new_context(&backend, ctx_params)
         .expect("unable to create the llama_context");
-    let tokens_list = model
-        .str_to_token(&prompt, AddBos::Always)
-        .unwrap_or_else(|_| panic!("failed to tokenize {prompt}"));
+    let tokens_list = model.vocab().tokenize(prompt.as_bytes(), true, true);
     let n_len = 1024;
 
     // create a llama_batch with size 512
@@ -63,16 +60,20 @@ fn main() {
             sampler.accept(token);
 
             // is it an end of stream?
-            if token == model.token_eos() {
+            if model.vocab().is_eog(token) {
                 eprintln!();
                 break;
             }
 
-            let output_string = model
-                .token_to_piece(token, &mut decoder, true, None)
-                .unwrap();
-            // use `Decoder.decode_to_string()` to avoid the intermediate buffer
-            print!("{output_string}");
+            let piece = model.vocab().token_to_piece(token, true, None);
+            let mut piece_str =
+                String::with_capacity(decoder.max_utf8_buffer_length(piece.len()).unwrap());
+            let (result, read, _) = decoder.decode_to_string(&piece, &mut piece_str, false);
+            assert!(
+                matches!(result, encoding_rs::CoderResult::InputEmpty) && read == piece.len(),
+                "UTF-8 decoder capacity bound must consume the complete token"
+            );
+            print!("{piece_str}");
             std::io::stdout().flush().unwrap();
 
             batch.clear();

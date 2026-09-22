@@ -14,7 +14,6 @@ use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::kv_overrides::ParamOverrideValue;
 use llama_cpp_2::model::params::{LlamaModelParams, LlamaSplitMode};
-use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::sampling::LlamaSampler;
 use llama_cpp_2::{ggml_time_us, send_logs_to_tracing, LogOptions};
@@ -265,9 +264,7 @@ fn main() -> Result<()> {
 
     // tokenize the prompt
 
-    let tokens_list = model
-        .str_to_token(&prompt, AddBos::Always)
-        .with_context(|| format!("failed to tokenize {prompt}"))?;
+    let tokens_list = model.vocab().tokenize(prompt.as_bytes(), true, true);
 
     let n_cxt = ctx.n_ctx() as i32;
     let n_kv_req = tokens_list.len() as i32 + (n_len - tokens_list.len() as i32);
@@ -286,17 +283,11 @@ either reduce n_len or increase n_ctx"
         bail!("the prompt is too long, it has more tokens than n_len")
     }
 
-    // print the prompt token-by-token
+    // print the input prompt tokens
     eprintln!();
-
-    let mut decoder = encoding_rs::UTF_8.new_decoder();
-
-    for token in &tokens_list {
-        eprint!(
-            "{}",
-            model.token_to_piece(*token, &mut decoder, true, None)?
-        );
-    }
+    let tokens_bytes = model.vocab().detokenize(&tokens_list, true, true);
+    let (token_str, _had_errors) = encoding_rs::UTF_8.decode_without_bom_handling(&tokens_bytes);
+    eprint!("{token_str}");
 
     std::io::stderr().flush()?;
 
@@ -325,6 +316,7 @@ either reduce n_len or increase n_ctx"
         LlamaSampler::dist(seed.unwrap_or(1234)),
         LlamaSampler::greedy(),
     ]);
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
 
     while n_cur <= n_len {
         // sample the next token
@@ -334,13 +326,15 @@ either reduce n_len or increase n_ctx"
             sampler.accept(token);
 
             // is it an end of stream?
-            if model.is_eog_token(token) {
+            if model.vocab().is_eog(token) {
                 eprintln!();
                 break;
             }
 
-            let output_string = model.token_to_piece(token, &mut decoder, true, None)?;
-            // use `Decoder.decode_to_string()` to avoid the intermediate buffer
+            let tokens = model.vocab().token_to_piece(token, true, None);
+            let mut output_string =
+                String::with_capacity(decoder.max_utf8_buffer_length(tokens.len()).unwrap());
+            let (_, _, _) = decoder.decode_to_string(&tokens, &mut output_string, false);
             print!("{output_string}");
             std::io::stdout().flush()?;
 

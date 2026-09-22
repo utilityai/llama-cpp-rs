@@ -308,7 +308,7 @@ impl LlamaSampler {
         #[cfg(feature = "common")]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_rs_sampler_init_grammar(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
             )
@@ -316,7 +316,7 @@ impl LlamaSampler {
         #[cfg(not(feature = "common"))]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_grammar(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
             )
@@ -350,7 +350,7 @@ impl LlamaSampler {
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
                 trigger_word_ptrs.as_mut_ptr(),
@@ -396,7 +396,7 @@ impl LlamaSampler {
         #[cfg(feature = "common")]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_rs_sampler_init_grammar_lazy_patterns(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
                 trigger_pattern_ptrs.as_mut_ptr(),
@@ -408,7 +408,7 @@ impl LlamaSampler {
         #[cfg(not(feature = "common"))]
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_grammar_lazy_patterns(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 grammar_str.as_ptr(),
                 grammar_root.as_ptr(),
                 trigger_pattern_ptrs.as_mut_ptr(),
@@ -509,7 +509,7 @@ impl LlamaSampler {
 
         let sampler = unsafe {
             llama_cpp_sys_2::llama_sampler_init_dry(
-                model.vocab_ptr(),
+                model.vocab().as_ptr(),
                 multiplier,
                 base,
                 allowed_length,

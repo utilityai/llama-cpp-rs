@@ -17,7 +17,7 @@ use llama_cpp_2::mtmd::{
 };
 
 use llama_cpp_2::llama_backend::LlamaBackend;
-use llama_cpp_2::model::{LlamaChatMessage, LlamaChatTemplate, LlamaModel, Special};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaChatTemplate, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 
 /// Command line parameters for the MTMD CLI application
@@ -205,14 +205,21 @@ impl<'a> MtmdCliContext<'a> {
             sampler.accept(token);
 
             // Check for end of generation
-            if model.is_eog_token(token) {
+            if model.vocab().is_eog(token) {
                 println!();
                 break;
             }
 
             // Print token
-            let piece = model.token_to_piece(token, &mut decoder, true, None)?;
-            print!("{piece}");
+            let piece = model.vocab().token_to_piece(token, true, None);
+            let mut piece_str =
+                String::with_capacity(decoder.max_utf8_buffer_length(piece.len()).unwrap());
+            let (result, read, _) = decoder.decode_to_string(&piece, &mut piece_str, false);
+            assert!(
+                matches!(result, encoding_rs::CoderResult::InputEmpty) && read == piece.len(),
+                "UTF-8 decoder capacity bound must consume the complete token"
+            );
+            print!("{piece_str}");
             io::stdout().flush()?;
 
             // Prepare next batch

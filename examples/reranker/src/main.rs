@@ -19,7 +19,6 @@ use llama_cpp_2::ggml_time_us;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::AddBos;
 use llama_cpp_2::model::LlamaModel;
 
 #[derive(clap::Parser, Debug, Clone)]
@@ -109,9 +108,8 @@ fn main() -> Result<()> {
     // tokenize the prompt
     let tokens_lines_list = prompt_lines
         .iter()
-        .map(|line| model.str_to_token(line, AddBos::Always))
-        .collect::<Result<Vec<_>, _>>()
-        .with_context(|| format!("failed to tokenize {prompt_lines:?}"))?;
+        .map(|line| model.vocab().tokenize(line.as_bytes(), true, true))
+        .collect::<Vec<_>>();
 
     let n_ctx = ctx.n_ctx() as usize;
     let n_ctx_train = model.n_ctx_train();
@@ -132,13 +130,12 @@ fn main() -> Result<()> {
         eprintln!("Number of tokens: {}", token_line.len());
         for token in token_line {
             // Attempt to convert token to string and print it; if it fails, print the token instead
-            match model.token_to_piece(*token, &mut decoder, true, None) {
-                Ok(token_str) => eprintln!("{token} --> {token_str}"),
-                Err(e) => {
-                    eprintln!("Failed to convert token to string, error: {e}");
-                    eprintln!("Token value: {token}");
-                }
-            }
+
+            let tokens = model.vocab().token_to_piece(*token, true, None);
+            let mut token_str =
+                String::with_capacity(decoder.max_utf8_buffer_length(tokens.len()).unwrap());
+            let (_, _, _) = decoder.decode_to_string(&tokens, &mut token_str, false);
+            print!("{token} --> {token_str}");
         }
         eprintln!();
     }
