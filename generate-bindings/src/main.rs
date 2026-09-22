@@ -42,6 +42,12 @@ fn main() {
         // We'd like to split things into different modules.
         .allowlist_recursively(false)
         .raw_line("use crate::*;")
+        // This has GGML_NORETURN, which is only parsed correctly on Windows,
+        // so the generated definition differs between platforms.
+        //
+        // NOTE: We cannot use `.enable_function_attribute_detection()`, see:
+        // https://github.com/rust-lang/rust-bindgen/issues/3496
+        .blocklist_function("ggml_abort")
         .parse_callbacks(Box::new(AllBlocklistedImplementsTrait))
         .parse_callbacks(Box::new(enums.clone()));
 
