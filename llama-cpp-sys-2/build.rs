@@ -986,6 +986,9 @@ fn main() {
             config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
         }
 
+        // Disable OpenSSL, it's hard to link with both WASI and Emscripten.
+        config.define("LLAMA_OPENSSL", "OFF");
+
         let mem64 = match &*target_arch {
             "wasm32" => "OFF",
             "wasm64" => "ON",
