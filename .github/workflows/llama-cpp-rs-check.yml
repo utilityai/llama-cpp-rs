@@ -41,6 +41,10 @@ jobs:
         run: cargo test --features sampler,mtmd,llguidance
       - name: Dry-Run Publishing
         run: RUST_BACKTRACE=1 cargo publish --workspace --verbose --dry-run
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
   arm64:
     name: Check that it builds on various targets (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
@@ -94,6 +98,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --features sampler,mtmd,llguidance -vv
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
   windows:
     name: Check that it builds on windows
     runs-on: windows-latest
@@ -109,3 +117,7 @@ jobs:
         run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
