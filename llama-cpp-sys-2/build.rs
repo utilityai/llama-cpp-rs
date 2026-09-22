@@ -435,12 +435,14 @@ fn main() {
         .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
-        .allowlist_function("ggml_.*")
-        .allowlist_type("ggml_.*")
-        .allowlist_function("gguf_.*")
-        .allowlist_type("gguf_.*")
-        .allowlist_function("llama_.*")
-        .allowlist_type("llama_.*")
+        .allowlist_item("ggml_.*")
+        .allowlist_item("gguf_.*")
+        .allowlist_item("llama_.*")
+        // We'd rather use a relatively decent cross-platform definition for
+        // `FILE` (we could use `use libc::FILE` here too, but that'd
+        // introduce a dependency which we don't really need).
+        .allowlist_recursively(false)
+        .raw_line("type FILE = ::std::os::raw::c_void;")
         .prepend_enum_name(false);
 
     // The `llama_rs_*` symbols are emitted by `wrapper_common.cpp`, which is
@@ -449,16 +451,14 @@ fn main() {
     if cfg!(feature = "common") {
         bindings_builder = bindings_builder
             .clang_arg("-DLLAMA_RS_BUILD_COMMON")
-            .allowlist_function("llama_rs_.*")
-            .allowlist_type("llama_rs_.*");
+            .allowlist_item("llama_rs_.*");
     }
 
     // Configure mtmd feature if enabled
     if cfg!(feature = "mtmd") {
         bindings_builder = bindings_builder
             .header("wrapper_mtmd.h")
-            .allowlist_function("mtmd_.*")
-            .allowlist_type("mtmd_.*");
+            .allowlist_item("mtmd_.*");
     }
 
     // Configure Android-specific bindgen settings
