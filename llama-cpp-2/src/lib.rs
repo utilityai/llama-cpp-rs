@@ -179,19 +179,15 @@ pub enum EncodeError {
     Unknown(c_int),
 }
 
-/// When embedding related functions fail
+/// Fetching embeddings failed.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
-pub enum EmbeddingsError {
-    /// Embeddings weren't enabled in the context options
-    #[error("Embeddings weren't enabled in the context options")]
-    NotEnabled,
-    /// Logits weren't enabled for the given token
-    #[error("Logits were not enabled for the given token")]
-    LogitsNotEnabled,
-    /// The given sequence index exceeds the max sequence id
-    #[error("Can't use sequence embeddings with a model supporting only LLAMA_POOLING_TYPE_NONE")]
-    NonePoolType,
-}
+#[error("Embeddings or logits weren't enabled")]
+pub struct EmbeddingsError(());
+
+/// Retrieving embeddings sequences failed.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[error("Embeddings or logits weren't enabled, or the model was configured with LLAMA_POOLING_TYPE_NONE")]
+pub struct EmbeddingsSeqError(());
 
 /// Errors that can occur when initializing a grammar sampler
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
