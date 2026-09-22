@@ -48,6 +48,15 @@ pub(crate) type SignedEnum = std::os::raw::c_schar;
 #[cfg(not(target_arch = "hexagon",))]
 pub(crate) type SignedEnum = std::os::raw::c_int;
 
+extern "C" {
+    pub fn ggml_abort(
+        file: *const std::os::raw::c_char,
+        line: std::os::raw::c_int,
+        fmt: *const std::os::raw::c_char,
+        ...
+    ) -> !;
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
