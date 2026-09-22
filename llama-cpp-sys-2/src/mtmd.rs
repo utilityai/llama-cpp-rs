@@ -6,7 +6,7 @@ pub const MTMD_INPUT_CHUNK_TYPE_TEXT: mtmd_input_chunk_type = 0;
 pub const MTMD_INPUT_CHUNK_TYPE_IMAGE: mtmd_input_chunk_type = 1;
 pub const MTMD_INPUT_CHUNK_TYPE_AUDIO: mtmd_input_chunk_type = 2;
 pub const MTMD_INPUT_CHUNK_TYPE_COUNT: mtmd_input_chunk_type = 3;
-pub type mtmd_input_chunk_type = ::std::os::raw::c_uint;
+pub type mtmd_input_chunk_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct mtmd_context {
@@ -295,7 +295,7 @@ extern "C" {
 pub const MTMD_GEN_AUDIO_TYPE_NONE: mtmd_gen_audio_type = 0;
 pub const MTMD_GEN_AUDIO_TYPE_QWEN3TTS: mtmd_gen_audio_type = 1;
 pub const MTMD_GEN_AUDIO_TYPE_POCKETTTS: mtmd_gen_audio_type = 2;
-pub type mtmd_gen_audio_type = ::std::os::raw::c_uint;
+pub type mtmd_gen_audio_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct mtmd_gen_audio_info {
@@ -308,7 +308,7 @@ extern "C" {
 }
 pub const MTMD_GEN_PROCESS_TYPE_GEN_CODE: mtmd_gen_process_type = 0;
 pub const MTMD_GEN_PROCESS_TYPE_GEN_WAV: mtmd_gen_process_type = 1;
-pub type mtmd_gen_process_type = ::std::os::raw::c_uint;
+pub type mtmd_gen_process_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct mtmd_gen_inp {
@@ -498,7 +498,7 @@ pub struct mtmd_helper_gen_audio {
 }
 pub const MTMD_HELPER_GEN_AUDIO_OUTTYPE_PCM: mtmd_helper_gen_audio_outtype = 0;
 pub const MTMD_HELPER_GEN_AUDIO_OUTTYPE_WAV: mtmd_helper_gen_audio_outtype = 1;
-pub type mtmd_helper_gen_audio_outtype = ::std::os::raw::c_uint;
+pub type mtmd_helper_gen_audio_outtype = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct mtmd_helper_gen_audio_inp {

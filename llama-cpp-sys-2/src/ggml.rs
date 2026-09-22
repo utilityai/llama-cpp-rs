@@ -19,7 +19,7 @@ pub const GGML_STATUS_ALLOC_FAILED: ggml_status = -2;
 pub const GGML_STATUS_FAILED: ggml_status = -1;
 pub const GGML_STATUS_SUCCESS: ggml_status = 0;
 pub const GGML_STATUS_ABORTED: ggml_status = 1;
-pub type ggml_status = ::std::os::raw::c_int;
+pub type ggml_status = SignedEnum;
 extern "C" {
     pub fn ggml_status_to_string(status: ggml_status) -> *const ::std::os::raw::c_char;
 }
@@ -107,13 +107,13 @@ pub const GGML_TYPE_NVFP4: ggml_type = 40;
 pub const GGML_TYPE_Q1_0: ggml_type = 41;
 pub const GGML_TYPE_Q2_0: ggml_type = 42;
 pub const GGML_TYPE_COUNT: ggml_type = 43;
-pub type ggml_type = ::std::os::raw::c_uint;
+pub type ggml_type = UnsignedEnum;
 pub const GGML_PREC_DEFAULT: ggml_prec = 0;
 pub const GGML_PREC_F32: ggml_prec = 10;
-pub type ggml_prec = ::std::os::raw::c_uint;
+pub type ggml_prec = UnsignedEnum;
 pub const GGML_HINT_NONE: ggml_op_hint = 0;
 pub const GGML_HINT_SRC0_IS_HADAMARD: ggml_op_hint = 1;
-pub type ggml_op_hint = ::std::os::raw::c_uint;
+pub type ggml_op_hint = UnsignedEnum;
 pub const GGML_FTYPE_UNKNOWN: ggml_ftype = -1;
 pub const GGML_FTYPE_ALL_F32: ggml_ftype = 0;
 pub const GGML_FTYPE_MOSTLY_F16: ggml_ftype = 1;
@@ -142,7 +142,7 @@ pub const GGML_FTYPE_MOSTLY_MXFP4: ggml_ftype = 25;
 pub const GGML_FTYPE_MOSTLY_NVFP4: ggml_ftype = 26;
 pub const GGML_FTYPE_MOSTLY_Q1_0: ggml_ftype = 27;
 pub const GGML_FTYPE_MOSTLY_Q2_0: ggml_ftype = 28;
-pub type ggml_ftype = ::std::os::raw::c_int;
+pub type ggml_ftype = SignedEnum;
 pub const GGML_OP_NONE: ggml_op = 0;
 pub const GGML_OP_DUP: ggml_op = 1;
 pub const GGML_OP_ADD: ggml_op = 2;
@@ -245,7 +245,7 @@ pub const GGML_OP_OPT_STEP_ADAMW: ggml_op = 98;
 pub const GGML_OP_OPT_STEP_SGD: ggml_op = 99;
 pub const GGML_OP_GLU: ggml_op = 100;
 pub const GGML_OP_COUNT: ggml_op = 101;
-pub type ggml_op = ::std::os::raw::c_uint;
+pub type ggml_op = UnsignedEnum;
 pub const GGML_UNARY_OP_ABS: ggml_unary_op = 0;
 pub const GGML_UNARY_OP_SGN: ggml_unary_op = 1;
 pub const GGML_UNARY_OP_NEG: ggml_unary_op = 2;
@@ -269,7 +269,7 @@ pub const GGML_UNARY_OP_CEIL: ggml_unary_op = 19;
 pub const GGML_UNARY_OP_ROUND: ggml_unary_op = 20;
 pub const GGML_UNARY_OP_TRUNC: ggml_unary_op = 21;
 pub const GGML_UNARY_OP_COUNT: ggml_unary_op = 22;
-pub type ggml_unary_op = ::std::os::raw::c_uint;
+pub type ggml_unary_op = UnsignedEnum;
 pub const GGML_GLU_OP_REGLU: ggml_glu_op = 0;
 pub const GGML_GLU_OP_GEGLU: ggml_glu_op = 1;
 pub const GGML_GLU_OP_SWIGLU: ggml_glu_op = 2;
@@ -277,29 +277,29 @@ pub const GGML_GLU_OP_SWIGLU_OAI: ggml_glu_op = 3;
 pub const GGML_GLU_OP_GEGLU_ERF: ggml_glu_op = 4;
 pub const GGML_GLU_OP_GEGLU_QUICK: ggml_glu_op = 5;
 pub const GGML_GLU_OP_COUNT: ggml_glu_op = 6;
-pub type ggml_glu_op = ::std::os::raw::c_uint;
+pub type ggml_glu_op = UnsignedEnum;
 pub const GGML_OBJECT_TYPE_TENSOR: ggml_object_type = 0;
 pub const GGML_OBJECT_TYPE_GRAPH: ggml_object_type = 1;
 pub const GGML_OBJECT_TYPE_WORK_BUFFER: ggml_object_type = 2;
-pub type ggml_object_type = ::std::os::raw::c_uint;
+pub type ggml_object_type = UnsignedEnum;
 pub const GGML_LOG_LEVEL_NONE: ggml_log_level = 0;
 pub const GGML_LOG_LEVEL_DEBUG: ggml_log_level = 1;
 pub const GGML_LOG_LEVEL_INFO: ggml_log_level = 2;
 pub const GGML_LOG_LEVEL_WARN: ggml_log_level = 3;
 pub const GGML_LOG_LEVEL_ERROR: ggml_log_level = 4;
 pub const GGML_LOG_LEVEL_CONT: ggml_log_level = 5;
-pub type ggml_log_level = ::std::os::raw::c_uint;
+pub type ggml_log_level = UnsignedEnum;
 pub const GGML_TENSOR_FLAG_INPUT: ggml_tensor_flag = 1;
 pub const GGML_TENSOR_FLAG_OUTPUT: ggml_tensor_flag = 2;
 pub const GGML_TENSOR_FLAG_PARAM: ggml_tensor_flag = 4;
 pub const GGML_TENSOR_FLAG_LOSS: ggml_tensor_flag = 8;
 pub const GGML_TENSOR_FLAG_COMPUTE: ggml_tensor_flag = 16;
-pub type ggml_tensor_flag = ::std::os::raw::c_uint;
+pub type ggml_tensor_flag = UnsignedEnum;
 pub const GGML_TRI_TYPE_UPPER_DIAG: ggml_tri_type = 0;
 pub const GGML_TRI_TYPE_UPPER: ggml_tri_type = 1;
 pub const GGML_TRI_TYPE_LOWER_DIAG: ggml_tri_type = 2;
 pub const GGML_TRI_TYPE_LOWER: ggml_tri_type = 3;
-pub type ggml_tri_type = ::std::os::raw::c_uint;
+pub type ggml_tri_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ggml_init_params {
@@ -1873,7 +1873,7 @@ extern "C" {
 pub const GGML_OP_POOL_MAX: ggml_op_pool = 0;
 pub const GGML_OP_POOL_AVG: ggml_op_pool = 1;
 pub const GGML_OP_POOL_COUNT: ggml_op_pool = 2;
-pub type ggml_op_pool = ::std::os::raw::c_uint;
+pub type ggml_op_pool = UnsignedEnum;
 extern "C" {
     pub fn ggml_pool_1d(
         ctx: *mut ggml_context,
@@ -1915,10 +1915,10 @@ pub const GGML_SCALE_MODE_NEAREST: ggml_scale_mode = 0;
 pub const GGML_SCALE_MODE_BILINEAR: ggml_scale_mode = 1;
 pub const GGML_SCALE_MODE_BICUBIC: ggml_scale_mode = 2;
 pub const GGML_SCALE_MODE_COUNT: ggml_scale_mode = 3;
-pub type ggml_scale_mode = ::std::os::raw::c_uint;
+pub type ggml_scale_mode = UnsignedEnum;
 pub const GGML_SCALE_FLAG_ALIGN_CORNERS: ggml_scale_flag = 256;
 pub const GGML_SCALE_FLAG_ANTIALIAS: ggml_scale_flag = 512;
-pub type ggml_scale_flag = ::std::os::raw::c_uint;
+pub type ggml_scale_flag = UnsignedEnum;
 extern "C" {
     pub fn ggml_upscale(
         ctx: *mut ggml_context,
@@ -2042,7 +2042,7 @@ extern "C" {
 }
 pub const GGML_SORT_ORDER_ASC: ggml_sort_order = 0;
 pub const GGML_SORT_ORDER_DESC: ggml_sort_order = 1;
-pub type ggml_sort_order = ::std::os::raw::c_uint;
+pub type ggml_sort_order = UnsignedEnum;
 extern "C" {
     pub fn ggml_argsort(
         ctx: *mut ggml_context,
@@ -2584,7 +2584,7 @@ pub const GGML_SCHED_PRIO_NORMAL: ggml_sched_priority = 0;
 pub const GGML_SCHED_PRIO_MEDIUM: ggml_sched_priority = 1;
 pub const GGML_SCHED_PRIO_HIGH: ggml_sched_priority = 2;
 pub const GGML_SCHED_PRIO_REALTIME: ggml_sched_priority = 3;
-pub type ggml_sched_priority = ::std::os::raw::c_int;
+pub type ggml_sched_priority = SignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ggml_threadpool_params {
@@ -2761,7 +2761,7 @@ extern "C" {
 pub const GGML_BACKEND_BUFFER_USAGE_ANY: ggml_backend_buffer_usage = 0;
 pub const GGML_BACKEND_BUFFER_USAGE_WEIGHTS: ggml_backend_buffer_usage = 1;
 pub const GGML_BACKEND_BUFFER_USAGE_COMPUTE: ggml_backend_buffer_usage = 2;
-pub type ggml_backend_buffer_usage = ::std::os::raw::c_uint;
+pub type ggml_backend_buffer_usage = UnsignedEnum;
 extern "C" {
     pub fn ggml_backend_buffer_name(buffer: ggml_backend_buffer_t)
         -> *const ::std::os::raw::c_char;
@@ -3008,7 +3008,7 @@ pub const GGML_BACKEND_DEVICE_TYPE_GPU: ggml_backend_dev_type = 1;
 pub const GGML_BACKEND_DEVICE_TYPE_IGPU: ggml_backend_dev_type = 2;
 pub const GGML_BACKEND_DEVICE_TYPE_ACCEL: ggml_backend_dev_type = 3;
 pub const GGML_BACKEND_DEVICE_TYPE_META: ggml_backend_dev_type = 4;
-pub type ggml_backend_dev_type = ::std::os::raw::c_uint;
+pub type ggml_backend_dev_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ggml_backend_dev_caps {
@@ -3319,7 +3319,7 @@ pub const GGML_BACKEND_SPLIT_AXIS_MIRRORED: ggml_backend_meta_split_axis = 10;
 pub const GGML_BACKEND_SPLIT_AXIS_PARTIAL: ggml_backend_meta_split_axis = 11;
 pub const GGML_BACKEND_SPLIT_AXIS_NONE: ggml_backend_meta_split_axis = 98;
 pub const GGML_BACKEND_SPLIT_AXIS_UNKNOWN: ggml_backend_meta_split_axis = 99;
-pub type ggml_backend_meta_split_axis = ::std::os::raw::c_uint;
+pub type ggml_backend_meta_split_axis = UnsignedEnum;
 extern "C" {
     pub fn ggml_backend_meta_split_axis_name(
         split_axis: ggml_backend_meta_split_axis,
@@ -3419,7 +3419,7 @@ pub const GGML_NUMA_STRATEGY_ISOLATE: ggml_numa_strategy = 2;
 pub const GGML_NUMA_STRATEGY_NUMACTL: ggml_numa_strategy = 3;
 pub const GGML_NUMA_STRATEGY_MIRROR: ggml_numa_strategy = 4;
 pub const GGML_NUMA_STRATEGY_COUNT: ggml_numa_strategy = 5;
-pub type ggml_numa_strategy = ::std::os::raw::c_uint;
+pub type ggml_numa_strategy = UnsignedEnum;
 extern "C" {
     pub fn ggml_numa_init(numa: ggml_numa_strategy);
 }
@@ -3702,7 +3702,7 @@ pub const GGML_OPT_LOSS_TYPE_MEAN: ggml_opt_loss_type = 0;
 pub const GGML_OPT_LOSS_TYPE_SUM: ggml_opt_loss_type = 1;
 pub const GGML_OPT_LOSS_TYPE_CROSS_ENTROPY: ggml_opt_loss_type = 2;
 pub const GGML_OPT_LOSS_TYPE_MEAN_SQUARED_ERROR: ggml_opt_loss_type = 3;
-pub type ggml_opt_loss_type = ::std::os::raw::c_uint;
+pub type ggml_opt_loss_type = UnsignedEnum;
 extern "C" {
     pub fn ggml_opt_dataset_init(
         type_data: ggml_type,
@@ -3752,11 +3752,11 @@ extern "C" {
 pub const GGML_OPT_BUILD_TYPE_FORWARD: ggml_opt_build_type = 10;
 pub const GGML_OPT_BUILD_TYPE_GRAD: ggml_opt_build_type = 20;
 pub const GGML_OPT_BUILD_TYPE_OPT: ggml_opt_build_type = 30;
-pub type ggml_opt_build_type = ::std::os::raw::c_uint;
+pub type ggml_opt_build_type = UnsignedEnum;
 pub const GGML_OPT_OPTIMIZER_TYPE_ADAMW: ggml_opt_optimizer_type = 0;
 pub const GGML_OPT_OPTIMIZER_TYPE_SGD: ggml_opt_optimizer_type = 1;
 pub const GGML_OPT_OPTIMIZER_TYPE_COUNT: ggml_opt_optimizer_type = 2;
-pub type ggml_opt_optimizer_type = ::std::os::raw::c_uint;
+pub type ggml_opt_optimizer_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct ggml_opt_optimizer_params {

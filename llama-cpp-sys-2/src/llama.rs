@@ -33,14 +33,14 @@ pub const LLAMA_VOCAB_TYPE_WPM: llama_vocab_type = 3;
 pub const LLAMA_VOCAB_TYPE_UGM: llama_vocab_type = 4;
 pub const LLAMA_VOCAB_TYPE_RWKV: llama_vocab_type = 5;
 pub const LLAMA_VOCAB_TYPE_PLAMO2: llama_vocab_type = 6;
-pub type llama_vocab_type = ::std::os::raw::c_uint;
+pub type llama_vocab_type = UnsignedEnum;
 pub const LLAMA_ROPE_TYPE_NONE: llama_rope_type = -1;
 pub const LLAMA_ROPE_TYPE_NORM: llama_rope_type = 0;
 pub const LLAMA_ROPE_TYPE_NEOX: llama_rope_type = 2;
 pub const LLAMA_ROPE_TYPE_MROPE: llama_rope_type = 8;
 pub const LLAMA_ROPE_TYPE_IMROPE: llama_rope_type = 40;
 pub const LLAMA_ROPE_TYPE_VISION: llama_rope_type = 24;
-pub type llama_rope_type = ::std::os::raw::c_int;
+pub type llama_rope_type = SignedEnum;
 pub const LLAMA_TOKEN_TYPE_UNDEFINED: llama_token_type = 0;
 pub const LLAMA_TOKEN_TYPE_NORMAL: llama_token_type = 1;
 pub const LLAMA_TOKEN_TYPE_UNKNOWN: llama_token_type = 2;
@@ -48,7 +48,7 @@ pub const LLAMA_TOKEN_TYPE_CONTROL: llama_token_type = 3;
 pub const LLAMA_TOKEN_TYPE_USER_DEFINED: llama_token_type = 4;
 pub const LLAMA_TOKEN_TYPE_UNUSED: llama_token_type = 5;
 pub const LLAMA_TOKEN_TYPE_BYTE: llama_token_type = 6;
-pub type llama_token_type = ::std::os::raw::c_uint;
+pub type llama_token_type = UnsignedEnum;
 pub const LLAMA_TOKEN_ATTR_UNDEFINED: llama_token_attr = 0;
 pub const LLAMA_TOKEN_ATTR_UNKNOWN: llama_token_attr = 1;
 pub const LLAMA_TOKEN_ATTR_UNUSED: llama_token_attr = 2;
@@ -60,7 +60,7 @@ pub const LLAMA_TOKEN_ATTR_NORMALIZED: llama_token_attr = 64;
 pub const LLAMA_TOKEN_ATTR_LSTRIP: llama_token_attr = 128;
 pub const LLAMA_TOKEN_ATTR_RSTRIP: llama_token_attr = 256;
 pub const LLAMA_TOKEN_ATTR_SINGLE_WORD: llama_token_attr = 512;
-pub type llama_token_attr = ::std::os::raw::c_uint;
+pub type llama_token_attr = UnsignedEnum;
 pub const LLAMA_FTYPE_ALL_F32: llama_ftype = 0;
 pub const LLAMA_FTYPE_MOSTLY_F16: llama_ftype = 1;
 pub const LLAMA_FTYPE_MOSTLY_Q4_0: llama_ftype = 2;
@@ -98,7 +98,7 @@ pub const LLAMA_FTYPE_MOSTLY_NVFP4: llama_ftype = 39;
 pub const LLAMA_FTYPE_MOSTLY_Q1_0: llama_ftype = 40;
 pub const LLAMA_FTYPE_MOSTLY_Q2_0: llama_ftype = 41;
 pub const LLAMA_FTYPE_GUESSED: llama_ftype = 1024;
-pub type llama_ftype = ::std::os::raw::c_uint;
+pub type llama_ftype = UnsignedEnum;
 extern "C" {
     pub fn llama_ftype_name(ftype: llama_ftype) -> *const ::std::os::raw::c_char;
 }
@@ -108,22 +108,22 @@ pub const LLAMA_ROPE_SCALING_TYPE_LINEAR: llama_rope_scaling_type = 1;
 pub const LLAMA_ROPE_SCALING_TYPE_YARN: llama_rope_scaling_type = 2;
 pub const LLAMA_ROPE_SCALING_TYPE_LONGROPE: llama_rope_scaling_type = 3;
 pub const LLAMA_ROPE_SCALING_TYPE_MAX_VALUE: llama_rope_scaling_type = 3;
-pub type llama_rope_scaling_type = ::std::os::raw::c_int;
+pub type llama_rope_scaling_type = SignedEnum;
 pub const LLAMA_POOLING_TYPE_UNSPECIFIED: llama_pooling_type = -1;
 pub const LLAMA_POOLING_TYPE_NONE: llama_pooling_type = 0;
 pub const LLAMA_POOLING_TYPE_MEAN: llama_pooling_type = 1;
 pub const LLAMA_POOLING_TYPE_CLS: llama_pooling_type = 2;
 pub const LLAMA_POOLING_TYPE_LAST: llama_pooling_type = 3;
 pub const LLAMA_POOLING_TYPE_RANK: llama_pooling_type = 4;
-pub type llama_pooling_type = ::std::os::raw::c_int;
+pub type llama_pooling_type = SignedEnum;
 pub const LLAMA_ATTENTION_TYPE_UNSPECIFIED: llama_attention_type = -1;
 pub const LLAMA_ATTENTION_TYPE_CAUSAL: llama_attention_type = 0;
 pub const LLAMA_ATTENTION_TYPE_NON_CAUSAL: llama_attention_type = 1;
-pub type llama_attention_type = ::std::os::raw::c_int;
+pub type llama_attention_type = SignedEnum;
 pub const LLAMA_FLASH_ATTN_TYPE_AUTO: llama_flash_attn_type = -1;
 pub const LLAMA_FLASH_ATTN_TYPE_DISABLED: llama_flash_attn_type = 0;
 pub const LLAMA_FLASH_ATTN_TYPE_ENABLED: llama_flash_attn_type = 1;
-pub type llama_flash_attn_type = ::std::os::raw::c_int;
+pub type llama_flash_attn_type = SignedEnum;
 extern "C" {
     pub fn llama_flash_attn_type_name(
         flash_attn_type: llama_flash_attn_type,
@@ -133,14 +133,14 @@ pub const LLAMA_SPLIT_MODE_NONE: llama_split_mode = 0;
 pub const LLAMA_SPLIT_MODE_LAYER: llama_split_mode = 1;
 pub const LLAMA_SPLIT_MODE_ROW: llama_split_mode = 2;
 pub const LLAMA_SPLIT_MODE_TENSOR: llama_split_mode = 3;
-pub type llama_split_mode = ::std::os::raw::c_uint;
+pub type llama_split_mode = UnsignedEnum;
 pub const LLAMA_LOAD_MODE_AUTO: llama_load_mode = -1;
 pub const LLAMA_LOAD_MODE_NONE: llama_load_mode = 0;
 pub const LLAMA_LOAD_MODE_MMAP: llama_load_mode = 1;
 pub const LLAMA_LOAD_MODE_MLOCK: llama_load_mode = 2;
 pub const LLAMA_LOAD_MODE_MMAP_MLOCK: llama_load_mode = 3;
 pub const LLAMA_LOAD_MODE_DIRECT_IO: llama_load_mode = 4;
-pub type llama_load_mode = ::std::os::raw::c_int;
+pub type llama_load_mode = SignedEnum;
 extern "C" {
     pub fn llama_load_mode_name(load_mode: llama_load_mode) -> *const ::std::os::raw::c_char;
 }
@@ -149,7 +149,7 @@ extern "C" {
 }
 pub const LLAMA_CONTEXT_TYPE_DEFAULT: llama_context_type = 0;
 pub const LLAMA_CONTEXT_TYPE_MTP: llama_context_type = 1;
-pub type llama_context_type = ::std::os::raw::c_uint;
+pub type llama_context_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct llama_token_data {
@@ -183,7 +183,7 @@ pub const LLAMA_KV_OVERRIDE_TYPE_INT: llama_model_kv_override_type = 0;
 pub const LLAMA_KV_OVERRIDE_TYPE_FLOAT: llama_model_kv_override_type = 1;
 pub const LLAMA_KV_OVERRIDE_TYPE_BOOL: llama_model_kv_override_type = 2;
 pub const LLAMA_KV_OVERRIDE_TYPE_STR: llama_model_kv_override_type = 3;
-pub type llama_model_kv_override_type = ::std::os::raw::c_uint;
+pub type llama_model_kv_override_type = UnsignedEnum;
 pub const LLAMA_MODEL_META_KEY_SAMPLING_SEQUENCE: llama_model_meta_key = 0;
 pub const LLAMA_MODEL_META_KEY_SAMPLING_TOP_K: llama_model_meta_key = 1;
 pub const LLAMA_MODEL_META_KEY_SAMPLING_TOP_P: llama_model_meta_key = 2;
@@ -196,7 +196,7 @@ pub const LLAMA_MODEL_META_KEY_SAMPLING_PENALTY_REPEAT: llama_model_meta_key = 8
 pub const LLAMA_MODEL_META_KEY_SAMPLING_MIROSTAT: llama_model_meta_key = 9;
 pub const LLAMA_MODEL_META_KEY_SAMPLING_MIROSTAT_TAU: llama_model_meta_key = 10;
 pub const LLAMA_MODEL_META_KEY_SAMPLING_MIROSTAT_ETA: llama_model_meta_key = 11;
-pub type llama_model_meta_key = ::std::os::raw::c_uint;
+pub type llama_model_meta_key = UnsignedEnum;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct llama_model_kv_override {
