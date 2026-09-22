@@ -33,9 +33,9 @@ use crate::token::LlamaToken;
 pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
     let n_vocab = model.n_vocab().cast_unsigned();
     let tok_eos = {
-        let eot = unsafe { llama_cpp_sys_2::llama_vocab_eot(model.vocab_ptr()) };
+        let eot = model.vocab().eot().0;
         if eot == -1 {
-            model.token_eos().0.cast_unsigned()
+            model.vocab().eos().0.cast_unsigned()
         } else {
             eot.cast_unsigned()
         }
@@ -49,16 +49,12 @@ pub fn llguidance_build_tok_env(model: &LlamaModel) -> TokEnv {
     let mut words = Vec::with_capacity(n_vocab as usize);
     for i in 0..n_vocab.cast_signed() {
         let token = LlamaToken(i);
-        if model.is_eog_token(token) && i.cast_unsigned() != tok_eos {
+        if model.vocab().is_eog(token) && i.cast_unsigned() != tok_eos {
             eog_tokens.push(i.cast_unsigned());
         }
-        let bytes = model
-            .token_to_piece_bytes(token, 32, false, None)
-            .unwrap_or_default();
+        let bytes = model.vocab().token_to_piece(token, false, None);
         if bytes.is_empty() {
-            let special_bytes = model
-                .token_to_piece_bytes(token, 32, true, None)
-                .unwrap_or_default();
+            let special_bytes = model.vocab().token_to_piece(token, true, None);
             if special_bytes.is_empty() {
                 words.push(vec![]);
             } else {
