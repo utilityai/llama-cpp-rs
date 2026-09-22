@@ -30,6 +30,24 @@ pub use self::mtmd::*;
 /// we don't really need.
 pub(crate) type FILE = std::os::raw::c_void;
 
+// See generate-bindings for more information on this.
+#[cfg(any(all(target_os = "windows", target_env = "msvc"), target_os = "uefi"))]
+pub(crate) type UnsignedEnum = std::os::raw::c_int;
+#[cfg(target_arch = "hexagon")]
+pub(crate) type UnsignedEnum = std::os::raw::c_uchar;
+#[cfg(not(any(
+    all(target_os = "windows", target_env = "msvc"),
+    target_os = "uefi",
+    target_arch = "hexagon",
+)))]
+pub(crate) type UnsignedEnum = std::os::raw::c_uint;
+
+// See generate-bindings for more information on this.
+#[cfg(target_arch = "hexagon")]
+pub(crate) type SignedEnum = std::os::raw::c_schar;
+#[cfg(not(target_arch = "hexagon",))]
+pub(crate) type SignedEnum = std::os::raw::c_int;
+
 #[cfg(test)]
 mod tests {
     #[test]

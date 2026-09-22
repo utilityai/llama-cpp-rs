@@ -11,7 +11,7 @@ pub const LLAMA_RS_STATUS_OK: llama_rs_status = 0;
 pub const LLAMA_RS_STATUS_INVALID_ARGUMENT: llama_rs_status = -1;
 pub const LLAMA_RS_STATUS_ALLOCATION_FAILED: llama_rs_status = -2;
 pub const LLAMA_RS_STATUS_EXCEPTION: llama_rs_status = -3;
-pub type llama_rs_status = ::std::os::raw::c_int;
+pub type llama_rs_status = SignedEnum;
 extern "C" {
     pub fn llama_rs_json_schema_to_grammar(
         schema_json: *const ::std::os::raw::c_char,
