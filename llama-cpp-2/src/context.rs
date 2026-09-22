@@ -15,7 +15,7 @@ use crate::token::data::LlamaTokenData;
 use crate::token::data_array::LlamaTokenDataArray;
 use crate::token::LlamaToken;
 use crate::{
-    DecodeError, EmbeddingsError, EncodeError, LlamaLoraAdapterRemoveError,
+    DecodeError, EmbeddingsError, EmbeddingsSeqError, EncodeError, LlamaLoraAdapterRemoveError,
     LlamaLoraAdapterSetError,
 };
 
@@ -30,7 +30,6 @@ pub struct LlamaContext<'a> {
     /// a reference to the contexts model.
     pub model: &'a LlamaModel,
     initialized_logits: Vec<i32>,
-    embeddings_enabled: bool,
     /// Backend samplers kept alive for the context's lifetime.
     _backend_samplers: Vec<(i32, LlamaSampler)>,
     /// Some data in the context acts as-if behind a `Cell`, such as
@@ -50,13 +49,11 @@ impl<'model> LlamaContext<'model> {
     pub(crate) fn new(
         llama_model: &'model LlamaModel,
         llama_context: Ptr<llama_cpp_sys_2::llama_context>,
-        embeddings_enabled: bool,
     ) -> Self {
         Self {
             context: llama_context,
             model: llama_model,
             initialized_logits: Vec::new(),
-            embeddings_enabled,
             _backend_samplers: Vec::new(),
             p: PhantomData,
         }
@@ -65,14 +62,12 @@ impl<'model> LlamaContext<'model> {
     pub(crate) fn with_samplers(
         llama_model: &'model LlamaModel,
         llama_context: Ptr<llama_cpp_sys_2::llama_context>,
-        embeddings_enabled: bool,
         backend_samplers: Vec<(i32, LlamaSampler)>,
     ) -> Self {
         Self {
             context: llama_context,
             model: llama_model,
             initialized_logits: Vec::new(),
-            embeddings_enabled,
             _backend_samplers: backend_samplers,
             p: PhantomData,
         }
@@ -171,9 +166,7 @@ impl<'model> LlamaContext<'model> {
 
     /// Get the embeddings for the `i`th sequence in the current context.
     ///
-    /// # Returns
-    ///
-    /// A slice containing the embeddings for the last decoded batch.
+    /// Returns a slice containing the embeddings for the last decoded batch.
     /// The size is the pooling-derived output width: `n_cls_out` for RANK,
     /// `n_embd_out` otherwise — NOT `n_embd` (llama.h:1029 /
     /// llama-context.cpp's extraction switch).
@@ -187,19 +180,15 @@ impl<'model> LlamaContext<'model> {
     /// # Panics
     ///
     /// * `n_embd` does not fit into a usize
-    pub fn embeddings_seq_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
-        if !self.embeddings_enabled {
-            return Err(EmbeddingsError::NotEnabled);
-        }
-
+    pub fn embeddings_seq_ith(&self, i: i32) -> Result<&[f32], EmbeddingsSeqError> {
         unsafe {
-            let embedding = llama_cpp_sys_2::llama_get_embeddings_seq(self.synchronizable_ptr(), i);
+            let embeddings =
+                llama_cpp_sys_2::llama_get_embeddings_seq(self.synchronizable_ptr(), i);
 
-            // Technically also possible whenever `i >= max(batch.n_seq)`, but can't check that here.
-            if embedding.is_null() {
-                Err(EmbeddingsError::NonePoolType)
+            if embeddings.is_null() {
+                Err(EmbeddingsSeqError(()))
             } else {
-                Ok(slice::from_raw_parts(embedding, self.embeddings_out_len()))
+                Ok(slice::from_raw_parts(embeddings, self.embeddings_out_len()))
             }
         }
     }
@@ -223,15 +212,11 @@ impl<'model> LlamaContext<'model> {
     ///
     /// * `n_embd` does not fit into a usize
     pub fn embeddings_ith(&self, i: i32) -> Result<&[f32], EmbeddingsError> {
-        if !self.embeddings_enabled {
-            return Err(EmbeddingsError::NotEnabled);
-        }
-
         unsafe {
             let embedding = llama_cpp_sys_2::llama_get_embeddings_ith(self.synchronizable_ptr(), i);
             // Technically also possible whenever `i >= batch.n_tokens`, but no good way of checking `n_tokens` here.
             if embedding.is_null() {
-                Err(EmbeddingsError::LogitsNotEnabled)
+                Err(EmbeddingsError(()))
             } else {
                 Ok(slice::from_raw_parts(embedding, self.embeddings_out_len()))
             }

@@ -408,7 +408,7 @@ impl LlamaModel {
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
-        Ok(LlamaContext::new(self, context, params.embeddings()))
+        Ok(LlamaContext::new(self, context))
     }
 
     /// Create a new context bound to another context via llama.cpp's `ctx_other` field.
@@ -440,7 +440,7 @@ impl LlamaModel {
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
-        Ok(LlamaContext::new(self, context, params.embeddings()))
+        Ok(LlamaContext::new(self, context))
     }
 
     /// Creates a new context with backend samplers attached for specific sequences.
@@ -503,12 +503,7 @@ impl LlamaModel {
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
-        Ok(LlamaContext::with_samplers(
-            self,
-            context,
-            params.embeddings(),
-            samplers,
-        ))
+        Ok(LlamaContext::with_samplers(self, context, samplers))
     }
 
     /// Apply the models chat template to some messages.
