@@ -18,11 +18,17 @@ enum AppleVariant {
     Other,
 }
 
+enum WasmVariant {
+    Emscripten,
+    // TODO: At some point WASI?
+}
+
 enum TargetOs {
     Windows(WindowsVariant),
     Apple(AppleVariant),
     Linux,
     Android,
+    Wasm(WasmVariant),
 }
 
 macro_rules! debug_log {
@@ -80,6 +86,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         Ok((TargetOs::Android, target))
     } else if target.contains("linux") {
         Ok((TargetOs::Linux, target))
+    } else if target.contains("emscripten") {
+        Ok((TargetOs::Wasm(WasmVariant::Emscripten), target))
     } else {
         Err(target)
     }
@@ -95,72 +103,81 @@ fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     Ok(target_dir.to_path_buf())
 }
 
-fn extract_lib_names(out_dir: &Path, build_shared_libs: bool, target_os: &TargetOs) -> Vec<String> {
-    let lib_pattern = match target_os {
+/// Filename prefix used for libraries on this platform.
+///
+/// This is similar to [`std::env::consts::DLL_PREFIX`].
+fn lib_prefix(target_os: &TargetOs, _shared: bool) -> &'static str {
+    match target_os {
+        // TODO: WASM on non-emscripten also don't have this.
+        TargetOs::Windows(WindowsVariant::Msvc) => "",
+        _ => "lib",
+    }
+}
+
+/// Filename suffix used for libraries on this platform.
+///
+/// This is similar to [`std::env::consts::DLL_SUFFIX`].
+fn lib_suffix(target_os: &TargetOs, shared: bool) -> &'static str {
+    match target_os {
         // MSVC emits .lib; the GNU (MinGW) toolchain emits .a static archives.
-        TargetOs::Windows(WindowsVariant::Msvc) => "*.lib",
-        TargetOs::Windows(_) => "*.a",
+        TargetOs::Windows(WindowsVariant::Msvc) => ".lib",
+        TargetOs::Windows(_) => ".a",
         TargetOs::Apple(_) => {
-            if build_shared_libs {
-                "*.dylib"
+            if shared {
+                ".dylib"
             } else {
-                "*.a"
+                ".a"
             }
         }
-        TargetOs::Linux | TargetOs::Android => {
-            if build_shared_libs {
-                "*.so"
+        TargetOs::Linux | TargetOs::Android | TargetOs::Wasm(WasmVariant::Emscripten) => {
+            if shared {
+                ".so"
             } else {
-                "*.a"
+                ".a"
             }
         }
-    };
-    let libs_dir = out_dir.join("lib*");
-    let pattern = libs_dir.join(lib_pattern);
+    }
+}
+
+fn extract_lib_names(dir_pattern: &Path, target_os: &TargetOs, shared: bool) -> Vec<PathBuf> {
+    let pattern = dir_pattern.join(format!(
+        "{}*{}",
+        lib_prefix(target_os, shared),
+        lib_suffix(target_os, shared)
+    ));
     debug_log!("Extract libs {}", pattern.display());
 
-    let mut lib_names: Vec<String> = Vec::new();
+    let mut libs = Vec::new();
 
     // Process the libraries based on the pattern
     for entry in glob(pattern.to_str().unwrap()).unwrap() {
         match entry {
-            Ok(path) => {
-                let stem = path.file_stem().unwrap();
-                let stem_str = stem.to_str().unwrap();
-
-                // Remove the "lib" prefix if present
-                let lib_name = if stem_str.starts_with("lib") {
-                    stem_str.strip_prefix("lib").unwrap_or(stem_str)
-                } else {
-                    if path.extension() == Some(std::ffi::OsStr::new("a")) {
-                        let target = path.parent().unwrap().join(format!("lib{}.a", stem_str));
-                        std::fs::rename(&path, &target).unwrap_or_else(|e| {
-                            panic!("Failed to rename {path:?} to {target:?}: {e:?}");
-                        })
-                    }
-                    stem_str
-                };
-                lib_names.push(lib_name.to_string());
-            }
+            Ok(path) => libs.push(path),
             Err(e) => println!("cargo:warning=error={}", e),
         }
     }
-    lib_names
+
+    libs
+}
+
+/// Remove the extension and "lib" prefix (if present) from the path's file name.
+fn lib_name(path: &Path) -> &str {
+    let stem = path.file_stem().unwrap();
+    let stem_str = stem.to_str().unwrap();
+    stem_str.strip_prefix("lib").unwrap_or(stem_str)
 }
 
 fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
-    let shared_lib_pattern = match target_os {
-        TargetOs::Windows(_) => "*.dll",
-        TargetOs::Apple(_) => "*.dylib",
-        TargetOs::Linux | TargetOs::Android => "*.so",
-    };
-
     let shared_libs_dir = match target_os {
         TargetOs::Windows(_) => "bin",
         _ => "lib",
     };
     let libs_dir = out_dir.join(shared_libs_dir);
-    let pattern = libs_dir.join(shared_lib_pattern);
+    let pattern = libs_dir.join(format!(
+        "{}*{}",
+        lib_prefix(target_os, true),
+        lib_suffix(target_os, true)
+    ));
     debug_log!("Extract lib assets {}", pattern.display());
     let mut files = Vec::new();
 
@@ -179,34 +196,16 @@ fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
 fn library_file_exists(
     search_dirs: &[PathBuf],
     lib_name: &str,
-    build_shared_libs: bool,
+    shared: bool,
     target_os: &TargetOs,
 ) -> bool {
-    let (prefixes, extensions): (&[&str], &[&str]) = match target_os {
-        TargetOs::Windows(_) => (&["", "lib"], &["lib"]),
-        TargetOs::Apple(_) => {
-            if build_shared_libs {
-                (&["lib"], &["dylib"])
-            } else {
-                (&["lib"], &["a"])
-            }
-        }
-        TargetOs::Linux | TargetOs::Android => {
-            if build_shared_libs {
-                (&["lib"], &["so"])
-            } else {
-                (&["lib"], &["a"])
-            }
-        }
-    };
-
     search_dirs.iter().any(|dir| {
-        prefixes.iter().any(|prefix| {
-            extensions.iter().any(|extension| {
-                dir.join(format!("{prefix}{lib_name}.{extension}"))
-                    .is_file()
-            })
-        })
+        dir.join(format!(
+            "{}{lib_name}{}",
+            lib_prefix(target_os, shared),
+            lib_suffix(target_os, shared)
+        ))
+        .is_file()
     })
 }
 
@@ -354,6 +353,110 @@ fn android_toolchain(target_triple: &str) -> AndroidToolchain {
     }
 }
 
+/// Find the sysroot in `$EMSDK/upstream/emscripten/cache/sysroot`, and if
+/// that fails, try to detect it by parsing `emcc --cflags`.
+///
+/// FIXME(madsmtm): Upstream this into `bindgen`.
+fn detect_emscripten_sysroot() -> String {
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let sysroot = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join("cache")
+            .join("sysroot");
+        if sysroot.exists() {
+            debug_log!("detected Emscripten sysroot from EMSDK env: {sysroot:?}");
+            return sysroot.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: parse --sysroot= from emcc --cflags
+    match Command::new("emcc").arg("--cflags").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log!("`emcc --cflags` stdout: {stdout}");
+            if !stderr.is_empty() {
+                for line in stderr.lines() {
+                    println!("cargo:warning=`emcc --cflags` stderr: {line}");
+                }
+            }
+            if !output.status.success() {
+                panic!("`emcc --cflags` failed: {stderr}")
+            }
+            for token in stdout.split_whitespace() {
+                if let Some(path) = token.strip_prefix("--sysroot=") {
+                    if Path::new(path).exists() {
+                        debug_log!("detected Emscripten sysroot from `emcc --cflags`: {path}");
+                        return path.to_string();
+                    } else {
+                        panic!("emcc reports sysroot at '{path}' but it does not exist on disk");
+                    }
+                }
+            }
+            panic!("`emcc --cflags` did not contain `--sysroot=`. Output was:\n{stdout}")
+        }
+        Err(e) => debug_log!("failed to run emcc --cflags: {e}"),
+    }
+
+    panic!(
+        "could not detect Emscripten sysroot, ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
+    )
+}
+
+/// Find the CMake toolchain file in `$EMSDK/upstream/emscripten/cmake`, and
+/// if that fails, try to detect it by locating `emcc` in `PATH`.
+///
+/// FIXME(madsmtm): Upstream this into `cmake-rs`.
+fn detect_emscripten_cmake_toolchain() -> String {
+    let toolchain_rel = PathBuf::new()
+        .join("cmake")
+        .join("Modules")
+        .join("Platform")
+        .join("Emscripten.cmake");
+
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let candidate = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join(&toolchain_rel);
+        if candidate.exists() {
+            debug_log!("detected Emscripten CMake toolchain from EMSDK: {candidate:?}");
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: find emcc, resolve symlinks, look for toolchain relative to its prefix
+    if let Ok(output) = Command::new("which").arg("emcc").output() {
+        let emcc_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if let Ok(resolved) = std::fs::canonicalize(&emcc_str) {
+            // emcc is at <prefix>/bin/emcc — go up to <prefix>
+            if let Some(prefix) = resolved.parent().and_then(|p| p.parent()) {
+                // Nix / system packages: <prefix>/share/emscripten/cmake/...
+                let candidate = prefix.join("share").join("emscripten").join(&toolchain_rel);
+                if candidate.exists() {
+                    debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
+                    return candidate.to_string_lossy().into_owned();
+                }
+                // emsdk layout: <prefix>/cmake/...
+                let candidate = prefix.join(&toolchain_rel);
+                if candidate.exists() {
+                    debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
+                    return candidate.to_string_lossy().into_owned();
+                }
+            }
+        }
+    }
+
+    panic!(
+        "could not detect Emscripten CMake toolchain file (Emscripten.cmake), ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
+    )
+}
+
 fn is_hidden(e: &DirEntry) -> bool {
     e.file_name()
         .to_str()
@@ -363,6 +466,8 @@ fn is_hidden(e: &DirEntry) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
     let (target_os, target_triple) =
         parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
@@ -521,6 +626,17 @@ fn main() {
         }
     }
 
+    // Configure Emscripten-specific bindgen settings
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
+        let sysroot = detect_emscripten_sysroot();
+        bindings_builder = bindings_builder
+            .clang_arg(format!("--sysroot={}", sysroot))
+            // The wasm32 clang backend defaults to hidden visibility, causing
+            // bindgen to skip all function declarations. Override to default.
+            // See: https://github.com/rust-lang/rust-bindgen/issues/1941
+            .clang_arg("-fvisibility=default");
+    }
+
     // Fix bindgen header discovery on Windows MSVC
     // Use cc crate to discover MSVC include paths by compiling a dummy file
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
@@ -676,7 +792,10 @@ fn main() {
                 .map(|s| s.to_string())
         });
 
-    if target_cpu == Some("native".into()) {
+    // Emscripten doesn't use -march or x86/ARM feature flags — emcc handles SIMD128 internally.
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
+        config.define("GGML_NATIVE", "OFF");
+    } else if target_cpu == Some("native".into()) {
         debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
         config.define("GGML_NATIVE", "ON");
     }
@@ -846,6 +965,33 @@ fn main() {
         // Link Android system libraries
         println!("cargo:rustc-link-lib=log");
         println!("cargo:rustc-link-lib=android");
+    }
+
+    if let TargetOs::Wasm(wasm_variant) = &target_os {
+        assert!(!build_shared_libs, "WASM only supports static linking");
+
+        // Disable OpenSSL, it's hard to link with both WASI and Emscripten.
+        config.define("LLAMA_OPENSSL", "OFF");
+
+        if matches!(wasm_variant, WasmVariant::Emscripten) {
+            let toolchain_file = detect_emscripten_cmake_toolchain();
+            config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
+
+            // Make Emscripten.cmake set `CMAKE_SYSTEM_PROCESSOR` to something
+            // that llama.cpp understands, instead of the bogus x86 that it
+            // defaults to for (apparent) compatibility with OpenCV.
+            // https://github.com/emscripten-core/emscripten/blob/d6c521a7f05449857c76bd99e396895583cf2083/cmake/Modules/Platform/Emscripten.cmake#L30-L37
+            config.define("EMSCRIPTEN_SYSTEM_PROCESSOR", &target_arch);
+        }
+
+        let mem64 = match &*target_arch {
+            "wasm32" => "OFF",
+            "wasm64" => "ON",
+            _ => panic!("unsupported WASM arch: {target_arch}"),
+        };
+        config.define("LLAMA_WASM_MEM64", mem64);
+
+        config.define("GGML_WEBGPU", "ON");
     }
 
     if matches!(target_os, TargetOs::Linux)
@@ -1026,7 +1172,6 @@ fn main() {
     }
 
     if cfg!(feature = "mkl") {
-        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         assert_eq!(
             target_arch, "x86_64",
             "The `mkl` feature requires an x86_64 target; Intel MKL is unavailable for {target_arch}."
@@ -1038,7 +1183,7 @@ fn main() {
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android | TargetOs::Wasm(_)) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
@@ -1221,6 +1366,28 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=mkl_rt");
     }
 
+    // MTMD depends on the hashing functionality.
+    if cfg!(feature = "mtmd") && !build_shared_libs {
+        let dir = build_dir
+            .join("build")
+            .join("vendor")
+            .join("hash")
+            .join("**");
+        let vendor_hash_libs = extract_lib_names(&dir, &target_os, false);
+        assert_eq!(
+            vendor_hash_libs.len(),
+            1,
+            "unknown vendor-hash archive found in {dir:?}: {vendor_hash_libs:?}",
+        );
+
+        let lib = &vendor_hash_libs[0];
+        println!(
+            "cargo:rustc-link-search=native={}",
+            lib.parent().unwrap().display()
+        );
+        println!("cargo:rustc-link-lib=static={}", lib_name(lib));
+    }
+
     // Link libraries
     let llama_libs_kind = if build_shared_libs
         || (cfg!(feature = "system-ggml") && !cfg!(feature = "system-ggml-static"))
@@ -1230,7 +1397,7 @@ fn main() {
         "static"
     };
 
-    let llama_libs = extract_lib_names(&out_dir, build_shared_libs, &target_os);
+    let llama_libs = extract_lib_names(&out_dir.join("lib*"), &target_os, build_shared_libs);
 
     assert_ne!(llama_libs.len(), 0);
 
@@ -1282,7 +1449,11 @@ fn main() {
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
     }
     for lib in llama_libs {
-        let link = format!("cargo:rustc-link-lib={}={}", llama_libs_kind, lib);
+        let link = format!(
+            "cargo:rustc-link-lib={}={}",
+            llama_libs_kind,
+            lib_name(&lib)
+        );
         debug_log!("LINK {link}",);
         println!("{link}",);
     }
@@ -1336,6 +1507,9 @@ fn main() {
             }
             // When neither feature is set, the cc crate handles C++ stdlib
             // linking automatically (defaults to c++_shared on Android).
+        }
+        TargetOs::Wasm(WasmVariant::Emscripten) => {
+            // Emscripten handles all C++ stdlib linking internally via emcc.
         }
         _ => (),
     }

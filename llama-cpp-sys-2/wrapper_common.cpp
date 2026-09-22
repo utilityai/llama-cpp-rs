@@ -10,12 +10,11 @@
 
 #include "llama.cpp/common/common.h"
 #include "llama.cpp/common/fit.h"
+#include "llama.cpp/common/json.h"
 #include "llama.cpp/common/json-schema-to-grammar.h"
 #include "llama.cpp/common/speculative.h"
 #include "llama.cpp/include/llama.h"
 #include "wrapper_utils.h"
-
-#include <nlohmann/json.hpp>
 
 extern "C" llama_rs_status llama_rs_json_schema_to_grammar(
     const char * schema_json,
@@ -27,7 +26,7 @@ extern "C" llama_rs_status llama_rs_json_schema_to_grammar(
 
     *out_grammar = nullptr;
     try {
-        const auto schema = nlohmann::ordered_json::parse(schema_json);
+        const auto schema = common_json::parse(schema_json);
         const auto grammar = json_schema_to_grammar(schema, force_gbnf);
         *out_grammar = llama_rs_dup_string(grammar);
         return *out_grammar ? LLAMA_RS_STATUS_OK : LLAMA_RS_STATUS_ALLOCATION_FAILED;
@@ -134,6 +133,7 @@ extern "C" int llama_rs_fit_params(
     struct llama_model_tensor_buft_override * tensor_buft_overrides,
     size_t * margins,
     uint32_t n_ctx_min,
+    const void * extra,
     enum ggml_log_level log_level) {
     return static_cast<int>(common_fit_params(
         path_model,
@@ -143,6 +143,7 @@ extern "C" int llama_rs_fit_params(
         tensor_buft_overrides,
         margins,
         n_ctx_min,
+        static_cast<const common_fit_extra_model *>(extra),
         log_level));
 }
 
