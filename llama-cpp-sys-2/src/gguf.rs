@@ -16,7 +16,7 @@ pub const GGUF_TYPE_UINT64: gguf_type = 10;
 pub const GGUF_TYPE_INT64: gguf_type = 11;
 pub const GGUF_TYPE_FLOAT64: gguf_type = 12;
 pub const GGUF_TYPE_COUNT: gguf_type = 13;
-pub type gguf_type = ::std::os::raw::c_uint;
+pub type gguf_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct gguf_context {
