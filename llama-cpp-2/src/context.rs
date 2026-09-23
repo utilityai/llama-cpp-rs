@@ -27,13 +27,14 @@ pub mod session;
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaContext<'a> {
     pub(crate) context: Ptr<llama_cpp_sys_2::llama_context>,
-    /// a reference to the contexts model.
-    pub model: &'a LlamaModel,
     /// Backend samplers kept alive for the context's lifetime.
     _backend_samplers: Vec<(i32, LlamaSampler)>,
+    /// The context internally holds a reference to the model, which can be
+    /// retrieved with `llama_get_model`.
+    model: PhantomData<&'a LlamaModel>,
     /// Some data in the context acts as-if behind a `Cell`, such as
     /// `t_start_us` and `n_eval`.
-    p: PhantomData<Cell<()>>,
+    data: PhantomData<Cell<()>>,
 }
 
 impl Debug for LlamaContext<'_> {
@@ -45,29 +46,30 @@ impl Debug for LlamaContext<'_> {
 }
 
 impl<'model> LlamaContext<'model> {
-    pub(crate) fn new(
-        llama_model: &'model LlamaModel,
-        llama_context: Ptr<llama_cpp_sys_2::llama_context>,
-    ) -> Self {
+    pub(crate) fn new(llama_context: Ptr<llama_cpp_sys_2::llama_context>) -> Self {
         Self {
             context: llama_context,
-            model: llama_model,
             _backend_samplers: Vec::new(),
-            p: PhantomData,
+            model: PhantomData,
+            data: PhantomData,
         }
     }
 
     pub(crate) fn with_samplers(
-        llama_model: &'model LlamaModel,
         llama_context: Ptr<llama_cpp_sys_2::llama_context>,
         backend_samplers: Vec<(i32, LlamaSampler)>,
     ) -> Self {
         Self {
             context: llama_context,
-            model: llama_model,
             _backend_samplers: backend_samplers,
-            p: PhantomData,
+            model: PhantomData,
+            data: PhantomData,
         }
+    }
+
+    // FIXME(madsmtm): Somehow return `LlamaModel<'_>` here?
+    fn model_ptr(&self) -> *const llama_cpp_sys_2::llama_model {
+        unsafe { llama_cpp_sys_2::llama_get_model(self.context.as_ptr()) }
     }
 
     /// Gets the max number of logical tokens that can be submitted to decode. Must be greater than or equal to [`Self::n_ubatch`].
@@ -221,10 +223,14 @@ impl<'model> LlamaContext<'model> {
     /// `{arch}.embedding_length_out` is present).
     fn embeddings_out_len(&self) -> usize {
         let pooling = unsafe { llama_cpp_sys_2::llama_pooling_type(self.context.as_ptr()) };
+
+        let model = self.model_ptr();
         if pooling == llama_cpp_sys_2::LLAMA_POOLING_TYPE_RANK {
-            usize::try_from(self.model.n_cls_out()).expect("n_cls_out does not fit into a usize")
+            let n_cls_out = unsafe { llama_cpp_sys_2::llama_model_n_cls_out(model) };
+            usize::try_from(n_cls_out).expect("n_cls_out does not fit into a usize")
         } else {
-            usize::try_from(self.model.n_embd_out()).expect("n_embd_out does not fit into a usize")
+            let n_embd_out = unsafe { llama_cpp_sys_2::llama_model_n_cls_out(model) };
+            usize::try_from(n_embd_out).expect("n_embd_out does not fit into a usize")
         }
     }
 
@@ -278,7 +284,11 @@ impl<'model> LlamaContext<'model> {
     pub fn get_logits(&self) -> &[f32] {
         let data = unsafe { llama_cpp_sys_2::llama_get_logits(self.synchronizable_ptr()) };
         assert!(!data.is_null(), "logits data for last token is null");
-        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
+
+        let model = self.model_ptr();
+        let vocab = unsafe { llama_cpp_sys_2::llama_model_get_vocab(model) };
+        let n_vocab = unsafe { llama_cpp_sys_2::llama_vocab_n_tokens(vocab) };
+        let len = usize::try_from(n_vocab).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
     }
@@ -325,7 +335,10 @@ impl<'model> LlamaContext<'model> {
             panic!("invalid logit index {i}");
         }
 
-        let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
+        let model = self.model_ptr();
+        let vocab = unsafe { llama_cpp_sys_2::llama_model_get_vocab(model) };
+        let n_vocab = unsafe { llama_cpp_sys_2::llama_vocab_n_tokens(vocab) };
+        let len = usize::try_from(n_vocab).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
     }
