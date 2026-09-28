@@ -373,8 +373,14 @@ fn detect_emscripten_sysroot() -> String {
     }
 
     // Fallback: parse --sysroot= from emcc --cflags
+    //
+    // An alternative here would be to look for `$(em-config CACHE)/sysroot`.
     match Command::new("emcc").arg("--cflags").output() {
         Ok(output) => {
+            // Invoke `emcc` once to prime the cache; `emcc` doesn't create it
+            // until the first time it's asked to compile something.
+            let _ = Command::new("emcc").status();
+
             let stdout = String::from_utf8_lossy(&output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             debug_log!("`emcc --cflags` stdout: {stdout}");
