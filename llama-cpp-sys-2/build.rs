@@ -1007,8 +1007,6 @@ fn main() {
             _ => panic!("unsupported WASM arch: {target_arch}"),
         };
         config.define("LLAMA_WASM_MEM64", mem64);
-
-        config.define("GGML_WEBGPU", "ON");
     }
 
     if matches!(target_os, TargetOs::Linux)
@@ -1204,6 +1202,14 @@ fn main() {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
+    }
+
+    // WebGPU is only supported on WASM targets (or JS targets, but Rust no
+    // longer has any of those).
+    if cfg!(feature = "webgpu") && matches!(target_os, TargetOs::Wasm(_)) {
+        config.define("GGML_WEBGPU", "ON");
+    } else {
+        config.define("GGML_WEBGPU", "OFF");
     }
 
     if cfg!(feature = "mtmd") {
