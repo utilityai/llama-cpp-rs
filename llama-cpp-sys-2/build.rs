@@ -404,7 +404,7 @@ fn detect_emscripten_sysroot() -> String {
             }
             panic!("`emcc --cflags` did not contain `--sysroot=`. Output was:\n{stdout}")
         }
-        Err(e) => debug_log!("failed to run emcc --cflags: {e}"),
+        Err(e) => debug_log!("failed to run `emcc --cflags`: {e}"),
     }
 
     panic!(
@@ -436,30 +436,34 @@ fn detect_emscripten_cmake_toolchain() -> String {
         }
     }
 
-    // Fallback: find emcc, resolve symlinks, look for toolchain relative to its prefix
-    if let Ok(output) = Command::new("which").arg("emcc").output() {
-        let emcc_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if let Ok(resolved) = std::fs::canonicalize(&emcc_str) {
-            // emcc is at <prefix>/bin/emcc — go up to <prefix>
-            if let Some(prefix) = resolved.parent().and_then(|p| p.parent()) {
-                // Nix / system packages: <prefix>/share/emscripten/cmake/...
-                let candidate = prefix.join("share").join("emscripten").join(&toolchain_rel);
-                if candidate.exists() {
-                    debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
-                    return candidate.to_string_lossy().into_owned();
-                }
-                // emsdk layout: <prefix>/cmake/...
-                let candidate = prefix.join(&toolchain_rel);
-                if candidate.exists() {
-                    debug_log!("detected Emscripten CMake toolchain: {candidate:?}");
-                    return candidate.to_string_lossy().into_owned();
+    // Fallback: find in Emscripten root
+    match Command::new("em-config").arg("EMSCRIPTEN_ROOT").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log!("`em-config EMSCRIPTEN_ROOT` stdout: {stdout}");
+            if !stderr.is_empty() {
+                for line in stderr.lines() {
+                    println!("cargo:warning=`em-config EMSCRIPTEN_ROOT` stderr: {line}");
                 }
             }
+            if !output.status.success() {
+                panic!("`em-config EMSCRIPTEN_ROOT` failed: {stderr}")
+            }
+
+            let path = Path::new(stdout.trim()).join(&toolchain_rel);
+            if path.exists() {
+                debug_log!("detected Emscripten CMake toolchain: {path:?}");
+                return path.to_string_lossy().into_owned();
+            } else {
+                panic!("`em-config EMSCRIPTEN_ROOT` did not contain a CMake file at {path:?}")
+            }
         }
+        Err(e) => debug_log!("failed to run `em-config EMSCRIPTEN_ROOT`: {e}"),
     }
 
     panic!(
-        "could not detect Emscripten CMake toolchain file (Emscripten.cmake), ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
+        "could not detect Emscripten CMake toolchain file (Emscripten.cmake), ensure `em-config` is on `PATH` or set the `EMSDK` environment variable"
     )
 }
 
