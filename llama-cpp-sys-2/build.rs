@@ -6,7 +6,6 @@ use std::str::FromStr as _;
 
 use cmake::Config;
 use glob::glob;
-use walkdir::DirEntry;
 
 enum WindowsVariant {
     Msvc,
@@ -462,13 +461,6 @@ fn detect_emscripten_cmake_toolchain() -> String {
     )
 }
 
-fn is_hidden(e: &DirEntry) -> bool {
-    e.file_name()
-        .to_str()
-        .map(|s| s.starts_with('.'))
-        .unwrap_or_default()
-}
-
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -513,28 +505,19 @@ fn main() {
     debug_log!("BUILD_SHARED: {}", build_shared_libs);
 
     // Make sure that changes to the llama.cpp project trigger a rebuild.
-    let rebuild_on_children_of = [
-        llama_src.join("src"),
-        llama_src.join("ggml/src"),
-        llama_src.join("common"),
-    ];
-    for entry in walkdir::WalkDir::new(&llama_src)
-        .into_iter()
-        .filter_entry(|e| !is_hidden(e))
-    {
-        let entry = entry.expect("Failed to obtain entry");
-        let rebuild = entry
-            .file_name()
-            .to_str()
-            .map(|f| f.starts_with("CMake"))
-            .unwrap_or_default()
-            || rebuild_on_children_of
-                .iter()
-                .any(|src_folder| entry.path().starts_with(src_folder));
-        if rebuild {
-            println!("cargo:rerun-if-changed={}", entry.path().display());
-        }
-    }
+    //
+    // Keep this in sync with the `package.include` key in `Cargo.toml`.
+    rebuild_if_changed(llama_src.join("ggml"));
+    rebuild_if_changed(llama_src.join("include"));
+    rebuild_if_changed(llama_src.join("common"));
+    rebuild_if_changed(llama_src.join("src"));
+    rebuild_if_changed(llama_src.join("tools").join("mtmd"));
+    rebuild_if_changed(llama_src.join("vendor"));
+    rebuild_if_changed(llama_src.join("convert_hf_to_gguf.py"));
+    rebuild_if_changed(llama_src.join("pocs"));
+    rebuild_if_changed(llama_src.join("CMakeLists.txt"));
+    rebuild_if_changed(llama_src.join("cmake"));
+    rebuild_if_changed(llama_src.join("tools").join("CMakeLists.txt"));
 
     // Use all available cores except 2 to
     let cmake_build_parallelism_level =
@@ -1569,4 +1552,8 @@ fn main() {
             }
         }
     }
+}
+
+fn rebuild_if_changed(path: impl AsRef<Path>) {
+    println!("cargo:rerun-if-changed={}", path.as_ref().display());
 }
