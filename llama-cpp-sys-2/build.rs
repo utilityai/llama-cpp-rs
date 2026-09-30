@@ -160,17 +160,16 @@ fn lib_name(path: &Path) -> &str {
 }
 
 /// Collects the shared libraries loaded at run time.
-///
-/// On Windows these are `.dll`s — `lib_suffix` only describes the import
-/// library the linker reads (`.lib`/`.a`), not the runtime artifact. On
-/// Linux/macOS link-time and run-time files are identical, so the
-/// prefix/suffix helpers apply as-is.
 fn extract_lib_assets(out_dir: &Path, target_os: &TargetOs) -> Vec<PathBuf> {
     let shared_libs_dir = match target_os {
         TargetOs::Windows(_) => "bin",
         _ => "lib",
     };
     let libs_dir = out_dir.join(shared_libs_dir);
+    // On Windows these are `.dll`s — `lib_suffix` only describes the import
+    // library the linker reads (`.lib`/`.a`), not the runtime artifact. On
+    // Linux/macOS link-time and run-time files are identical, so the
+    // prefix/suffix helpers apply as-is.
     let pattern = match target_os {
         TargetOs::Windows(_) => libs_dir.join("*.dll"),
         _ => libs_dir.join(format!(
