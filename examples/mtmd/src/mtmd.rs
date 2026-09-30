@@ -181,7 +181,7 @@ impl<'a> MtmdCliContext<'a> {
         // Clear bitmaps after tokenization
         self.bitmaps.clear();
 
-        self.n_past = chunks.eval_chunks(&self.mtmd_ctx, context, 0, 0, batch_size, true)?;
+        self.n_past = chunks.eval_chunks(&mut self.mtmd_ctx, context, 0, 0, batch_size, true)?;
         Ok(())
     }
 

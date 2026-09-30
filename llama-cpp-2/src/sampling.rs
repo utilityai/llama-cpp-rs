@@ -29,7 +29,7 @@ impl LlamaSampler {
     #[must_use]
     pub fn sample(&mut self, ctx: &LlamaContext, idx: i32) -> LlamaToken {
         let token = unsafe {
-            llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.context.as_ptr(), idx)
+            llama_cpp_sys_2::llama_sampler_sample(self.sampler, ctx.synchronizable_ptr(), idx)
         };
 
         LlamaToken(token)

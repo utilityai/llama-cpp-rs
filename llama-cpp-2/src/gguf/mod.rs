@@ -95,7 +95,7 @@ impl GgufContext {
 
 impl Drop for GgufContext {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::gguf_free(self.ctx.as_ptr()) }
+        unsafe { llama_cpp_sys_2::gguf_free(self.ctx.as_mut_ptr()) }
     }
 }
 
