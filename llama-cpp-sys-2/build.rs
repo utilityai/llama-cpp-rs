@@ -492,7 +492,10 @@ fn main() {
         };
 
         // Configure bindgen for Android
+        // Recent NDK headers reject unversioned target triples, and bindgen's
+        // default `--target` (derived from `TARGET`) carries no API level.
         bindings_builder = bindings_builder
+            .clang_arg(format!("--target={}{}", target_triple, tc.api))
             .clang_arg(format!("--sysroot={}", tc.sysroot))
             .clang_arg(format!("-D__ANDROID_API__={}", tc.api))
             .clang_arg("-D__ANDROID__");
@@ -513,14 +516,6 @@ fn main() {
             .clang_arg("stdbool.h")
             .clang_arg("-include")
             .clang_arg("stdint.h");
-
-        // Set additional clang args for cargo ndk compatibility
-        if env::var("CARGO_SUBCOMMAND").as_deref() == Ok("ndk") {
-            std::env::set_var(
-                "BINDGEN_EXTRA_CLANG_ARGS",
-                format!("--target={}", target_triple),
-            );
-        }
     }
 
     // Fix bindgen header discovery on Windows MSVC
