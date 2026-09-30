@@ -5,7 +5,8 @@
 
 use std::ffi::{CStr, CString};
 use std::path::Path;
-use std::ptr::NonNull;
+
+use crate::ptr::Ptr;
 
 /// A safe wrapper around `gguf_context`.
 ///
@@ -13,7 +14,7 @@ use std::ptr::NonNull;
 /// never loaded into memory (`no_alloc = true`).
 #[derive(Debug)]
 pub struct GgufContext {
-    ctx: NonNull<llama_cpp_sys_2::gguf_context>,
+    ctx: Ptr<llama_cpp_sys_2::gguf_context>,
 }
 
 impl GgufContext {
@@ -29,7 +30,7 @@ impl GgufContext {
         };
         let ptr = unsafe { llama_cpp_sys_2::gguf_init_from_file(c_path.as_ptr(), params) };
         Some(Self {
-            ctx: NonNull::new(ptr)?,
+            ctx: Ptr::new(ptr)?,
         })
     }
 

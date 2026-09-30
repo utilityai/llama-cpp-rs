@@ -7,11 +7,11 @@
 //! This API is experimental and subject to breaking changes.
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
-use std::ptr::NonNull;
 use std::slice;
 
 use crate::context::LlamaContext;
 use crate::model::LlamaModel;
+use crate::ptr::Ptr;
 use crate::token::LlamaToken;
 
 /// Input chunk types for multimodal data
@@ -160,7 +160,7 @@ pub struct MtmdInputText {
 /// text, images, and audio through llama.cpp's multimodal interface.
 #[derive(Debug)]
 pub struct MtmdContext {
-    pub(crate) context: NonNull<llama_cpp_sys_2::mtmd_context>,
+    context: Ptr<llama_cpp_sys_2::mtmd_context>,
 }
 
 // MtmdContext is thread safe
@@ -201,7 +201,7 @@ impl MtmdContext {
             )
         };
 
-        let context = NonNull::new(context).ok_or(MtmdInitError::NullResult)?;
+        let context = Ptr::new(context).ok_or(MtmdInitError::NullResult)?;
         Ok(Self { context })
     }
 
@@ -364,7 +364,7 @@ impl Drop for MtmdContext {
 /// For audio, data is stored as PCM F32 samples.
 #[derive(Debug, Clone)]
 pub struct MtmdBitmap {
-    pub(crate) bitmap: NonNull<llama_cpp_sys_2::mtmd_bitmap>,
+    bitmap: Ptr<llama_cpp_sys_2::mtmd_bitmap>,
 }
 
 // MtmdBitmap is thread safe
@@ -408,7 +408,7 @@ impl MtmdBitmap {
 
         let bitmap = unsafe { llama_cpp_sys_2::mtmd_bitmap_init(nx, ny, data.as_ptr()) };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = Ptr::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
@@ -443,7 +443,7 @@ impl MtmdBitmap {
         let bitmap =
             unsafe { llama_cpp_sys_2::mtmd_bitmap_init_from_audio(data.len(), data.as_ptr()) };
 
-        let bitmap = NonNull::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = Ptr::new(bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
@@ -492,7 +492,7 @@ impl MtmdBitmap {
             )
         };
 
-        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = Ptr::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
@@ -538,7 +538,7 @@ impl MtmdBitmap {
             )
         };
 
-        let bitmap = NonNull::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
+        let bitmap = Ptr::new(wrapper.bitmap).ok_or(MtmdBitmapError::NullResult)?;
         Ok(Self { bitmap })
     }
 
@@ -633,7 +633,7 @@ impl Drop for MtmdBitmap {
 /// with text chunks containing tokens and media chunks containing embeddings.
 #[derive(Debug)]
 pub struct MtmdInputChunks {
-    pub(crate) chunks: NonNull<llama_cpp_sys_2::mtmd_input_chunks>,
+    chunks: Ptr<llama_cpp_sys_2::mtmd_input_chunks>,
 }
 
 impl Default for MtmdInputChunks {
@@ -660,7 +660,7 @@ impl MtmdInputChunks {
     #[must_use]
     pub fn new() -> Self {
         let chunks = unsafe { llama_cpp_sys_2::mtmd_input_chunks_init() };
-        let chunks = NonNull::new(chunks).unwrap();
+        let chunks = Ptr::new(chunks).unwrap();
         Self { chunks }
     }
 
@@ -709,7 +709,7 @@ impl MtmdInputChunks {
             unsafe { llama_cpp_sys_2::mtmd_input_chunks_get(self.chunks.as_ptr(), index) };
 
         // Note: We don't own this chunk, it's owned by the chunks collection
-        NonNull::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
+        Ptr::new(chunk_ptr.cast_mut()).map(|ptr| MtmdInputChunk {
             chunk: ptr,
             owned: false,
             phantom: PhantomData,
@@ -809,7 +809,7 @@ impl Drop for MtmdInputChunks {
 /// owned chunk with a `'static` lifetime that is freed independently.
 #[derive(Debug)]
 pub struct MtmdInputChunk<'a> {
-    pub(crate) chunk: NonNull<llama_cpp_sys_2::mtmd_input_chunk>,
+    chunk: Ptr<llama_cpp_sys_2::mtmd_input_chunk>,
     owned: bool,
     phantom: PhantomData<&'a MtmdInputChunks>,
 }
@@ -903,7 +903,7 @@ impl MtmdInputChunk<'_> {
     /// Returns `MtmdInputChunkError::NullResult` if copying fails.
     pub fn copy(&self) -> Result<MtmdInputChunk<'static>, MtmdInputChunkError> {
         let chunk = unsafe { llama_cpp_sys_2::mtmd_input_chunk_copy(self.chunk.as_ptr()) };
-        let chunk = NonNull::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
+        let chunk = Ptr::new(chunk).ok_or(MtmdInputChunkError::NullResult)?;
         Ok(MtmdInputChunk {
             chunk,
             owned: true,
