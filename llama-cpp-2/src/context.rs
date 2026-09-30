@@ -2,11 +2,11 @@
 
 use std::fmt::{Debug, Formatter};
 use std::num::NonZeroI32;
-use std::ptr::NonNull;
 use std::slice;
 
 use crate::llama_batch::LlamaBatch;
 use crate::model::{LlamaLoraAdapter, LlamaModel};
+use crate::ptr::Ptr;
 use crate::sampling::LlamaSampler;
 use crate::timing::LlamaTimings;
 use crate::token::data::LlamaTokenData;
@@ -24,7 +24,7 @@ pub mod session;
 /// Safe wrapper around `llama_context`.
 #[allow(clippy::module_name_repetitions)]
 pub struct LlamaContext<'a> {
-    pub(crate) context: NonNull<llama_cpp_sys_2::llama_context>,
+    pub(crate) context: Ptr<llama_cpp_sys_2::llama_context>,
     /// a reference to the contexts model.
     pub model: &'a LlamaModel,
     initialized_logits: Vec<i32>,
@@ -44,7 +44,7 @@ impl Debug for LlamaContext<'_> {
 impl<'model> LlamaContext<'model> {
     pub(crate) fn new(
         llama_model: &'model LlamaModel,
-        llama_context: NonNull<llama_cpp_sys_2::llama_context>,
+        llama_context: Ptr<llama_cpp_sys_2::llama_context>,
         embeddings_enabled: bool,
     ) -> Self {
         Self {
@@ -58,7 +58,7 @@ impl<'model> LlamaContext<'model> {
 
     pub(crate) fn with_samplers(
         llama_model: &'model LlamaModel,
-        llama_context: NonNull<llama_cpp_sys_2::llama_context>,
+        llama_context: Ptr<llama_cpp_sys_2::llama_context>,
         embeddings_enabled: bool,
         backend_samplers: Vec<(i32, LlamaSampler)>,
     ) -> Self {

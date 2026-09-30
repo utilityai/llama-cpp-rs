@@ -1,9 +1,8 @@
 //! Experimental wrappers for llama.cpp speculative decoding helpers.
 
-use std::ptr::NonNull;
-
 use crate::context::LlamaContext;
 use crate::llama_batch::LlamaBatch;
+use crate::ptr::Ptr;
 use crate::status_is_ok;
 use crate::token::LlamaToken;
 
@@ -51,7 +50,7 @@ pub enum MtpSpeculativeError {
 /// Batches passed to [`Self::process`] must therefore contain only sequence 0.
 #[derive(Debug)]
 pub struct MtpSpeculative<'model> {
-    raw: NonNull<llama_cpp_sys_2::llama_rs_mtp_speculative>,
+    raw: Ptr<llama_cpp_sys_2::llama_rs_mtp_speculative>,
     target_context: LlamaContext<'model>,
     draft_context: LlamaContext<'model>,
     n_max: usize,
@@ -85,7 +84,7 @@ impl<'model> MtpSpeculative<'model> {
                 params.p_min,
             )
         };
-        let raw = NonNull::new(raw).ok_or(MtpSpeculativeError::InitFailed)?;
+        let raw = Ptr::new(raw).ok_or(MtpSpeculativeError::InitFailed)?;
 
         Ok(Self {
             raw,
