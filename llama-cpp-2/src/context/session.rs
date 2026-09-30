@@ -168,7 +168,7 @@ impl LlamaContext<'_> {
 
         if unsafe {
             llama_cpp_sys_2::llama_save_session_file(
-                self.context.as_ptr(),
+                self.synchronizable_ptr(),
                 cstr.as_ptr(),
                 tokens.as_ptr().cast::<llama_cpp_sys_2::llama_token>(),
                 tokens.len(),
@@ -211,7 +211,7 @@ impl LlamaContext<'_> {
 
         let load_session_success = unsafe {
             llama_cpp_sys_2::llama_load_session_file(
-                self.context.as_ptr(),
+                self.context.as_mut_ptr(),
                 cstr.as_ptr(),
                 tokens_out,
                 max_tokens,
@@ -260,7 +260,7 @@ impl LlamaContext<'_> {
 
         if unsafe {
             llama_cpp_sys_2::llama_state_save_file(
-                self.context.as_ptr(),
+                self.synchronizable_ptr(),
                 cstr.as_ptr(),
                 tokens.as_ptr().cast::<llama_cpp_sys_2::llama_token>(),
                 tokens.len(),
@@ -309,7 +309,7 @@ impl LlamaContext<'_> {
 
         let success = unsafe {
             llama_cpp_sys_2::llama_state_load_file(
-                self.context.as_ptr(),
+                self.context.as_mut_ptr(),
                 cstr.as_ptr(),
                 tokens_out,
                 max_tokens,
@@ -364,7 +364,7 @@ impl LlamaContext<'_> {
 
         let bytes_written = unsafe {
             llama_cpp_sys_2::llama_state_seq_save_file(
-                self.context.as_ptr(),
+                self.synchronizable_ptr(),
                 cstr.as_ptr(),
                 seq_id,
                 tokens.as_ptr().cast::<llama_cpp_sys_2::llama_token>(),
@@ -418,7 +418,7 @@ impl LlamaContext<'_> {
 
         let bytes_read = unsafe {
             llama_cpp_sys_2::llama_state_seq_load_file(
-                self.context.as_ptr(),
+                self.context.as_mut_ptr(),
                 cstr.as_ptr(),
                 dest_seq_id,
                 tokens_out,
@@ -447,7 +447,7 @@ impl LlamaContext<'_> {
     /// and `kv_cache`) - will often be smaller after compacting tokens
     #[must_use]
     pub fn get_state_size(&self) -> usize {
-        unsafe { llama_cpp_sys_2::llama_get_state_size(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_get_state_size(self.synchronizable_ptr()) }
     }
 
     /// Copies the state to the specified destination address.
@@ -458,7 +458,7 @@ impl LlamaContext<'_> {
     ///
     /// Destination needs to have allocated enough memory.
     pub unsafe fn copy_state_data(&self, dest: *mut u8) -> usize {
-        unsafe { llama_cpp_sys_2::llama_copy_state_data(self.context.as_ptr(), dest) }
+        unsafe { llama_cpp_sys_2::llama_copy_state_data(self.synchronizable_ptr(), dest) }
     }
 
     /// Set the state reading from the specified address
@@ -468,7 +468,7 @@ impl LlamaContext<'_> {
     ///
     /// help wanted: not entirely sure what the safety requirements are here.
     pub unsafe fn set_state_data(&mut self, src: &[u8]) -> usize {
-        unsafe { llama_cpp_sys_2::llama_set_state_data(self.context.as_ptr(), src.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_set_state_data(self.context.as_mut_ptr(), src.as_ptr()) }
     }
 
     /// Get the size of the state for a single sequence with optional flags.
@@ -486,7 +486,11 @@ impl LlamaContext<'_> {
     #[must_use]
     pub fn state_seq_get_size_ext(&self, seq_id: i32, flags: LlamaStateSeqFlags) -> usize {
         unsafe {
-            llama_cpp_sys_2::llama_state_seq_get_size_ext(self.context.as_ptr(), seq_id, flags.0)
+            llama_cpp_sys_2::llama_state_seq_get_size_ext(
+                self.synchronizable_ptr(),
+                seq_id,
+                flags.0,
+            )
         }
     }
 
@@ -515,7 +519,7 @@ impl LlamaContext<'_> {
     ) -> usize {
         unsafe {
             llama_cpp_sys_2::llama_state_seq_get_data_ext(
-                self.context.as_ptr(),
+                self.synchronizable_ptr(),
                 dest,
                 usize::MAX,
                 seq_id,
@@ -550,7 +554,7 @@ impl LlamaContext<'_> {
     ) -> bool {
         unsafe {
             llama_cpp_sys_2::llama_state_seq_set_data_ext(
-                self.context.as_ptr(),
+                self.context.as_mut_ptr(),
                 src.as_ptr(),
                 src.len(),
                 dest_seq_id,
@@ -585,12 +589,16 @@ impl LlamaContext<'_> {
         flags: LlamaStateSeqFlags,
     ) -> Result<SeqState, crate::StateSeqError> {
         let size = unsafe {
-            llama_cpp_sys_2::llama_state_seq_get_size_ext(self.context.as_ptr(), seq_id, flags.0)
+            llama_cpp_sys_2::llama_state_seq_get_size_ext(
+                self.synchronizable_ptr(),
+                seq_id,
+                flags.0,
+            )
         };
         let mut bytes = vec![0u8; size];
         let n = unsafe {
             llama_cpp_sys_2::llama_state_seq_get_data_ext(
-                self.context.as_ptr(),
+                self.synchronizable_ptr(),
                 bytes.as_mut_ptr(),
                 size,
                 seq_id,
@@ -628,7 +636,7 @@ impl LlamaContext<'_> {
     ) -> Result<(), crate::StateSeqError> {
         let n = unsafe {
             llama_cpp_sys_2::llama_state_seq_set_data_ext(
-                self.context.as_ptr(),
+                self.context.as_mut_ptr(),
                 state.bytes.as_ptr(),
                 state.bytes.len(),
                 seq_id,

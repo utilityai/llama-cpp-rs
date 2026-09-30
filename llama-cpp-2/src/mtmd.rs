@@ -288,7 +288,7 @@ impl MtmdContext {
         text: MtmdInputText,
         bitmaps: &[&MtmdBitmap],
     ) -> Result<MtmdInputChunks, MtmdTokenizeError> {
-        let chunks = MtmdInputChunks::new();
+        let mut chunks = MtmdInputChunks::new();
         let text_cstring = CString::new(text.text)?;
         let input_text = llama_cpp_sys_2::mtmd_input_text {
             text: text_cstring.as_ptr(),
@@ -298,15 +298,13 @@ impl MtmdContext {
         };
 
         // Create bitmap pointers
-        let bitmap_ptrs: Vec<*const llama_cpp_sys_2::mtmd_bitmap> = bitmaps
-            .iter()
-            .map(|b| b.bitmap.as_ptr().cast_const())
-            .collect();
+        let bitmap_ptrs: Vec<*const llama_cpp_sys_2::mtmd_bitmap> =
+            bitmaps.iter().map(|b| b.bitmap.as_ptr()).collect();
 
         let result = unsafe {
             llama_cpp_sys_2::mtmd_tokenize(
                 self.context.as_ptr(),
-                chunks.chunks.as_ptr(),
+                chunks.chunks.as_mut_ptr(),
                 &raw const input_text,
                 bitmap_ptrs.as_ptr().cast_mut(),
                 bitmaps.len(),
@@ -338,9 +336,9 @@ impl MtmdContext {
     /// # Errors
     ///
     /// Returns `MtmdEncodeError::EncodeFailure` if encoding fails.
-    pub fn encode_chunk(&self, chunk: &MtmdInputChunk<'_>) -> Result<(), MtmdEncodeError> {
+    pub fn encode_chunk(&mut self, chunk: &MtmdInputChunk<'_>) -> Result<(), MtmdEncodeError> {
         let result = unsafe {
-            llama_cpp_sys_2::mtmd_encode_chunk(self.context.as_ptr(), chunk.chunk.as_ptr())
+            llama_cpp_sys_2::mtmd_encode_chunk(self.context.as_mut_ptr(), chunk.chunk.as_ptr())
         };
 
         if result == 0 {
@@ -353,7 +351,7 @@ impl MtmdContext {
 
 impl Drop for MtmdContext {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::mtmd_free(self.context.as_ptr()) }
+        unsafe { llama_cpp_sys_2::mtmd_free(self.context.as_mut_ptr()) }
     }
 }
 
@@ -605,16 +603,16 @@ impl MtmdBitmap {
     ///
     /// ```no_run
     /// # use llama_cpp_2::mtmd::MtmdBitmap;
-    /// # fn example(bitmap: &MtmdBitmap) -> Result<(), Box<dyn std::error::Error>> {
+    /// # fn example(bitmap: &mut MtmdBitmap) -> Result<(), Box<dyn std::error::Error>> {
     /// bitmap.set_id("image_001")?;
     /// assert_eq!(bitmap.id(), Some("image_001".to_string()));
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_id(&self, id: &str) -> Result<(), std::ffi::NulError> {
+    pub fn set_id(&mut self, id: &str) -> Result<(), std::ffi::NulError> {
         let id_cstr = CString::new(id)?;
         unsafe {
-            llama_cpp_sys_2::mtmd_bitmap_set_id(self.bitmap.as_ptr(), id_cstr.as_ptr());
+            llama_cpp_sys_2::mtmd_bitmap_set_id(self.bitmap.as_mut_ptr(), id_cstr.as_ptr());
         }
         Ok(())
     }
@@ -622,7 +620,7 @@ impl MtmdBitmap {
 
 impl Drop for MtmdBitmap {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::mtmd_bitmap_free(self.bitmap.as_ptr()) }
+        unsafe { llama_cpp_sys_2::mtmd_bitmap_free(self.bitmap.as_mut_ptr()) }
     }
 }
 
@@ -762,8 +760,8 @@ impl MtmdInputChunks {
     /// This function is NOT thread-safe.
     pub fn eval_chunks(
         &self,
-        mtmd_ctx: &MtmdContext,
-        llama_ctx: &LlamaContext,
+        mtmd_ctx: &mut MtmdContext,
+        llama_ctx: &mut LlamaContext,
         n_past: llama_cpp_sys_2::llama_pos,
         seq_id: llama_cpp_sys_2::llama_seq_id,
         n_batch: i32,
@@ -773,8 +771,8 @@ impl MtmdInputChunks {
 
         let result = unsafe {
             llama_cpp_sys_2::mtmd_helper_eval_chunks(
-                mtmd_ctx.context.as_ptr(),
-                llama_ctx.context.as_ptr(),
+                mtmd_ctx.context.as_mut_ptr(),
+                llama_ctx.context.as_mut_ptr(),
                 self.chunks.as_ptr(),
                 n_past,
                 seq_id,
@@ -794,7 +792,7 @@ impl MtmdInputChunks {
 
 impl Drop for MtmdInputChunks {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::mtmd_input_chunks_free(self.chunks.as_ptr()) }
+        unsafe { llama_cpp_sys_2::mtmd_input_chunks_free(self.chunks.as_mut_ptr()) }
     }
 }
 
@@ -915,7 +913,7 @@ impl MtmdInputChunk<'_> {
 impl Drop for MtmdInputChunk<'_> {
     fn drop(&mut self) {
         if self.owned {
-            unsafe { llama_cpp_sys_2::mtmd_input_chunk_free(self.chunk.as_ptr()) }
+            unsafe { llama_cpp_sys_2::mtmd_input_chunk_free(self.chunk.as_mut_ptr()) }
         }
     }
 }
