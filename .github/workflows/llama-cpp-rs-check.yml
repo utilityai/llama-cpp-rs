@@ -109,3 +109,9 @@ jobs:
         run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
+      # With dynamic-link, simple.exe only starts if the build script copied
+      # the DLLs next to it.
+      - name: Build (dynamic-link)
+        run: cargo build --bin simple --features llama-cpp-2/dynamic-link
+      - name: Run (dynamic-link)
+        run: target\debug\simple.exe --help
