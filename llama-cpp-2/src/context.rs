@@ -29,7 +29,6 @@ pub struct LlamaContext<'a> {
     pub(crate) context: Ptr<llama_cpp_sys_2::llama_context>,
     /// a reference to the contexts model.
     pub model: &'a LlamaModel,
-    initialized_logits: Vec<i32>,
     /// Backend samplers kept alive for the context's lifetime.
     _backend_samplers: Vec<(i32, LlamaSampler)>,
     /// Some data in the context acts as-if behind a `Cell`, such as
@@ -53,7 +52,6 @@ impl<'model> LlamaContext<'model> {
         Self {
             context: llama_context,
             model: llama_model,
-            initialized_logits: Vec::new(),
             _backend_samplers: Vec::new(),
             p: PhantomData,
         }
@@ -67,7 +65,6 @@ impl<'model> LlamaContext<'model> {
         Self {
             context: llama_context,
             model: llama_model,
-            initialized_logits: Vec::new(),
             _backend_samplers: backend_samplers,
             p: PhantomData,
         }
@@ -105,11 +102,7 @@ impl<'model> LlamaContext<'model> {
             unsafe { llama_cpp_sys_2::llama_decode(self.context.as_mut_ptr(), batch.llama_batch) };
 
         match NonZeroI32::new(result) {
-            None => {
-                self.initialized_logits
-                    .clone_from(&batch.initialized_logits);
-                Ok(())
-            }
+            None => Ok(()),
             Some(error) => Err(DecodeError::from(error)),
         }
     }
@@ -128,11 +121,7 @@ impl<'model> LlamaContext<'model> {
             unsafe { llama_cpp_sys_2::llama_encode(self.context.as_mut_ptr(), batch.llama_batch) };
 
         match NonZeroI32::new(result) {
-            None => {
-                self.initialized_logits
-                    .clone_from(&batch.initialized_logits);
-                Ok(())
-            }
+            None => Ok(()),
             Some(error) => Err(EncodeError::from(error)),
         }
     }
@@ -330,19 +319,12 @@ impl<'model> LlamaContext<'model> {
     /// - logit `i` is not initialized.
     #[must_use]
     pub fn get_logits_ith(&self, i: i32) -> &[f32] {
-        assert!(
-            self.initialized_logits.contains(&i),
-            "logit {i} is not initialized. only {:?} is",
-            self.initialized_logits
-        );
-        assert!(
-            self.n_ctx() > u32::try_from(i).expect("i does not fit into a u32"),
-            "n_ctx ({}) must be greater than i ({})",
-            self.n_ctx(),
-            i
-        );
-
         let data = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.synchronizable_ptr(), i) };
+
+        if data.is_null() {
+            panic!("invalid logit index {i}");
+        }
+
         let len = usize::try_from(self.model.n_vocab()).expect("n_vocab does not fit into a usize");
 
         unsafe { slice::from_raw_parts(data, len) }
