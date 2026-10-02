@@ -18,11 +18,17 @@ enum AppleVariant {
     Other,
 }
 
+enum WasmVariant {
+    Emscripten,
+    // TODO: At some point WASI?
+}
+
 enum TargetOs {
     Windows(WindowsVariant),
     Apple(AppleVariant),
     Linux,
     Android,
+    Wasm(WasmVariant),
 }
 
 macro_rules! debug_log {
@@ -80,6 +86,8 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
         Ok((TargetOs::Android, target))
     } else if target.contains("linux") {
         Ok((TargetOs::Linux, target))
+    } else if target.contains("emscripten") {
+        Ok((TargetOs::Wasm(WasmVariant::Emscripten), target))
     } else {
         Err(target)
     }
@@ -121,7 +129,7 @@ fn lib_suffix(target_os: &TargetOs, shared: bool) -> &'static str {
                 ".a"
             }
         }
-        TargetOs::Linux | TargetOs::Android => {
+        TargetOs::Linux | TargetOs::Android | TargetOs::Wasm(WasmVariant::Emscripten) => {
             if shared {
                 ".so"
             } else {
@@ -345,6 +353,120 @@ fn android_toolchain(target_triple: &str) -> AndroidToolchain {
     }
 }
 
+/// Find the sysroot in `$EMSDK/upstream/emscripten/cache/sysroot`, and if
+/// that fails, try to detect it by parsing `emcc --cflags`.
+///
+/// FIXME(madsmtm): Upstream this into `bindgen`.
+fn detect_emscripten_sysroot() -> String {
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let sysroot = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join("cache")
+            .join("sysroot");
+        if sysroot.exists() {
+            debug_log!("detected Emscripten sysroot from EMSDK env: {sysroot:?}");
+            return sysroot.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: parse --sysroot= from emcc --cflags
+    //
+    // An alternative here would be to look for `$(em-config CACHE)/sysroot`.
+    match Command::new("emcc").arg("--cflags").output() {
+        Ok(output) => {
+            // Invoke `emcc` once to prime the cache; `emcc` doesn't create it
+            // until the first time it's asked to compile something.
+            let _ = Command::new("emcc").status();
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log!("`emcc --cflags` stdout: {stdout}");
+            if !stderr.is_empty() {
+                for line in stderr.lines() {
+                    println!("cargo:warning=`emcc --cflags` stderr: {line}");
+                }
+            }
+            if !output.status.success() {
+                panic!("`emcc --cflags` failed: {stderr}")
+            }
+            for token in stdout.split_whitespace() {
+                if let Some(path) = token.strip_prefix("--sysroot=") {
+                    if Path::new(path).exists() {
+                        debug_log!("detected Emscripten sysroot from `emcc --cflags`: {path}");
+                        return path.to_string();
+                    } else {
+                        panic!("emcc reports sysroot at '{path}' but it does not exist on disk");
+                    }
+                }
+            }
+            panic!("`emcc --cflags` did not contain `--sysroot=`. Output was:\n{stdout}")
+        }
+        Err(e) => debug_log!("failed to run `emcc --cflags`: {e}"),
+    }
+
+    panic!(
+        "could not detect Emscripten sysroot, ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
+    )
+}
+
+/// Find the CMake toolchain file in `$EMSDK/upstream/emscripten/cmake`, and
+/// if that fails, try to detect it by locating `emcc` in `PATH`.
+///
+/// FIXME(madsmtm): Upstream this into `cmake-rs`.
+fn detect_emscripten_cmake_toolchain() -> String {
+    let toolchain_rel = PathBuf::new()
+        .join("cmake")
+        .join("Modules")
+        .join("Platform")
+        .join("Emscripten.cmake");
+
+    // Primary: EMSDK env var
+    println!("cargo:rerun-if-env-changed=EMSDK");
+    if let Ok(emsdk) = env::var("EMSDK") {
+        let candidate = PathBuf::from(&emsdk)
+            .join("upstream")
+            .join("emscripten")
+            .join(&toolchain_rel);
+        if candidate.exists() {
+            debug_log!("detected Emscripten CMake toolchain from EMSDK: {candidate:?}");
+            return candidate.to_string_lossy().into_owned();
+        }
+    }
+
+    // Fallback: find in Emscripten root
+    match Command::new("em-config").arg("EMSCRIPTEN_ROOT").output() {
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            debug_log!("`em-config EMSCRIPTEN_ROOT` stdout: {stdout}");
+            if !stderr.is_empty() {
+                for line in stderr.lines() {
+                    println!("cargo:warning=`em-config EMSCRIPTEN_ROOT` stderr: {line}");
+                }
+            }
+            if !output.status.success() {
+                panic!("`em-config EMSCRIPTEN_ROOT` failed: {stderr}")
+            }
+
+            let path = Path::new(stdout.trim()).join(&toolchain_rel);
+            if path.exists() {
+                debug_log!("detected Emscripten CMake toolchain: {path:?}");
+                return path.to_string_lossy().into_owned();
+            } else {
+                panic!("`em-config EMSCRIPTEN_ROOT` did not contain a CMake file at {path:?}")
+            }
+        }
+        Err(e) => debug_log!("failed to run `em-config EMSCRIPTEN_ROOT`: {e}"),
+    }
+
+    panic!(
+        "could not detect Emscripten CMake toolchain file (Emscripten.cmake), ensure `em-config` is on `PATH` or set the `EMSDK` environment variable"
+    )
+}
+
 fn is_hidden(e: &DirEntry) -> bool {
     e.file_name()
         .to_str()
@@ -354,6 +476,8 @@ fn is_hidden(e: &DirEntry) -> bool {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
     let (target_os, target_triple) =
         parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
@@ -523,6 +647,17 @@ fn main() {
         }
     }
 
+    // Configure Emscripten-specific bindgen settings
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
+        let sysroot = detect_emscripten_sysroot();
+        bindings_builder = bindings_builder
+            .clang_arg(format!("--sysroot={}", sysroot))
+            // The wasm32 clang backend defaults to hidden visibility, causing
+            // bindgen to skip all function declarations. Override to default.
+            // See: https://github.com/rust-lang/rust-bindgen/issues/1941
+            .clang_arg("-fvisibility=default");
+    }
+
     // Fix bindgen header discovery on Windows MSVC
     // Use cc crate to discover MSVC include paths by compiling a dummy file
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
@@ -678,7 +813,10 @@ fn main() {
                 .map(|s| s.to_string())
         });
 
-    if target_cpu == Some("native".into()) {
+    // Emscripten doesn't use -march or x86/ARM feature flags — emcc handles SIMD128 internally.
+    if matches!(target_os, TargetOs::Wasm(WasmVariant::Emscripten)) {
+        config.define("GGML_NATIVE", "OFF");
+    } else if target_cpu == Some("native".into()) {
         debug_log!("Detected target-cpu=native, compiling with GGML_NATIVE");
         config.define("GGML_NATIVE", "ON");
     }
@@ -848,6 +986,31 @@ fn main() {
         // Link Android system libraries
         println!("cargo:rustc-link-lib=log");
         println!("cargo:rustc-link-lib=android");
+    }
+
+    if let TargetOs::Wasm(wasm_variant) = &target_os {
+        assert!(!build_shared_libs, "WASM only supports static linking");
+
+        if matches!(wasm_variant, WasmVariant::Emscripten) {
+            let toolchain_file = detect_emscripten_cmake_toolchain();
+            config.define("CMAKE_TOOLCHAIN_FILE", &toolchain_file);
+
+            // Make Emscripten.cmake set `CMAKE_SYSTEM_PROCESSOR` to something
+            // that llama.cpp understands, instead of the bogus x86 that it
+            // defaults to for (apparent) compatibility with OpenCV.
+            // https://github.com/emscripten-core/emscripten/blob/d6c521a7f05449857c76bd99e396895583cf2083/cmake/Modules/Platform/Emscripten.cmake#L30-L37
+            config.define("EMSCRIPTEN_SYSTEM_PROCESSOR", &target_arch);
+        }
+
+        // Disable OpenSSL, it's hard to link with both WASI and Emscripten.
+        config.define("LLAMA_OPENSSL", "OFF");
+
+        let mem64 = match &*target_arch {
+            "wasm32" => "OFF",
+            "wasm64" => "ON",
+            _ => panic!("unsupported WASM arch: {target_arch}"),
+        };
+        config.define("LLAMA_WASM_MEM64", mem64);
     }
 
     if matches!(target_os, TargetOs::Linux)
@@ -1028,7 +1191,6 @@ fn main() {
     }
 
     if cfg!(feature = "mkl") {
-        let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
         assert_eq!(
             target_arch, "x86_64",
             "The `mkl` feature requires an x86_64 target; Intel MKL is unavailable for {target_arch}."
@@ -1040,10 +1202,18 @@ fn main() {
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
     // rather than modifying the defaults in Cargo.toml just in case someone enables the OpenMP feature
     // and tries to build for Android anyway.
-    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android) {
+    if cfg!(feature = "openmp") && !matches!(target_os, TargetOs::Android | TargetOs::Wasm(_)) {
         config.define("GGML_OPENMP", "ON");
     } else {
         config.define("GGML_OPENMP", "OFF");
+    }
+
+    // WebGPU is only supported on WASM targets (or JS targets, but Rust no
+    // longer has any of those).
+    if cfg!(feature = "webgpu") && matches!(target_os, TargetOs::Wasm(_)) {
+        config.define("GGML_WEBGPU", "ON");
+    } else {
+        config.define("GGML_WEBGPU", "OFF");
     }
 
     if cfg!(feature = "mtmd") {
@@ -1367,6 +1537,9 @@ fn main() {
             }
             // When neither feature is set, the cc crate handles C++ stdlib
             // linking automatically (defaults to c++_shared on Android).
+        }
+        TargetOs::Wasm(WasmVariant::Emscripten) => {
+            // Emscripten handles all C++ stdlib linking internally via emcc.
         }
         _ => (),
     }

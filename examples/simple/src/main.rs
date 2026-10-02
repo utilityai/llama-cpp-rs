@@ -8,7 +8,6 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
-use hf_hub::api::sync::ApiBuilder;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
@@ -130,7 +129,12 @@ impl Model {
     fn get_or_load(self) -> Result<PathBuf> {
         match self {
             Model::Local { path } => Ok(path),
-            Model::HuggingFace { model, repo } => ApiBuilder::new()
+            #[cfg(target_family = "wasm")]
+            Model::HuggingFace { .. } => {
+                anyhow::bail!("cannot download model from huggingface on WASM")
+            }
+            #[cfg(not(target_family = "wasm"))]
+            Model::HuggingFace { model, repo } => hf_hub::api::sync::ApiBuilder::new()
                 .with_progress(true)
                 .build()
                 .with_context(|| "unable to create huggingface api")?
