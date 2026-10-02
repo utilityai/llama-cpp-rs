@@ -235,7 +235,7 @@ impl<'model> LlamaContext<'model> {
             let n_cls_out = unsafe { llama_cpp_sys_2::llama_model_n_cls_out(model) };
             usize::try_from(n_cls_out).expect("n_cls_out does not fit into a usize")
         } else {
-            let n_embd_out = unsafe { llama_cpp_sys_2::llama_model_n_cls_out(model) };
+            let n_embd_out = unsafe { llama_cpp_sys_2::llama_model_n_embd_out(model) };
             usize::try_from(n_embd_out).expect("n_embd_out does not fit into a usize")
         }
     }
