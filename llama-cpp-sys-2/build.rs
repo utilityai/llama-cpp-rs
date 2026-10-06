@@ -1204,6 +1204,8 @@ fn main() {
     // WebGPU is only supported on WASM targets (or JS targets, but Rust no
     // longer has any of those).
     if cfg!(feature = "webgpu") && matches!(target_os, TargetOs::Emscripten) {
+        // NOTE: We could set `EMDAWNWEBGPU_DIR` here as well in the future,
+        // though for now `--use-port=emdawnwebgpu` is probably sufficient.
         config.define("GGML_WEBGPU", "ON");
     } else {
         config.define("GGML_WEBGPU", "OFF");
