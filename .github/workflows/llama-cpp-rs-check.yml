@@ -130,11 +130,7 @@ jobs:
       - name: Build
         # Needs to use build-std, see:
         # https://doc.rust-lang.org/rustc/platform-support/wasm32-unknown-emscripten.html#emscripten-abi-compatibility
-        #
-        # Also only tests that we can build the main and the -sys package,
-        # intentionally doesn't try to build tests and examples because those
-        # depend on packages that don't support WASM (or at least not easily,
-        # like OpenSSL).
         run: |
           source ./emsdk/emsdk_env.sh
-          cargo +nightly -Zbuild-std build --target wasm32-unknown-emscripten --features sampler,mtmd,llguidance -vv -pllama-cpp-2
+          export CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_LINKER=em++
+          cargo +nightly -Zbuild-std build --target wasm32-unknown-emscripten --features sampler,mtmd,llguidance -vv
