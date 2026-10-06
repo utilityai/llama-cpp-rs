@@ -995,7 +995,7 @@ fn main() {
         // https://github.com/emscripten-core/emscripten/blob/d6c521a7f05449857c76bd99e396895583cf2083/cmake/Modules/Platform/Emscripten.cmake#L30-L37
         config.define("EMSCRIPTEN_SYSTEM_PROCESSOR", &target_arch);
 
-        // Disable OpenSSL, it's hard to link with both WASI and Emscripten.
+        // Disable OpenSSL, it's hard to link to with Emscripten.
         config.define("LLAMA_OPENSSL", "OFF");
 
         let mem64 = match &*target_arch {
