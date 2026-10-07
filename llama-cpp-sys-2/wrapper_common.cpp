@@ -154,6 +154,7 @@ extern "C" void llama_rs_memory_breakdown_print(const struct llama_context * ctx
 struct llama_rs_mtp_speculative {
     common_params_speculative params;
     common_speculative * spec = nullptr;
+    common_batch batch;
     std::vector<llama_token> prompt;
     std::vector<llama_token> draft;
     size_t last_draft_len = 0;
@@ -205,6 +206,7 @@ extern "C" struct llama_rs_mtp_speculative * llama_rs_mtp_speculative_init(
         wrapper->params.draft.n_max = n_max;
         wrapper->params.draft.n_min = n_min;
         wrapper->params.draft.p_min = p_min;
+        wrapper->batch = common_batch(ctx_tgt);
 
         wrapper->spec = common_speculative_init(wrapper->params, 1);
         if (!wrapper->spec) {
@@ -258,7 +260,12 @@ extern "C" llama_rs_status llama_rs_mtp_speculative_process(
     }
 
     try {
-        return common_speculative_process(spec->spec, *batch)
+        spec->batch.clear();
+        for (int32_t k = 0; k < batch->n_tokens; ++k) {
+            const bool output = batch->logits ? batch->logits[k] != 0 : k == batch->n_tokens - 1;
+            spec->batch.add(batch->token[k], batch->pos[k], LLAMA_RS_MTP_SEQ_ID, output);
+        }
+        return common_speculative_process(spec->spec, spec->batch)
             ? LLAMA_RS_STATUS_OK
             : LLAMA_RS_STATUS_EXCEPTION;
     } catch (...) {
