@@ -682,11 +682,16 @@ fn main() {
         // rust code isn't using `target-cpu=native`, so llama.cpp shouldn't use GGML_NATIVE either
         config.define("GGML_NATIVE", "OFF");
 
-        // if `target-cpu` is set set, also set -march for llama.cpp to the same value
+        // if `target-cpu` is set, also set -march/-mcpu for llama.cpp to the same value
         if let Some(ref cpu) = target_cpu {
-            debug_log!("Setting baseline architecture: -march={}", cpu);
-            config.cflag(format!("-march={}", cpu));
-            config.cxxflag(format!("-march={}", cpu));
+            let flag = if target_triple.starts_with("powerpc") {
+                "-mcpu"
+            } else {
+                "-march"
+            };
+            debug_log!("Setting baseline architecture: {}={}", flag, cpu);
+            config.cflag(format!("{}={}", flag, cpu));
+            config.cxxflag(format!("{}={}", flag, cpu));
         }
 
         // cargo only sets this when at least one target feature is enabled, which
