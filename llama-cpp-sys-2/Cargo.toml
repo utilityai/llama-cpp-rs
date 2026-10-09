@@ -83,6 +83,9 @@ opencl = []
 # Build the BLAS backend with Intel MKL (x86_64-only; requires MKLROOT set).
 mkl = []
 openmp = []
+# Enable WebGPU support on WASM targets.
+# This requires `-Clink-arg=--use-port=emdawnwebgpu` to be able to link.
+webgpu = []
 # Link GNU OpenMP (`libgomp`) statically on GNU targets. This is useful for
 # downstreams that ship self-contained binaries while keeping OpenMP enabled.
 static-openmp = ["openmp"]
