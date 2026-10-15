@@ -36,6 +36,7 @@ dynamic-link = ["llama-cpp-sys-2/dynamic-link"]
 vulkan = ["llama-cpp-sys-2/vulkan"]
 opencl = ["llama-cpp-sys-2/opencl"]
 openmp = ["llama-cpp-sys-2/openmp"]
+webgpu = ["llama-cpp-sys-2/webgpu"]
 # Link GNU OpenMP (`libgomp`) statically on GNU targets while keeping OpenMP
 # enabled. Useful for self-contained downstream binaries.
 static-openmp = ["llama-cpp-sys-2/static-openmp"]
