@@ -37,6 +37,8 @@ impl LlamaTimings {
                 n_p_eval,
                 n_eval,
                 n_reused,
+                n_reallocs_same: 0,
+                n_reallocs_diff: 0,
             },
         }
     }
