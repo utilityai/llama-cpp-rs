@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
 links = "llama"
 
+# Keep this in sync with `cargo:rerun-if-changed` in `build.rs`.
 include = [
     # Our files
     "README.md",
@@ -59,7 +60,6 @@ cc = { workspace = true, features = ["parallel"] }
 cmake = "0.1"
 find_cuda_helper = "0.2.0"
 glob = "0.3.3"
-walkdir = "2"
 
 [features]
 default = ["common"]
