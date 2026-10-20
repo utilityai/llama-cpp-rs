@@ -55,7 +55,7 @@ include = [
 
 [build-dependencies]
 bindgen = { workspace = true }
-cc = { workspace = true, features = ["parallel"] }
+cc = "1.2.61"
 cmake = "0.1"
 find_cuda_helper = "0.2.0"
 glob = "0.3.3"
