@@ -226,14 +226,14 @@ fn validate_android_ndk(ndk_path: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Android NDK toolchain facts derived from the environment for a given Rust target
-/// triple. Shared by the bindgen setup (clang args) and the Vulkan backend build (CMake
-/// cache vars) so the two agree on which NDK, sysroot, arch and API level to use.
+/// Android NDK toolchain facts derived from the environment for a given Rust
+/// target triple.
+///
+/// Shared with the Vulkan backend build (CMake cache vars) so that it agrees
+/// on which NDK, sysroot, arch and API level to use.
 struct AndroidToolchain {
     /// NDK root (e.g. the value of `ANDROID_NDK`).
     ndk: String,
-    /// `<ndk>/toolchains/llvm/prebuilt/<host_tag>`
-    toolchain_path: String,
     /// `<toolchain_path>/sysroot`
     sysroot: String,
     /// NDK sysroot arch directory / triple, e.g. `aarch64-linux-android`.
@@ -340,71 +340,11 @@ fn android_toolchain(target_triple: &str) -> AndroidToolchain {
 
     AndroidToolchain {
         ndk,
-        toolchain_path,
         sysroot,
         arch_triple,
         abi,
         api,
     }
-}
-
-/// Find the sysroot in `$EMSDK/upstream/emscripten/cache/sysroot`, and if
-/// that fails, try to detect it by parsing `emcc --cflags`.
-///
-/// FIXME(madsmtm): Upstream this into `bindgen`.
-fn detect_emscripten_sysroot() -> String {
-    // Primary: EMSDK env var
-    println!("cargo:rerun-if-env-changed=EMSDK");
-    if let Ok(emsdk) = env::var("EMSDK") {
-        let sysroot = PathBuf::from(&emsdk)
-            .join("upstream")
-            .join("emscripten")
-            .join("cache")
-            .join("sysroot");
-        if sysroot.exists() {
-            debug_log!("detected Emscripten sysroot from EMSDK env: {sysroot:?}");
-            return sysroot.to_string_lossy().into_owned();
-        }
-    }
-
-    // Fallback: parse --sysroot= from emcc --cflags
-    //
-    // An alternative here would be to look for `$(em-config CACHE)/sysroot`.
-    match Command::new("emcc").arg("--cflags").output() {
-        Ok(output) => {
-            // Invoke `emcc` once to prime the cache; `emcc` doesn't create it
-            // until the first time it's asked to compile something.
-            let _ = Command::new("emcc").status();
-
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            debug_log!("`emcc --cflags` stdout: {stdout}");
-            if !stderr.is_empty() {
-                for line in stderr.lines() {
-                    println!("cargo:warning=`emcc --cflags` stderr: {line}");
-                }
-            }
-            if !output.status.success() {
-                panic!("`emcc --cflags` failed: {stderr}")
-            }
-            for token in stdout.split_whitespace() {
-                if let Some(path) = token.strip_prefix("--sysroot=") {
-                    if Path::new(path).exists() {
-                        debug_log!("detected Emscripten sysroot from `emcc --cflags`: {path}");
-                        return path.to_string();
-                    } else {
-                        panic!("emcc reports sysroot at '{path}' but it does not exist on disk");
-                    }
-                }
-            }
-            panic!("`emcc --cflags` did not contain `--sysroot=`. Output was:\n{stdout}")
-        }
-        Err(e) => debug_log!("failed to run `emcc --cflags`: {e}"),
-    }
-
-    panic!(
-        "could not detect Emscripten sysroot, ensure `emcc` is on `PATH` or set the `EMSDK` environment variable"
-    )
 }
 
 /// Find the CMake toolchain file in `$EMSDK/upstream/emscripten/cmake`, and
@@ -547,173 +487,10 @@ fn main() {
         };
     env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", cmake_build_parallelism_level);
 
-    // Bindings
-    let mut bindings_builder = bindgen::Builder::default()
-        .header("wrapper.h")
-        .clang_arg(format!("-I{}", llama_src.join("include").display()))
-        .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
-        .derive_partialeq(true)
-        .allowlist_item("ggml_.*")
-        .allowlist_item("gguf_.*")
-        .allowlist_item("llama_.*")
-        // We'd rather use a relatively decent cross-platform definition for
-        // `FILE` (we could use `use libc::FILE` here too, but that'd
-        // introduce a dependency which we don't really need).
-        .allowlist_recursively(false)
-        .raw_line("type FILE = ::std::os::raw::c_void;")
-        .prepend_enum_name(false);
-
-    // The `llama_rs_*` symbols are emitted by `wrapper_common.cpp`, which is
-    // only compiled (and only has its header included from `wrapper.h`) when
-    // the `common` feature is enabled.
     if cfg!(feature = "common") {
-        bindings_builder = bindings_builder
-            .clang_arg("-DLLAMA_RS_BUILD_COMMON")
-            .allowlist_item("llama_rs_.*");
-    }
-
-    // Configure mtmd feature if enabled
-    if cfg!(feature = "mtmd") {
-        bindings_builder = bindings_builder
-            .header("wrapper_mtmd.h")
-            .allowlist_item("mtmd_.*");
-    }
-
-    // Configure Android-specific bindgen settings
-    if matches!(target_os, TargetOs::Android) {
-        let tc = android_toolchain(&target_triple);
-
-        // Find clang builtin includes
-        let clang_builtin_includes = {
-            let clang_lib_path = format!("{}/lib/clang", tc.toolchain_path);
-            std::fs::read_dir(&clang_lib_path).ok().and_then(|entries| {
-                entries
-                    .filter_map(|e| e.ok())
-                    .find(|entry| {
-                        entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
-                            && entry
-                                .file_name()
-                                .to_str()
-                                .map(|name| name.chars().next().unwrap_or('0').is_ascii_digit())
-                                .unwrap_or(false)
-                    })
-                    .and_then(|entry| {
-                        let include_path =
-                            format!("{}/{}/include", clang_lib_path, entry.file_name().to_str()?);
-                        if std::path::Path::new(&include_path).exists() {
-                            Some(include_path)
-                        } else {
-                            None
-                        }
-                    })
-            })
-        };
-
-        // Configure bindgen for Android
-        // Recent NDK headers reject unversioned target triples, and bindgen's
-        // default `--target` (derived from `TARGET`) carries no API level.
-        bindings_builder = bindings_builder
-            .clang_arg(format!("--target={}{}", target_triple, tc.api))
-            .clang_arg(format!("--sysroot={}", tc.sysroot))
-            .clang_arg(format!("-D__ANDROID_API__={}", tc.api))
-            .clang_arg("-D__ANDROID__");
-
-        // Add include paths in correct order
-        if let Some(ref builtin_includes) = clang_builtin_includes {
-            bindings_builder = bindings_builder
-                .clang_arg("-isystem")
-                .clang_arg(builtin_includes);
-        }
-
-        bindings_builder = bindings_builder
-            .clang_arg("-isystem")
-            .clang_arg(format!("{}/usr/include/{}", tc.sysroot, tc.arch_triple))
-            .clang_arg("-isystem")
-            .clang_arg(format!("{}/usr/include", tc.sysroot))
-            .clang_arg("-include")
-            .clang_arg("stdbool.h")
-            .clang_arg("-include")
-            .clang_arg("stdint.h");
-    }
-
-    // Configure Emscripten-specific bindgen settings
-    if matches!(target_os, TargetOs::Emscripten) {
-        let sysroot = detect_emscripten_sysroot();
-        bindings_builder = bindings_builder
-            .clang_arg(format!("--sysroot={}", sysroot))
-            // The wasm32 clang backend defaults to hidden visibility, causing
-            // bindgen to skip all function declarations. Override to default.
-            // See: https://github.com/rust-lang/rust-bindgen/issues/1941
-            .clang_arg("-fvisibility=default");
-    }
-
-    // Fix bindgen header discovery on Windows MSVC
-    // Use cc crate to discover MSVC include paths by compiling a dummy file
-    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-        // Create a minimal dummy C file to extract compiler flags
-        let out_dir = env::var("OUT_DIR").unwrap();
-        let dummy_c = Path::new(&out_dir).join("dummy.c");
-        std::fs::write(&dummy_c, "int main() { return 0; }").unwrap();
-
-        // Use cc crate to get compiler with proper environment setup
-        let mut build = cc::Build::new();
-        build.file(&dummy_c);
-
-        // Get the actual compiler command cc would use
-        let compiler = build.try_get_compiler().unwrap();
-
-        // Extract include paths by checking compiler's environment
-        // cc crate sets up MSVC environment internally
-        let env_include = compiler
-            .env()
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case("INCLUDE"))
-            .map(|(_, v)| v);
-
-        if let Some(include_paths) = env_include {
-            for include_path in include_paths
-                .to_string_lossy()
-                .split(';')
-                .filter(|s| !s.is_empty())
-            {
-                bindings_builder = bindings_builder
-                    .clang_arg("-isystem")
-                    .clang_arg(include_path);
-                debug_log!("Added MSVC include path: {}", include_path);
-            }
-        }
-
-        // Add MSVC compatibility flags
-        bindings_builder = bindings_builder
-            .clang_arg(format!("--target={}", target_triple))
-            .clang_arg("-fms-compatibility")
-            .clang_arg("-fms-extensions");
-
-        debug_log!(
-            "Configured bindgen with MSVC toolchain for target: {}",
-            target_triple
-        );
-    }
-    let bindings = bindings_builder
-        .generate()
-        .expect("Failed to generate bindings");
-
-    // Write the generated bindings to an output file
-    let bindings_path = out_dir.join("bindings.rs");
-    bindings
-        .write_to_file(bindings_path)
-        .expect("Failed to write bindings");
-
-    println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rerun-if-changed=wrapper_common.h");
-    println!("cargo:rerun-if-changed=wrapper_common.cpp");
-    println!("cargo:rerun-if-changed=wrapper_utils.h");
-    println!("cargo:rerun-if-changed=wrapper_mtmd.h");
-
-    debug_log!("Bindings Created");
-
-    if cfg!(feature = "common") {
+        println!("cargo:rerun-if-changed=wrapper_utils.h");
+        println!("cargo:rerun-if-changed=wrapper_common.h");
+        println!("cargo:rerun-if-changed=wrapper_common.cpp");
         let mut common_wrapper_build = cc::Build::new();
         common_wrapper_build
             .cpp(true)
