@@ -46,6 +46,21 @@ struct llama_sampler * llama_rs_sampler_init_grammar_lazy_patterns(
 
 llama_rs_status llama_rs_sampler_accept(struct llama_sampler * sampler, llama_token token);
 
+// Wraps llama_sampler_sample in try/catch. llama.cpp can throw a C++ exception
+// during sampling (e.g. when a grammar masks every remaining candidate), which
+// would otherwise unwind across the FFI boundary and abort the process.
+llama_rs_status llama_rs_sampler_sample(
+    struct llama_sampler * sampler,
+    struct llama_context * ctx,
+    int32_t idx,
+    llama_token * out_token);
+
+// Wraps llama_sampler_apply in try/catch, for callers that apply a sampler to a
+// token data array directly instead of going through sample.
+llama_rs_status llama_rs_sampler_apply(
+    struct llama_sampler * sampler,
+    llama_token_data_array * cur_p);
+
 // Fit model/context params to device memory (wraps llama.cpp's common_fit_params).
 // Returns common_params_fit_status as an int: 0 = success, 1 = failure, 2 = error.
 int llama_rs_fit_params(
