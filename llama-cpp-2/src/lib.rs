@@ -163,13 +163,12 @@ pub enum DecodeError {
     /// An unknown error occurred.
     #[error("Decode Error {0}: unknown")]
     Unknown(c_int),
-    /// Computation was aborted by the abort callback. Processed micro-batches
-    /// may remain in context memory; see [`context::LlamaContext::decode`].
+    /// The abort callback requested cancellation.
     #[error("Decode Error 2: aborted")]
     Aborted,
 }
 
-/// Failed to encode a batch.
+/// Failed to decode a batch.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum EncodeError {
     /// No kv cache slot was available.
@@ -181,7 +180,7 @@ pub enum EncodeError {
     /// An unknown error occurred.
     #[error("Encode Error {0}: unknown")]
     Unknown(c_int),
-    /// Computation was aborted by the abort callback.
+    /// The abort callback requested cancellation.
     #[error("Encode Error 2: aborted")]
     Aborted,
 }

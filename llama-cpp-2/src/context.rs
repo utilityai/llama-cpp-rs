@@ -30,8 +30,7 @@ pub struct LlamaContext<'a> {
     pub(crate) context: Ptr<llama_cpp_sys_2::llama_context>,
     /// Backend samplers kept alive for the context's lifetime.
     _backend_samplers: Vec<(i32, LlamaSampler)>,
-    /// Native callbacks borrow this allocation. `Drop` frees the native context
-    /// before Rust drops this field, so it also stays alive during teardown.
+    /// Registered with llama.cpp; `Drop` frees the native context before this field.
     abort_callback: Option<Box<abort_callback::AbortCallback>>,
     /// The context internally holds a reference to the model, which can be
     /// retrieved with `llama_get_model`.
@@ -102,24 +101,13 @@ impl<'model> LlamaContext<'model> {
         unsafe { llama_cpp_sys_2::llama_n_ctx(self.context.as_ptr()) }
     }
 
-    /// Install a callback that requests cancellation by returning `true`.
+    /// Install a callback polled during `decode`/`encode`; returning `true` aborts the
+    /// call with [`DecodeError::Aborted`] or [`EncodeError::Aborted`].
     ///
-    /// The context owns the callback until it is replaced, cleared, or the context
-    /// is freed. It may be called on a native compute thread; use shared state
-    /// such as an [`std::sync::atomic::AtomicBool`] to request cancellation from
-    /// another thread. Keep the callback short and nonblocking. A caught panic
-    /// requests cancellation instead of unwinding through C (with `panic = "abort"`,
-    /// a panic still terminates the process).
-    ///
-    /// Cancellation is cooperative and backend-dependent. CPU execution polls
-    /// between graph operations, not during an operation. Metal cannot preempt
-    /// a running command buffer; the bundled version does not expose its abort
-    /// callback through the backend registry and does not poll in normal execution.
-    /// Other backends may not support cancellation at all.
-    ///
-    /// Installing or replacing a callback waits for outstanding computation to
-    /// finish. To cancel an in-flight call, update the callback's shared state.
-    /// See [`Self::decode`] for recovery after an abort.
+    /// The callback may run on a compute thread, so signal it through shared state such
+    /// as an [`std::sync::atomic::AtomicBool`]. Polling is backend-dependent: the CPU
+    /// backend checks between graph operations; the bundled Metal backend does not check
+    /// once GPU work is submitted.
     pub fn set_abort_callback<F>(&mut self, callback: F)
     where
         F: Fn() -> bool + Send + Sync + 'static,
@@ -127,10 +115,7 @@ impl<'model> LlamaContext<'model> {
         self.replace_abort_callback(Some(Box::new(abort_callback::AbortCallback::new(callback))));
     }
 
-    /// Disable cancellation and drop the installed callback, if any.
-    ///
-    /// Waits for outstanding computation to finish before unregistering the
-    /// callback. This does not reset context memory after an aborted call.
+    /// Remove the installed abort callback, if any.
     pub fn clear_abort_callback(&mut self) {
         self.replace_abort_callback(None);
     }
@@ -149,11 +134,8 @@ impl<'model> LlamaContext<'model> {
 
     /// Decodes the batch.
     ///
-    /// [`DecodeError::Aborted`] leaves any previously processed micro-batches in
-    /// context memory, including the KV cache. Discard outputs from the aborted
-    /// call. Before reuse, reset the cancellation flag (or clear the callback)
-    /// and call [`Self::clear_kv_cache`], or recreate the context. Clearing the
-    /// callback alone does not roll back the batch.
+    /// After [`DecodeError::Aborted`], earlier micro-batches may remain in memory; call
+    /// [`Self::clear_kv_cache`] before reusing the context.
     ///
     /// # Errors
     ///
@@ -174,14 +156,9 @@ impl<'model> LlamaContext<'model> {
 
     /// Encodes the batch.
     ///
-    /// On [`EncodeError::Aborted`], discard the call's outputs and reset the
-    /// cancellation flag (or clear the callback) before retrying. Encoding does
-    /// not use the KV cache; recreate the context if it holds encoder output
-    /// needed by subsequent decoder calls.
-    ///
     /// # Errors
     ///
-    /// - `EncodeError` if the encoding failed.
+    /// - `EncodeError` if the decoding failed.
     ///
     /// # Panics
     ///
@@ -510,8 +487,6 @@ impl<'model> LlamaContext<'model> {
 
 impl Drop for LlamaContext<'_> {
     fn drop(&mut self) {
-        // Rust drops fields after this method returns. Keep the callback and
-        // backend samplers alive until native teardown has completed.
         unsafe { llama_cpp_sys_2::llama_free(self.context.as_mut_ptr()) }
     }
 }

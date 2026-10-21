@@ -1,9 +1,7 @@
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-// A sized allocation gives C a thin pointer while retaining the closure's
-// vtable. Only shared references are created by the trampoline, even if a
-// backend invokes it concurrently. Send also permits moving the context.
+// Sized wrapper so C gets a thin pointer to the boxed closure.
 pub(super) struct AbortCallback(Box<dyn Fn() -> bool + Send + Sync + 'static>);
 
 impl AbortCallback {
@@ -13,23 +11,20 @@ impl AbortCallback {
 }
 
 extern "C" fn trampoline(data: *mut c_void) -> bool {
-    // SAFETY: replace installs a pointer into an owned Box<AbortCallback>.
-    // The context synchronizes before replacement and frees the native context
-    // before dropping the box. No mutable access to the closure is exposed.
+    // SAFETY: `data` points into the context's boxed callback, which outlives every
+    // native call: replacement synchronizes first, and `Drop` frees the context first.
     let callback = unsafe { &*data.cast::<AbortCallback>() };
     match catch_unwind(AssertUnwindSafe(|| (callback.0)())) {
         Ok(abort) => abort,
         Err(payload) => {
-            // A custom panic payload can itself panic on drop. Leaking it keeps
-            // that second panic from unwinding across the FFI boundary.
+            // Dropping the payload could panic again across the FFI boundary.
             std::mem::forget(payload);
             true
         }
     }
 }
 
-// The caller must finish outstanding computation before changing native state.
-// Register the new pointer (or null) before dropping the previous allocation.
+// Registers the new pointer before dropping the old allocation; callers synchronize first.
 pub(super) fn replace(
     current: &mut Option<Box<AbortCallback>>,
     next: Option<Box<AbortCallback>>,
