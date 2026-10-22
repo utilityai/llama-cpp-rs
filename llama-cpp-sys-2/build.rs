@@ -1471,7 +1471,9 @@ fn main() {
     if cfg!(feature = "system-ggml") {
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml");
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-base");
-        println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
+        if cfg!(feature = "dynamic-link") {
+            println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
+        }
     }
     for lib in llama_libs {
         let link = format!(
@@ -1503,6 +1505,9 @@ fn main() {
                 } else {
                     println!("cargo:rustc-link-lib=dylib=msvcrtd");
                 }
+            }
+            if cfg!(feature = "openmp") {
+                println!("cargo:rustc-link-lib=vcomp");
             }
         }
         TargetOs::Linux => {
