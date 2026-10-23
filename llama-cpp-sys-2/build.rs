@@ -8,16 +8,19 @@ use cmake::Config;
 use glob::glob;
 use walkdir::DirEntry;
 
+#[derive(Clone, Copy)]
 enum WindowsVariant {
     Msvc,
     Other,
 }
 
+#[derive(Clone, Copy)]
 enum AppleVariant {
     WatchOS,
     Other,
 }
 
+#[derive(Clone, Copy)]
 enum TargetOs {
     Windows(WindowsVariant),
     Apple(AppleVariant),
@@ -469,89 +472,15 @@ fn is_hidden(e: &DirEntry) -> bool {
         .unwrap_or_default()
 }
 
-fn main() {
-    println!("cargo:rerun-if-changed=build.rs");
-
-    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-
-    let (target_os, target_triple) =
-        parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-
-    let target_dir = get_cargo_target_dir().unwrap();
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
-    let llama_src = Path::new(&manifest_dir).join("llama.cpp");
-    let build_shared_libs = cfg!(feature = "dynamic-link");
-
-    let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
-        .map(|v| v == "1")
-        .unwrap_or(build_shared_libs);
-
-    // Default to compiling llama.cpp in release mode (though with debug info
-    // if requested).
-    //
-    // This can be overwritten with `CMAKE_BUILD_TYPE` or `LLAMA_LIB_PROFILE`.
-    let profile = if std::env::var("DEBUG").unwrap() == "true" {
-        "RelWithDebInfo".to_string()
-    } else {
-        "Release".to_string()
-    };
-    let profile = env::var("LLAMA_LIB_PROFILE").unwrap_or(profile);
-
-    let static_crt = env::var("LLAMA_STATIC_CRT")
-        .map(|v| v == "1")
-        .unwrap_or(false);
-
-    println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
-    println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
-    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
-
-    debug_log!("TARGET: {}", target_triple);
-    debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
-    debug_log!("TARGET_DIR: {}", target_dir.display());
-    debug_log!("OUT_DIR: {}", out_dir.display());
-    debug_log!("BUILD_SHARED: {}", build_shared_libs);
-
-    // Make sure that changes to the llama.cpp project trigger a rebuild.
-    let rebuild_on_children_of = [
-        llama_src.join("src"),
-        llama_src.join("ggml/src"),
-        llama_src.join("common"),
-    ];
-    for entry in walkdir::WalkDir::new(&llama_src)
-        .into_iter()
-        .filter_entry(|e| !is_hidden(e))
-    {
-        let entry = entry.expect("Failed to obtain entry");
-        let rebuild = entry
-            .file_name()
-            .to_str()
-            .map(|f| f.starts_with("CMake"))
-            .unwrap_or_default()
-            || rebuild_on_children_of
-                .iter()
-                .any(|src_folder| entry.path().starts_with(src_folder));
-        if rebuild {
-            println!("cargo:rerun-if-changed={}", entry.path().display());
-        }
-    }
-
-    // Use all available cores except 2 to
-    let cmake_build_parallelism_level =
-        match env::var("CMAKE_BUILD_PARALLEL_LEVEL").map(|v| NonZeroUsize::from_str(&v)) {
-            Ok(Ok(v)) => v.to_string(),
-            _ => std::thread::available_parallelism()
-                .expect("failed to load available parallelism")
-                .get()
-                .to_string(),
-        };
-    env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", cmake_build_parallelism_level);
-
+fn generate_bindings(target_os: TargetOs, target_triple: String, headerpaths: &[PathBuf], out_dir: &Path) {
     // Bindings
     let mut bindings_builder = bindgen::Builder::default()
         .header("wrapper.h")
-        .clang_arg(format!("-I{}", llama_src.join("include").display()))
-        .clang_arg(format!("-I{}", llama_src.join("ggml/include").display()))
+        .clang_args(
+            headerpaths
+                .into_iter()
+                .map(|path| format!("-I{}", path.display())),
+        )
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .derive_partialeq(true)
         .allowlist_item("ggml_.*")
@@ -712,38 +641,74 @@ fn main() {
     println!("cargo:rerun-if-changed=wrapper_mtmd.h");
 
     debug_log!("Bindings Created");
+}
 
-    if cfg!(feature = "common") {
-        let mut common_wrapper_build = cc::Build::new();
-        common_wrapper_build
-            .cpp(true)
-            .file("wrapper_common.cpp")
-            .include(&llama_src)
-            .include(llama_src.join("common"))
-            .include(llama_src.join("include"))
-            .include(llama_src.join("ggml/include"))
-            .include(llama_src.join("vendor"))
-            .flag_if_supported("-std=c++17")
-            .pic(true);
+fn build_bundled_llama(target_os: TargetOs, target_triple: &String, llama_src: &Path, out_dir: &Path) -> Vec<PathBuf> {
+    let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
-        if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-            common_wrapper_build.flag("/std:c++17");
+    let target_dir = get_cargo_target_dir().unwrap();
+    let build_shared_libs = cfg!(feature = "dynamic-link");
+
+    let build_shared_libs = std::env::var("LLAMA_BUILD_SHARED_LIBS")
+        .map(|v| v == "1")
+        .unwrap_or(build_shared_libs);
+
+    // Default to compiling llama.cpp in release mode (though with debug info
+    // if requested).
+    //
+    // This can be overwritten with `CMAKE_BUILD_TYPE` or `LLAMA_LIB_PROFILE`.
+    let profile = if std::env::var("DEBUG").unwrap() == "true" {
+        "RelWithDebInfo".to_string()
+    } else {
+        "Release".to_string()
+    };
+    let profile = env::var("LLAMA_LIB_PROFILE").unwrap_or(profile);
+
+    let static_crt = env::var("LLAMA_STATIC_CRT")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+
+    println!("cargo:rerun-if-env-changed=LLAMA_LIB_PROFILE");
+    println!("cargo:rerun-if-env-changed=LLAMA_BUILD_SHARED_LIBS");
+    println!("cargo:rerun-if-env-changed=LLAMA_STATIC_CRT");
+
+    debug_log!("TARGET_DIR: {}", target_dir.display());
+    debug_log!("BUILD_SHARED: {}", build_shared_libs);
+
+    // Make sure that changes to the llama.cpp project trigger a rebuild.
+    let rebuild_on_children_of = [
+        llama_src.join("src"),
+        llama_src.join("ggml/src"),
+        llama_src.join("common"),
+    ];
+    for entry in walkdir::WalkDir::new(&llama_src)
+        .into_iter()
+        .filter_entry(|e| !is_hidden(e))
+    {
+        let entry = entry.expect("Failed to obtain entry");
+        let rebuild = entry
+            .file_name()
+            .to_str()
+            .map(|f| f.starts_with("CMake"))
+            .unwrap_or_default()
+            || rebuild_on_children_of
+                .iter()
+                .any(|src_folder| entry.path().starts_with(src_folder));
+        if rebuild {
+            println!("cargo:rerun-if-changed={}", entry.path().display());
         }
-
-        // Suppress cc's automatic C++ stdlib link when this build script already
-        // emits an explicit `cargo:rustc-link-lib` for it. Otherwise Apple
-        // gets duplicate `-lc++` (cc defaults to `c++` there, and we println
-        // the same flag below), which has segfaulted clang under memory pressure.
-        // Android static-stdcxx still needs this so we can link `c++_static`
-        // instead of cc's default `c++_shared`.
-        if matches!(target_os, TargetOs::Apple(_))
-            || (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
-        {
-            common_wrapper_build.cpp_link_stdlib(None);
-        }
-
-        common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
     }
+
+    // Use all available cores except 2 to
+    let cmake_build_parallelism_level =
+        match env::var("CMAKE_BUILD_PARALLEL_LEVEL").map(|v| NonZeroUsize::from_str(&v)) {
+            Ok(Ok(v)) => v.to_string(),
+            _ => std::thread::available_parallelism()
+                .expect("failed to load available parallelism")
+                .get()
+                .to_string(),
+        };
+    env::set_var("CMAKE_BUILD_PARALLEL_LEVEL", cmake_build_parallelism_level);
 
     // Build with Cmake
 
@@ -1471,7 +1436,9 @@ fn main() {
     if cfg!(feature = "system-ggml") {
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml");
         println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-base");
-        println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
+        if cfg!(feature = "dynamic-link") {
+            println!("cargo:rustc-link-lib={llama_libs_kind}=ggml-cpu");
+        }
     }
     for lib in llama_libs {
         let link = format!(
@@ -1503,6 +1470,9 @@ fn main() {
                 } else {
                     println!("cargo:rustc-link-lib=dylib=msvcrtd");
                 }
+            }
+            if cfg!(feature = "openmp") {
+                println!("cargo:rustc-link-lib=vcomp");
             }
         }
         TargetOs::Linux => {
@@ -1569,4 +1539,85 @@ fn main() {
             }
         }
     }
+
+    vec![
+        llama_src.join("include"),
+        llama_src.join("ggml/include"),
+        #[cfg(feature = "mtmd")]
+        llama_src.join("tools/mtmd"),
+    ]
+}
+
+fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+
+    let (target_os, target_triple) =
+        parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
+
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
+    let llama_src = Path::new(&manifest_dir).join("llama.cpp");
+
+    debug_log!("TARGET: {}", target_triple);
+    debug_log!("OUT_DIR: {}", out_dir.display());
+    debug_log!("CARGO_MANIFEST_DIR: {}", manifest_dir);
+
+    let headerpaths = if cfg!(feature = "system-llama") {
+        debug_log!("Building bindings from system llama.cpp");
+        use system_deps;
+        system_deps::Config::new()
+            .probe()
+            .unwrap()
+            .all_include_paths()
+            .into_iter()
+            .map(|v| v.to_owned())
+            .collect()
+    } else {
+        debug_log!("Building bindings from bundled llama.cpp");
+        build_bundled_llama(target_os, &target_triple, &llama_src, &out_dir)
+    };
+
+    debug_log!("INCLUDES = {:?}", headerpaths);
+
+    if cfg!(feature = "common") {
+        let mut common_wrapper_build = cc::Build::new();
+        common_wrapper_build
+            .cpp(true)
+            .file("wrapper_common.cpp")
+            .flag_if_supported("-std=c++17")
+            .pic(true);
+
+        if cfg!(feature = "system-llama") {
+            common_wrapper_build
+                .includes(&headerpaths);
+        } else {
+            common_wrapper_build
+                .include(&llama_src)
+                .include(llama_src.join("common"))
+                .include(llama_src.join("include"))
+                .include(llama_src.join("ggml/include"))
+                .include(llama_src.join("vendor"));
+        }
+
+        if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+            common_wrapper_build.flag("/std:c++17");
+        }
+
+        // Suppress cc's automatic C++ stdlib link when this build script already
+        // emits an explicit `cargo:rustc-link-lib` for it. Otherwise Apple
+        // gets duplicate `-lc++` (cc defaults to `c++` there, and we println
+        // the same flag below), which has segfaulted clang under memory pressure.
+        // Android static-stdcxx still needs this so we can link `c++_static`
+        // instead of cc's default `c++_shared`.
+        if matches!(target_os, TargetOs::Apple(_))
+            || (matches!(target_os, TargetOs::Android) && cfg!(feature = "static-stdcxx"))
+        {
+            common_wrapper_build.cpp_link_stdlib(None);
+        }
+
+        common_wrapper_build.compile("llama_cpp_sys_2_common_wrapper");
+    }
+
+    generate_bindings(target_os, target_triple, &headerpaths, &out_dir);
 }
