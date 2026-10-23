@@ -60,6 +60,7 @@ cmake = "0.1"
 find_cuda_helper = "0.2.0"
 glob = "0.3.3"
 walkdir = "2"
+system-deps = "9"
 
 [features]
 default = ["common"]
@@ -94,7 +95,13 @@ rocm = []
 # it. Currently used by Android and Linux GNU/musl targets.
 static-stdcxx = []
 shared-stdcxx = []
+# Turn this on to rely on system-provided llama.cpp
+system-llama = []
 system-ggml = []
 system-ggml-static = ["system-ggml"]
 mtmd = []
 dynamic-backends = ["dynamic-link"]
+
+[package.metadata.system-deps]
+llama = { version = "0.6", feature = "system-llama" }
+ggml = { version = "0.26.0", feature = "system-llama" }

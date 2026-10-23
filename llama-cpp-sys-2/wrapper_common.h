@@ -1,6 +1,6 @@
 #pragma once
 
-#include "llama.cpp/include/llama.h"
+#include <llama.h>
 
 #include <stdbool.h>
 #include <stddef.h>

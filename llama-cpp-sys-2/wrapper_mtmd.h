@@ -1,2 +1,2 @@
-#include "llama.cpp/tools/mtmd/mtmd.h"
-#include "llama.cpp/tools/mtmd/mtmd-helper.h"
+#include <mtmd.h>
+#include <mtmd-helper.h>
