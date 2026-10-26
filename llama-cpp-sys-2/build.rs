@@ -767,7 +767,9 @@ fn main() {
             "OFF"
         },
     );
-    config.define("LLAMA_CURL", "OFF");
+    // Disable find_package(OpenSSL), we don't need that since we're not
+    // buildings server.cpp.
+    config.define("LLAMA_OPENSSL", "OFF");
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
