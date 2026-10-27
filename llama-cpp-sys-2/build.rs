@@ -1501,6 +1501,16 @@ fn main() {
     match target_os {
         TargetOs::Windows(WindowsVariant::Msvc) => {
             println!("cargo:rustc-link-lib=advapi32");
+            // clang-cl compiles with LLVM OpenMP, which doesn't auto-link its
+            // runtime like cl.exe does with vcomp.
+            if cfg!(feature = "openmp") && cc::Build::new().get_compiler().is_like_clang_cl() {
+                emit_compiler_static_archive_search_path("libomp.lib");
+                if cfg!(feature = "static-openmp") {
+                    println!("cargo:rustc-link-lib=static=libomp");
+                } else {
+                    println!("cargo:rustc-link-lib=libomp");
+                }
+            }
             let lib_is_debug = profile.eq_ignore_ascii_case("debug");
             if lib_is_debug {
                 if static_crt {
