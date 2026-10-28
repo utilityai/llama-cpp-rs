@@ -723,11 +723,12 @@ fn main() {
             .include(llama_src.join("include"))
             .include(llama_src.join("ggml/include"))
             .include(llama_src.join("vendor"))
-            .flag_if_supported("-std=c++17")
+            .std("c++17")
             .pic(true);
 
         if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-            common_wrapper_build.flag("/std:c++17");
+            // FIXME(madsmtm): Why is this flag necessary for clang-cl?
+            common_wrapper_build.flag("/EHsc");
         }
 
         // Suppress cc's automatic C++ stdlib link when this build script already
@@ -768,6 +769,10 @@ fn main() {
         },
     );
     config.define("LLAMA_CURL", "OFF");
+
+    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+        config.cxxflag("/EHsc");
+    }
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
