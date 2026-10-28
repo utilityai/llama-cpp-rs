@@ -231,17 +231,18 @@ pub const GGML_OP_LIGHTNING_INDEXER: ggml_op = 87;
 pub const GGML_OP_DSV4_HC_COMB: ggml_op = 88;
 pub const GGML_OP_DSV4_HC_PRE: ggml_op = 89;
 pub const GGML_OP_DSV4_HC_POST: ggml_op = 90;
-pub const GGML_OP_UNARY: ggml_op = 91;
-pub const GGML_OP_MAP_CUSTOM1: ggml_op = 92;
-pub const GGML_OP_MAP_CUSTOM2: ggml_op = 93;
-pub const GGML_OP_MAP_CUSTOM3: ggml_op = 94;
-pub const GGML_OP_CUSTOM: ggml_op = 95;
-pub const GGML_OP_CROSS_ENTROPY_LOSS: ggml_op = 96;
-pub const GGML_OP_CROSS_ENTROPY_LOSS_BACK: ggml_op = 97;
-pub const GGML_OP_OPT_STEP_ADAMW: ggml_op = 98;
-pub const GGML_OP_OPT_STEP_SGD: ggml_op = 99;
-pub const GGML_OP_GLU: ggml_op = 100;
-pub const GGML_OP_COUNT: ggml_op = 101;
+pub const GGML_OP_TOP_K_MASK: ggml_op = 91;
+pub const GGML_OP_UNARY: ggml_op = 92;
+pub const GGML_OP_MAP_CUSTOM1: ggml_op = 93;
+pub const GGML_OP_MAP_CUSTOM2: ggml_op = 94;
+pub const GGML_OP_MAP_CUSTOM3: ggml_op = 95;
+pub const GGML_OP_CUSTOM: ggml_op = 96;
+pub const GGML_OP_CROSS_ENTROPY_LOSS: ggml_op = 97;
+pub const GGML_OP_CROSS_ENTROPY_LOSS_BACK: ggml_op = 98;
+pub const GGML_OP_OPT_STEP_ADAMW: ggml_op = 99;
+pub const GGML_OP_OPT_STEP_SGD: ggml_op = 100;
+pub const GGML_OP_GLU: ggml_op = 101;
+pub const GGML_OP_COUNT: ggml_op = 102;
 pub type ggml_op = UnsignedEnum;
 pub const GGML_UNARY_OP_ABS: ggml_unary_op = 0;
 pub const GGML_UNARY_OP_SGN: ggml_unary_op = 1;
@@ -1143,6 +1144,12 @@ extern "C" {
         prec: ggml_prec,
         idx: ::std::os::raw::c_int,
     ) -> bool;
+}
+extern "C" {
+    pub fn ggml_prec_get_acc(a: *const ggml_tensor) -> ggml_prec;
+}
+extern "C" {
+    pub fn ggml_prec_get_src(a: *const ggml_tensor, idx: ::std::os::raw::c_int) -> ggml_prec;
 }
 extern "C" {
     pub fn ggml_mul_mat(
@@ -2307,6 +2314,16 @@ extern "C" {
         residual: *mut ggml_tensor,
         post: *mut ggml_tensor,
         comb: *mut ggml_tensor,
+    ) -> *mut ggml_tensor;
+}
+extern "C" {
+    pub fn ggml_top_k_mask(
+        ctx: *mut ggml_context,
+        mask: *mut ggml_tensor,
+        top_k: *mut ggml_tensor,
+        score: *mut ggml_tensor,
+        blocks: *mut ggml_tensor,
+        extra: *mut ggml_tensor,
     ) -> *mut ggml_tensor;
 }
 pub type ggml_custom1_op_t = ::std::option::Option<
