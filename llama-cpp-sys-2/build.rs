@@ -723,11 +723,12 @@ fn main() {
             .include(llama_src.join("include"))
             .include(llama_src.join("ggml/include"))
             .include(llama_src.join("vendor"))
-            .flag_if_supported("-std=c++17")
+            .std("c++17")
             .pic(true);
 
         if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
-            common_wrapper_build.flag("/std:c++17");
+            // FIXME(madsmtm): Why is this flag necessary for clang-cl?
+            common_wrapper_build.flag("/EHsc");
         }
 
         // Suppress cc's automatic C++ stdlib link when this build script already
@@ -768,6 +769,10 @@ fn main() {
         },
     );
     config.define("LLAMA_CURL", "OFF");
+
+    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
+        config.cxxflag("/EHsc");
+    }
 
     // Pass CMAKE_ environment variables down to CMake
     for (key, value) in env::vars() {
@@ -1496,6 +1501,16 @@ fn main() {
     match target_os {
         TargetOs::Windows(WindowsVariant::Msvc) => {
             println!("cargo:rustc-link-lib=advapi32");
+            // clang-cl compiles with LLVM OpenMP, which doesn't auto-link its
+            // runtime like cl.exe does with vcomp.
+            if cfg!(feature = "openmp") && cc::Build::new().get_compiler().is_like_clang_cl() {
+                emit_compiler_static_archive_search_path("libomp.lib");
+                if cfg!(feature = "static-openmp") {
+                    println!("cargo:rustc-link-lib=static=libomp");
+                } else {
+                    println!("cargo:rustc-link-lib=libomp");
+                }
+            }
             let lib_is_debug = profile.eq_ignore_ascii_case("debug");
             if lib_is_debug {
                 if static_crt {
