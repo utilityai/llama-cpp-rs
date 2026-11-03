@@ -1,5 +1,5 @@
 //! A safe wrapper around `llama_model`.
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::os::raw::c_int;
 use std::path::Path;
 use std::str::Utf8Error;
@@ -365,6 +365,42 @@ impl LlamaModel {
         Ok(LlamaModel { model })
     }
 
+    /// Loads a model from a C `FILE` stream that is already open. The stream
+    /// is passed as `*mut c_void` because the bindings keep `FILE` opaque.
+    ///
+    /// llama.cpp reads the GGUF data from the stream's current position and
+    /// memory-maps it through the stream's underlying file, so it never
+    /// resolves a path. The model therefore comes from exactly the file the
+    /// caller opened, which lets a caller verify a file and then load it
+    /// through the same handle, and lets a model be embedded in a larger
+    /// file. llama.cpp requires the GGUF data section to start at a file
+    /// offset aligned to 32 bytes when memory mapping is enabled.
+    ///
+    /// # Safety
+    ///
+    /// `file` must be a `FILE` pointer that is open for reading in binary
+    /// mode and was created by the C runtime llama.cpp is linked against. It
+    /// must stay open until this function returns. llama.cpp does not close
+    /// it, so the caller closes it afterwards.
+    ///
+    /// # Errors
+    ///
+    /// See [`LlamaModelLoadError`] for more information.
+    #[tracing::instrument(skip_all, fields(params))]
+    pub unsafe fn load_from_file_ptr(
+        _: &LlamaBackend,
+        file: *mut c_void,
+        params: &LlamaModelParams,
+    ) -> Result<Self, LlamaModelLoadError> {
+        let llama_model =
+            unsafe { llama_cpp_sys_2::llama_model_load_from_file_ptr(file, params.params) };
+
+        let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
+
+        tracing::debug!("Loaded model from an open file");
+        Ok(LlamaModel { model })
+    }
+
     /// Initializes a lora adapter from a file.
     ///
     /// # Errors
@@ -638,5 +674,33 @@ where
 impl Drop for LlamaModel {
     fn drop(&mut self) {
         unsafe { llama_cpp_sys_2::llama_free_model(self.model.as_mut_ptr()) }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    extern "C" {
+        fn fopen(path: *const c_char, mode: *const c_char) -> *mut c_void;
+        fn fclose(stream: *mut c_void) -> c_int;
+    }
+
+    #[test]
+    fn loads_a_vocab_only_model_from_an_open_file() {
+        let backend = LlamaBackend::init().unwrap();
+        let params = LlamaModelParams::default()
+            .with_vocab_only(true)
+            .with_use_mmap(false);
+        let path = CString::new("src/gguf/ggml-vocab-bert-bge.gguf").unwrap();
+        let mode = CString::new("rb").unwrap();
+
+        let file = unsafe { fopen(path.as_ptr(), mode.as_ptr()) };
+        assert!(!file.is_null(), "Failed to open the vocab fixture");
+        let loaded = unsafe { LlamaModel::load_from_file_ptr(&backend, file, &params) };
+        assert_eq!(unsafe { fclose(file) }, 0);
+
+        let model = loaded.unwrap();
+        assert!(model.n_vocab() > 0);
     }
 }
