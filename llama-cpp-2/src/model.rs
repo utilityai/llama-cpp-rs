@@ -380,8 +380,10 @@ impl LlamaModel {
     ///
     /// `file` must be a `FILE` pointer that is open for reading in binary
     /// mode and was created by the C runtime llama.cpp is linked against. It
-    /// must stay open until this function returns. llama.cpp does not close
-    /// it, so the caller closes it afterwards.
+    /// must stay open until this function returns. llama.cpp only reads the
+    /// stream during this call and the returned model does not refer to it,
+    /// so the caller can close it as soon as this function returns, and must
+    /// close it, because llama.cpp never does.
     ///
     /// # Errors
     ///
@@ -689,6 +691,9 @@ mod tests {
     #[test]
     fn loads_a_vocab_only_model_from_an_open_file() {
         let backend = LlamaBackend::init().unwrap();
+        // The fixture has no tensors, so its data section is not padded to 32
+        // bytes, and llama.cpp refuses to memory-map an unaligned data section
+        // from a stream.
         let params = LlamaModelParams::default()
             .with_vocab_only(true)
             .with_use_mmap(false);
