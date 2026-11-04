@@ -19,6 +19,7 @@ use crate::{
     LlamaLoraAdapterSetError,
 };
 
+mod abort_callback;
 pub mod kv_cache;
 pub mod params;
 pub mod session;
@@ -29,6 +30,8 @@ pub struct LlamaContext<'a> {
     pub(crate) context: Ptr<llama_cpp_sys_2::llama_context>,
     /// Backend samplers kept alive for the context's lifetime.
     _backend_samplers: Vec<(i32, LlamaSampler)>,
+    /// Registered with llama.cpp; `Drop` frees the native context before this field.
+    abort_callback: Option<Box<abort_callback::AbortCallback>>,
     /// The context internally holds a reference to the model, which can be
     /// retrieved with `llama_get_model`.
     model: PhantomData<&'a LlamaModel>,
@@ -56,6 +59,7 @@ impl<'model> LlamaContext<'model> {
         Self {
             context: llama_context,
             _backend_samplers: Vec::new(),
+            abort_callback: None,
             model: PhantomData,
             data: PhantomData,
         }
@@ -68,6 +72,7 @@ impl<'model> LlamaContext<'model> {
         Self {
             context: llama_context,
             _backend_samplers: backend_samplers,
+            abort_callback: None,
             model: PhantomData,
             data: PhantomData,
         }
@@ -96,7 +101,41 @@ impl<'model> LlamaContext<'model> {
         unsafe { llama_cpp_sys_2::llama_n_ctx(self.context.as_ptr()) }
     }
 
+    /// Install a callback polled during `decode`/`encode`; returning `true` aborts the
+    /// call with [`DecodeError::Aborted`] or [`EncodeError::Aborted`].
+    ///
+    /// The callback may run on a compute thread, so signal it through shared state such
+    /// as an [`std::sync::atomic::AtomicBool`]. Polling is backend-dependent: the CPU
+    /// backend checks between graph operations; the bundled Metal backend does not check
+    /// once GPU work is submitted.
+    pub fn set_abort_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() -> bool + Send + Sync + 'static,
+    {
+        self.replace_abort_callback(Some(Box::new(abort_callback::AbortCallback::new(callback))));
+    }
+
+    /// Remove the installed abort callback, if any.
+    pub fn clear_abort_callback(&mut self) {
+        self.replace_abort_callback(None);
+    }
+
+    fn replace_abort_callback(&mut self, callback: Option<Box<abort_callback::AbortCallback>>) {
+        self.synchronize();
+        let context = self.context.as_mut_ptr();
+        abort_callback::replace(
+            &mut self.abort_callback,
+            callback,
+            |callback, data| unsafe {
+                llama_cpp_sys_2::llama_set_abort_callback(context, callback, data);
+            },
+        );
+    }
+
     /// Decodes the batch.
+    ///
+    /// After [`DecodeError::Aborted`], earlier micro-batches may remain in memory; call
+    /// [`Self::clear_kv_cache`] before reusing the context.
     ///
     /// # Errors
     ///
