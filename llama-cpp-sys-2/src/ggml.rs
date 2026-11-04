@@ -3267,6 +3267,24 @@ pub type ggml_backend_sched_eval_callback = ::std::option::Option<
         user_data: *mut ::std::os::raw::c_void,
     ) -> bool,
 >;
+pub type ggml_backend_sched_copy_callback = ::std::option::Option<
+    unsafe extern "C" fn(
+        backend: ggml_backend_t,
+        src: *const ggml_tensor,
+        dst: *mut ggml_tensor,
+        graph: *mut ggml_cgraph,
+        user_data: *mut ::std::os::raw::c_void,
+    ) -> bool,
+>;
+pub type ggml_backend_sched_realloc_callback = ::std::option::Option<
+    unsafe extern "C" fn(
+        sched: ggml_backend_sched_t,
+        graph: *mut ggml_cgraph,
+        backend_ids_changed: bool,
+        graph_size_changed: bool,
+        user_data: *mut ::std::os::raw::c_void,
+    ),
+>;
 extern "C" {
     pub fn ggml_backend_sched_new(
         backends: *mut ggml_backend_t,
@@ -3364,6 +3382,20 @@ extern "C" {
     pub fn ggml_backend_sched_set_eval_callback(
         sched: ggml_backend_sched_t,
         callback: ggml_backend_sched_eval_callback,
+        user_data: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
+    pub fn ggml_backend_sched_set_copy_callback(
+        sched: ggml_backend_sched_t,
+        callback: ggml_backend_sched_copy_callback,
+        user_data: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
+    pub fn ggml_backend_sched_set_realloc_callback(
+        sched: ggml_backend_sched_t,
+        callback: ggml_backend_sched_realloc_callback,
         user_data: *mut ::std::os::raw::c_void,
     );
 }

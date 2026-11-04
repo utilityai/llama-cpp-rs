@@ -34,6 +34,7 @@ pub const LLAMA_VOCAB_TYPE_UGM: llama_vocab_type = 4;
 pub const LLAMA_VOCAB_TYPE_RWKV: llama_vocab_type = 5;
 pub const LLAMA_VOCAB_TYPE_PLAMO2: llama_vocab_type = 6;
 pub const LLAMA_VOCAB_TYPE_TEST: llama_vocab_type = 7;
+pub const LLAMA_VOCAB_TYPE_PLAMO3: llama_vocab_type = 8;
 pub type llama_vocab_type = UnsignedEnum;
 pub const LLAMA_ROPE_TYPE_NONE: llama_rope_type = -1;
 pub const LLAMA_ROPE_TYPE_NORM: llama_rope_type = 0;
@@ -282,6 +283,7 @@ pub struct llama_context_params {
     pub cb_eval_user_data: *mut ::std::os::raw::c_void,
     pub type_k: ggml_type,
     pub type_v: ggml_type,
+    pub moe_cache_size: usize,
     pub abort_callback: ggml_abort_callback,
     pub abort_callback_data: *mut ::std::os::raw::c_void,
     pub embeddings: bool,
@@ -1513,6 +1515,8 @@ pub struct llama_perf_context_data {
     pub n_p_eval: i32,
     pub n_eval: i32,
     pub n_reused: i32,
+    pub n_reallocs_same: i32,
+    pub n_reallocs_diff: i32,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
