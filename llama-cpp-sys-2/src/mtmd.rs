@@ -10,6 +10,7 @@ pub type mtmd_input_chunk_type = UnsignedEnum;
 pub const MTMD_VIDEO_TEMPLATE_DEFAULT: mtmd_video_template = 0;
 pub const MTMD_VIDEO_TEMPLATE_LFM3: mtmd_video_template = 1;
 pub const MTMD_VIDEO_TEMPLATE_LFM3_OMNI: mtmd_video_template = 2;
+pub const MTMD_VIDEO_TEMPLATE_QWEN3VL: mtmd_video_template = 3;
 pub type mtmd_video_template = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -161,6 +162,9 @@ extern "C" {
 }
 extern "C" {
     pub fn mtmd_bitmap_is_audio(bitmap: *const mtmd_bitmap) -> bool;
+}
+extern "C" {
+    pub fn mtmd_bitmap_is_voice(bitmap: *const mtmd_bitmap) -> bool;
 }
 extern "C" {
     pub fn mtmd_bitmap_free(bitmap: *mut mtmd_bitmap);
@@ -404,6 +408,7 @@ pub const MTMD_GEN_AUDIO_TYPE_QWEN3TTS: mtmd_gen_audio_type = 1;
 pub const MTMD_GEN_AUDIO_TYPE_POCKETTTS: mtmd_gen_audio_type = 2;
 pub const MTMD_GEN_AUDIO_TYPE_SOPRANO: mtmd_gen_audio_type = 3;
 pub const MTMD_GEN_AUDIO_TYPE_LFM3A: mtmd_gen_audio_type = 4;
+pub const MTMD_GEN_AUDIO_TYPE_CHATTERBOX: mtmd_gen_audio_type = 5;
 pub type mtmd_gen_audio_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -411,9 +416,30 @@ pub struct mtmd_gen_audio_info {
     pub type_: mtmd_gen_audio_type,
     pub sample_rate: i32,
     pub model_variant: *const ::std::os::raw::c_char,
+    pub n_voices: i32,
 }
 extern "C" {
     pub fn mtmd_gen_audio_get_info(ctx: *const mtmd_context) -> mtmd_gen_audio_info;
+}
+extern "C" {
+    pub fn mtmd_gen_audio_read_tensor(
+        ctx: *mut mtmd_context,
+        name: *const ::std::os::raw::c_char,
+        out: *mut f32,
+        n_max: usize,
+    ) -> usize;
+}
+extern "C" {
+    pub fn mtmd_gen_audio_voice_name(
+        ctx: *const mtmd_context,
+        idx: i32,
+    ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn mtmd_gen_audio_get_voice(
+        ctx: *const mtmd_context,
+        name: *const ::std::os::raw::c_char,
+    ) -> *mut mtmd_bitmap;
 }
 pub const MTMD_GEN_PROCESS_TYPE_GEN_CODE: mtmd_gen_process_type = 0;
 pub const MTMD_GEN_PROCESS_TYPE_GEN_WAV: mtmd_gen_process_type = 1;
@@ -465,6 +491,9 @@ extern "C" {
 }
 extern "C" {
     pub fn mtmd_gen_state_reset(state: *mut mtmd_gen_state);
+}
+extern "C" {
+    pub fn mtmd_gen_state_set_ref(ctx: *mut mtmd_context, state: *mut mtmd_gen_state) -> i32;
 }
 extern "C" {
     pub fn mtmd_gen_inp_default(ctx: *const mtmd_context) -> mtmd_gen_inp;
@@ -687,7 +716,6 @@ pub struct mtmd_helper_gen_audio_inp {
     pub out_mode: mtmd_helper_gen_audio_out_mode,
     pub speaker_ref: *mut mtmd_bitmap,
     pub lang: *const ::std::os::raw::c_char,
-    pub voice: *const ::std::os::raw::c_char,
     pub top_k: i32,
     pub top_p: f32,
     pub seed: u32,

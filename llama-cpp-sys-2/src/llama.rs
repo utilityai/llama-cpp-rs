@@ -99,6 +99,7 @@ pub const LLAMA_FTYPE_MOSTLY_MXFP4_MOE: llama_ftype = 38;
 pub const LLAMA_FTYPE_MOSTLY_NVFP4: llama_ftype = 39;
 pub const LLAMA_FTYPE_MOSTLY_Q1_0: llama_ftype = 40;
 pub const LLAMA_FTYPE_MOSTLY_Q2_0: llama_ftype = 41;
+pub const LLAMA_FTYPE_MOSTLY_F8_E4M3: llama_ftype = 42;
 pub const LLAMA_FTYPE_GUESSED: llama_ftype = 1024;
 pub type llama_ftype = UnsignedEnum;
 extern "C" {

@@ -49,6 +49,11 @@ extern "C" {
     pub fn ggml_fp32_to_bf16_row(arg1: *const f32, arg2: *mut ggml_bf16_t, arg3: i64);
 }
 #[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct ggml_fp8_e4m3_t {
+    pub bits: u8,
+}
+#[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct ggml_object {
     _unused: [u8; 0],
@@ -98,7 +103,8 @@ pub const GGML_TYPE_MXFP4: ggml_type = 39;
 pub const GGML_TYPE_NVFP4: ggml_type = 40;
 pub const GGML_TYPE_Q1_0: ggml_type = 41;
 pub const GGML_TYPE_Q2_0: ggml_type = 42;
-pub const GGML_TYPE_COUNT: ggml_type = 43;
+pub const GGML_TYPE_F8_E4M3: ggml_type = 43;
+pub const GGML_TYPE_COUNT: ggml_type = 44;
 pub type ggml_type = UnsignedEnum;
 pub const GGML_PREC_UNDEFINED: ggml_prec = 0;
 pub const GGML_PREC_DEFAULT: ggml_prec = 0;
@@ -139,6 +145,7 @@ pub const GGML_FTYPE_MOSTLY_MXFP4: ggml_ftype = 25;
 pub const GGML_FTYPE_MOSTLY_NVFP4: ggml_ftype = 26;
 pub const GGML_FTYPE_MOSTLY_Q1_0: ggml_ftype = 27;
 pub const GGML_FTYPE_MOSTLY_Q2_0: ggml_ftype = 28;
+pub const GGML_FTYPE_MOSTLY_F8_E4M3: ggml_ftype = 29;
 pub type ggml_ftype = SignedEnum;
 pub const GGML_OP_NONE: ggml_op = 0;
 pub const GGML_OP_DUP: ggml_op = 1;
@@ -2122,6 +2129,19 @@ extern "C" {
     ) -> *mut ggml_tensor;
 }
 extern "C" {
+    pub fn ggml_flash_attn_ext_rows(
+        ctx: *mut ggml_context,
+        q: *mut ggml_tensor,
+        k: *mut ggml_tensor,
+        v: *mut ggml_tensor,
+        mask: *mut ggml_tensor,
+        kv_rows: *mut ggml_tensor,
+        scale: f32,
+        max_bias: f32,
+        logit_softcap: f32,
+    ) -> *mut ggml_tensor;
+}
+extern "C" {
     pub fn ggml_flash_attn_ext_set_prec(a: *mut ggml_tensor, prec: ggml_prec);
 }
 extern "C" {
@@ -2897,6 +2917,13 @@ extern "C" {
     pub fn ggml_backend_tensor_copy(src: *const ggml_tensor, dst: *mut ggml_tensor);
 }
 extern "C" {
+    pub fn ggml_backend_tensor_copy_n(
+        srcs: *const *const ggml_tensor,
+        dsts: *const *mut ggml_tensor,
+        n_tensors: usize,
+    );
+}
+extern "C" {
     pub fn ggml_backend_guid(backend: ggml_backend_t) -> ggml_guid_t;
 }
 extern "C" {
@@ -2998,6 +3025,26 @@ extern "C" {
         n_copies: usize,
         stride_tensor: usize,
         stride_data: usize,
+    );
+}
+extern "C" {
+    pub fn ggml_backend_tensor_set_n(
+        tensors: *const *mut ggml_tensor,
+        data: *const ::std::os::raw::c_void,
+        offsets: *const usize,
+        sizes: *const usize,
+        data_offsets: *const usize,
+        n_tensors: usize,
+    );
+}
+extern "C" {
+    pub fn ggml_backend_tensor_get_n(
+        tensors: *const *const ggml_tensor,
+        data: *mut ::std::os::raw::c_void,
+        offsets: *const usize,
+        sizes: *const usize,
+        data_offsets: *const usize,
+        n_tensors: usize,
     );
 }
 extern "C" {
@@ -3179,6 +3226,23 @@ pub type ggml_backend_comm_init_t = ::std::option::Option<
     unsafe extern "C" fn(
         backends: *mut ggml_backend_t,
         n_backends: usize,
+    ) -> *mut ::std::os::raw::c_void,
+>;
+pub type ggml_backend_comm_bootstrap_callback = ::std::option::Option<
+    unsafe extern "C" fn(
+        user_data: *mut ::std::os::raw::c_void,
+        send_buf: *const ::std::os::raw::c_void,
+        recv_buf: *mut ::std::os::raw::c_void,
+        size: usize,
+    ) -> bool,
+>;
+pub type ggml_backend_comm_init_rank_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        backend: ggml_backend_t,
+        rank: ::std::os::raw::c_int,
+        world_size: ::std::os::raw::c_int,
+        bootstrap_callback: ggml_backend_comm_bootstrap_callback,
+        bootstrap_callback_data: *mut ::std::os::raw::c_void,
     ) -> *mut ::std::os::raw::c_void,
 >;
 pub type ggml_backend_comm_free_t =
