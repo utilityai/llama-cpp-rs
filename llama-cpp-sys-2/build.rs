@@ -409,8 +409,40 @@ fn is_hidden(e: &DirEntry) -> bool {
         .unwrap_or_default()
 }
 
+// Cargo 1.100 changed the build layout, so tests must select the matching stdout path.
+// https://github.com/rust-lang/cargo/pull/17354
+fn read_cargo_version() -> (u32, u32) {
+    let output = Command::new(env::var_os("CARGO").expect("CARGO must identify the running Cargo"))
+        .arg("--version")
+        .output()
+        .expect("failed to execute cargo --version");
+    assert!(output.status.success(), "cargo --version failed");
+    let output = String::from_utf8(output.stdout).expect("Cargo version must be UTF-8");
+    let version = output
+        .split_whitespace()
+        .nth(1)
+        .expect("cargo --version must contain a version");
+    let mut components = version.split('.');
+    let major = components
+        .next()
+        .expect("Cargo version must contain a major component")
+        .parse()
+        .expect("Cargo major version must be numeric");
+    let minor = components
+        .next()
+        .expect("Cargo version must contain a minor component")
+        .parse()
+        .expect("Cargo minor version must be numeric");
+    (major, minor)
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+
+    println!("cargo:rustc-check-cfg=cfg(uses_cargo_layout_v2)");
+    if read_cargo_version() >= (1, 100) {
+        println!("cargo:rustc-cfg=uses_cargo_layout_v2");
+    }
 
     let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 

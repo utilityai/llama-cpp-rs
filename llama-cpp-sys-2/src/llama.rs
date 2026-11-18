@@ -279,12 +279,12 @@ pub struct llama_context_params {
     pub yarn_beta_fast: f32,
     pub yarn_beta_slow: f32,
     pub yarn_orig_ctx: u32,
-    pub defrag_thold: f32,
     pub cb_eval: ggml_backend_sched_eval_callback,
     pub cb_eval_user_data: *mut ::std::os::raw::c_void,
     pub type_k: ggml_type,
     pub type_v: ggml_type,
     pub moe_cache_size: usize,
+    pub moe_cache_cpu_share: f32,
     pub abort_callback: ggml_abort_callback,
     pub abort_callback_data: *mut ::std::os::raw::c_void,
     pub embeddings: bool,
@@ -397,12 +397,6 @@ extern "C" {
     ) -> *mut llama_model;
 }
 extern "C" {
-    pub fn llama_load_model_from_file(
-        path_model: *const ::std::os::raw::c_char,
-        params: llama_model_params,
-    ) -> *mut llama_model;
-}
-extern "C" {
     pub fn llama_model_load_from_file(
         path_model: *const ::std::os::raw::c_char,
         params: llama_model_params,
@@ -428,19 +422,10 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn llama_free_model(model: *mut llama_model);
-}
-extern "C" {
     pub fn llama_model_free(model: *mut llama_model);
 }
 extern "C" {
     pub fn llama_init_from_model(
-        model: *mut llama_model,
-        params: llama_context_params,
-    ) -> *mut llama_context;
-}
-extern "C" {
-    pub fn llama_new_context_with_model(
         model: *mut llama_model,
         params: llama_context_params,
     ) -> *mut llama_context;
@@ -489,21 +474,6 @@ extern "C" {
 }
 extern "C" {
     pub fn llama_n_rs_seq(ctx: *const llama_context) -> u32;
-}
-extern "C" {
-    pub fn llama_n_ctx_train(model: *const llama_model) -> i32;
-}
-extern "C" {
-    pub fn llama_n_embd(model: *const llama_model) -> i32;
-}
-extern "C" {
-    pub fn llama_n_layer(model: *const llama_model) -> i32;
-}
-extern "C" {
-    pub fn llama_n_head(model: *const llama_model) -> i32;
-}
-extern "C" {
-    pub fn llama_n_vocab(vocab: *const llama_vocab) -> i32;
 }
 extern "C" {
     pub fn llama_get_model(ctx: *const llama_context) -> *const llama_model;
@@ -643,6 +613,15 @@ extern "C" {
     ) -> u32;
 }
 extern "C" {
+    pub fn llama_model_dflash_selector_top_k(model: *const llama_model) -> i32;
+}
+extern "C" {
+    pub fn llama_model_target_layer_ids(model: *const llama_model) -> *const i32;
+}
+extern "C" {
+    pub fn llama_model_target_layer_ids_n(model: *const llama_model) -> u32;
+}
+extern "C" {
     pub fn llama_adapter_lora_init(
         model: *mut llama_model,
         path_lora: *const ::std::os::raw::c_char,
@@ -764,19 +743,10 @@ extern "C" {
     pub fn llama_state_get_size(ctx: *mut llama_context) -> usize;
 }
 extern "C" {
-    pub fn llama_get_state_size(ctx: *mut llama_context) -> usize;
-}
-extern "C" {
     pub fn llama_state_get_data(ctx: *mut llama_context, dst: *mut u8, size: usize) -> usize;
 }
 extern "C" {
-    pub fn llama_copy_state_data(ctx: *mut llama_context, dst: *mut u8) -> usize;
-}
-extern "C" {
     pub fn llama_state_set_data(ctx: *mut llama_context, src: *const u8, size: usize) -> usize;
-}
-extern "C" {
-    pub fn llama_set_state_data(ctx: *mut llama_context, src: *const u8) -> usize;
 }
 extern "C" {
     pub fn llama_state_load_file(
@@ -788,24 +758,7 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
-    pub fn llama_load_session_file(
-        ctx: *mut llama_context,
-        path_session: *const ::std::os::raw::c_char,
-        tokens_out: *mut llama_token,
-        n_token_capacity: usize,
-        n_token_count_out: *mut usize,
-    ) -> bool;
-}
-extern "C" {
     pub fn llama_state_save_file(
-        ctx: *mut llama_context,
-        path_session: *const ::std::os::raw::c_char,
-        tokens: *const llama_token,
-        n_token_count: usize,
-    ) -> bool;
-}
-extern "C" {
-    pub fn llama_save_session_file(
         ctx: *mut llama_context,
         path_session: *const ::std::os::raw::c_char,
         tokens: *const llama_token,
@@ -951,6 +904,20 @@ extern "C" {
     ) -> bool;
 }
 extern "C" {
+    pub fn llama_batch_ext_add_embd_row(
+        batch: *mut llama_batch_ext,
+        seq_id: llama_seq_id,
+        row: i32,
+    ) -> i32;
+}
+extern "C" {
+    pub fn llama_batch_ext_set_embd_state_row(
+        batch: *mut llama_batch_ext,
+        idx: i32,
+        row: i32,
+    ) -> bool;
+}
+extern "C" {
     pub fn llama_batch_ext_set_output_embd(
         batch: *mut llama_batch_ext,
         idx: i32,
@@ -997,9 +964,6 @@ extern "C" {
     pub fn llama_get_causal_attn(ctx: *const llama_context) -> bool;
 }
 extern "C" {
-    pub fn llama_set_warmup(ctx: *mut llama_context, warmup: bool);
-}
-extern "C" {
     pub fn llama_set_abort_callback(
         ctx: *mut llama_context,
         abort_callback: ggml_abort_callback,
@@ -1023,6 +987,55 @@ extern "C" {
 }
 extern "C" {
     pub fn llama_get_embeddings_seq(ctx: *mut llama_context, seq_id: llama_seq_id) -> *mut f32;
+}
+extern "C" {
+    pub fn llama_set_embeddings_nextn(ctx: *mut llama_context, value: bool, masked: bool);
+}
+extern "C" {
+    pub fn llama_set_nextn_layer_offset(ctx: *mut llama_context, offset: i32);
+}
+extern "C" {
+    pub fn llama_get_embeddings_nextn(ctx: *mut llama_context) -> *mut f32;
+}
+extern "C" {
+    pub fn llama_get_embeddings_nextn_ith(ctx: *mut llama_context, i: i32) -> *mut f32;
+}
+extern "C" {
+    pub fn llama_set_embeddings_layer_inp(ctx: *mut llama_context, lid: u32, value: bool);
+}
+extern "C" {
+    pub fn llama_get_embeddings_layer_inp(ctx: *mut llama_context, lid: u32) -> *mut f32;
+}
+extern "C" {
+    pub fn llama_set_embeddings_layer_inp_dev(ctx: *mut llama_context, value: bool);
+}
+extern "C" {
+    pub fn llama_supports_embd_row(ctx: *const llama_context) -> bool;
+}
+extern "C" {
+    pub fn llama_set_embeddings_nextn_dev(ctx: *mut llama_context, value: bool) -> bool;
+}
+extern "C" {
+    pub fn llama_get_embeddings_nextn_rows(
+        ctx: *mut llama_context,
+        row0: i64,
+        n_rows: i64,
+        out: *mut f32,
+    ) -> bool;
+}
+extern "C" {
+    pub fn llama_set_embeddings_nextn_rows(
+        ctx: *mut llama_context,
+        row0: i64,
+        n_rows: i64,
+        data: *const f32,
+    ) -> bool;
+}
+extern "C" {
+    pub fn llama_set_ctx_state_src(ctx: *mut llama_context, ctx_src: *mut llama_context) -> bool;
+}
+extern "C" {
+    pub fn llama_get_ctx_other(ctx: *mut llama_context) -> *mut llama_context;
 }
 extern "C" {
     pub fn llama_get_sampled_token_ith(ctx: *mut llama_context, i: i32) -> llama_token;
@@ -1116,72 +1129,6 @@ extern "C" {
 }
 extern "C" {
     pub fn llama_vocab_fim_sep(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_get_text(
-        vocab: *const llama_vocab,
-        token: llama_token,
-    ) -> *const ::std::os::raw::c_char;
-}
-extern "C" {
-    pub fn llama_token_get_score(vocab: *const llama_vocab, token: llama_token) -> f32;
-}
-extern "C" {
-    pub fn llama_token_get_attr(vocab: *const llama_vocab, token: llama_token) -> llama_token_attr;
-}
-extern "C" {
-    pub fn llama_token_is_eog(vocab: *const llama_vocab, token: llama_token) -> bool;
-}
-extern "C" {
-    pub fn llama_token_is_control(vocab: *const llama_vocab, token: llama_token) -> bool;
-}
-extern "C" {
-    pub fn llama_token_bos(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_eos(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_eot(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_cls(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_sep(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_nl(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_pad(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_add_bos_token(vocab: *const llama_vocab) -> bool;
-}
-extern "C" {
-    pub fn llama_add_eos_token(vocab: *const llama_vocab) -> bool;
-}
-extern "C" {
-    pub fn llama_token_fim_pre(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_fim_suf(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_fim_mid(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_fim_pad(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_fim_rep(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_token_fim_sep(vocab: *const llama_vocab) -> llama_token;
-}
-extern "C" {
-    pub fn llama_vocab_cls(vocab: *const llama_vocab) -> llama_token;
 }
 extern "C" {
     #[doc = " @details Convert the provided text into tokens.\n @param tokens The tokens pointer must be large enough to hold the resulting tokens.\n @return Returns the number of tokens on success, no more than n_tokens_max\n @return Returns a negative number on failure - the number of tokens that would have been returned\n @return Returns INT32_MIN on overflow (e.g., tokenization result size exceeds int32_t limit)\n @param add_special Allow to add BOS and EOS tokens if model is configured to do so.\n @param parse_special Allow tokenizing special and/or control tokens which otherwise are not exposed and treated\n                      as plaintext. Does not insert a leading space."]
@@ -1403,17 +1350,6 @@ extern "C" {
         vocab: *const llama_vocab,
         grammar_str: *const ::std::os::raw::c_char,
         grammar_root: *const ::std::os::raw::c_char,
-    ) -> *mut llama_sampler;
-}
-extern "C" {
-    pub fn llama_sampler_init_grammar_lazy(
-        vocab: *const llama_vocab,
-        grammar_str: *const ::std::os::raw::c_char,
-        grammar_root: *const ::std::os::raw::c_char,
-        trigger_words: *mut *const ::std::os::raw::c_char,
-        num_trigger_words: usize,
-        trigger_tokens: *const llama_token,
-        num_trigger_tokens: usize,
     ) -> *mut llama_sampler;
 }
 extern "C" {

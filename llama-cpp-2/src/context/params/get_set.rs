@@ -489,26 +489,7 @@ impl LlamaContextParams {
         self.context_params.yarn_orig_ctx
     }
 
-    /// Set the KV cache defragmentation threshold
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// # use llama_cpp_2::context::params::LlamaContextParams;
-    /// let params = LlamaContextParams::default().with_defrag_thold(0.1);
-    /// assert_eq!(params.defrag_thold(), 0.1);
-    /// ```
-    #[must_use]
-    pub fn with_defrag_thold(mut self, defrag_thold: f32) -> Self {
-        self.context_params.defrag_thold = defrag_thold;
-        self
-    }
-
-    /// Get the KV cache defragmentation threshold
-    #[must_use]
-    pub fn defrag_thold(&self) -> f32 {
-        self.context_params.defrag_thold
-    }
+    // Do not expose defrag_thold: llama.cpp v1.0.0 removed it, so it cannot configure the cache.
 
     /// Set the KV cache data type for K
     ///

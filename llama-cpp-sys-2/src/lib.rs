@@ -62,10 +62,16 @@ mod tests {
     #[test]
     fn cxx_stdlib_link_directive_is_not_duplicated() {
         let out_dir = env!("OUT_DIR");
-        let output_path = std::path::Path::new(out_dir)
+        let build_dir = std::path::Path::new(out_dir)
             .parent()
-            .expect("OUT_DIR should have a parent build directory")
-            .join("output");
+            .expect("OUT_DIR should have a parent build directory");
+
+        // Cargo 1.100 moved script stdout, so each version must use its own layout.
+        // https://github.com/rust-lang/cargo/pull/17354
+        #[cfg(uses_cargo_layout_v2)]
+        let output_path = build_dir.join("run").join("stdout");
+        #[cfg(not(uses_cargo_layout_v2))]
+        let output_path = build_dir.join("output");
         let output = std::fs::read_to_string(&output_path).unwrap_or_else(|err| {
             panic!(
                 "failed to read build script output {}: {err}",
