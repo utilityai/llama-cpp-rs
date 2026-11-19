@@ -576,6 +576,12 @@ impl MtmdBitmap {
         unsafe { llama_cpp_sys_2::mtmd_bitmap_is_audio(self.bitmap.as_ptr()) }
     }
 
+    /// Check if this bitmap contains voice data.
+    #[must_use]
+    pub fn is_voice(&self) -> bool {
+        unsafe { llama_cpp_sys_2::mtmd_bitmap_is_voice(self.bitmap.as_ptr()) }
+    }
+
     /// Get the bitmap's optional ID string.
     ///
     /// Bitmap ID is useful for KV cache tracking and can e.g. be calculated

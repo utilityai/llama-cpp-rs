@@ -1,7 +1,7 @@
 [package]
 name = "llama-cpp-sys-2"
 description = "Low Level Bindings to llama.cpp"
-version = "0.1.161"
+version = "0.1.162"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/utilityai/llama-cpp-rs"
@@ -15,7 +15,6 @@ include = [
     "wrapper_common.h",
     "wrapper_common.cpp",
     "wrapper_utils.h",
-    "wrapper_mtmd.h",
     "build.rs",
     "/src",
 
@@ -55,7 +54,6 @@ include = [
 [dependencies]
 
 [build-dependencies]
-bindgen = { workspace = true }
 cc = { workspace = true, features = ["parallel"] }
 cmake = "0.1"
 find_cuda_helper = "0.2.0"

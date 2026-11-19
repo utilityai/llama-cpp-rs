@@ -41,6 +41,10 @@ jobs:
         run: cargo test --features sampler,mtmd,llguidance
       - name: Dry-Run Publishing
         run: RUST_BACKTRACE=1 cargo publish --workspace --verbose --dry-run
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
   arm64:
     name: Check that it builds on various targets (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
@@ -94,14 +98,38 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --features sampler,mtmd,llguidance -vv
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
   windows:
-    name: Check that it builds on windows
-    runs-on: windows-latest
+    name: Check that it builds on windows (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: msvc
+            os: windows-latest
+          - name: clang-cl
+            os: windows-latest
+            cc: clang-cl.exe
+          - name: clang-cl arm64
+            os: windows-11-arm
+            cc: clang-cl.exe
+    runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           submodules: recursive
+      - name: Use ${{ matrix.cc }}
+        if: matrix.cc
+        shell: bash
+        run: |
+          echo "CC=${{ matrix.cc }}" >> "$GITHUB_ENV"
+          echo "CXX=${{ matrix.cc }}" >> "$GITHUB_ENV"
+          # The Visual Studio generator ignores CC/CXX and always uses cl.exe
+          echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -109,6 +137,10 @@ jobs:
         run: cargo build --features sampler,mtmd,llguidance -vv
       - name: Test
         run: cargo test --features sampler,mtmd,llguidance
+      - name: Regenerate bindings
+        run: cargo run --bin generate-bindings
+      - name: Check that bindings are the same afterwards
+        run: git diff --exit-code
   emscripten:
     name: Check that building for Emscripten works
     runs-on: ubuntu-latest
