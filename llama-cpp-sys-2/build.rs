@@ -545,7 +545,9 @@ fn main() {
             "OFF"
         },
     );
-    config.define("LLAMA_CURL", "OFF");
+    // Disable find_package(OpenSSL), we don't need that since we're not
+    // buildings server.cpp.
+    config.define("LLAMA_OPENSSL", "OFF");
 
     if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) {
         config.cxxflag("/EHsc");
