@@ -130,6 +130,12 @@ jobs:
           echo "CXX=${{ matrix.cc }}" >> "$GITHUB_ENV"
           # The Visual Studio generator ignores CC/CXX and always uses cl.exe
           echo "CMAKE_GENERATOR=Ninja" >> "$GITHUB_ENV"
+      - name: Upgrade LLVM for clang-cl
+        # windows-latest ships LLVM 20, but its MSVC STL requires clang-cl >= 22 (STL1000).
+        # Skip on arm64 where the preinstalled LLVM still works.
+        if: matrix.cc == 'clang-cl.exe' && matrix.os == 'windows-latest'
+        shell: pwsh
+        run: choco upgrade llvm --no-progress -y --version=22.1.8
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
