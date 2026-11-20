@@ -263,9 +263,17 @@ impl<'context, 'model> LlamaBatchExt<'context, 'model> {
     /// # Errors
     ///
     /// Returns the C API error for a full batch, invalid sequence, or invalid token.
-    pub fn add_token(&mut self, sequence_id: i32, token: LlamaToken) -> Result<i32, BatchExtAddError> {
+    pub fn add_token(
+        &mut self,
+        sequence_id: i32,
+        token: LlamaToken,
+    ) -> Result<i32, BatchExtAddError> {
         let index = unsafe {
-            llama_cpp_sys_2::llama_batch_ext_add_token(self.batch.as_mut_ptr(), sequence_id, token.0)
+            llama_cpp_sys_2::llama_batch_ext_add_token(
+                self.batch.as_mut_ptr(),
+                sequence_id,
+                token.0,
+            )
         };
         if index < 0 {
             Err(BatchExtAddError(index))
@@ -280,7 +288,11 @@ impl<'context, 'model> LlamaBatchExt<'context, 'model> {
     /// # Errors
     ///
     /// Returns the C API error for a full batch, invalid sequence, or invalid row.
-    pub fn add_embedding_row(&mut self, sequence_id: i32, row: i32) -> Result<i32, BatchExtAddError> {
+    pub fn add_embedding_row(
+        &mut self,
+        sequence_id: i32,
+        row: i32,
+    ) -> Result<i32, BatchExtAddError> {
         let index = unsafe {
             llama_cpp_sys_2::llama_batch_ext_add_embd_row(self.batch.as_mut_ptr(), sequence_id, row)
         };
@@ -312,21 +324,33 @@ impl<'context, 'model> LlamaBatchExt<'context, 'model> {
     pub fn set_positions(&mut self, index: i32, positions: [i32; 4]) -> bool {
         // Native code reads up to four positions without receiving a length; the array guarantees that bound.
         unsafe {
-            llama_cpp_sys_2::llama_batch_ext_set_pos(self.batch.as_mut_ptr(), index, positions.as_ptr())
+            llama_cpp_sys_2::llama_batch_ext_set_pos(
+                self.batch.as_mut_ptr(),
+                index,
+                positions.as_ptr(),
+            )
         }
     }
 
     /// Sets whether an entry produces output logits. Returns false for an invalid index.
     pub fn set_output_logits(&mut self, index: i32, enabled: bool) -> bool {
         unsafe {
-            llama_cpp_sys_2::llama_batch_ext_set_output_logits(self.batch.as_mut_ptr(), index, enabled)
+            llama_cpp_sys_2::llama_batch_ext_set_output_logits(
+                self.batch.as_mut_ptr(),
+                index,
+                enabled,
+            )
         }
     }
 
     /// Sets whether an entry produces output embeddings. Returns false for an invalid index.
     pub fn set_output_embeddings(&mut self, index: i32, enabled: bool) -> bool {
         unsafe {
-            llama_cpp_sys_2::llama_batch_ext_set_output_embd(self.batch.as_mut_ptr(), index, enabled)
+            llama_cpp_sys_2::llama_batch_ext_set_output_embd(
+                self.batch.as_mut_ptr(),
+                index,
+                enabled,
+            )
         }
     }
 

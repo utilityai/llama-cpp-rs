@@ -22,7 +22,10 @@ impl ApiFixture {
 
         // The upstream virtual-model loader creates its tensors from metadata, so
         // these tests need neither downloaded weights nor a generated model file.
-        unsafe extern "C" fn initialize_tensor(tensor: *mut sys::ggml_tensor, _: *mut std::ffi::c_void) {
+        unsafe extern "C" fn initialize_tensor(
+            tensor: *mut sys::ggml_tensor,
+            _: *mut std::ffi::c_void,
+        ) {
             let size = unsafe { sys::ggml_nbytes(tensor) };
             let values = vec![0.01_f32; size / std::mem::size_of::<f32>()];
             unsafe { sys::ggml_backend_tensor_set(tensor, values.as_ptr().cast(), 0, size) };
@@ -31,7 +34,11 @@ impl ApiFixture {
         let model = unsafe {
             let metadata = sys::gguf_init_empty();
             assert!(!metadata.is_null());
-            sys::gguf_set_val_str(metadata, c"general.architecture".as_ptr(), c"llama".as_ptr());
+            sys::gguf_set_val_str(
+                metadata,
+                c"general.architecture".as_ptr(),
+                c"llama".as_ptr(),
+            );
             sys::gguf_set_val_str(metadata, c"tokenizer.ggml.model".as_ptr(), c"none".as_ptr());
             for (key, value) in [
                 (c"llama.vocab_size", 16),
@@ -45,7 +52,11 @@ impl ApiFixture {
             ] {
                 sys::gguf_set_val_u32(metadata, key.as_ptr(), value);
             }
-            sys::gguf_set_val_f32(metadata, c"llama.attention.layer_norm_rms_epsilon".as_ptr(), 1e-5);
+            sys::gguf_set_val_f32(
+                metadata,
+                c"llama.attention.layer_norm_rms_epsilon".as_ptr(),
+                1e-5,
+            );
             let mut params = sys::llama_model_default_params();
             params.n_gpu_layers = 0;
             let model = sys::llama_model_init_from_user(
@@ -55,7 +66,9 @@ impl ApiFixture {
                 params,
             );
             sys::gguf_free(metadata);
-            LlamaModel { model: Ptr::new(model).expect("create tiny CPU model") }
+            LlamaModel {
+                model: Ptr::new(model).expect("create tiny CPU model"),
+            }
         };
         Self { model, backend }
     }
@@ -68,7 +81,9 @@ impl ApiFixture {
             .with_n_threads(1)
             .with_n_threads_batch(1)
             .with_flash_attention_policy(sys::LLAMA_FLASH_ATTN_TYPE_DISABLED);
-        self.model.new_context(&self.backend, params).expect("create test context")
+        self.model
+            .new_context(&self.backend, params)
+            .expect("create test context")
     }
 
     fn run(check: impl FnOnce(&Self, LlamaContext<'_>)) {
@@ -76,7 +91,10 @@ impl ApiFixture {
 
         // Backend initialization is process-wide, and native context creation can
         // mutate the model: serialize these tests rather than sharing it concurrently.
-        let fixture = FIXTURE.get_or_init(|| Mutex::new(Self::new())).lock().unwrap();
+        let fixture = FIXTURE
+            .get_or_init(|| Mutex::new(Self::new()))
+            .lock()
+            .unwrap();
         check(&fixture, fixture.create_context());
     }
 }
@@ -175,10 +193,12 @@ fn nextn_transfers_reject_partial_rows_and_unconfigured_buffers() {
         // does not poison the shared model and obscure subsequent test failures.
         assert!(catch_unwind(AssertUnwindSafe(|| {
             context.get_embeddings_nextn_rows(0, &mut output[..EMBEDDING_WIDTH - 1]);
-        })).is_err());
+        }))
+        .is_err());
         assert!(catch_unwind(AssertUnwindSafe(|| {
             context.set_embeddings_nextn_rows(0, &output[..EMBEDDING_WIDTH - 1]);
-        })).is_err());
+        }))
+        .is_err());
     });
 }
 

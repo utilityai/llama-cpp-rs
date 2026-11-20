@@ -239,7 +239,8 @@ impl<'model> LlamaContext<'model> {
     /// `len` must not exceed the number of initialized floats in the last batch's
     /// NextN output. Masked output contains only the selected output tokens.
     pub unsafe fn get_embeddings_nextn(&self, len: usize) -> Option<&[f32]> {
-        let data = unsafe { llama_cpp_sys_2::llama_get_embeddings_nextn(self.synchronizable_ptr()) };
+        let data =
+            unsafe { llama_cpp_sys_2::llama_get_embeddings_nextn(self.synchronizable_ptr()) };
 
         // The C API does not expose the output row count, so callers must supply a valid bound.
         if data.is_null() {
@@ -373,7 +374,10 @@ impl<'model> LlamaContext<'model> {
     /// The source must remain alive, with a compatible device buffer, until it is
     /// cleared or this context is destroyed and its pending work is synchronized.
     /// Access to both contexts must be coordinated while their buffers are shared.
-    pub unsafe fn set_context_state_source(&mut self, source: Option<&mut LlamaContext<'_>>) -> bool {
+    pub unsafe fn set_context_state_source(
+        &mut self,
+        source: Option<&mut LlamaContext<'_>>,
+    ) -> bool {
         let source = source.map_or(std::ptr::null_mut(), |ctx| ctx.context.as_mut_ptr());
 
         // llama.cpp retains this pointer after the call; a temporary Rust borrow cannot enforce its lifetime.

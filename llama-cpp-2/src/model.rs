@@ -444,10 +444,7 @@ impl LlamaModel {
         // <https://github.com/ggml-org/llama.cpp/blob/f45576aa86c07d60d346b469651a098a15cc4f81/src/llama-context.cpp#L3751>
         // FIXME(madsmtm): Make this sound!
         let context = unsafe {
-            llama_cpp_sys_2::llama_init_from_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -476,10 +473,7 @@ impl LlamaModel {
         context_params.ctx_other = unsafe { ctx_other.context.as_mut_ptr_unsound() };
         // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_init_from_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -539,10 +533,7 @@ impl LlamaModel {
 
         // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_init_from_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -669,4 +660,3 @@ impl Drop for LlamaModel {
         unsafe { llama_cpp_sys_2::llama_model_free(self.model.as_mut_ptr()) }
     }
 }
-
