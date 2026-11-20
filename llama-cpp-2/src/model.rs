@@ -662,3 +662,9 @@ impl Drop for LlamaModel {
         unsafe { llama_cpp_sys_2::llama_model_free(self.model.as_mut_ptr()) }
     }
 }
+
+// Keep these as unit tests because the in-memory model fixture needs the
+// crate-private LlamaModel field and Ptr type, which tests/ cannot access.
+// This avoids exposing test-only constructors or requiring external model files.
+#[cfg(test)]
+mod speculative_and_state_tests;
