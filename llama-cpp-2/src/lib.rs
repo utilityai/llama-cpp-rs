@@ -163,6 +163,9 @@ pub enum DecodeError {
     /// An unknown error occurred.
     #[error("Decode Error {0}: unknown")]
     Unknown(c_int),
+    /// The abort callback requested cancellation.
+    #[error("Decode Error 2: aborted")]
+    Aborted,
 }
 
 /// Failed to decode a batch.
@@ -177,6 +180,9 @@ pub enum EncodeError {
     /// An unknown error occurred.
     #[error("Encode Error {0}: unknown")]
     Unknown(c_int),
+    /// The abort callback requested cancellation.
+    #[error("Encode Error 2: aborted")]
+    Aborted,
 }
 
 /// Fetching embeddings failed.
@@ -210,6 +216,7 @@ pub enum GrammarError {
 impl From<NonZeroI32> for DecodeError {
     fn from(value: NonZeroI32) -> Self {
         match value.get() {
+            2 => DecodeError::Aborted,
             1 => DecodeError::NoKvCacheSlot,
             -1 => DecodeError::NTokensZero,
             i => DecodeError::Unknown(i),
@@ -221,9 +228,30 @@ impl From<NonZeroI32> for DecodeError {
 impl From<NonZeroI32> for EncodeError {
     fn from(value: NonZeroI32) -> Self {
         match value.get() {
+            2 => EncodeError::Aborted,
             1 => EncodeError::NoKvCacheSlot,
             -1 => EncodeError::NTokensZero,
             i => EncodeError::Unknown(i),
+        }
+    }
+}
+
+#[cfg(test)]
+mod computation_error_tests {
+    use super::{DecodeError, EncodeError, NonZeroI32};
+
+    #[test]
+    fn maps_abort_and_preserves_existing_errors() {
+        for (code, decode, encode) in [
+            (2, DecodeError::Aborted, EncodeError::Aborted),
+            (1, DecodeError::NoKvCacheSlot, EncodeError::NoKvCacheSlot),
+            (-1, DecodeError::NTokensZero, EncodeError::NTokensZero),
+            (-2, DecodeError::Unknown(-2), EncodeError::Unknown(-2)),
+            (3, DecodeError::Unknown(3), EncodeError::Unknown(3)),
+        ] {
+            let code = NonZeroI32::new(code).unwrap();
+            assert_eq!(DecodeError::from(code), decode);
+            assert_eq!(EncodeError::from(code), encode);
         }
     }
 }
