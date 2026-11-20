@@ -166,7 +166,6 @@ impl LlamaContext<'_> {
 
         let cstr = CString::new(path)?;
 
-        // llama.cpp v1.0.0 removed the session alias; file operations use the state API.
         if unsafe {
             llama_cpp_sys_2::llama_state_save_file(
                 self.synchronizable_ptr(),
@@ -451,20 +450,27 @@ impl LlamaContext<'_> {
         unsafe { llama_cpp_sys_2::llama_state_get_size(self.synchronizable_ptr()) }
     }
 
-    /// Copies the state to the specified destination address.
+    /// Copies the state into the destination buffer.
     ///
-    /// Returns the number of bytes copied
+    /// Returns the number of bytes copied, or zero if the state cannot be copied.
     ///
-    /// # Safety
+    /// Allocate [`Self::get_state_size`] bytes to hold the complete state.
     ///
-    /// Destination needs to have allocated at least [`Self::get_state_size`] bytes.
-    pub unsafe fn copy_state_data(&self, dest: *mut u8) -> usize {
-        // The state API requires an explicit bound; callers must allocate the reported size.
+    /// The destination must be writable:
+    ///
+    /// ```compile_fail
+    /// use llama_cpp_2::context::LlamaContext;
+    /// fn cannot_write_shared_buffer(context: &LlamaContext<'_>, buffer: &[u8]) {
+    ///     context.copy_state_data(buffer);
+    /// }
+    /// ```
+    pub fn copy_state_data(&self, dest: &mut [u8]) -> usize {
+        // Passing the actual slice length lets llama.cpp enforce the destination's write bound.
         unsafe {
             llama_cpp_sys_2::llama_state_get_data(
                 self.synchronizable_ptr(),
-                dest,
-                self.get_state_size(),
+                dest.as_mut_ptr(),
+                dest.len(),
             )
         }
     }

@@ -136,7 +136,6 @@ impl LlamaModel {
     /// platforms due to llama.cpp returning a `c_int` (i32 on most platforms) which is almost certainly positive.
     #[must_use]
     pub fn n_ctx_train(&self) -> u32 {
-        // Use the model API because llama.cpp v1.0.0 removed its deprecated aliases.
         let n_ctx_train = unsafe { llama_cpp_sys_2::llama_model_n_ctx_train(self.model.as_ptr()) };
         u32::try_from(n_ctx_train).expect("n_ctx_train fits into an u32")
     }
@@ -211,6 +210,28 @@ impl LlamaModel {
     /// They require special handling for state checkpointing.
     pub fn is_hybrid(&self) -> bool {
         unsafe { llama_cpp_sys_2::llama_model_is_hybrid(self.model.as_ptr()) }
+    }
+
+    /// Gets the number of candidate tokens the DFlash selector keeps per block position.
+    /// Returns zero when the model has no selector head.
+    #[must_use]
+    pub fn get_dflash_selector_top_k(&self) -> i32 {
+        unsafe { llama_cpp_sys_2::llama_model_dflash_selector_top_k(self.model.as_ptr()) }
+    }
+
+    /// Gets the target layer IDs used by a speculative draft model.
+    ///
+    /// Returns an empty slice when the model does not select target layers.
+    #[must_use]
+    pub fn get_target_layer_ids(&self) -> &[i32] {
+        let count = unsafe { llama_cpp_sys_2::llama_model_target_layer_ids_n(self.model.as_ptr()) };
+        if count == 0 {
+            return &[];
+        }
+        let ids = unsafe { llama_cpp_sys_2::llama_model_target_layer_ids(self.model.as_ptr()) };
+
+        // The model owns this immutable array; the count check also excludes its null empty pointer.
+        unsafe { std::slice::from_raw_parts(ids, count as usize) }
     }
 
     /// Returns the number of layers within the model.

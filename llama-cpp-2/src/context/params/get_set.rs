@@ -489,8 +489,6 @@ impl LlamaContextParams {
         self.context_params.yarn_orig_ctx
     }
 
-    // Do not expose defrag_thold: llama.cpp v1.0.0 removed it, so it cannot configure the cache.
-
     /// Set the KV cache data type for K
     ///
     /// # Examples
