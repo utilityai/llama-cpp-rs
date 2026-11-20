@@ -65,7 +65,8 @@ mod tests {
         let output_path = std::path::Path::new(out_dir)
             .parent()
             .expect("OUT_DIR should have a parent build directory")
-            .join("output");
+            .join("run")
+            .join("stdout");
         let output = std::fs::read_to_string(&output_path).unwrap_or_else(|err| {
             panic!(
                 "failed to read build script output {}: {err}",
