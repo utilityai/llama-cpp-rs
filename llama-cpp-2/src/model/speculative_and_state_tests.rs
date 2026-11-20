@@ -1,3 +1,7 @@
+// This in-memory fixture needs the crate-private LlamaModel field and Ptr type,
+// so these tests live inside the model module rather than in tests/. This avoids
+// exposing test-only constructors or requiring external model files.
+
 use super::*;
 use crate::llama_batch::{BatchExtAddError, LlamaBatchExt};
 use llama_cpp_sys_2 as sys;

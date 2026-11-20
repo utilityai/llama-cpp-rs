@@ -1,4 +1,11 @@
 //! A safe wrapper around `llama_model`.
+
+// Keep these as unit tests because the in-memory model fixture needs the
+// crate-private LlamaModel field and Ptr type, which tests/ cannot access.
+// This avoids exposing test-only constructors or requiring external model files.
+#[cfg(test)]
+mod speculative_and_state_tests;
+
 use std::ffi::{c_char, CStr, CString};
 use std::os::raw::c_int;
 use std::path::Path;
@@ -663,8 +670,3 @@ impl Drop for LlamaModel {
     }
 }
 
-// Keep these as unit tests because the in-memory model fixture needs the
-// crate-private LlamaModel field and Ptr type, which tests/ cannot access.
-// This avoids exposing test-only constructors or requiring external model files.
-#[cfg(test)]
-mod speculative_and_state_tests;
