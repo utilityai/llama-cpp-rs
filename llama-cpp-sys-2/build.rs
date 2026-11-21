@@ -88,7 +88,7 @@ fn parse_target_os() -> Result<(TargetOs, String), String> {
     }
 }
 
-fn get_cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn cargo_target_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let out_dir = env::var("OUT_DIR")?;
     let path = PathBuf::from(out_dir);
     let target_dir = path
@@ -418,7 +418,7 @@ fn main() {
         parse_target_os().unwrap_or_else(|t| panic!("Failed to parse target os {t}"));
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    let target_dir = get_cargo_target_dir().unwrap();
+    let target_dir = cargo_target_dir().unwrap();
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Failed to get CARGO_MANIFEST_DIR");
     let llama_src = Path::new(&manifest_dir).join("llama.cpp");
     let build_shared_libs = cfg!(feature = "dynamic-link");

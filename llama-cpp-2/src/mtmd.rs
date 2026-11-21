@@ -243,15 +243,9 @@ impl MtmdContext {
     /// Get audio sample rate in Hz (e.g., 16000 for Whisper).
     /// Returns None if audio is not supported.
     #[must_use]
-    pub fn get_audio_sample_rate(&self) -> Option<u32> {
+    pub fn audio_sample_rate(&self) -> Option<u32> {
         let rate = unsafe { llama_cpp_sys_2::mtmd_get_audio_sample_rate(self.context.as_ptr()) };
         (rate > 0).then_some(rate.unsigned_abs())
-    }
-
-    /// Backward-compatible alias for the audio sample rate getter.
-    #[must_use]
-    pub fn get_audio_bitrate(&self) -> Option<u32> {
-        self.get_audio_sample_rate()
     }
 
     /// Tokenize input text and bitmaps into chunks.

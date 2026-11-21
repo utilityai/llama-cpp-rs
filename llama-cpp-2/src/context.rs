@@ -250,7 +250,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - underlying logits data is null
     pub fn candidates(&self) -> impl Iterator<Item = LlamaTokenData> + '_ {
-        (0_i32..).zip(self.get_logits()).map(|(i, logit)| {
+        (0_i32..).zip(self.logits()).map(|(i, logit)| {
             let token = LlamaToken::new(i);
             LlamaTokenData::new(token, *logit, 0_f32)
         })
@@ -287,7 +287,7 @@ impl<'model> LlamaContext<'model> {
     /// - `n_vocab` does not fit into a usize
     /// - token data returned is null
     #[must_use]
-    pub fn get_logits(&self) -> &[f32] {
+    pub fn logits(&self) -> &[f32] {
         let data = unsafe { llama_cpp_sys_2::llama_get_logits(self.synchronizable_ptr()) };
         assert!(!data.is_null(), "logits data for last token is null");
 
@@ -305,7 +305,7 @@ impl<'model> LlamaContext<'model> {
     ///
     /// - logit `i` is not initialized.
     pub fn candidates_ith(&self, i: i32) -> impl Iterator<Item = LlamaTokenData> + '_ {
-        (0_i32..).zip(self.get_logits_ith(i)).map(|(i, logit)| {
+        (0_i32..).zip(self.logits_ith(i)).map(|(i, logit)| {
             let token = LlamaToken::new(i);
             LlamaTokenData::new(token, *logit, 0_f32)
         })
@@ -334,7 +334,7 @@ impl<'model> LlamaContext<'model> {
     /// - `n_vocab` does not fit into a usize
     /// - logit `i` is not initialized.
     #[must_use]
-    pub fn get_logits_ith(&self, i: i32) -> &[f32] {
+    pub fn logits_ith(&self, i: i32) -> &[f32] {
         let data = unsafe { llama_cpp_sys_2::llama_get_logits_ith(self.synchronizable_ptr(), i) };
 
         if data.is_null() {

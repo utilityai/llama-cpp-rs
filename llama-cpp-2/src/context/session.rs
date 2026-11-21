@@ -446,7 +446,7 @@ impl LlamaContext<'_> {
     /// Returns the maximum size in bytes of the state (rng, logits, embedding
     /// and `kv_cache`) - will often be smaller after compacting tokens
     #[must_use]
-    pub fn get_state_size(&self) -> usize {
+    pub fn state_size(&self) -> usize {
         unsafe { llama_cpp_sys_2::llama_get_state_size(self.synchronizable_ptr()) }
     }
 

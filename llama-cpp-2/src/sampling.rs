@@ -161,7 +161,7 @@ impl LlamaSampler {
     /// - For sampler chains: returns the first non-default seed found in reverse order
     /// - For all other samplers: returns 0xFFFFFFFF
     #[must_use]
-    pub fn get_seed(&self) -> u32 {
+    pub fn seed(&self) -> u32 {
         unsafe { llama_cpp_sys_2::llama_sampler_get_seed(self.sampler.as_ptr()) }
     }
 
