@@ -161,7 +161,7 @@ impl<'a> LlamaBatch<'a> {
     ///
     /// # Panics
     /// If the number of tokens in ``tokens`` exceeds [`i32::MAX`].
-    pub fn get_one(tokens: &'a [LlamaToken]) -> Result<Self, BatchAddError> {
+    pub fn create_one(tokens: &'a [LlamaToken]) -> Result<Self, BatchAddError> {
         if tokens.is_empty() {
             return Err(BatchAddError::EmptyBuffer);
         }
