@@ -821,7 +821,7 @@ fn main() {
                     "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set",
                 );
                 let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
-                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
                 println!("cargo:rustc-link-lib=vulkan-1");
 
                 // workaround for this error: "FileTracker : error FTK1011: could not create the new file tracking log file"
@@ -843,7 +843,7 @@ fn main() {
                 // If we are not using system provided vulkan SDK, add vulkan libs for linking
                 if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
                     let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
-                    println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                    println!("cargo:rustc-link-search=native={}", vulkan_lib_path.display());
                 }
                 println!("cargo:rustc-link-lib=vulkan");
             }
@@ -1041,12 +1041,12 @@ fn main() {
     }
 
     // Search paths
-    println!("cargo:rustc-link-search={}", out_dir.join("lib").display());
+    println!("cargo:rustc-link-search=native={}", out_dir.join("lib").display());
     println!(
-        "cargo:rustc-link-search={}",
+        "cargo:rustc-link-search=native={}",
         out_dir.join("lib64").display()
     );
-    println!("cargo:rustc-link-search={}", build_dir.display());
+    println!("cargo:rustc-link-search=native={}", build_dir.display());
 
     if cfg!(feature = "system-ggml") {
         // Extract library directory from CMake's found GGML package
