@@ -1,13 +1,12 @@
-// This in-memory fixture needs the crate-private LlamaModel field and Ptr type,
-// so these tests live inside the model module rather than in tests/. This avoids
-// exposing test-only constructors or requiring external model files.
-
-use super::*;
-use crate::llama_batch::{BatchExtAddError, LlamaBatchExt};
+use llama_cpp_2::context::{params::LlamaContextParams, LlamaContext};
+use llama_cpp_2::llama_backend::LlamaBackend;
+use llama_cpp_2::llama_batch::{BatchExtAddError, LlamaBatchExt};
+use llama_cpp_2::model::{params::LlamaModelParams, LlamaModel};
+use llama_cpp_2::token::LlamaToken;
+use llama_cpp_2::EmbeddingsNextnError;
 use llama_cpp_sys_2 as sys;
 use std::num::NonZeroU32;
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
 
 const EMBEDDING_WIDTH: usize = 16;
 
@@ -57,18 +56,16 @@ impl ApiFixture {
                 c"llama.attention.layer_norm_rms_epsilon".as_ptr(),
                 1e-5,
             );
-            let mut params = sys::llama_model_default_params();
-            params.n_gpu_layers = 0;
-            let model = sys::llama_model_init_from_user(
+            let params = LlamaModelParams::default().with_n_gpu_layers(0);
+            let model = LlamaModel::init_from_user(
+                &backend,
                 metadata,
-                Some(initialize_tensor),
+                initialize_tensor,
                 std::ptr::null_mut(),
-                params,
+                &params,
             );
             sys::gguf_free(metadata);
-            LlamaModel {
-                model: Ptr::new(model).expect("create tiny CPU model"),
-            }
+            model.expect("create tiny CPU model")
         };
         Self { model, backend }
     }
@@ -87,14 +84,12 @@ impl ApiFixture {
     }
 
     fn run(check: impl FnOnce(&Self, LlamaContext<'_>)) {
-        static FIXTURE: OnceLock<Mutex<ApiFixture>> = OnceLock::new();
+        static BACKEND_LOCK: Mutex<()> = Mutex::new(());
 
-        // Backend initialization is process-wide, and native context creation can
-        // mutate the model: serialize these tests rather than sharing it concurrently.
-        let fixture = FIXTURE
-            .get_or_init(|| Mutex::new(Self::new()))
-            .lock()
-            .unwrap();
+        // Serialize access to the process-wide backend and scope each model to
+        // its test so Metal can release its buffers before process exit.
+        let _backend_lock = BACKEND_LOCK.lock().unwrap();
+        let fixture = Self::new();
         check(&fixture, fixture.create_context());
     }
 }
@@ -110,7 +105,7 @@ fn reports_absent_dflash_selector_and_target_layers() {
 #[test]
 fn extended_batch_rejects_invalid_entries_and_recovers_capacity_after_clear() {
     ApiFixture::run(|_, mut context| {
-        let mut batch = LlamaBatchExt::new(&mut context).unwrap();
+        let mut batch = LlamaBatchExt::new(&mut context);
         assert_eq!(batch.add_embedding_row(-1, 0), Err(BatchExtAddError(-3)));
         assert_eq!(batch.add_embedding_row(0, -1), Err(BatchExtAddError(-2)));
         batch.clear();
@@ -125,17 +120,17 @@ fn extended_batch_rejects_invalid_entries_and_recovers_capacity_after_clear() {
 #[test]
 fn extended_batch_validates_state_rows_and_entry_configuration() {
     ApiFixture::run(|_, mut context| {
-        let mut batch = LlamaBatchExt::new(&mut context).unwrap();
+        let mut batch = LlamaBatchExt::new(&mut context);
         let index = batch.add_token(0, LlamaToken(0)).unwrap();
-        assert!(!batch.set_embedding_state_row(index, -1));
-        assert!(!batch.set_embedding_state_row(index + 1, 0));
-        assert!(batch.set_embedding_state_row(index, 0));
-        assert!(!batch.set_embedding_state_row(index, 1));
-        assert!(batch.set_positions(index, [0; 4]));
-        assert!(!batch.set_positions(index + 1, [0; 4]));
-        assert!(batch.set_output_logits(index, true));
-        assert!(!batch.set_output_embeddings(index + 1, true));
-        assert!(!batch.add_sequence_id(index, -1));
+        assert!(batch.set_embedding_state_row(index, -1).is_err());
+        assert!(batch.set_embedding_state_row(index + 1, 0).is_err());
+        assert!(batch.set_embedding_state_row(index, 0).is_ok());
+        assert!(batch.set_embedding_state_row(index, 1).is_err());
+        assert!(batch.set_positions(index, [0; 4]).is_ok());
+        assert!(batch.set_positions(index + 1, [0; 4]).is_err());
+        assert!(batch.set_output_logits(index, true).is_ok());
+        assert!(batch.set_output_embeddings(index + 1, true).is_err());
+        assert!(batch.add_sequence_id(index, -1).is_err());
     });
 }
 
@@ -143,14 +138,14 @@ fn extended_batch_validates_state_rows_and_entry_configuration() {
 fn extended_decode_exposes_layer_inputs_and_state_copy_respects_slice_bounds() {
     ApiFixture::run(|_, mut context| {
         context.set_embeddings_layer_inp(0, true);
-        let mut batch = LlamaBatchExt::new(&mut context).unwrap();
+        let mut batch = LlamaBatchExt::new(&mut context);
         let index = batch.add_token(0, LlamaToken(0)).unwrap();
-        assert!(batch.set_positions(index, [0; 4]));
-        assert!(batch.set_output_embeddings(index, true));
+        assert!(batch.set_positions(index, [0; 4]).is_ok());
+        assert!(batch.set_output_embeddings(index, true).is_ok());
         batch.decode().unwrap();
 
         // One decoded token initializes exactly one layer-input row in this fixture.
-        let embeddings = unsafe { context.get_embeddings_layer_inp(0, EMBEDDING_WIDTH) };
+        let embeddings = unsafe { context.embeddings_layer_inp(0, EMBEDDING_WIDTH) };
         assert_eq!(embeddings, &[0.01_f32; EMBEDDING_WIDTH]);
         let size = context.get_state_size();
         assert!(size > 0);
@@ -171,50 +166,46 @@ fn state_copy_rejects_a_short_slice_without_overwriting_its_guard() {
 }
 
 #[test]
-fn nextn_transfers_reject_partial_rows_and_unconfigured_buffers() {
+fn nextn_transfers_reject_partial_input_rows_and_unconfigured_buffers() {
     ApiFixture::run(|_, mut context| {
         let mut output = [0.5; EMBEDDING_WIDTH];
-        assert!(!context.get_embeddings_nextn_rows(0, &mut output));
+        assert!(context.embeddings_nextn_rows(0, &mut output).is_err());
         assert_eq!(output, [0.5; EMBEDDING_WIDTH]);
-        assert!(!context.set_embeddings_nextn_rows(0, &output));
-        assert!(!context.set_embeddings_nextn_dev(true));
+        assert!(context.set_embeddings_nextn_rows(0, &output).is_err());
+        assert!(context.set_embeddings_nextn_dev(true).is_err());
         context.set_embeddings_nextn(true, true);
-        assert!(!context.set_embeddings_nextn_dev(true));
+        assert!(context.set_embeddings_nextn_dev(true).is_err());
         context.set_embeddings_nextn(true, false);
 
         // CPU has no backend events, so even unmasked extraction cannot enable
         // a device buffer; rejection must leave host destination memory untouched.
-        assert!(!context.set_embeddings_nextn_dev(true));
-        assert!(!context.get_embeddings_nextn_rows(0, &mut output));
+        assert!(context.set_embeddings_nextn_dev(true).is_err());
+        assert!(context.embeddings_nextn_rows(0, &mut output).is_err());
         assert_eq!(output, [0.5; EMBEDDING_WIDTH]);
-        assert!(context.set_embeddings_nextn_dev(false));
+        assert!(context.set_embeddings_nextn_dev(false).is_ok());
 
-        // Keep the fixture lock outside each unwind so an expected bounds panic
-        // does not poison the shared model and obscure subsequent test failures.
-        assert!(catch_unwind(AssertUnwindSafe(|| {
-            context.get_embeddings_nextn_rows(0, &mut output[..EMBEDDING_WIDTH - 1]);
-        }))
-        .is_err());
-        assert!(catch_unwind(AssertUnwindSafe(|| {
-            context.set_embeddings_nextn_rows(0, &output[..EMBEDDING_WIDTH - 1]);
-        }))
-        .is_err());
+        assert_eq!(
+            context.set_embeddings_nextn_rows(0, &output[..EMBEDDING_WIDTH - 1]),
+            Err(EmbeddingsNextnError::PartialInputRow),
+        );
     });
 }
 
 #[test]
 fn reports_unpaired_context_and_rejects_unsupported_state_source() {
     ApiFixture::run(|fixture, mut source| {
-        assert!(source.get_context_other_ptr().is_null());
+        assert!(source.context_other_ptr().is_null());
         let mut destination = fixture.create_context();
-        assert!(destination.get_context_other_ptr().is_null());
+        assert!(destination.context_other_ptr().is_null());
         assert!(!destination.supports_embedding_rows());
 
         // Even a rejected state source is retained natively; clear it while the
         // source is still alive, and destroy the destination before the source.
         unsafe {
-            assert!(!destination.set_context_state_source(Some(&mut source)));
-            assert!(!destination.set_context_state_source(None));
+            assert!(destination
+                .set_context_state_source(Some(&mut source))
+                .is_err());
+            assert!(destination.set_context_state_source(None).is_err());
         }
     });
 }

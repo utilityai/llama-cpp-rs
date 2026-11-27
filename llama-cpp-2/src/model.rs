@@ -1,12 +1,6 @@
 //! A safe wrapper around `llama_model`.
 
-// Keep these as unit tests because the in-memory model fixture needs the
-// crate-private LlamaModel field and Ptr type, which tests/ cannot access.
-// This avoids exposing test-only constructors or requiring external model files.
-#[cfg(test)]
-mod speculative_and_state_tests;
-
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::os::raw::c_int;
 use std::path::Path;
 use std::str::Utf8Error;
@@ -392,6 +386,37 @@ impl LlamaModel {
 
         tracing::debug!(?path, "Loaded model");
         Ok(LlamaModel { model })
+    }
+
+    /// Creates a model from GGUF metadata and a callback that supplies tensor data.
+    ///
+    /// # Safety
+    ///
+    /// `metadata` must point to a valid GGUF context for the duration of the call.
+    /// The callback must initialize each supplied tensor with data matching its
+    /// type and size. It must use `user_data` only as permitted by its owner and
+    /// must neither retain the tensor pointer nor unwind across the C boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaModelLoadError::NullResult`] if llama.cpp cannot create the model.
+    pub unsafe fn init_from_user(
+        _: &LlamaBackend,
+        metadata: *mut llama_cpp_sys_2::gguf_context,
+        set_tensor_data: unsafe extern "C" fn(*mut llama_cpp_sys_2::ggml_tensor, *mut c_void),
+        user_data: *mut c_void,
+        params: &LlamaModelParams,
+    ) -> Result<Self, LlamaModelLoadError> {
+        let model = unsafe {
+            llama_cpp_sys_2::llama_model_init_from_user(
+                metadata,
+                Some(set_tensor_data),
+                user_data,
+                params.params,
+            )
+        };
+        let model = Ptr::new(model).ok_or(LlamaModelLoadError::NullResult)?;
+        Ok(Self { model })
     }
 
     /// Initializes a lora adapter from a file.
