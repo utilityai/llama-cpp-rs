@@ -220,6 +220,183 @@ impl<'model> LlamaContext<'model> {
         }
     }
 
+    /// Sets whether NextN embeddings are extracted, optionally only for output tokens.
+    pub fn set_embeddings_nextn(&mut self, enabled: bool, masked: bool) {
+        unsafe {
+            llama_cpp_sys_2::llama_set_embeddings_nextn(self.context.as_mut_ptr(), enabled, masked);
+        }
+    }
+
+    /// Selects the appended NextN head, using an offset from the model's trunk layers.
+    pub fn set_nextn_layer_offset(&mut self, offset: i32) {
+        unsafe { llama_cpp_sys_2::llama_set_nextn_layer_offset(self.context.as_mut_ptr(), offset) }
+    }
+
+    /// Gets the NextN embedding buffer, or `None` when host output is unavailable.
+    ///
+    /// # Safety
+    ///
+    /// `len` must not exceed the number of initialized floats in the last batch's
+    /// NextN output. Masked output contains only the selected output tokens.
+    pub unsafe fn get_embeddings_nextn(&self, len: usize) -> Option<&[f32]> {
+        let data =
+            unsafe { llama_cpp_sys_2::llama_get_embeddings_nextn(self.synchronizable_ptr()) };
+
+        // The C API does not expose the output row count, so callers must supply a valid bound.
+        if data.is_null() {
+            None
+        } else {
+            Some(unsafe { slice::from_raw_parts(data, len) })
+        }
+    }
+
+    /// Gets the NextN embeddings for one token from the last decoded batch.
+    ///
+    /// Unmasked output uses the batch token index; masked output uses the same
+    /// indexing as [`Self::embeddings_ith`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the C API returns no embedding for this token.
+    pub fn get_embeddings_nextn_ith(&self, index: i32) -> Result<&[f32], EmbeddingsError> {
+        let data = unsafe {
+            llama_cpp_sys_2::llama_get_embeddings_nextn_ith(self.synchronizable_ptr(), index)
+        };
+        if data.is_null() {
+            Err(EmbeddingsError(()))
+        } else {
+            // NextN rows use n_embd_out even when normal embeddings use a pooling-specific width.
+            Ok(unsafe { slice::from_raw_parts(data, self.get_nextn_embedding_width()) })
+        }
+    }
+
+    /// Sets whether the input embeddings of the selected layer are extracted.
+    /// Layer ID `n_layer` selects the output of the last trunk layer.
+    pub fn set_embeddings_layer_inp(&mut self, layer_id: u32, enabled: bool) {
+        unsafe {
+            llama_cpp_sys_2::llama_set_embeddings_layer_inp(
+                self.context.as_mut_ptr(),
+                layer_id,
+                enabled,
+            );
+        }
+    }
+
+    /// Gets a layer input buffer extracted by the last decode.
+    ///
+    /// # Safety
+    ///
+    /// The layer must have host extraction enabled and a completed decode.
+    /// `len` must not exceed the number of initialized floats in that layer's output.
+    pub unsafe fn get_embeddings_layer_inp(&self, layer_id: u32, len: usize) -> &[f32] {
+        let data = unsafe {
+            llama_cpp_sys_2::llama_get_embeddings_layer_inp(self.synchronizable_ptr(), layer_id)
+        };
+
+        // Layer extraction has no C API size query; keep its buffer bound an explicit safety obligation.
+        unsafe { slice::from_raw_parts(data, len) }
+    }
+
+    /// Sets whether enabled layer inputs are extracted to device memory instead of host memory.
+    pub fn set_embeddings_layer_inp_dev(&mut self, enabled: bool) {
+        unsafe {
+            llama_cpp_sys_2::llama_set_embeddings_layer_inp_dev(self.context.as_mut_ptr(), enabled);
+        }
+    }
+
+    /// Returns whether this context can decode embedding rows from its paired context's device buffer.
+    #[must_use]
+    pub fn supports_embedding_rows(&self) -> bool {
+        unsafe { llama_cpp_sys_2::llama_supports_embd_row(self.context.as_ptr()) }
+    }
+
+    /// Sets whether unmasked NextN embeddings are stored in device memory.
+    /// Returns false when the requested device buffer cannot be used.
+    pub fn set_embeddings_nextn_dev(&mut self, enabled: bool) -> bool {
+        unsafe {
+            llama_cpp_sys_2::llama_set_embeddings_nextn_dev(self.context.as_mut_ptr(), enabled)
+        }
+    }
+
+    /// Copies complete NextN device rows into `output`, starting at `first_row`.
+    /// Returns false if the device buffer or row range is unavailable.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer length is not a multiple of the model's NextN output width.
+    pub fn get_embeddings_nextn_rows(&self, first_row: u32, output: &mut [f32]) -> bool {
+        let width = self.get_nextn_embedding_width();
+        assert!(
+            width > 0 && output.len() % width == 0,
+            "buffer must contain complete NextN rows"
+        );
+        let rows = i64::try_from(output.len() / width).expect("NextN row count exceeds i64");
+
+        // Derive the row count from the slice so the backend cannot write past its allocation.
+        unsafe {
+            llama_cpp_sys_2::llama_get_embeddings_nextn_rows(
+                self.synchronizable_ptr(),
+                i64::from(first_row),
+                rows,
+                output.as_mut_ptr(),
+            )
+        }
+    }
+
+    /// Copies complete rows from `input` into the NextN device buffer.
+    /// Returns false if the device buffer or row range is unavailable.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the buffer length is not a multiple of the model's NextN output width.
+    pub fn set_embeddings_nextn_rows(&mut self, first_row: u32, input: &[f32]) -> bool {
+        let width = self.get_nextn_embedding_width();
+        assert!(
+            width > 0 && input.len() % width == 0,
+            "buffer must contain complete NextN rows"
+        );
+        let rows = i64::try_from(input.len() / width).expect("NextN row count exceeds i64");
+        unsafe {
+            llama_cpp_sys_2::llama_set_embeddings_nextn_rows(
+                self.context.as_mut_ptr(),
+                i64::from(first_row),
+                rows,
+                input.as_ptr(),
+            )
+        }
+    }
+
+    /// Sets the context supplying device state rows, or clears it with `None`.
+    /// Returns whether the context accepts batches with state rows.
+    ///
+    /// # Safety
+    ///
+    /// The source must remain alive, with a compatible device buffer, until it is
+    /// cleared or this context is destroyed and its pending work is synchronized.
+    /// Access to both contexts must be coordinated while their buffers are shared.
+    pub unsafe fn set_context_state_source(
+        &mut self,
+        source: Option<&mut LlamaContext<'_>>,
+    ) -> bool {
+        let source = source.map_or(std::ptr::null_mut(), |ctx| ctx.context.as_mut_ptr());
+
+        // llama.cpp retains this pointer after the call; a temporary Rust borrow cannot enforce its lifetime.
+        unsafe { llama_cpp_sys_2::llama_set_ctx_state_src(self.context.as_mut_ptr(), source) }
+    }
+
+    /// Gets the paired context pointer, or null when no context was paired at construction.
+    /// The pointer is borrowed and must not be freed or used after the paired context is destroyed.
+    #[must_use]
+    pub fn get_context_other_ptr(&self) -> *mut llama_cpp_sys_2::llama_context {
+        // Returning a pointer avoids constructing a second owning wrapper that would free the paired context.
+        unsafe { llama_cpp_sys_2::llama_get_ctx_other(self.context.as_mut_ptr_unsound()) }
+    }
+
+    fn get_nextn_embedding_width(&self) -> usize {
+        let width = unsafe { llama_cpp_sys_2::llama_model_n_embd_out(self.model_ptr()) };
+        usize::try_from(width).expect("NextN output width must be nonnegative")
+    }
+
     /// The correct output width for an embeddings read, keyed on the context's
     /// LIVE pooling type rather than the model's `n_embd`.
     ///
