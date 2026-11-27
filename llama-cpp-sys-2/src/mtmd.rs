@@ -181,6 +181,12 @@ extern "C" {
 extern "C" {
     pub fn mtmd_bitmap_set_is_video(bitmap: *mut mtmd_bitmap, is_video: bool);
 }
+extern "C" {
+    pub fn mtmd_bitmap_set_transcript(
+        bitmap: *mut mtmd_bitmap,
+        transcript: *const ::std::os::raw::c_char,
+    );
+}
 pub type mtmd_bitmap_lazy_callback = ::std::option::Option<
     unsafe extern "C" fn(
         chunk_idx: usize,
@@ -410,12 +416,21 @@ pub const MTMD_GEN_AUDIO_TYPE_SOPRANO: mtmd_gen_audio_type = 3;
 pub const MTMD_GEN_AUDIO_TYPE_LFM3A: mtmd_gen_audio_type = 4;
 pub const MTMD_GEN_AUDIO_TYPE_CHATTERBOX: mtmd_gen_audio_type = 5;
 pub const MTMD_GEN_AUDIO_TYPE_DRAMA3: mtmd_gen_audio_type = 6;
+pub const MTMD_GEN_AUDIO_TYPE_ZONOS3: mtmd_gen_audio_type = 7;
+pub const MTMD_GEN_AUDIO_TYPE_YUE2: mtmd_gen_audio_type = 8;
+pub const MTMD_GEN_AUDIO_TYPE_MINIMAX_MUSIC3: mtmd_gen_audio_type = 9;
+pub const MTMD_GEN_AUDIO_TYPE_FISH_S2: mtmd_gen_audio_type = 10;
+pub const MTMD_GEN_AUDIO_TYPE_MOSHI: mtmd_gen_audio_type = 11;
+pub const MTMD_GEN_AUDIO_TYPE_KOKORO: mtmd_gen_audio_type = 12;
+pub const MTMD_GEN_AUDIO_TYPE_TINY_VOCA: mtmd_gen_audio_type = 13;
+pub const MTMD_GEN_AUDIO_TYPE_VOXCPM2: mtmd_gen_audio_type = 14;
 pub type mtmd_gen_audio_type = UnsignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct mtmd_gen_audio_info {
     pub type_: mtmd_gen_audio_type,
     pub sample_rate: i32,
+    pub n_channels: i32,
     pub model_variant: *const ::std::os::raw::c_char,
     pub n_voices: i32,
 }
@@ -435,6 +450,14 @@ extern "C" {
         ctx: *const mtmd_context,
         idx: i32,
     ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn mtmd_gen_audio_g2p(
+        ctx: *const mtmd_context,
+        word: *const ::std::os::raw::c_char,
+        buf: *mut ::std::os::raw::c_char,
+        buf_size: usize,
+    ) -> i32;
 }
 extern "C" {
     pub fn mtmd_gen_audio_get_voice(
@@ -460,6 +483,12 @@ pub struct mtmd_gen_inp {
     pub n_codes: usize,
     pub feats: *const f32,
     pub n_feats: usize,
+    pub speed: f32,
+    pub backbone_state: *const u8,
+    pub backbone_state_size: usize,
+    pub backbone_n_past: i32,
+    pub n_steps: i32,
+    pub cfg_scale: f32,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -497,6 +526,12 @@ extern "C" {
     pub fn mtmd_gen_state_set_ref(ctx: *mut mtmd_context, state: *mut mtmd_gen_state) -> i32;
 }
 extern "C" {
+    pub fn mtmd_gen_state_get_ref_codes(
+        state: *const mtmd_gen_state,
+        n_codes: *mut usize,
+    ) -> *const i32;
+}
+extern "C" {
     pub fn mtmd_gen_inp_default(ctx: *const mtmd_context) -> mtmd_gen_inp;
 }
 extern "C" {
@@ -517,11 +552,60 @@ pub struct mtmd_helper_video {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct mtmd_helper_video_stream_info {
+    pub width: u32,
+    pub height: u32,
+    pub fps: f32,
+    pub n_frames: i32,
+    pub duration: f32,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct mtmd_helper_video_decoder {
+    pub open: ::std::option::Option<
+        unsafe extern "C" fn(
+            user_data: *mut ::std::os::raw::c_void,
+            path: *const ::std::os::raw::c_char,
+            buf: *const ::std::os::raw::c_uchar,
+            len: usize,
+            info: *mut mtmd_helper_video_stream_info,
+        ) -> *mut ::std::os::raw::c_void,
+    >,
+    pub start: ::std::option::Option<
+        unsafe extern "C" fn(
+            state: *mut ::std::os::raw::c_void,
+            width: u32,
+            height: u32,
+            fps: f32,
+            fps_picked: *mut bool,
+        ) -> bool,
+    >,
+    pub read_frame: ::std::option::Option<
+        unsafe extern "C" fn(
+            state: *mut ::std::os::raw::c_void,
+            rgb: *mut ::std::os::raw::c_uchar,
+            width: u32,
+            height: u32,
+        ) -> bool,
+    >,
+    pub read_audio: ::std::option::Option<
+        unsafe extern "C" fn(
+            state: *mut ::std::os::raw::c_void,
+            sample_rate: ::std::os::raw::c_int,
+            n_samples: *mut usize,
+        ) -> *const f32,
+    >,
+    pub close: ::std::option::Option<unsafe extern "C" fn(state: *mut ::std::os::raw::c_void)>,
+    pub user_data: *mut ::std::os::raw::c_void,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct mtmd_helper_video_init_params {
     pub fps_target: f32,
     pub ffmpeg_bin_dir: *const ::std::os::raw::c_char,
     pub timestamp_interval_ms: i64,
     pub no_soundtrack: bool,
+    pub decoder: *const mtmd_helper_video_decoder,
 }
 extern "C" {
     pub fn mtmd_helper_video_init_params_default() -> mtmd_helper_video_init_params;
@@ -562,6 +646,29 @@ extern "C" {
         placeholder: bool,
         opt: mtmd_helper_init_opt,
     ) -> mtmd_helper_bitmap_wrapper;
+}
+pub const MTMD_HELPER_MEDIA_TYPE_UNKNOWN: mtmd_helper_media_type = 0;
+pub const MTMD_HELPER_MEDIA_TYPE_IMAGE: mtmd_helper_media_type = 1;
+pub const MTMD_HELPER_MEDIA_TYPE_AUDIO: mtmd_helper_media_type = 2;
+pub const MTMD_HELPER_MEDIA_TYPE_VIDEO: mtmd_helper_media_type = 3;
+pub type mtmd_helper_media_type = UnsignedEnum;
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct mtmd_helper_media_meta {
+    pub type_: mtmd_helper_media_type,
+    pub width: u32,
+    pub height: u32,
+    pub sample_rate: i32,
+    pub duration: f32,
+    pub n_frames: i32,
+}
+extern "C" {
+    pub fn mtmd_helper_get_media_meta(
+        buf: *const ::std::os::raw::c_uchar,
+        len: usize,
+        opt: mtmd_helper_init_opt,
+        out: *mut mtmd_helper_media_meta,
+    ) -> i32;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -693,6 +800,7 @@ pub struct mtmd_helper_cap {
     pub audio: bool,
     pub video: bool,
     pub audio_stream: bool,
+    pub audio_duplex: bool,
     pub text_gen: bool,
     pub audio_gen: bool,
     pub audio_gen_spk_ref: bool,
@@ -735,11 +843,16 @@ pub struct mtmd_helper_gen_audio_inp {
     pub n_past: i32,
     pub out_mode: mtmd_helper_gen_audio_out_mode,
     pub speaker_ref: *mut mtmd_bitmap,
+    pub speaker_ref_text: *const ::std::os::raw::c_char,
     pub lang: *const ::std::os::raw::c_char,
     pub top_k: i32,
     pub top_p: f32,
     pub temp: f32,
     pub seed: u32,
+    pub speed: f32,
+    pub loudness: f32,
+    pub cfg_scale: f32,
+    pub flow_steps: i32,
     pub out_type: mtmd_helper_gen_audio_outtype,
 }
 extern "C" {
@@ -756,6 +869,9 @@ extern "C" {
 }
 extern "C" {
     pub fn mtmd_helper_gen_audio_reset(ctx: *mut mtmd_helper_gen_audio);
+}
+extern "C" {
+    pub fn mtmd_helper_gen_audio_max_frames(ctx: *const mtmd_helper_gen_audio) -> i32;
 }
 extern "C" {
     pub fn mtmd_helper_gen_audio_set_input(

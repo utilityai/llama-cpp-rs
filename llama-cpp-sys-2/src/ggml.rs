@@ -245,7 +245,9 @@ pub const GGML_OP_CROSS_ENTROPY_LOSS_BACK: ggml_op = 95;
 pub const GGML_OP_OPT_STEP_ADAMW: ggml_op = 96;
 pub const GGML_OP_OPT_STEP_SGD: ggml_op = 97;
 pub const GGML_OP_GLU: ggml_op = 98;
-pub const GGML_OP_COUNT: ggml_op = 99;
+pub const GGML_OP_SLEEP: ggml_op = 99;
+pub const GGML_OP_SIGMOID_BACK: ggml_op = 100;
+pub const GGML_OP_COUNT: ggml_op = 101;
 pub type ggml_op = UnsignedEnum;
 pub const GGML_UNARY_OP_ABS: ggml_unary_op = 0;
 pub const GGML_UNARY_OP_SGN: ggml_unary_op = 1;
@@ -327,6 +329,7 @@ pub struct ggml_tensor {
     pub extra: *mut ::std::os::raw::c_void,
     pub padding: [::std::os::raw::c_char; 8usize],
 }
+pub type ggml_tensor_t = *mut ggml_tensor;
 pub type ggml_abort_callback =
     ::std::option::Option<unsafe extern "C" fn(data: *mut ::std::os::raw::c_void) -> bool>;
 pub type ggml_guid = [u8; 16usize];
@@ -913,6 +916,13 @@ extern "C" {
 }
 extern "C" {
     pub fn ggml_silu_back(
+        ctx: *mut ggml_context,
+        a: *mut ggml_tensor,
+        b: *mut ggml_tensor,
+    ) -> *mut ggml_tensor;
+}
+extern "C" {
+    pub fn ggml_sigmoid_back(
         ctx: *mut ggml_context,
         a: *mut ggml_tensor,
         b: *mut ggml_tensor,
@@ -2049,6 +2059,16 @@ extern "C" {
     pub fn ggml_flash_attn_ext_add_sinks(a: *mut ggml_tensor, sinks: *mut ggml_tensor);
 }
 extern "C" {
+    pub fn ggml_flash_attn_ext_has_indexed_bias(a: *const ggml_tensor) -> bool;
+}
+extern "C" {
+    pub fn ggml_flash_attn_ext_add_indexed_bias(
+        a: *mut ggml_tensor,
+        table: *mut ggml_tensor,
+        indices: *mut ggml_tensor,
+    );
+}
+extern "C" {
     pub fn ggml_flash_attn_back(
         ctx: *mut ggml_context,
         q: *mut ggml_tensor,
@@ -2174,6 +2194,22 @@ extern "C" {
         left: bool,
         lower: bool,
         uni: bool,
+    ) -> *mut ggml_tensor;
+}
+extern "C" {
+    pub fn ggml_gated_delta_net_ext(
+        ctx: *mut ggml_context,
+        q: *mut ggml_tensor,
+        k: *mut ggml_tensor,
+        v: *mut ggml_tensor,
+        g: *mut ggml_tensor,
+        beta: *mut ggml_tensor,
+        state: *mut ggml_tensor,
+        pend_k: *mut ggml_tensor,
+        pend_v: *mut ggml_tensor,
+        pend_gb: *mut ggml_tensor,
+        n_rep: *mut ggml_tensor,
+        keep: bool,
     ) -> *mut ggml_tensor;
 }
 extern "C" {
@@ -2364,6 +2400,9 @@ extern "C" {
         n_tasks: ::std::os::raw::c_int,
         userdata: *mut ::std::os::raw::c_void,
     ) -> *mut ggml_tensor;
+}
+extern "C" {
+    pub fn ggml_sleep(ctx: *mut ggml_context, a: *mut ggml_tensor, us: i32) -> *mut ggml_tensor;
 }
 extern "C" {
     pub fn ggml_cross_entropy_loss(
@@ -3032,6 +3071,7 @@ pub struct ggml_backend_dev_caps {
     pub buffer_from_host_ptr: bool,
     pub events: bool,
     pub mmap_support: bool,
+    pub fast_async_host_input: bool,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]

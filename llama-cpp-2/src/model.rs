@@ -107,6 +107,19 @@ impl LlamaChatMessage {
     }
 }
 
+/// The head on the block of a DFlash draft model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DflashVariant {
+    /// DFlash.
+    Dflash,
+    /// DFlash2: DFlash with a selector head.
+    Dflash2,
+    /// DSpark: DFlash with a Markov head.
+    DSpark,
+    /// LiliCorr: DFlash with a scorer head.
+    LiliCorr,
+}
+
 /// The RoPE type that's used within the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RopeType {
@@ -214,6 +227,26 @@ impl LlamaModel {
         unsafe { llama_cpp_sys_2::llama_model_is_hybrid(self.model.as_ptr()) }
     }
 
+    /// Gets the DFlash variant that the model loader picked from the head of the draft.
+    /// Returns `None` when the model is not a DFlash draft model.
+    #[must_use]
+    pub fn dflash_variant(&self) -> Option<DflashVariant> {
+        match unsafe { llama_cpp_sys_2::llama_model_dflash_variant(self.model.as_ptr()) } {
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_NONE => None,
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DFLASH => Some(DflashVariant::Dflash),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DFLASH2 => Some(DflashVariant::Dflash2),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DSPARK => Some(DflashVariant::DSpark),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_LILICORR => Some(DflashVariant::LiliCorr),
+            variant => {
+                tracing::error!(
+                    variant = variant,
+                    "Unexpected DFlash variant from llama.cpp"
+                );
+                None
+            }
+        }
+    }
+
     /// Gets the number of candidate tokens the DFlash selector keeps per block position.
     /// Returns zero when the model has no selector head.
     #[must_use]
@@ -279,6 +312,43 @@ impl LlamaModel {
     /// Get the number of metadata key/value pairs
     pub fn meta_count(&self) -> i32 {
         unsafe { llama_cpp_sys_2::llama_model_meta_count(self.model.as_ptr()) }
+    }
+
+    /// Get the number of strings in a metadata string array.
+    ///
+    /// llama.cpp reads only the `tokenizer.tts_dicts` and `tokenizer.tts_dict.*` arrays.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MetaValError::NegativeReturn`] if the model has no such array.
+    pub fn meta_arr_len(&self, key: &str) -> Result<u32, MetaValError> {
+        let key = CString::new(key)?;
+        let len =
+            unsafe { llama_cpp_sys_2::llama_model_meta_arr_n(self.model.as_ptr(), key.as_ptr()) };
+        u32::try_from(len).map_err(|_| MetaValError::NegativeReturn(len))
+    }
+
+    /// Get a string of a metadata string array (see [`Self::meta_arr_len`]).
+    /// Returns `None` if the array or the index does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `key` contains a null byte or the string is not valid UTF-8.
+    pub fn meta_arr_str(&self, key: &str, index: u32) -> Result<Option<String>, MetaValError> {
+        let key = CString::new(key)?;
+        let Ok(index) = i32::try_from(index) else {
+            return Ok(None);
+        };
+        let ptr = unsafe {
+            llama_cpp_sys_2::llama_model_meta_arr_str(self.model.as_ptr(), key.as_ptr(), index)
+        };
+        if ptr.is_null() {
+            return Ok(None);
+        }
+
+        // The model owns the string, so copy it out.
+        let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+        Ok(Some(String::from_utf8(bytes)?))
     }
 
     /// Get metadata key name by index

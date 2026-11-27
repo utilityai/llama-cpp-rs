@@ -157,6 +157,12 @@ pub type llama_lazy_mode = UnsignedEnum;
 pub const LLAMA_CONTEXT_TYPE_DEFAULT: llama_context_type = 0;
 pub const LLAMA_CONTEXT_TYPE_MTP: llama_context_type = 1;
 pub type llama_context_type = UnsignedEnum;
+pub const LLAMA_DFLASH_VARIANT_NONE: llama_dflash_variant = -1;
+pub const LLAMA_DFLASH_VARIANT_DFLASH: llama_dflash_variant = 0;
+pub const LLAMA_DFLASH_VARIANT_DFLASH2: llama_dflash_variant = 1;
+pub const LLAMA_DFLASH_VARIANT_DSPARK: llama_dflash_variant = 2;
+pub const LLAMA_DFLASH_VARIANT_LILICORR: llama_dflash_variant = 3;
+pub type llama_dflash_variant = SignedEnum;
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct llama_token_data {
@@ -328,6 +334,15 @@ pub struct llama_model_quantize_params {
     pub tt_overrides: *const llama_model_tensor_override,
     pub prune_layers: *const i32,
     pub max_buf_size: usize,
+    pub activations: *const llama_model_imatrix_data,
+    pub statistics: *const llama_model_imatrix_data,
+    pub stats_schema: *const *const ::std::os::raw::c_char,
+    pub target_bpw: f32,
+    pub target_size: i64,
+    pub state_file: *const ::std::os::raw::c_char,
+    pub target_exclude: *const ggml_type,
+    pub abort_callback: ggml_abort_callback,
+    pub abort_callback_data: *mut ::std::os::raw::c_void,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -566,6 +581,19 @@ extern "C" {
     ) -> i32;
 }
 extern "C" {
+    pub fn llama_model_meta_arr_n(
+        model: *const llama_model,
+        key: *const ::std::os::raw::c_char,
+    ) -> i32;
+}
+extern "C" {
+    pub fn llama_model_meta_arr_str(
+        model: *const llama_model,
+        key: *const ::std::os::raw::c_char,
+        i: i32,
+    ) -> *const ::std::os::raw::c_char;
+}
+extern "C" {
     pub fn llama_model_desc(
         model: *const llama_model,
         buf: *mut ::std::os::raw::c_char,
@@ -611,6 +639,9 @@ extern "C" {
         fname_out: *const ::std::os::raw::c_char,
         params: *const llama_model_quantize_params,
     ) -> u32;
+}
+extern "C" {
+    pub fn llama_model_dflash_variant(model: *const llama_model) -> llama_dflash_variant;
 }
 extern "C" {
     pub fn llama_model_dflash_selector_top_k(model: *const llama_model) -> i32;
