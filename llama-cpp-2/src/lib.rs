@@ -81,6 +81,9 @@ pub enum LlamaCppError {
     /// see [`EmbeddingsError`]
     #[error(transparent)]
     EmbeddingError(#[from] EmbeddingsError),
+    /// see [`EmbeddingsNextnError`]
+    #[error(transparent)]
+    EmbeddingsNextnError(#[from] EmbeddingsNextnError),
     // See [`LlamaSamplerError`]
     /// Backend device not found
     #[error("Backend device {0} not found")]
@@ -183,6 +186,11 @@ pub enum EncodeError {
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 #[error("Embeddings or logits weren't enabled")]
 pub struct EmbeddingsError(());
+
+/// Fetching or transferring NextN embeddings failed.
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[error("NextN embeddings or their device buffer are unavailable")]
+pub struct EmbeddingsNextnError(());
 
 /// Retrieving embeddings sequences failed.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]

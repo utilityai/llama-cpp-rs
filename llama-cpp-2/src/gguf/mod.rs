@@ -1,9 +1,10 @@
-//! Safe wrapper around `gguf_context` for reading GGUF file metadata.
+//! Safe wrapper around `gguf_context` for GGUF metadata.
 //!
 //! Provides metadata-only access to GGUF files without loading tensor data.
-//! Useful for inspecting model architecture parameters before loading a model.
+//! Useful for inspecting model architecture parameters before loading a model,
+//! or for building the metadata of [`LlamaModel::init_from_user`](crate::model::LlamaModel::init_from_user).
 
-use std::ffi::{CStr, CString};
+use std::ffi::{CStr, CString, NulError};
 use std::path::Path;
 
 use crate::ptr::Ptr;
@@ -23,6 +24,63 @@ unsafe impl Send for GgufContext {}
 unsafe impl Sync for GgufContext {}
 
 impl GgufContext {
+    /// Create an empty context with no key-value pairs and no tensors.
+    ///
+    /// # Panics
+    ///
+    /// Panics if llama.cpp returns a null context, which happens only when the allocation fails.
+    #[must_use]
+    pub fn new() -> Self {
+        let ptr = unsafe { llama_cpp_sys_2::gguf_init_empty() };
+        Self {
+            ctx: Ptr::new(ptr).expect("gguf_init_empty returned null"),
+        }
+    }
+
+    pub(crate) fn as_mut_ptr(&mut self) -> *mut llama_cpp_sys_2::gguf_context {
+        self.ctx.as_mut_ptr()
+    }
+
+    /// Set a `uint32` value, replacing any value stored under `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `key` contains a null byte.
+    pub fn set_val_u32(&mut self, key: &str, val: u32) -> Result<(), NulError> {
+        let c_key = CString::new(key)?;
+        unsafe { llama_cpp_sys_2::gguf_set_val_u32(self.ctx.as_mut_ptr(), c_key.as_ptr(), val) }
+        Ok(())
+    }
+
+    /// Set a `float32` value, replacing any value stored under `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `key` contains a null byte.
+    pub fn set_val_f32(&mut self, key: &str, val: f32) -> Result<(), NulError> {
+        let c_key = CString::new(key)?;
+        unsafe { llama_cpp_sys_2::gguf_set_val_f32(self.ctx.as_mut_ptr(), c_key.as_ptr(), val) }
+        Ok(())
+    }
+
+    /// Set a string value, replacing any value stored under `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `key` or `val` contains a null byte.
+    pub fn set_val_str(&mut self, key: &str, val: &str) -> Result<(), NulError> {
+        let c_key = CString::new(key)?;
+        let c_val = CString::new(val)?;
+        unsafe {
+            llama_cpp_sys_2::gguf_set_val_str(
+                self.ctx.as_mut_ptr(),
+                c_key.as_ptr(),
+                c_val.as_ptr(),
+            );
+        }
+        Ok(())
+    }
+
     /// Open a GGUF file and parse its metadata header.
     ///
     /// Returns `None` if the path contains a null byte, the file does not
@@ -95,6 +153,12 @@ impl GgufContext {
     /// Total number of tensors described in the file.
     pub fn n_tensors(&self) -> i64 {
         unsafe { llama_cpp_sys_2::gguf_get_n_tensors(self.ctx.as_ptr()) }
+    }
+}
+
+impl Default for GgufContext {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,11 +1,13 @@
 //! A safe wrapper around `llama_model`.
-use std::ffi::{c_char, CStr, CString};
+
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::os::raw::c_int;
 use std::path::Path;
 use std::str::Utf8Error;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
+use crate::gguf::GgufContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::ptr::Ptr;
@@ -31,7 +33,7 @@ pub struct LlamaModel {
 
 // SAFETY: The model is immutable except for methods where it's passed as `&mut`.
 //
-// FIXME(madsmtm): Apart from `llama_new_context_with_model`, which mutates.
+// FIXME(madsmtm): Apart from `llama_init_from_model`, which mutates.
 unsafe impl Send for LlamaModel {}
 // SAFETY: Same as above.
 unsafe impl Sync for LlamaModel {}
@@ -105,6 +107,19 @@ impl LlamaChatMessage {
     }
 }
 
+/// The head on the block of a DFlash draft model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DflashVariant {
+    /// DFlash.
+    Dflash,
+    /// DFlash2: DFlash with a selector head.
+    Dflash2,
+    /// DSpark: DFlash with a Markov head.
+    DSpark,
+    /// LiliCorr: DFlash with a scorer head.
+    LiliCorr,
+}
+
 /// The RoPE type that's used within the model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RopeType {
@@ -136,7 +151,7 @@ impl LlamaModel {
     /// platforms due to llama.cpp returning a `c_int` (i32 on most platforms) which is almost certainly positive.
     #[must_use]
     pub fn n_ctx_train(&self) -> u32 {
-        let n_ctx_train = unsafe { llama_cpp_sys_2::llama_n_ctx_train(self.model.as_ptr()) };
+        let n_ctx_train = unsafe { llama_cpp_sys_2::llama_model_n_ctx_train(self.model.as_ptr()) };
         u32::try_from(n_ctx_train).expect("n_ctx_train fits into an u32")
     }
 
@@ -170,7 +185,7 @@ impl LlamaModel {
     /// without issue.
     #[must_use]
     pub fn n_embd(&self) -> c_int {
-        unsafe { llama_cpp_sys_2::llama_n_embd(self.model.as_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_model_n_embd(self.model.as_ptr()) }
     }
 
     /// The model's *output* embedding width (`n_embd_out`). This is the width
@@ -210,6 +225,48 @@ impl LlamaModel {
     /// They require special handling for state checkpointing.
     pub fn is_hybrid(&self) -> bool {
         unsafe { llama_cpp_sys_2::llama_model_is_hybrid(self.model.as_ptr()) }
+    }
+
+    /// Gets the DFlash variant that the model loader picked from the head of the draft.
+    /// Returns `None` when the model is not a DFlash draft model.
+    #[must_use]
+    pub fn dflash_variant(&self) -> Option<DflashVariant> {
+        match unsafe { llama_cpp_sys_2::llama_model_dflash_variant(self.model.as_ptr()) } {
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_NONE => None,
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DFLASH => Some(DflashVariant::Dflash),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DFLASH2 => Some(DflashVariant::Dflash2),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_DSPARK => Some(DflashVariant::DSpark),
+            llama_cpp_sys_2::LLAMA_DFLASH_VARIANT_LILICORR => Some(DflashVariant::LiliCorr),
+            variant => {
+                tracing::error!(
+                    variant = variant,
+                    "Unexpected DFlash variant from llama.cpp"
+                );
+                None
+            }
+        }
+    }
+
+    /// Gets the number of candidate tokens the DFlash selector keeps per block position.
+    /// Returns zero when the model has no selector head.
+    #[must_use]
+    pub fn dflash_selector_top_k(&self) -> i32 {
+        unsafe { llama_cpp_sys_2::llama_model_dflash_selector_top_k(self.model.as_ptr()) }
+    }
+
+    /// Gets the target layer IDs used by a speculative draft model.
+    ///
+    /// Returns an empty slice when the model does not select target layers.
+    #[must_use]
+    pub fn target_layer_ids(&self) -> &[i32] {
+        let count = unsafe { llama_cpp_sys_2::llama_model_target_layer_ids_n(self.model.as_ptr()) };
+        if count == 0 {
+            return &[];
+        }
+        let ids = unsafe { llama_cpp_sys_2::llama_model_target_layer_ids(self.model.as_ptr()) };
+
+        // The model owns this immutable array; the count check also excludes its null empty pointer.
+        unsafe { std::slice::from_raw_parts(ids, count as usize) }
     }
 
     /// Returns the number of layers within the model.
@@ -255,6 +312,41 @@ impl LlamaModel {
     /// Get the number of metadata key/value pairs
     pub fn meta_count(&self) -> i32 {
         unsafe { llama_cpp_sys_2::llama_model_meta_count(self.model.as_ptr()) }
+    }
+
+    /// Get the number of strings in a metadata string array.
+    ///
+    /// llama.cpp reads only the `tokenizer.tts_dicts` and `tokenizer.tts_dict.*` arrays.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MetaValError::NegativeReturn`] if the model has no such array.
+    pub fn meta_arr_len(&self, key: &str) -> Result<u32, MetaValError> {
+        let key = CString::new(key)?;
+        let len =
+            unsafe { llama_cpp_sys_2::llama_model_meta_arr_n(self.model.as_ptr(), key.as_ptr()) };
+        u32::try_from(len).map_err(|_| MetaValError::NegativeReturn(len))
+    }
+
+    /// Get a string of a metadata string array (see [`Self::meta_arr_len`]).
+    /// Returns `None` if the array or the index does not exist.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `key` contains a null byte or the string is not valid UTF-8.
+    pub fn meta_arr_str(&self, key: &str, index: u32) -> Result<Option<String>, MetaValError> {
+        let key = CString::new(key)?;
+        let Ok(index) = i32::try_from(index) else {
+            return Ok(None);
+        };
+        let ptr = unsafe {
+            llama_cpp_sys_2::llama_model_meta_arr_str(self.model.as_ptr(), key.as_ptr(), index)
+        };
+        if ptr.is_null() {
+            return Ok(None);
+        }
+        let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
+        Ok(Some(String::from_utf8(bytes)?))
     }
 
     /// Get metadata key name by index
@@ -357,11 +449,51 @@ impl LlamaModel {
 
         let cstr = CString::new(path)?;
         let llama_model =
-            unsafe { llama_cpp_sys_2::llama_load_model_from_file(cstr.as_ptr(), params.params) };
+            unsafe { llama_cpp_sys_2::llama_model_load_from_file(cstr.as_ptr(), params.params) };
 
         let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 
         tracing::debug!(?path, "Loaded model");
+        Ok(LlamaModel { model })
+    }
+
+    /// Creates a model from GGUF metadata, without a model file.
+    ///
+    /// llama.cpp creates the tensors that the metadata describes, as
+    /// `GGML_TYPE_F32` by default. It calls `set_tensor_data` one time for each
+    /// tensor to fill its data, for example with `ggml_backend_tensor_set`.
+    /// A panic in `set_tensor_data` aborts the process.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaModelLoadError::NullResult`] if llama.cpp cannot create the model.
+    pub fn init_from_user<F>(
+        _: &LlamaBackend,
+        metadata: &mut GgufContext,
+        mut set_tensor_data: F,
+        params: &LlamaModelParams,
+    ) -> Result<Self, LlamaModelLoadError>
+    where
+        F: FnMut(*mut llama_cpp_sys_2::ggml_tensor),
+    {
+        unsafe extern "C" fn trampoline<F: FnMut(*mut llama_cpp_sys_2::ggml_tensor)>(
+            tensor: *mut llama_cpp_sys_2::ggml_tensor,
+            userdata: *mut c_void,
+        ) {
+            let set_tensor_data = unsafe { &mut *userdata.cast::<F>() };
+            set_tensor_data(tensor);
+        }
+
+        // llama.cpp calls `trampoline` only during this call, so `set_tensor_data` outlives every use.
+        let llama_model = unsafe {
+            llama_cpp_sys_2::llama_model_init_from_user(
+                metadata.as_mut_ptr(),
+                Some(trampoline::<F>),
+                std::ptr::from_mut(&mut set_tensor_data).cast(),
+                params.params,
+            )
+        };
+        let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
         Ok(LlamaModel { model })
     }
 
@@ -410,15 +542,12 @@ impl LlamaModel {
     ) -> Result<LlamaContext<'a>, LlamaContextLoadError> {
         let context_params = params.context_params;
         // Constructing multiple contexts from a model in parallel is actually
-        // unsound, since `llama_new_context_with_model` mutates the model's
+        // unsound, since `llama_init_from_model` mutates the model's
         // `n_ctx_train` in some cases:
         // <https://github.com/ggml-org/llama.cpp/blob/f45576aa86c07d60d346b469651a098a15cc4f81/src/llama-context.cpp#L3751>
         // FIXME(madsmtm): Make this sound!
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -447,10 +576,7 @@ impl LlamaModel {
         context_params.ctx_other = unsafe { ctx_other.context.as_mut_ptr_unsound() };
         // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -510,10 +636,7 @@ impl LlamaModel {
 
         // Unsoundness: See `LlamaMode::new_context`.
         let context = unsafe {
-            llama_cpp_sys_2::llama_new_context_with_model(
-                self.model.as_mut_ptr_unsound(),
-                context_params,
-            )
+            llama_cpp_sys_2::llama_init_from_model(self.model.as_mut_ptr_unsound(), context_params)
         };
         let context = Ptr::new(context).ok_or(LlamaContextLoadError::NullReturn)?;
 
@@ -637,6 +760,6 @@ where
 
 impl Drop for LlamaModel {
     fn drop(&mut self) {
-        unsafe { llama_cpp_sys_2::llama_free_model(self.model.as_mut_ptr()) }
+        unsafe { llama_cpp_sys_2::llama_model_free(self.model.as_mut_ptr()) }
     }
 }

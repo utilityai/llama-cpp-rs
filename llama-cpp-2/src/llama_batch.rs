@@ -1,8 +1,12 @@
 //! Safe wrapper around `llama_batch`.
 
+use crate::context::LlamaContext;
+use crate::ptr::Ptr;
 use crate::token::LlamaToken;
+use crate::{DecodeError, EncodeError};
 use llama_cpp_sys_2::{llama_batch, llama_batch_free, llama_batch_init, llama_pos, llama_seq_id};
 use std::marker::PhantomData;
+use std::num::NonZeroI32;
 
 /// A safe wrapper around `llama_batch`.
 #[derive(Debug)]
@@ -208,5 +212,246 @@ impl<'a> Drop for LlamaBatch<'a> {
                 llama_batch_free(self.llama_batch);
             }
         }
+    }
+}
+
+/// An extended batch of tokens or device embedding rows, bound to its processing context.
+///
+/// Processing consumes the batch and releases the context borrow, so output can then
+/// be read from the context. All embedding entries must use device rows when any do;
+/// state rows must likewise be set for all entries or none.
+///
+/// The context cannot be destroyed while a batch still uses its memory:
+///
+/// ```compile_fail
+/// use llama_cpp_2::context::LlamaContext;
+/// use llama_cpp_2::llama_batch::LlamaBatchExt;
+/// fn cannot_drop_context(mut context: LlamaContext<'_>) {
+///     let batch = LlamaBatchExt::new(&mut context);
+///     drop(context);
+///     drop(batch);
+/// }
+/// ```
+#[derive(Debug)]
+pub struct LlamaBatchExt<'context, 'model> {
+    context: &'context mut LlamaContext<'model>,
+    batch: Ptr<llama_cpp_sys_2::llama_batch_ext>,
+}
+
+/// An error code returned when an extended batch rejects an entry.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("extended batch rejected the entry with error code {0}")]
+pub struct BatchExtAddError(pub i32);
+
+/// An extended batch rejected an update to one of its entries.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("extended batch rejected the entry update")]
+pub struct BatchExtEntryError(());
+
+fn entry_result(accepted: bool) -> Result<(), BatchExtEntryError> {
+    if accepted {
+        Ok(())
+    } else {
+        Err(BatchExtEntryError(()))
+    }
+}
+
+impl<'context, 'model> LlamaBatchExt<'context, 'model> {
+    /// Creates an empty batch using the context's model, limits, and memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if llama.cpp returns a null batch, which happens only when the allocation fails.
+    #[must_use]
+    pub fn new(context: &'context mut LlamaContext<'model>) -> Self {
+        let batch = unsafe { llama_cpp_sys_2::llama_batch_ext_init(context.context.as_mut_ptr()) };
+        let batch = Ptr::new(batch).expect("llama_batch_ext_init returned null");
+
+        // The native batch keeps the context's memory pointer, so hold its exclusive borrow until drop.
+        Self { context, batch }
+    }
+
+    /// Clears the batch so its entries can be rebuilt before processing.
+    pub fn clear(&mut self) {
+        unsafe { llama_cpp_sys_2::llama_batch_ext_clear(self.batch.as_mut_ptr()) }
+    }
+
+    /// Adds a token and returns its batch index. Set its position before processing.
+    ///
+    /// # Errors
+    ///
+    /// Returns the C API error for a full batch, invalid sequence, or invalid token.
+    pub fn add_token(
+        &mut self,
+        sequence_id: i32,
+        token: LlamaToken,
+    ) -> Result<i32, BatchExtAddError> {
+        let index = unsafe {
+            llama_cpp_sys_2::llama_batch_ext_add_token(
+                self.batch.as_mut_ptr(),
+                sequence_id,
+                token.0,
+            )
+        };
+        if index < 0 {
+            Err(BatchExtAddError(index))
+        } else {
+            Ok(index)
+        }
+    }
+
+    /// Adds a row from the paired context's layer input device buffer.
+    /// Set its positions before processing. The context must support embedding rows.
+    ///
+    /// # Errors
+    ///
+    /// Returns the C API error for a full batch, invalid sequence, or invalid row.
+    pub fn add_embedding_row(
+        &mut self,
+        sequence_id: i32,
+        row: i32,
+    ) -> Result<i32, BatchExtAddError> {
+        let index = unsafe {
+            llama_cpp_sys_2::llama_batch_ext_add_embd_row(self.batch.as_mut_ptr(), sequence_id, row)
+        };
+        if index < 0 {
+            Err(BatchExtAddError(index))
+        } else {
+            Ok(index)
+        }
+    }
+
+    /// Sets the state row read from the context configured with
+    /// [`LlamaContext::set_context_state_source`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry, an invalid row, or an entry that already has a state.
+    pub fn set_embedding_state_row(
+        &mut self,
+        index: i32,
+        row: i32,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
+            llama_cpp_sys_2::llama_batch_ext_set_embd_state_row(self.batch.as_mut_ptr(), index, row)
+        })
+    }
+
+    /// Adds a sequence to an existing batch entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry or sequence.
+    pub fn add_sequence_id(
+        &mut self,
+        index: i32,
+        sequence_id: i32,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
+            llama_cpp_sys_2::llama_batch_ext_add_seq(self.batch.as_mut_ptr(), index, sequence_id)
+        })
+    }
+
+    /// Sets the entry's positions in `[t, y, x, z]` order for M-RoPE embeddings.
+    /// Text tokens and models without M-RoPE use only the first position.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_positions(
+        &mut self,
+        index: i32,
+        positions: [i32; 4],
+    ) -> Result<(), BatchExtEntryError> {
+        // llama.cpp reads up to four positions and takes no length, so the array sets the bound.
+        entry_result(unsafe {
+            llama_cpp_sys_2::llama_batch_ext_set_pos(
+                self.batch.as_mut_ptr(),
+                index,
+                positions.as_ptr(),
+            )
+        })
+    }
+
+    /// Sets whether an entry produces output logits.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_output_logits(
+        &mut self,
+        index: i32,
+        enabled: bool,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
+            llama_cpp_sys_2::llama_batch_ext_set_output_logits(
+                self.batch.as_mut_ptr(),
+                index,
+                enabled,
+            )
+        })
+    }
+
+    /// Sets whether an entry produces output embeddings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_output_embeddings(
+        &mut self,
+        index: i32,
+        enabled: bool,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
+            llama_cpp_sys_2::llama_batch_ext_set_output_embd(
+                self.batch.as_mut_ptr(),
+                index,
+                enabled,
+            )
+        })
+    }
+
+    /// Decodes the batch and releases its context borrow.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`LlamaContext::decode`].
+    pub fn decode(mut self) -> Result<(), DecodeError> {
+        let result = unsafe {
+            llama_cpp_sys_2::llama_process(
+                self.context.context.as_mut_ptr(),
+                llama_cpp_sys_2::LLAMA_PROCESS_TYPE_DECODE,
+                self.batch.as_mut_ptr(),
+            )
+        };
+        match NonZeroI32::new(result) {
+            None => Ok(()),
+            Some(error) => Err(DecodeError::from(error)),
+        }
+    }
+
+    /// Encodes the batch and releases its context borrow.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same errors as [`LlamaContext::encode`].
+    pub fn encode(mut self) -> Result<(), EncodeError> {
+        let result = unsafe {
+            llama_cpp_sys_2::llama_process(
+                self.context.context.as_mut_ptr(),
+                llama_cpp_sys_2::LLAMA_PROCESS_TYPE_ENCODE,
+                self.batch.as_mut_ptr(),
+            )
+        };
+        match NonZeroI32::new(result) {
+            None => Ok(()),
+            Some(error) => Err(EncodeError::from(error)),
+        }
+    }
+}
+
+impl Drop for LlamaBatchExt<'_, '_> {
+    fn drop(&mut self) {
+        unsafe { llama_cpp_sys_2::llama_batch_ext_free(self.batch.as_mut_ptr()) }
     }
 }
