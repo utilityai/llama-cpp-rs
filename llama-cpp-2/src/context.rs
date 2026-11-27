@@ -400,7 +400,6 @@ impl<'model> LlamaContext<'model> {
         &mut self,
         source: &mut LlamaContext<'_>,
     ) -> Result<(), EmbeddingsNextnError> {
-        // llama.cpp keeps this pointer after the call.
         let accepted = unsafe {
             llama_cpp_sys_2::llama_set_ctx_state_src(
                 self.context.as_mut_ptr(),

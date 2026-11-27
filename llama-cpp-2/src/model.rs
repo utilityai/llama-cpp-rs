@@ -345,8 +345,6 @@ impl LlamaModel {
         if ptr.is_null() {
             return Ok(None);
         }
-
-        // The model owns the string, so copy it out.
         let bytes = unsafe { CStr::from_ptr(ptr) }.to_bytes().to_vec();
         Ok(Some(String::from_utf8(bytes)?))
     }
