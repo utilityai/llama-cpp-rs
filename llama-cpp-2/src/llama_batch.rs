@@ -227,7 +227,7 @@ impl<'a> Drop for LlamaBatch<'a> {
 /// use llama_cpp_2::context::LlamaContext;
 /// use llama_cpp_2::llama_batch::LlamaBatchExt;
 /// fn cannot_drop_context(mut context: LlamaContext<'_>) {
-///     let batch = LlamaBatchExt::new(&mut context).unwrap();
+///     let batch = LlamaBatchExt::new(&mut context);
 ///     drop(context);
 ///     drop(batch);
 /// }
@@ -243,14 +243,32 @@ pub struct LlamaBatchExt<'context, 'model> {
 #[error("extended batch rejected the entry with error code {0}")]
 pub struct BatchExtAddError(pub i32);
 
+/// An extended batch rejected an update to one of its entries.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("extended batch rejected the entry update")]
+pub struct BatchExtEntryError(());
+
+fn entry_result(accepted: bool) -> Result<(), BatchExtEntryError> {
+    if accepted {
+        Ok(())
+    } else {
+        Err(BatchExtEntryError(()))
+    }
+}
+
 impl<'context, 'model> LlamaBatchExt<'context, 'model> {
     /// Creates an empty batch using the context's model, limits, and memory.
-    /// Returns `None` if the C API returns a null batch pointer.
-    pub fn new(context: &'context mut LlamaContext<'model>) -> Option<Self> {
+    ///
+    /// # Panics
+    ///
+    /// Panics if llama.cpp returns a null batch, which happens only when the allocation fails.
+    #[must_use]
+    pub fn new(context: &'context mut LlamaContext<'model>) -> Self {
         let batch = unsafe { llama_cpp_sys_2::llama_batch_ext_init(context.context.as_mut_ptr()) };
+        let batch = Ptr::new(batch).expect("llama_batch_ext_init returned null");
 
-        // The native batch retains the context's memory pointer, so hold its exclusive borrow until drop.
-        Ptr::new(batch).map(|batch| Self { context, batch })
+        // The native batch keeps the context's memory pointer, so hold its exclusive borrow until drop.
+        Self { context, batch }
     }
 
     /// Clears the batch so its entries can be rebuilt before processing.
@@ -304,54 +322,93 @@ impl<'context, 'model> LlamaBatchExt<'context, 'model> {
     }
 
     /// Sets the state row read from the context configured with
-    /// [`LlamaContext::set_context_state_source`]. Returns false for an invalid or already-set entry.
-    pub fn set_embedding_state_row(&mut self, index: i32, row: i32) -> bool {
-        unsafe {
+    /// [`LlamaContext::set_context_state_source`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry, an invalid row, or an entry that already has a state.
+    pub fn set_embedding_state_row(
+        &mut self,
+        index: i32,
+        row: i32,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
             llama_cpp_sys_2::llama_batch_ext_set_embd_state_row(self.batch.as_mut_ptr(), index, row)
-        }
+        })
     }
 
-    /// Adds a sequence to an existing batch entry. Returns false for invalid indices or sequences.
-    pub fn add_sequence_id(&mut self, index: i32, sequence_id: i32) -> bool {
-        unsafe {
+    /// Adds a sequence to an existing batch entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry or sequence.
+    pub fn add_sequence_id(
+        &mut self,
+        index: i32,
+        sequence_id: i32,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
             llama_cpp_sys_2::llama_batch_ext_add_seq(self.batch.as_mut_ptr(), index, sequence_id)
-        }
+        })
     }
 
     /// Sets the entry's positions in `[t, y, x, z]` order for M-RoPE embeddings.
     /// Text tokens and models without M-RoPE use only the first position.
-    /// Returns false for an invalid batch index.
-    pub fn set_positions(&mut self, index: i32, positions: [i32; 4]) -> bool {
-        // Native code reads up to four positions without receiving a length; the array guarantees that bound.
-        unsafe {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_positions(
+        &mut self,
+        index: i32,
+        positions: [i32; 4],
+    ) -> Result<(), BatchExtEntryError> {
+        // llama.cpp reads up to four positions and takes no length, so the array sets the bound.
+        entry_result(unsafe {
             llama_cpp_sys_2::llama_batch_ext_set_pos(
                 self.batch.as_mut_ptr(),
                 index,
                 positions.as_ptr(),
             )
-        }
+        })
     }
 
-    /// Sets whether an entry produces output logits. Returns false for an invalid index.
-    pub fn set_output_logits(&mut self, index: i32, enabled: bool) -> bool {
-        unsafe {
+    /// Sets whether an entry produces output logits.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_output_logits(
+        &mut self,
+        index: i32,
+        enabled: bool,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
             llama_cpp_sys_2::llama_batch_ext_set_output_logits(
                 self.batch.as_mut_ptr(),
                 index,
                 enabled,
             )
-        }
+        })
     }
 
-    /// Sets whether an entry produces output embeddings. Returns false for an invalid index.
-    pub fn set_output_embeddings(&mut self, index: i32, enabled: bool) -> bool {
-        unsafe {
+    /// Sets whether an entry produces output embeddings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid entry.
+    pub fn set_output_embeddings(
+        &mut self,
+        index: i32,
+        enabled: bool,
+    ) -> Result<(), BatchExtEntryError> {
+        entry_result(unsafe {
             llama_cpp_sys_2::llama_batch_ext_set_output_embd(
                 self.batch.as_mut_ptr(),
                 index,
                 enabled,
             )
-        }
+        })
     }
 
     /// Decodes the batch and releases its context borrow.

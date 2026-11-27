@@ -1,18 +1,13 @@
 //! A safe wrapper around `llama_model`.
 
-// Keep these as unit tests because the in-memory model fixture needs the
-// crate-private LlamaModel field and Ptr type, which tests/ cannot access.
-// This avoids exposing test-only constructors or requiring external model files.
-#[cfg(test)]
-mod speculative_and_state_tests;
-
-use std::ffi::{c_char, CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::os::raw::c_int;
 use std::path::Path;
 use std::str::Utf8Error;
 
 use crate::context::params::LlamaContextParams;
 use crate::context::LlamaContext;
+use crate::gguf::GgufContext;
 use crate::llama_backend::LlamaBackend;
 use crate::model::params::LlamaModelParams;
 use crate::ptr::Ptr;
@@ -222,7 +217,7 @@ impl LlamaModel {
     /// Gets the number of candidate tokens the DFlash selector keeps per block position.
     /// Returns zero when the model has no selector head.
     #[must_use]
-    pub fn get_dflash_selector_top_k(&self) -> i32 {
+    pub fn dflash_selector_top_k(&self) -> i32 {
         unsafe { llama_cpp_sys_2::llama_model_dflash_selector_top_k(self.model.as_ptr()) }
     }
 
@@ -230,7 +225,7 @@ impl LlamaModel {
     ///
     /// Returns an empty slice when the model does not select target layers.
     #[must_use]
-    pub fn get_target_layer_ids(&self) -> &[i32] {
+    pub fn target_layer_ids(&self) -> &[i32] {
         let count = unsafe { llama_cpp_sys_2::llama_model_target_layer_ids_n(self.model.as_ptr()) };
         if count == 0 {
             return &[];
@@ -391,6 +386,46 @@ impl LlamaModel {
         let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
 
         tracing::debug!(?path, "Loaded model");
+        Ok(LlamaModel { model })
+    }
+
+    /// Creates a model from GGUF metadata, without a model file.
+    ///
+    /// llama.cpp creates the tensors that the metadata describes, as
+    /// `GGML_TYPE_F32` by default. It calls `set_tensor_data` one time for each
+    /// tensor to fill its data, for example with `ggml_backend_tensor_set`.
+    /// A panic in `set_tensor_data` aborts the process.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LlamaModelLoadError::NullResult`] if llama.cpp cannot create the model.
+    pub fn init_from_user<F>(
+        _: &LlamaBackend,
+        metadata: &mut GgufContext,
+        mut set_tensor_data: F,
+        params: &LlamaModelParams,
+    ) -> Result<Self, LlamaModelLoadError>
+    where
+        F: FnMut(*mut llama_cpp_sys_2::ggml_tensor),
+    {
+        unsafe extern "C" fn trampoline<F: FnMut(*mut llama_cpp_sys_2::ggml_tensor)>(
+            tensor: *mut llama_cpp_sys_2::ggml_tensor,
+            userdata: *mut c_void,
+        ) {
+            let set_tensor_data = unsafe { &mut *userdata.cast::<F>() };
+            set_tensor_data(tensor);
+        }
+
+        // llama.cpp calls `trampoline` only during this call, so `set_tensor_data` outlives every use.
+        let llama_model = unsafe {
+            llama_cpp_sys_2::llama_model_init_from_user(
+                metadata.as_mut_ptr(),
+                Some(trampoline::<F>),
+                std::ptr::from_mut(&mut set_tensor_data).cast(),
+                params.params,
+            )
+        };
+        let model = Ptr::new(llama_model).ok_or(LlamaModelLoadError::NullResult)?;
         Ok(LlamaModel { model })
     }
 

@@ -455,17 +455,7 @@ impl LlamaContext<'_> {
     /// Returns the number of bytes copied, or zero if the state cannot be copied.
     ///
     /// Allocate [`Self::get_state_size`] bytes to hold the complete state.
-    ///
-    /// The destination must be writable:
-    ///
-    /// ```compile_fail
-    /// use llama_cpp_2::context::LlamaContext;
-    /// fn cannot_write_shared_buffer(context: &LlamaContext<'_>, buffer: &[u8]) {
-    ///     context.copy_state_data(buffer);
-    /// }
-    /// ```
     pub fn copy_state_data(&self, dest: &mut [u8]) -> usize {
-        // Passing the actual slice length lets llama.cpp enforce the destination's write bound.
         unsafe {
             llama_cpp_sys_2::llama_state_get_data(
                 self.synchronizable_ptr(),
