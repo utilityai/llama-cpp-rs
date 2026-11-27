@@ -12,6 +12,7 @@ use llama_cpp_2::llama_batch::{BatchExtAddError, LlamaBatchExt};
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::token::LlamaToken;
+use llama_cpp_2::MetaValError;
 use llama_cpp_sys_2 as sys;
 
 const EMBEDDING_WIDTH: usize = 16;
@@ -75,8 +76,19 @@ fn create_context(model: &LlamaModel) -> LlamaContext<'_> {
 #[test]
 fn reports_absent_dflash_selector_and_target_layers() {
     let model = create_model();
+    assert_eq!(model.dflash_variant(), None);
     assert_eq!(model.dflash_selector_top_k(), 0);
     assert!(model.target_layer_ids().is_empty());
+}
+
+#[test]
+fn reports_absent_metadata_string_arrays() {
+    let model = create_model();
+    assert_eq!(
+        model.meta_arr_len("tokenizer.tts_dicts"),
+        Err(MetaValError::NegativeReturn(-1))
+    );
+    assert_eq!(model.meta_arr_str("tokenizer.tts_dicts", 0), Ok(None));
 }
 
 #[test]
