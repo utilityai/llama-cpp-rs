@@ -184,6 +184,26 @@ pub enum EncodeError {
 #[error("Embeddings or logits weren't enabled")]
 pub struct EmbeddingsError(());
 
+/// An error while accessing NextN embeddings or configuring their device buffers.
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum EmbeddingsNextnError {
+    /// No host NextN embedding is available for the requested token.
+    #[error("NextN embedding unavailable for this token")]
+    TokenUnavailable,
+    /// The requested device buffer configuration could not be applied.
+    #[error("NextN device buffer unavailable")]
+    DeviceBufferUnavailable,
+    /// The device buffer or requested row range is unavailable.
+    #[error("NextN device rows unavailable")]
+    DeviceRowsUnavailable,
+    /// The input length is not a multiple of the NextN row width.
+    #[error("NextN input must contain only complete rows")]
+    PartialInputRow,
+    /// The configured context does not support device state rows.
+    #[error("context does not support device state rows")]
+    StateRowsUnsupported,
+}
+
 /// Retrieving embeddings sequences failed.
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 #[error("Embeddings or logits weren't enabled, or the model was configured with LLAMA_POOLING_TYPE_NONE")]
